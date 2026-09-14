@@ -15,7 +15,7 @@
 		"@astrojs/cloudflare": "12.6.12",
 		"@astrojs/mdx": "4.3.13",
 		"@astrojs/rss": "4.0.19",
-		"@astrojs/sitemap": "3.6.1",
+		"@astrojs/sitemap": "3.7.4",
 		"astro": "5.16.9",
 		"typescript": "5.9.3"
 	},
