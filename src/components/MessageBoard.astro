@@ -1,0 +1,102 @@
+---
+/**
+ * MessageBoard — the public visitor message board (global overlay).
+ *
+ * Structure:
+ *   - a fixed, pointer-transparent field that holds one floating element per
+ *     message: glossy Frutiger Aero bubbles in the light theme, glowing star
+ *     orbs in the dark theme (styles/board.css, switched by html[data-theme]);
+ *   - a composer anchored bottom-centre at all times: text, optional image,
+ *     send, plus the visible-count slider and the full-archive button;
+ *   - an archive dialog listing every message ever sent.
+ *
+ * The UI talks only to /api/board; persistence, validation, rate limiting and
+ * sanitization live server-side (src/pages/api/board.ts, src/server/*). The
+ * storage provider is configurable without touching this component.
+ *
+ * Behaviour guarantees: physics float elements upward and let them collide;
+ * dragging keeps interacting with neighbours; new posts spawn above the
+ * composer and rise; only the N most recent load initially (slider 3-30);
+ * reduced motion gets a calm static grid; everything is keyboard reachable.
+ */
+import '../styles/board.css';
+import { BOARD_CONFIG } from '../config/board.config';
+---
+
+<div class="board" data-board>
+	<ul class="board__field" role="list" aria-label="Visitor messages" data-board-field></ul>
+
+	<form class="board__composer" data-glass="raised" data-board-composer aria-label="Post a message to the public board">
+		<div class="board__composer-row">
+			<label class="sr-only" for="board-text">Your public message</label>
+			<textarea
+				id="board-text"
+				class="board__input"
+				data-board-text
+				rows="1"
+				maxlength={BOARD_CONFIG.maxTextLength}
+				placeholder="Leave a public message… (lorem ipsum welcome)"
+			></textarea>
+
+			<label class="board__attach" title="Attach an image (PNG, JPEG, WebP or GIF, 400 KB max)">
+				<span class="sr-only">Attach an image</span>
+				<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-board-file />
+				<svg viewBox="0 0 24 24" aria-hidden="true">
+					<path
+						d="M4.5 6.5h15v11h-15zM4.5 8l5 4 3.5-3 4.5 4M9 10.2a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4Z"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+					/>
+				</svg>
+			</label>
+			<img class="board__preview" data-board-preview alt="" hidden />
+
+			<button class="board__send" type="submit" data-board-submit>
+				<span>Send</span>
+				<svg viewBox="0 0 24 24" aria-hidden="true">
+					<path d="M4 12h15m0 0-5.5-5.5M19 12l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+				</svg>
+			</button>
+		</div>
+
+		<div class="board__composer-row board__composer-row--meta">
+			<label class="board__slider-label mono" for="board-count">
+				Visible
+				<input
+					id="board-count"
+					type="range"
+					min={BOARD_CONFIG.minVisible}
+					max={BOARD_CONFIG.maxVisible}
+					step="1"
+					value={String(BOARD_CONFIG.defaultVisible)}
+					data-board-slider
+				/>
+				<span class="mono" data-board-slider-value>{BOARD_CONFIG.defaultVisible}</span>
+			</label>
+			<button class="board__archive-open mono" type="button" data-board-archive-open>
+				All messages
+			</button>
+		</div>
+
+		<p class="board__status mono" data-board-status role="status" aria-live="polite"></p>
+	</form>
+
+	<div class="board__archive" data-glass="raised" data-board-archive role="dialog" aria-modal="true" aria-label="Every message ever sent" hidden>
+		<header class="board__archive-head">
+			<h2 class="board__archive-title">Every message</h2>
+			<button class="board__archive-close" type="button" data-board-archive-close>
+				<span class="sr-only">Close the message archive</span>
+				<svg viewBox="0 0 24 24" aria-hidden="true">
+					<path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+				</svg>
+			</button>
+		</header>
+		<ol class="board__archive-list" data-board-archive-list></ol>
+	</div>
+</div>
+
+<script>
+	import { initMessageBoard } from '../scripts/board';
+	initMessageBoard();
+</script>

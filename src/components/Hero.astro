@@ -1,0 +1,293 @@
+---
+/**
+ * Hero — the first second of the site.
+ *
+ * Load sequence (all opacity/transform, nothing that can shift layout):
+ *    0ms   starfield fades up          (Starfield.astro)
+ *    200ms floating nav                (Header.astro)
+ *    340ms status line
+ *    400ms BNJI wordmark
+ *    650ms byline
+ *    850ms calls to action
+ *   1050ms technical meta strip
+ *
+ * The wordmark is `aria-hidden` and the h1 carries a spoken expansion, so a
+ * screen reader hears "BNJI — a personal digital hub" instead of
+ * four letters with no context.
+ *
+ * Parallax note: data-parallax sits on a wrapper, never on the same element as
+ * data-load — both own `transform`, and a running animation would win. A
+ * negative strength means "lag behind the scroll", which is what gives large
+ * display type its sense of depth.
+ */
+import GlassButton from './GlassButton.astro';
+import { SITE } from '../data/site';
+
+const year = new Date().getFullYear();
+
+/** Mono facts under the calls to action. Kept here (not in data/) because they
+ *  are hero copy, not a reusable data model. */
+const HERO_FACTS = ['Astro 7', 'Cloudflare Workers', 'Dual themes · liquid glass', 'Prerendered'] as const;
+---
+
+<section class="hero" id="top" aria-labelledby="hero-title">
+	<div class="container">
+		<div class="hero-inner" data-parallax="-0.08">
+			<p class="hero-status" data-load style="--load-delay: 340ms">
+				<span class="dot dot--live" aria-hidden="true"></span>
+				<span class="hero-status__text">
+					{SITE.author.location} &middot; dolor sit amet &middot; {year}
+				</span>
+			</p>
+
+			<h1 class="hero-title" id="hero-title" data-load="emerge" style="--load-delay: 400ms">
+				<span class="hero-title__word text-luminous" data-star-reactive aria-hidden="true">
+					{SITE.name}
+				</span>
+				<span class="sr-only"> — {SITE.author.name}'s personal digital hub</span>
+			</h1>
+
+			<div class="hero-rule" data-load style="--load-delay: 560ms" aria-hidden="true"></div>
+
+			<p class="hero-byline" data-load style="--load-delay: 650ms">
+				<span class="hero-byline__name">{SITE.author.name}</span>
+				<span class="hero-byline__sep" aria-hidden="true">/</span>
+				<span class="hero-byline__role">{SITE.author.tagline}</span>
+			</p>
+
+			<div class="hero-actions actions-stack" data-load style="--load-delay: 850ms">
+				<GlassButton href="/projects/" variant="primary" size="lg" magnetic icon="arrow-right">
+					Explore projects
+				</GlassButton>
+				<GlassButton href="/blog/" size="lg" magnetic>
+					Read the blog
+				</GlassButton>
+				<GlassButton href="/lab/" variant="quiet" size="lg" magnetic icon="flask">
+					Enter the Lab
+				</GlassButton>
+			</div>
+
+			<ul class="hero-facts" data-load style="--load-delay: 1050ms" role="list">
+				{HERO_FACTS.map((fact) => <li>{fact}</li>)}
+			</ul>
+		</div>
+
+		<a class="hero-scroll" href="#identity" data-load style="--load-delay: 1250ms">
+			<span class="hero-scroll__label">Scroll</span>
+			<span class="hero-scroll__track" aria-hidden="true"><span></span></span>
+		</a>
+	</div>
+</section>
+
+<style>
+	.hero {
+		position: relative;
+		/* svh keeps the hero correct on mobile browsers with dynamic toolbars;
+		   the vh line is the fallback for browsers without svh. */
+		min-height: 92vh;
+		min-height: 92svh;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding-block: clamp(3rem, 8vh, 6rem) clamp(4rem, 9vh, 7rem);
+	}
+
+	.hero-inner {
+		display: grid;
+		justify-items: center;
+		text-align: center;
+		gap: clamp(0.9rem, 2vh, 1.4rem);
+	}
+
+	/* --- Status line ------------------------------------------------------ */
+
+	.hero-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.42em 0.95em;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+	}
+
+	.hero-status__text {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+	}
+
+	/* --- Wordmark --------------------------------------------------------- */
+
+	.hero-title {
+		font-size: var(--text-hero);
+		font-weight: 200;
+		letter-spacing: var(--tracking-tight);
+		line-height: 0.86;
+		margin: 0;
+	}
+
+	.hero-title__word {
+		display: inline-block;
+		/* Optical centring: a tracked wordmark otherwise looks shifted right. */
+		padding-inline-end: 0.045em;
+	}
+
+	/* A hairline under the wordmark gives the composition a horizon without
+	   adding another panel to the page. */
+	.hero-rule {
+		inline-size: min(520px, 72vw);
+		block-size: 1px;
+		background: linear-gradient(
+			to right,
+			transparent,
+			rgba(255, 255, 255, 0.18) 22%,
+			rgba(127, 212, 255, 0.42) 50%,
+			rgba(255, 255, 255, 0.18) 78%,
+			transparent
+		);
+	}
+
+	/* --- Byline ----------------------------------------------------------- */
+
+	.hero-byline {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: center;
+		gap: 0.55rem 0.9rem;
+		max-width: 46ch;
+	}
+
+	.hero-byline__name {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.24em;
+		text-transform: uppercase;
+		color: var(--accent-strong);
+	}
+
+	.hero-byline__sep {
+		color: var(--text-faint);
+	}
+
+	.hero-byline__role {
+		font-size: var(--text-lead);
+		line-height: 1.5;
+		color: var(--text-muted);
+	}
+
+	/* --- Actions ---------------------------------------------------------- */
+	/* Flex basics (wrap, gap, full-width mobile stacking) come from the shared
+	   .actions-stack utility in global.css; only the centring is hero-specific. */
+
+	.hero-actions {
+		justify-content: center;
+		margin-block-start: 0.6rem;
+	}
+
+	/* --- Meta strip ------------------------------------------------------- */
+
+	.hero-facts {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.4rem 1.4rem;
+		margin-block-start: clamp(1.5rem, 4vh, 2.75rem);
+		list-style: none;
+	}
+
+	.hero-facts li {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	/* --- Scroll cue ------------------------------------------------------- */
+
+	.hero-scroll {
+		position: absolute;
+		inset-inline: 0;
+		inset-block-end: clamp(1rem, 3vh, 2rem);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.6rem;
+		color: var(--text-dim);
+		text-decoration: none;
+	}
+
+	.hero-scroll__label {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.28em;
+		text-transform: uppercase;
+	}
+
+	.hero-scroll__track {
+		display: block;
+		inline-size: 1px;
+		block-size: 42px;
+		background: linear-gradient(to bottom, var(--glass-border-strong), transparent);
+		overflow: hidden;
+	}
+
+	.hero-scroll__track span {
+		display: block;
+		inline-size: 1px;
+		block-size: 14px;
+		background: var(--accent);
+		animation: hero-scroll-cue 2.6s var(--ease-soft) infinite;
+	}
+
+	@keyframes hero-scroll-cue {
+		0% {
+			transform: translateY(-16px);
+			opacity: 0;
+		}
+		40% {
+			opacity: 1;
+		}
+		100% {
+			transform: translateY(46px);
+			opacity: 0;
+		}
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.hero-scroll:hover {
+			color: var(--accent-strong);
+		}
+	}
+
+	/* --- Small screens ---------------------------------------------------- */
+
+	@media (max-width: 720px) {
+		.hero {
+			min-height: 86vh;
+			min-height: 86svh;
+			padding-block-start: clamp(2rem, 6vh, 4rem);
+		}
+
+		.hero-title {
+			line-height: 0.9;
+		}
+
+		.hero-scroll {
+			display: none;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.hero-scroll__track span {
+			animation: none;
+			opacity: 0.6;
+		}
+	}
+</style>

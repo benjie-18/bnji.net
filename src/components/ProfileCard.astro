@@ -1,0 +1,307 @@
+---
+/**
+ * ProfileCard — link-in-bio card, structure modelled on ayo.so profile cards.
+ *
+ * Recreated layout & hierarchy (visual reference: https://ayo.so/gizlyy):
+ *   1. glossy avatar orb with a lit ring, centred, overlapping the card top
+ *   2. display name + @handle
+ *   3. badge row (icon chip + counter)
+ *   4. short bio paragraph
+ *   5. "loves" list rendered as wrapped chips
+ *   6. social/link button row (full-width glass rows with icon + chevron)
+ *   7. copy-handle block with clipboard feedback
+ *   8. micro-footer line
+ *
+ * Interaction style matches the reference: rounded inflated glass, hover lift
+ * with a specular sweep, copy button that confirms inline. All content is
+ * PLACEHOLDER (lorem ipsum) — this project carries no personal biography.
+ *
+ * Theme-aware by construction: every colour comes from tokens, so the card is
+ * a dark glass slab or an Aero soap bubble depending on data-theme.
+ */
+import BrandMark from './BrandMark.astro';
+import Icon from './Icon.astro';
+import { SITE } from '../data/site';
+
+/** Placeholder badges — swap freely, keep them non-personal. */
+const BADGES = [
+	{ icon: 'spark', label: '1024' },
+	{ icon: 'flask', label: 'lab' },
+	{ icon: 'globe', label: 'en' },
+] as const;
+
+/** Placeholder "loves" chips. */
+const LOVES = ['Lorem', 'Ipsum', 'Dolor', 'Sit amet', 'Consectetur', 'Adipiscing', 'Elit', 'Sed do'];
+
+const LINKS = [
+	{ icon: 'github', label: 'GitHub', href: SITE.github, note: SITE.githubHandle },
+	{ icon: 'mail', label: 'Email', href: `mailto:${SITE.email}`, note: SITE.email },
+	{ icon: 'rss', label: 'RSS feed', href: '/rss.xml', note: '/rss.xml' },
+] as const;
+---
+
+<aside class="profile-card" data-glass="raised" aria-label="Profile card">
+	<div class="profile-card__avatar" aria-hidden="true">
+		<span class="profile-card__avatar-orb">
+			<BrandMark size={44} />
+		</span>
+	</div>
+
+	<h2 class="profile-card__name">{SITE.author.name}</h2>
+	<p class="profile-card__handle mono">@loremipsum</p>
+
+	<ul class="profile-card__badges" role="list" aria-label="Badges">
+		{
+			BADGES.map((b) => (
+				<li class="profile-card__badge" data-glass="quiet">
+					<Icon name={b.icon} size={13} />
+					<span class="mono">{b.label}</span>
+				</li>
+			))
+		}
+	</ul>
+
+	<p class="profile-card__bio">
+		Haii — lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+		eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
+		minim veniam, quis nostrud exercitation.
+	</p>
+
+	<p class="profile-card__loves-label mono">Love :</p>
+	<ul class="profile-card__loves" role="list">
+		{LOVES.map((love) => <li class="profile-card__love">{love}</li>)}
+	</ul>
+
+	<nav class="profile-card__links" aria-label="Profile links">
+		{
+			LINKS.map((link) => (
+				<a class="profile-card__link" data-glass="interactive quiet" href={link.href} rel="me noopener">
+					<Icon name={link.icon} size={16} />
+					<span class="profile-card__link-label">{link.label}</span>
+					<span class="profile-card__link-note mono">{link.note}</span>
+					<Icon name="arrow-right" size={14} />
+				</a>
+			))
+		}
+	</nav>
+
+	<div class="profile-card__copy" data-glass="quiet">
+		<div>
+			<p class="mono profile-card__copy-label">Discord</p>
+			<p class="profile-card__copy-value mono" data-copy-value>lorem.ipsum</p>
+		</div>
+		<button class="profile-card__copy-btn" type="button" data-copy-handle>
+			<span data-copy-text>Copy</span>
+		</button>
+	</div>
+
+	<p class="profile-card__foot mono">placeholder profile · no real person</p>
+</aside>
+
+<script>
+	// Copy-handle feedback: inline confirmation, no alert, no layout shift.
+	const card = document.currentScript?.closest?.('.profile-card') as HTMLElement | null;
+	const root = card ?? document.querySelector<HTMLElement>('.profile-card');
+	const button = root?.querySelector<HTMLButtonElement>('[data-copy-handle]');
+	const value = root?.querySelector<HTMLElement>('[data-copy-value]');
+	const label = root?.querySelector<HTMLElement>('[data-copy-text]');
+	if (button && value && label) {
+		button.addEventListener('click', async () => {
+			try {
+				await navigator.clipboard.writeText(value.textContent?.trim() ?? '');
+				label.textContent = 'Copied ✓';
+				setTimeout(() => (label.textContent = 'Copy'), 1600);
+			} catch {
+				label.textContent = 'Select + copy';
+			}
+		});
+	}
+</script>
+
+<style>
+	.profile-card {
+		position: relative;
+		width: min(100%, 400px);
+		margin-inline: auto;
+		padding: 3.4rem 1.4rem 1.2rem;
+		border-radius: var(--radius-xl);
+		text-align: center;
+	}
+
+	/* Avatar orb: inflated glossy sphere with a lit ring, half-overlapping the
+	   card edge exactly like the reference card. */
+	.profile-card__avatar {
+		position: absolute;
+		top: -46px;
+		left: 50%;
+		transform: translateX(-50%);
+	}
+	.profile-card__avatar-orb {
+		display: grid;
+		place-items: center;
+		inline-size: 92px;
+		block-size: 92px;
+		border-radius: 50%;
+		color: var(--text-strong);
+		background:
+			radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.85), transparent 34%),
+			radial-gradient(circle at 50% 50%, var(--glass-bg-raised), var(--glass-bg) 70%);
+		border: 1px solid var(--glass-border-strong);
+		box-shadow:
+			var(--glass-shadow-raised),
+			inset 0 2px 6px rgba(255, 255, 255, 0.35),
+			inset 0 -8px 18px -10px var(--glass-refraction);
+	}
+
+	.profile-card__name {
+		margin: 0;
+		font-family: var(--font-display);
+		font-size: var(--text-title);
+		font-weight: 650;
+		letter-spacing: var(--tracking-snug);
+		color: var(--text-strong);
+	}
+	.profile-card__handle {
+		margin: 0.15rem 0 0;
+		font-size: var(--text-small);
+		color: var(--text-dim);
+	}
+
+	.profile-card__badges {
+		display: flex;
+		justify-content: center;
+		gap: 0.45rem;
+		margin: 0.8rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.profile-card__badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.28rem 0.6rem;
+		border-radius: var(--radius-pill);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+	}
+
+	.profile-card__bio {
+		margin: 0.9rem 0 0;
+		font-size: var(--text-small);
+		line-height: var(--leading-snug);
+		color: var(--text-muted);
+	}
+
+	.profile-card__loves-label {
+		margin: 1rem 0 0.4rem;
+		text-align: left;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+	.profile-card__loves {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		text-align: left;
+	}
+	.profile-card__love {
+		padding: 0.24rem 0.62rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		font-size: var(--text-small);
+		color: var(--text-muted);
+	}
+
+	.profile-card__links {
+		display: grid;
+		gap: 0.5rem;
+		margin-top: 1.1rem;
+	}
+	.profile-card__link {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.62rem 0.8rem;
+		border-radius: var(--radius-md);
+		color: var(--text);
+		text-decoration: none;
+		font-size: var(--text-small);
+	}
+	.profile-card__link-label {
+		font-weight: 600;
+	}
+	.profile-card__link-note {
+		margin-left: auto;
+		font-size: var(--text-micro);
+		color: var(--text-dim);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 40%;
+	}
+
+	.profile-card__copy {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-top: 0.7rem;
+		padding: 0.6rem 0.8rem;
+		border-radius: var(--radius-md);
+		text-align: left;
+	}
+	.profile-card__copy-label {
+		margin: 0;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+	.profile-card__copy-value {
+		margin: 0.1rem 0 0;
+		font-size: var(--text-small);
+		color: var(--text);
+	}
+	.profile-card__copy-btn {
+		flex: none;
+		padding: 0.42rem 0.85rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border-strong);
+		background: var(--glass-bg);
+		color: var(--text);
+		font-size: var(--text-small);
+		cursor: pointer;
+		transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+	}
+	.profile-card__copy-btn:hover {
+		background: var(--glass-bg-raised);
+		transform: translateY(-1px);
+	}
+	.profile-card__copy-btn:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	.profile-card__foot {
+		margin: 0.9rem 0 0;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	@media (max-width: 480px) {
+		.profile-card {
+			padding-inline: 1rem;
+		}
+		.profile-card__link-note {
+			display: none;
+		}
+	}
+</style>

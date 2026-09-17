@@ -1,0 +1,268 @@
+/* ==========================================================================
+   BNJI.NET — liquid glass design system
+   --------------------------------------------------------------------------
+   One translucent surface language for the whole site, in two theme voices
+   (dark: lit film over the void · light: inflated Frutiger Aero soap bubble).
+
+   What makes this "liquid glass" rather than blur-plus-white:
+     1. REAL TRANSLUCENCY   backdrop-filter blurs AND saturates AND lifts
+        brightness, so the surface visibly refracts whatever is behind it.
+     2. GRADIENT EDGE RIM   the 1px border is a border-box gradient (hot
+        top-left, cool bottom-right) instead of a flat stroke — the lit rim
+        that sells curvature.
+     3. INTERNAL OPTICS     ::before stacks a top specular sheet, a bottom
+        bounce-light refraction and an environmental colour bleed, so the
+        panel picks up the colour of its surroundings.
+     4. SPECULAR RESPONSE   ::after carries the pointer-tracked highlight and
+        a sweep highlight that slides on hover/focus — highlights change with
+        the viewer, like a curved surface.
+     5. SEPARATION          layered ambient shadows + an inset bottom
+        refraction line lift the surface off its background.
+     6. GRACEFUL FALLBACK   without backdrop-filter the surface becomes an
+        opaque tinted panel (--glass-bg-fallback); nothing becomes unreadable.
+
+   How to use it
+   -------------
+   - Components should render GlassPanel.astro / GlassButton.astro, which apply
+     the classes below. Prefer those over writing new glass CSS.
+   - Any element can opt in with the bare attribute: <div data-glass>.
+     scripts/interactions.ts looks for [data-glass] to drive --mouse-x/--mouse-y.
+   - Variants are additive attribute tokens: data-glass="raised interactive".
+
+   Why pseudo-elements sit at z-index: -1
+   --------------------------------------
+   [data-glass] sets isolation: isolate, which creates a local stacking context.
+   The ::before (optics) and ::after (pointer spot / sweep) can then be painted
+   *behind the panel's content but above its own background* without leaking
+   under or over neighbouring panels.
+   ========================================================================== */
+
+[data-glass],
+.glass {
+	position: relative;
+	isolation: isolate;
+	border: 1px solid transparent;
+	border-radius: var(--radius-lg);
+	/* Surface film (padding-box) + lit rim (border-box). Two layers, one
+	   element: the rim gradient is what reads as curved glass edge. */
+	background:
+		linear-gradient(
+			168deg,
+			var(--glass-bg-raised),
+			var(--glass-bg) 38%,
+			var(--glass-bg-quiet) 100%
+		)
+		padding-box,
+		linear-gradient(
+			135deg,
+			var(--glass-edge-a),
+			var(--glass-edge-b) 42%,
+			var(--glass-edge-c) 100%
+		)
+		border-box;
+	box-shadow:
+		var(--glass-shadow),
+		inset 0 1px 0 var(--glass-highlight),
+		inset 0 -1px 0 var(--glass-refraction);
+	/* Refraction. Safari needs the prefixed form; both are required for the
+	   effect to be consistent across browsers. */
+	backdrop-filter:
+		blur(var(--glass-blur)) saturate(var(--glass-saturate))
+		brightness(var(--glass-brightness));
+	-webkit-backdrop-filter:
+		blur(var(--glass-blur)) saturate(var(--glass-saturate))
+		brightness(var(--glass-brightness));
+	transition:
+		box-shadow var(--dur-base) var(--ease-out),
+		border-color var(--dur-base) var(--ease-out),
+		transform var(--dur-fast) var(--ease-out);
+}
+
+/* No compositing support? Stay a believable tinted panel instead of breaking. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+	[data-glass],
+	.glass {
+		background:
+			linear-gradient(
+				168deg,
+				var(--glass-bg-fallback),
+				var(--glass-bg-fallback) 60%,
+				var(--glass-bg-fallback)
+			)
+			padding-box,
+			linear-gradient(
+				135deg,
+				var(--glass-edge-a),
+				var(--glass-edge-b) 42%,
+				var(--glass-edge-c) 100%
+			)
+			border-box;
+	}
+}
+
+/* --- Internal optics ------------------------------------------------------ */
+/* Top specular sheet + bottom bounce refraction + environmental bleed from the
+   lower-left corner. Pure gradients: zero runtime cost, theme-aware via
+   tokens, and it is why the surface never reads as a flat container. */
+[data-glass]::before,
+.glass::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background:
+		/* specular sheet, lit from above */
+		linear-gradient(
+			to bottom,
+			var(--glass-highlight),
+			transparent 34%
+		),
+		/* bounce light refracted along the bottom edge */
+		radial-gradient(120% 42% at 50% 108%, var(--glass-refraction), transparent 70%),
+		/* environmental colour bleed: the surface "sees" its surroundings */
+		radial-gradient(70% 60% at 0% 100%, var(--glass-env-bleed), transparent 68%),
+		radial-gradient(60% 50% at 100% 0%, var(--glass-env-bleed), transparent 66%);
+	pointer-events: none;
+}
+
+/* --- Specular response ---------------------------------------------------- */
+/* Pointer-tracked liquid highlight plus a sweep that slides across on hover,
+   like light travelling over a curved surface. Off by default; only lit on
+   fine pointers so touch devices never get a stuck spotlight. */
+[data-glass]::after,
+.glass::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background:
+		radial-gradient(
+			var(--glass-spot) circle at var(--mouse-x) var(--mouse-y),
+			var(--glass-specular),
+			var(--glass-refraction) 38%,
+			transparent 68%
+		),
+		linear-gradient(
+			105deg,
+			transparent 30%,
+			var(--glass-specular) 46%,
+			var(--glass-highlight) 50%,
+			transparent 66%
+		);
+	background-size:
+		100% 100%,
+		260% 100%;
+	background-position:
+		0 0,
+		130% 0;
+	background-repeat: no-repeat;
+	opacity: 0;
+	transition:
+		opacity var(--dur-base) var(--ease-out),
+		background-position var(--dur-slow) var(--ease-out);
+	pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	[data-glass]:hover::after,
+	[data-glass]:focus-within::after,
+	.glass:hover::after,
+	.glass:focus-within::after {
+		opacity: 1;
+		background-position:
+			0 0,
+			-30% 0;
+	}
+}
+
+/* --- Variants ------------------------------------------------------------- */
+/* Variants are attribute *tokens*, so they compose freely:
+   data-glass="raised interactive" applies both. The .glass--* class aliases
+   exist for surfaces that must not be pointer-tracked (rare). */
+
+/* Raised: navigation, sheets, anything floating above other surfaces. */
+[data-glass~='raised'],
+.glass--raised {
+	background:
+		linear-gradient(
+			168deg,
+			var(--glass-bg-raised),
+			var(--glass-bg) 46%,
+			var(--glass-bg) 100%
+		)
+		padding-box,
+		linear-gradient(
+			135deg,
+			var(--glass-edge-a),
+			var(--glass-edge-b) 36%,
+			var(--glass-edge-c) 100%
+		)
+		border-box;
+	box-shadow:
+		var(--glass-shadow-raised),
+		inset 0 1px 0 var(--glass-highlight),
+		inset 0 -1px 0 var(--glass-refraction);
+}
+
+/* Quiet: rows, chips, inset metadata. NO backdrop-filter on purpose — small
+   stacked surfaces would otherwise each pay for a blur pass. The tint + rim
+   gradient keep them visually inside the glass family. */
+[data-glass~='quiet'],
+.glass--quiet {
+	background:
+		linear-gradient(168deg, var(--glass-bg), var(--glass-bg-quiet) 100%) padding-box,
+		linear-gradient(135deg, var(--glass-edge-b), var(--glass-edge-c) 100%) border-box;
+	box-shadow: inset 0 1px 0 var(--glass-highlight);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+
+/* Interactive: cards and tiles that are hover/focus targets. */
+[data-glass~='interactive'],
+.glass--interactive {
+	transition:
+		transform var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out),
+		box-shadow var(--dur-base) var(--ease-out),
+		background-color var(--dur-base) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	[data-glass~='interactive']:hover,
+	.glass--interactive:hover {
+		transform: translateY(var(--hover-lift));
+		box-shadow:
+			var(--glass-shadow-raised),
+			var(--glass-glow),
+			inset 0 1px 0 var(--glass-highlight),
+			inset 0 -1px 0 var(--glass-refraction);
+	}
+}
+
+/* Keyboard users get the same treatment as hover, so nothing depends on a
+   pointer being present. */
+[data-glass~='interactive']:focus-within,
+.glass--interactive:focus-within {
+	box-shadow:
+		var(--glass-shadow-raised),
+		var(--glass-glow),
+		inset 0 1px 0 var(--glass-highlight),
+		inset 0 -1px 0 var(--glass-refraction);
+}
+
+/* --- Radius modifiers ----------------------------------------------------- */
+
+.glass--radius-sm {
+	border-radius: var(--radius-sm);
+}
+.glass--radius-md {
+	border-radius: var(--radius-md);
+}
+.glass--radius-lg {
+	border-radius: var(--radius-lg);
+}
+.glass--radius-pill {
+	border-radius: var(--radius-pill);
+}

@@ -1,0 +1,41 @@
+---
+/**
+ * AeroSky — the Frutiger Aero environment layer for the light theme.
+ *
+ * One fixed gradient layer (sun bloom, cloud masses, bokeh, water gloss — see
+ * styles/aero.css) plus a handful of floating soap bubbles. The bubble field
+ * is deliberate CSS-only motion: each bubble is a span with inline size/
+ * position/timing, animated with transform+opacity on the compositor.
+ *
+ * Cost model: zero JavaScript, zero repaints (gradients are static, motion is
+ * transform-only), and the whole layer is display:none in the dark theme and
+ * frozen under prefers-reduced-motion.
+ */
+
+/** Deterministic bubble field: [left %, size px, duration s, delay s, opacity, sway vw]. */
+const BUBBLES: [number, number, number, number, number, number][] = [
+	[6, 84, 34, -4, 0.4, 4],
+	[16, 34, 26, -12, 0.5, -3],
+	[27, 56, 30, -20, 0.42, 5],
+	[38, 22, 21, -7, 0.55, -2],
+	[47, 96, 40, -26, 0.34, 3],
+	[58, 40, 27, -15, 0.48, -4],
+	[66, 64, 33, -2, 0.4, 4],
+	[76, 26, 22, -18, 0.52, -3],
+	[84, 74, 37, -9, 0.38, 5],
+	[92, 44, 28, -23, 0.46, -4],
+	[11, 18, 19, -16, 0.5, 2],
+	[71, 16, 18, -5, 0.5, -2],
+];
+---
+
+<div class="aero-sky" aria-hidden="true">
+	{
+		BUBBLES.map(([left, size, duration, delay, opacity, sway], i) => (
+			<span
+				class="aero-bubble"
+				style={`left:${left}%;bottom:-12vh;width:${size}px;height:${size}px;animation-duration:${duration}s;animation-delay:${delay}s;--bubble-opacity:${opacity};--bubble-sway:${sway}vw;--i:${i}`}
+			/>
+		))
+	}
+</div>

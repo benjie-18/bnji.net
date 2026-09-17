@@ -1,85 +1,221 @@
 ---
+/**
+ * Header — the floating pill navigation.
+ *
+ * Links come from src/data/navigation.ts; nothing here is hard-coded, so a
+ * destination can be added without touching this file. The nav arrives at 200ms
+ * in the load sequence, right after the starfield.
+ *
+ * Responsive contract
+ * -------------------
+ *  - >= 900px: brand + inline links inside one pill.
+ *  - <  900px: brand + a disclosure button; the same list becomes a glass sheet
+ *    under the pill. Closed means `visibility: hidden`, so its links leave both
+ *    the layout and the tab order.
+ *  - No JavaScript: the sheet is shown inline and the dock stops floating
+ *    (rules in global.css), because a menu button that cannot open is worse
+ *    than a slightly taller bar.
+ *
+ * Boundary note: this component styles the pill and the list container. The
+ * links themselves are HeaderLink.astro, which owns every `.nav-link` rule
+ * including its mobile variant. The dock's own positioning (fixed, centred,
+ * pointer-transparent) lives in global.css with the other structural shells.
+ */
+import { PRIMARY_NAV } from '../data/navigation';
+import { SITE } from '../data/site';
+import BrandMark from './BrandMark.astro';
 import HeaderLink from './HeaderLink.astro';
-import { SITE_TITLE } from '../consts';
+import ThemeToggle from './ThemeToggle.astro';
 ---
 
-<header>
-	<nav>
-		<h2><a href="/">{SITE_TITLE}</a></h2>
-		<div class="internal-links">
-			<HeaderLink href="/">Home</HeaderLink>
-			<HeaderLink href="/blog">Blog</HeaderLink>
-			<HeaderLink href="/about">About</HeaderLink>
-		</div>
-		<div class="social-links">
-			<a href="https://m.webtoo.ls/@astro" target="_blank">
-				<span class="sr-only">Follow Astro on Mastodon</span>
-				<svg viewBox="0 0 16 16" aria-hidden="true" width="32" height="32"
-					><path
-						fill="currentColor"
-						d="M11.19 12.195c2.016-.24 3.77-1.475 3.99-2.603.348-1.778.32-4.339.32-4.339 0-3.47-2.286-4.488-2.286-4.488C12.062.238 10.083.017 8.027 0h-.05C5.92.017 3.942.238 2.79.765c0 0-2.285 1.017-2.285 4.488l-.002.662c-.004.64-.007 1.35.011 2.091.083 3.394.626 6.74 3.78 7.57 1.454.383 2.703.463 3.709.408 1.823-.1 2.847-.647 2.847-.647l-.06-1.317s-1.303.41-2.767.36c-1.45-.05-2.98-.156-3.215-1.928a3.614 3.614 0 0 1-.033-.496s1.424.346 3.228.428c1.103.05 2.137-.064 3.188-.189zm1.613-2.47H11.13v-4.08c0-.859-.364-1.295-1.091-1.295-.804 0-1.207.517-1.207 1.541v2.233H7.168V5.89c0-1.024-.403-1.541-1.207-1.541-.727 0-1.091.436-1.091 1.296v4.079H3.197V5.522c0-.859.22-1.541.66-2.046.456-.505 1.052-.764 1.793-.764.856 0 1.504.328 1.933.983L8 4.39l.417-.695c.429-.655 1.077-.983 1.934-.983.74 0 1.336.259 1.791.764.442.505.661 1.187.661 2.046v4.203z"
-					></path></svg
-				>
-			</a>
-			<a href="https://twitter.com/astrodotbuild" target="_blank">
-				<span class="sr-only">Follow Astro on Twitter</span>
-				<svg viewBox="0 0 16 16" aria-hidden="true" width="32" height="32"
-					><path
-						fill="currentColor"
-						d="M5.026 15c6.038 0 9.341-5.003 9.341-9.334 0-.14 0-.282-.006-.422A6.685 6.685 0 0 0 16 3.542a6.658 6.658 0 0 1-1.889.518 3.301 3.301 0 0 0 1.447-1.817 6.533 6.533 0 0 1-2.087.793A3.286 3.286 0 0 0 7.875 6.03a9.325 9.325 0 0 1-6.767-3.429 3.289 3.289 0 0 0 1.018 4.382A3.323 3.323 0 0 1 .64 6.575v.045a3.288 3.288 0 0 0 2.632 3.218 3.203 3.203 0 0 1-.865.115 3.23 3.23 0 0 1-.614-.057 3.283 3.283 0 0 0 3.067 2.277A6.588 6.588 0 0 1 .78 13.58a6.32 6.32 0 0 1-.78-.045A9.344 9.344 0 0 0 5.026 15z"
-					></path></svg
-				>
-			</a>
-			<a href="https://github.com/withastro/astro" target="_blank">
-				<span class="sr-only">Go to Astro's GitHub repo</span>
-				<svg viewBox="0 0 16 16" aria-hidden="true" width="32" height="32"
-					><path
-						fill="currentColor"
-						d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"
-					></path></svg
-				>
-			</a>
-		</div>
+<!-- <header> so every page gets a real banner landmark, not a bare div. -->
+<header class="nav-dock" data-nav data-load style="--load-delay: 200ms">
+	<nav class="nav-pill" data-glass="raised" aria-label="Primary">
+		<a class="brand" href="/">
+			<BrandMark size={20} />
+			<span class="brand-word">{SITE.name}</span>
+			<span class="sr-only"> — {SITE.author.name}, home</span>
+		</a>
+
+		<ul class="nav-list" id="primary-navigation" data-nav-panel role="list">
+			{
+				PRIMARY_NAV.map((item) => (
+					<li>
+						<HeaderLink href={item.href}>{item.label}</HeaderLink>
+					</li>
+				))
+			}
+		</ul>
+
+		<ThemeToggle />
+
+		<button
+			class="nav-toggle"
+			type="button"
+			data-nav-toggle
+			aria-expanded="false"
+			aria-controls="primary-navigation"
+		>
+			<span class="sr-only">Toggle navigation menu</span>
+			<span class="nav-toggle-bars" aria-hidden="true">
+				<span></span>
+				<span></span>
+			</span>
+		</button>
 	</nav>
 </header>
-<style>
-	header {
-		margin: 0;
-		padding: 0 1em;
-		background: white;
-		box-shadow: 0 2px 8px rgba(var(--black), 5%);
-	}
-	h2 {
-		margin: 0;
-		font-size: 1em;
-	}
 
-	h2 a,
-	h2 a.active {
-		text-decoration: none;
-	}
-	nav {
+<style>
+	.nav-pill {
+		position: relative; /* anchor for the mobile sheet */
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: clamp(0.35rem, 1.4vw, 1rem);
+		max-width: 100%;
+		min-height: var(--nav-height);
+		padding: 0.34rem 0.4rem 0.34rem 0.9rem;
+		border-radius: var(--radius-pill);
+		pointer-events: auto; /* the dock itself is pointer-transparent */
+		transition:
+			background-color var(--dur-base) var(--ease-out),
+			border-color var(--dur-base) var(--ease-out),
+			box-shadow var(--dur-base) var(--ease-out);
 	}
-	nav a {
-		padding: 1em 0.5em;
-		color: var(--black);
-		border-bottom: 4px solid transparent;
+
+	/* Once the page has scrolled, the pill gains a little more fill so it stays
+	   legible over bright content. scripts/scroll.ts toggles .is-stuck on the
+	   dock, which is why the selector starts at .nav-dock. */
+	.nav-dock.is-stuck .nav-pill {
+		background: var(--glass-bg-raised);
+		border-color: var(--glass-border-strong);
+		box-shadow: var(--glass-shadow-raised);
+	}
+
+	.brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.55rem;
+		padding-block: 0.3em;
+		color: var(--text-strong);
 		text-decoration: none;
+		border-radius: var(--radius-pill);
 	}
-	nav a.active {
-		text-decoration: none;
-		border-bottom-color: var(--accent);
+
+	.brand-word {
+		font-family: var(--font-display);
+		font-size: 1rem;
+		font-weight: 600;
+		letter-spacing: 0.18em;
+		/* Optical compensation so the wordmark looks centred in the pill. */
+		margin-inline-end: -0.18em;
+		transition: color var(--dur-fast) var(--ease-out);
 	}
-	.social-links,
-	.social-links a {
+
+	@media (hover: hover) and (pointer: fine) {
+		.brand:hover .brand-word {
+			color: var(--accent-strong);
+		}
+	}
+
+	.nav-list {
 		display: flex;
+		align-items: center;
+		gap: 0.15rem;
+		list-style: none;
+		margin: 0;
 	}
-	@media (max-width: 720px) {
-		.social-links {
-			display: none;
+
+	.nav-toggle {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		inline-size: 40px;
+		block-size: 40px;
+		margin-inline-start: auto;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: rgba(255, 255, 255, 0.04);
+		color: var(--text);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.nav-toggle:hover {
+			background: rgba(255, 255, 255, 0.09);
+			border-color: var(--glass-border-strong);
+		}
+	}
+
+	.nav-toggle-bars {
+		display: grid;
+		gap: 5px;
+		inline-size: 16px;
+	}
+
+	.nav-toggle-bars span {
+		display: block;
+		block-size: 1.5px;
+		inline-size: 100%;
+		border-radius: 2px;
+		background: currentColor;
+		transition: transform var(--dur-fast) var(--ease-out);
+	}
+
+	/* --- Small screens: the list becomes a glass sheet --------------------- */
+
+	@media (max-width: 899px) {
+		.nav-toggle {
+			display: inline-flex;
+		}
+
+		.nav-list {
+			position: absolute;
+			inset-inline: 0;
+			inset-block-start: calc(100% + 10px);
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.1rem;
+			padding: 0.5rem;
+			border-radius: var(--radius-lg);
+			border: 1px solid var(--glass-border-strong);
+			box-shadow: var(--glass-shadow-raised);
+			/* Not backdrop-filter, and deliberately so: the sheet is a DOM child of
+			   the pill, and an element with backdrop-filter becomes a "backdrop
+			   root" for its descendants — the sheet could only blur the pill's own
+			   already-blurred backdrop, which renders flat and costs fill rate on
+			   the devices that can least afford it. A near-solid dark panel over a
+			   near-black page is visually the same thing, so that is what it is. */
+			background: rgba(6, 8, 14, 0.94);
+			/* Closed: invisible AND unreachable by keyboard and screen reader. */
+			opacity: 0;
+			visibility: hidden;
+			transform: translate3d(0, -8px, 0);
+			transition:
+				opacity var(--dur-fast) var(--ease-out),
+				transform var(--dur-fast) var(--ease-out),
+				visibility 0s linear var(--dur-fast);
+		}
+
+		.nav-list.is-open {
+			opacity: 1;
+			visibility: visible;
+			transform: none;
+			transition:
+				opacity var(--dur-base) var(--ease-out),
+				transform var(--dur-base) var(--ease-spring),
+				visibility 0s;
+		}
+
+		/* Two bars become a cross. */
+		.nav-toggle[aria-expanded='true'] .nav-toggle-bars span:first-child {
+			transform: translateY(3.25px) rotate(45deg);
+		}
+
+		.nav-toggle[aria-expanded='true'] .nav-toggle-bars span:last-child {
+			transform: translateY(-3.25px) rotate(-45deg);
 		}
 	}
 </style>

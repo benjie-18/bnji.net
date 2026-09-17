@@ -1,0 +1,32 @@
+---
+/**
+ * MagneticButton — a wrapper that gives its child a small pointer attraction.
+ *
+ * It renders a span (not a button) so it can wrap any control: GlassButton
+ * composes it via `magnetic`, and it can also be used around a nav item or an
+ * image link. The transform is applied to this wrapper while the child keeps its
+ * own hover lift, which is why the two effects never cancel each other out.
+ *
+ * scripts/interactions.ts drives it and only on devices with a fine pointer.
+ * The pull is capped at ~9px so a control can never slide away from a click.
+ */
+interface Props {
+	/** Pull factor, 0-1. Higher = follows the cursor more. */
+	strength?: number;
+	/** Maximum displacement in px. */
+	max?: number;
+	class?: string;
+}
+
+const { strength = 0.24, max = 9, class: className = '' } = Astro.props;
+---
+
+<span class:list={['magnetic', className]} data-magnetic={strength} data-magnetic-max={max}>
+	<slot />
+</span>
+
+<style>
+	.magnetic {
+		display: inline-flex;
+	}
+</style>

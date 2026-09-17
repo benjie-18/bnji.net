@@ -1,0 +1,153 @@
+---
+/**
+ * 404 — "This page disappeared into the void."
+ *
+ * Same starfield, glass and type language as the rest of the site: a lost
+ * visitor should still feel like they are inside BNJI, not inside a browser
+ * error. The page is marked noindex so a stray URL cannot enter a search index.
+ *
+ * Served by Astro for unknown routes, and emitted as 404.html for the static
+ * asset handler, so both the Worker and the edge return this page.
+ */
+import GlassButton from '../components/GlassButton.astro';
+import GlassPanel from '../components/GlassPanel.astro';
+import { PRIMARY_NAV } from '../data/navigation';
+import Layout from '../layouts/Layout.astro';
+
+/** Everything except the current (nonexistent) page: a way out in every
+ *  direction instead of a single "go home" button. */
+const escapes = PRIMARY_NAV.filter((item) => item.href !== '/');
+---
+
+<Layout
+	title="Page not found"
+	description="404 — this page disappeared into the void. Return to BNJI.NET or jump to projects, the blog, the Lab or contact."
+	noindex
+>
+	<section class="void" aria-labelledby="void-title">
+		<div class="container">
+			<GlassPanel pad="lg" reveal starReactive class="void-panel">
+				<p class="void-code" aria-hidden="true">404</p>
+
+				<h1 class="void-title" id="void-title">
+					This page disappeared into the void.
+				</h1>
+
+				<p class="lead void-lead">
+					These coordinates do not match anything in the system. The page may have
+					been renamed, moved to a subdomain, or it never existed at all.
+				</p>
+
+				<div class="actions-stack void-actions">
+					<GlassButton href="/" variant="primary" size="lg" magnetic icon="spark">
+						Return to BNJI
+					</GlassButton>
+					<GlassButton href="/projects/" size="lg" magnetic icon="arrow-right">
+						Browse projects
+					</GlassButton>
+				</div>
+
+				<nav class="void-nav" aria-label="Other destinations">
+					<p class="mono void-nav__label">Or jump to</p>
+					<ul class="void-nav__list" role="list">
+						{
+							escapes.map((item) => (
+								<li>
+									<a href={item.href}>{item.label}</a>
+								</li>
+							))
+						}
+					</ul>
+				</nav>
+			</GlassPanel>
+		</div>
+	</section>
+</Layout>
+
+<style>
+	.void {
+		min-height: 78vh;
+		min-height: 78svh;
+		display: flex;
+		align-items: center;
+		padding-block: clamp(3rem, 10vh, 7rem);
+	}
+
+	.void-panel {
+		display: grid;
+		justify-items: center;
+		text-align: center;
+		gap: clamp(0.9rem, 2vw, 1.3rem);
+		padding-block: clamp(2.5rem, 7vw, 5rem);
+		inline-size: 100%;
+	}
+
+	/* Decorative: the huge numeral is aria-hidden and the real heading is the
+	   sentence below it, so a screen reader never hears "four oh four". */
+	.void-code {
+		font-family: var(--font-display);
+		font-size: clamp(4rem, 16vw, 10rem);
+		font-weight: 200;
+		letter-spacing: 0.04em;
+		line-height: 0.85;
+		color: transparent;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.04));
+		-webkit-background-clip: text;
+		background-clip: text;
+	}
+
+	.void-title {
+		font-size: clamp(1.6rem, 4.4vw, 2.8rem);
+		font-weight: 300;
+		letter-spacing: var(--tracking-snug);
+		line-height: 1.15;
+		max-width: 24ch;
+		margin: 0;
+	}
+
+	.void-lead {
+		text-align: center;
+		margin-inline: auto;
+	}
+
+	.void-actions {
+		justify-content: center;
+		margin-block-start: 0.6rem;
+	}
+
+	.void-nav {
+		display: grid;
+		gap: 0.7rem;
+		justify-items: center;
+		margin-block-start: 1.2rem;
+		padding-block-start: 1.4rem;
+		border-block-start: 1px solid rgba(255, 255, 255, 0.07);
+		inline-size: 100%;
+		max-width: 520px;
+	}
+
+	.void-nav__label {
+		color: var(--text-faint);
+	}
+
+	.void-nav__list {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.4rem 1.1rem;
+		list-style: none;
+	}
+
+	.void-nav__list a {
+		font-family: var(--font-display);
+		font-size: 0.92rem;
+		color: var(--text-muted);
+		text-decoration: none;
+		border-radius: var(--radius-xs);
+		transition: color var(--dur-fast) var(--ease-out);
+	}
+
+	.void-nav__list a:hover {
+		color: var(--accent-strong);
+	}
+</style>

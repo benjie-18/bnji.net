@@ -1,0 +1,253 @@
+---
+/**
+ * Lab — Memory Pairs. The classic flip-and-match game on a 4×4 glass grid.
+ *
+ * DOM-only (no canvas, no framework): each card is a real <button>, so the
+ * game is fully keyboard playable and screen-reader announceable. Move
+ * counter, session best score, win state and a reset. Flips are transform/
+ * opacity only; reduced motion swaps the flip for an instant reveal.
+ *
+ * Isolation contract: no rAF loop at all (event-driven), owns its subtree.
+ */
+const GLYPHS = ['◆', '●', '▲', '■', '★', '☾', '✚', '⬟'];
+const deck = [...GLYPHS, ...GLYPHS]
+	.map((glyph, i) => ({ glyph, key: `${glyph}-${i}`, sort: Math.random() }))
+	.sort((a, b) => a.sort - b.sort)
+	.map((card) => card.glyph);
+---
+
+<div class="memory" data-memory>
+	<div class="memory__hud mono">
+		<span>moves <b data-mem-moves>0</b></span>
+		<span>pairs <b data-mem-pairs>0</b>/8</span>
+		<span>best <b data-mem-best>—</b></span>
+	</div>
+
+	<div class="memory__grid" role="group" aria-label="Memory pairs board">
+		{
+			deck.map((glyph, index) => (
+				<button
+					class="memory__card"
+					type="button"
+					data-mem-card={glyph}
+					data-index={index}
+					aria-label={`Card ${index + 1}, face down`}
+				>
+					<span class="memory__face memory__face--back" aria-hidden="true">?</span>
+					<span class="memory__face memory__face--front" aria-hidden="true">{glyph}</span>
+				</button>
+			))
+		}
+	</div>
+
+	<div class="memory__actions">
+		<button class="memory__reset mono" type="button" data-mem-reset>Reset board</button>
+		<p class="memory__status mono" data-mem-status role="status" aria-live="polite"></p>
+	</div>
+</div>
+
+<script>
+	const host =
+		(document.currentScript?.closest?.('[data-memory]') as HTMLElement | null) ??
+		document.querySelector<HTMLElement>('[data-memory]');
+	if (host) {
+		const cards = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-mem-card]'));
+		const movesEl = host.querySelector<HTMLElement>('[data-mem-moves]');
+		const pairsEl = host.querySelector<HTMLElement>('[data-mem-pairs]');
+		const bestEl = host.querySelector<HTMLElement>('[data-mem-best]');
+		const statusEl = host.querySelector<HTMLElement>('[data-mem-status]');
+		const reset = host.querySelector<HTMLButtonElement>('[data-mem-reset]');
+		if (movesEl && pairsEl && bestEl && statusEl && reset) {
+			let first: HTMLButtonElement | null = null;
+			let lock = false;
+			let moves = 0;
+			let pairs = 0;
+
+			const readBest = (): number | null => {
+				try {
+					const value = sessionStorage.getItem('bnji-memory-best');
+					return value ? Number(value) : null;
+				} catch {
+					return null;
+				}
+			};
+			const writeBest = (value: number) => {
+				try {
+					sessionStorage.setItem('bnji-memory-best', String(value));
+				} catch {
+					/* storage blocked: best score simply won't persist */
+				}
+			};
+			const best = readBest();
+			bestEl.textContent = best ? String(best) : '—';
+
+			const setFace = (card: HTMLButtonElement, up: boolean, matched: boolean) => {
+				card.classList.toggle('memory__card--up', up);
+				card.classList.toggle('memory__card--done', matched);
+				card.setAttribute(
+					'aria-label',
+					up
+						? `Card showing ${card.dataset.memCard}${matched ? ', matched' : ''}`
+						: `Card ${Number(card.dataset.index) + 1}, face down`,
+				);
+			};
+
+			const finish = () => {
+				statusEl.textContent = `Solved in ${moves} moves.`;
+				const previous = readBest();
+				if (previous === null || moves < previous) {
+					writeBest(moves);
+					bestEl.textContent = String(moves);
+					statusEl.textContent += ' New best.';
+				}
+			};
+
+			for (const card of cards) {
+				card.addEventListener('click', () => {
+					if (lock || card.classList.contains('memory__card--up')) return;
+					setFace(card, true, false);
+					if (!first) {
+						first = card;
+						return;
+					}
+					moves += 1;
+					movesEl.textContent = String(moves);
+					const a = first;
+					first = null;
+					if (a.dataset.memCard === card.dataset.memCard) {
+						setFace(a, true, true);
+						setFace(card, true, true);
+						pairs += 1;
+						pairsEl.textContent = String(pairs);
+						if (pairs === 8) finish();
+					} else {
+						lock = true;
+						setTimeout(() => {
+							setFace(a, false, false);
+							setFace(card, false, false);
+							lock = false;
+						}, 700);
+					}
+				});
+			}
+
+			reset.addEventListener('click', () => {
+				first = null;
+				lock = false;
+				moves = 0;
+				pairs = 0;
+				movesEl.textContent = '0';
+				pairsEl.textContent = '0';
+				statusEl.textContent = '';
+				for (const card of cards) setFace(card, false, false);
+			});
+		}
+	}
+</script>
+
+<style>
+	.memory {
+		display: grid;
+		gap: 0.7rem;
+	}
+	.memory__hud {
+		display: flex;
+		gap: 1.2rem;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+	.memory__hud b {
+		color: var(--text-strong);
+		font-weight: 600;
+	}
+	.memory__grid {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.5rem;
+	}
+	.memory__card {
+		position: relative;
+		aspect-ratio: 1;
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-sm);
+		background: var(--glass-bg-quiet);
+		color: var(--text);
+		cursor: pointer;
+		perspective: 400px;
+		transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+	}
+	.memory__card:hover {
+		transform: translateY(-2px);
+		border-color: var(--glass-border-strong);
+	}
+	.memory__card:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+	.memory__face {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		font-size: clamp(1rem, 3vw, 1.5rem);
+		transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+	}
+	.memory__face--front {
+		opacity: 0;
+		transform: rotateY(90deg);
+		color: var(--accent);
+	}
+	.memory__face--back {
+		color: var(--text-faint);
+	}
+	.memory__card--up .memory__face--front {
+		opacity: 1;
+		transform: rotateY(0);
+	}
+	.memory__card--up .memory__face--back {
+		opacity: 0;
+		transform: rotateY(-90deg);
+	}
+	.memory__card--done {
+		border-color: var(--signal-live);
+		background: var(--accent-soft);
+	}
+	.memory__actions {
+		display: flex;
+		align-items: center;
+		gap: 0.9rem;
+		flex-wrap: wrap;
+	}
+	.memory__reset {
+		padding: 0.4rem 0.9rem;
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-pill);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		cursor: pointer;
+	}
+	.memory__reset:hover {
+		color: var(--text-strong);
+		background: var(--glass-bg);
+	}
+	.memory__reset:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+	.memory__status {
+		margin: 0;
+		font-size: var(--text-micro);
+		color: var(--signal-live);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.memory__face,
+		.memory__card {
+			transition: none;
+		}
+	}
+</style>

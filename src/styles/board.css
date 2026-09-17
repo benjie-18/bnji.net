@@ -1,0 +1,446 @@
+/* ==========================================================================
+   BNJI.NET — public message board
+   --------------------------------------------------------------------------
+   The field is a fixed, pointer-transparent layer; each message is one
+   floating element positioned with translate3d by scripts/board.ts.
+
+   Theme voices (switched purely by html[data-theme]):
+     light — Frutiger Aero soap bubbles: inflated spheres with a hot specular
+             dot, hue-tinted translucent body and a bright rim;
+     dark  — stars: luminous hue-tinted orbs with a four-point sparkle and a
+             soft glow, sitting inside the space environment.
+
+   The composer is anchored bottom-centre at ALL times (the brief's anchor),
+   and the archive is a modal dialog above everything.
+   ========================================================================== */
+
+.board {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-board);
+	pointer-events: none;
+	overflow: hidden;
+}
+
+.board__field {
+	position: absolute;
+	inset: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* --- Floating message elements -------------------------------------------- */
+
+.board-msg {
+	position: absolute;
+	top: 0;
+	left: 0;
+	pointer-events: auto;
+	will-change: transform;
+}
+
+.board-msg--enter {
+	animation: board-pop var(--dur-slow) var(--ease-spring);
+}
+
+@keyframes board-pop {
+	from {
+		scale: 0.55;
+		opacity: 0;
+	}
+	to {
+		scale: 1;
+		opacity: 1;
+	}
+}
+
+.board-msg__grab {
+	display: grid;
+	place-items: center;
+	gap: 0.35rem;
+	inline-size: 100%;
+	aspect-ratio: 1;
+	padding: 16%;
+	border: 1px solid transparent;
+	border-radius: 50%;
+	text-align: center;
+	font-family: var(--font-body);
+	font-size: 0.76rem;
+	line-height: 1.35;
+	cursor: grab;
+	touch-action: none; /* pointer drag owns the gesture */
+	overflow: hidden;
+	transition: scale var(--dur-fast) var(--ease-spring);
+}
+
+.board-msg__grab--held {
+	cursor: grabbing;
+	scale: 1.07;
+	z-index: 2;
+}
+
+.board-msg__grab:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 3px;
+}
+
+.board-msg__text {
+	display: -webkit-box;
+	-webkit-line-clamp: 5;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	word-break: break-word;
+}
+
+.board-msg__img {
+	inline-size: 38%;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+/* Light: glossy aero bubble, hue-tinted. */
+html[data-theme='light'] .board-msg__grab {
+	color: #0b3d52;
+	background:
+		radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.95), transparent 34%),
+		radial-gradient(circle at 68% 78%, hsla(var(--hue), 85%, 70%, 0.4), transparent 46%),
+		radial-gradient(
+			circle at 50% 50%,
+			hsla(var(--hue), 90%, 96%, 0.55) 52%,
+			hsla(var(--hue), 85%, 84%, 0.72) 82%,
+			hsla(var(--hue), 90%, 98%, 0.95) 99%
+		);
+	border-color: hsla(var(--hue), 90%, 99%, 0.9);
+	box-shadow:
+		0 10px 26px -14px hsla(var(--hue), 70%, 40%, 0.45),
+		inset 0 -8px 16px -10px hsla(var(--hue), 70%, 45%, 0.5),
+		inset 0 3px 8px -4px rgba(255, 255, 255, 0.9);
+}
+
+/* Dark: star orb with sparkle + glow. */
+html[data-theme='dark'] .board-msg__grab {
+	color: #081018;
+	background: radial-gradient(
+		circle at 50% 44%,
+		hsla(var(--hue), 96%, 90%, 0.98),
+		hsla(var(--hue), 88%, 68%, 0.62) 46%,
+		hsla(var(--hue), 82%, 46%, 0.16) 72%,
+		transparent 78%
+	);
+	border-color: hsla(var(--hue), 90%, 80%, 0.35);
+	box-shadow:
+		0 0 26px -4px hsla(var(--hue), 90%, 70%, 0.45),
+		inset 0 0 18px -8px hsla(var(--hue), 95%, 88%, 0.8);
+}
+
+/* Four-point sparkle behind dark orbs — the "star" read. */
+html[data-theme='dark'] .board-msg::before {
+	content: '';
+	position: absolute;
+	inset: -18%;
+	pointer-events: none;
+	background: conic-gradient(
+		from 0deg,
+		transparent 0deg 40deg,
+		hsla(var(--hue), 95%, 85%, 0.5) 45deg,
+		transparent 50deg 130deg,
+		hsla(var(--hue), 95%, 85%, 0.5) 135deg,
+		transparent 140deg 220deg,
+		hsla(var(--hue), 95%, 85%, 0.5) 225deg,
+		transparent 230deg 310deg,
+		hsla(var(--hue), 95%, 85%, 0.5) 315deg,
+		transparent 320deg
+	);
+	mask: radial-gradient(circle, transparent 30%, black 42%, transparent 62%);
+	-webkit-mask: radial-gradient(circle, transparent 30%, black 42%, transparent 62%);
+	opacity: 0.8;
+}
+
+/* Reduced motion: calm static grid, no pop animation. */
+.board--static .board-msg {
+	transition: transform var(--dur-base) var(--ease-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.board-msg--enter {
+		animation: none;
+	}
+	.board-msg__grab {
+		transition: none;
+	}
+}
+
+/* --- Composer: anchored bottom-centre, always ------------------------------ */
+
+.board__composer {
+	position: fixed;
+	left: 50%;
+	bottom: var(--gutter);
+	transform: translateX(-50%);
+	z-index: calc(var(--z-board) + 1);
+	pointer-events: auto;
+	display: grid;
+	gap: 0.4rem;
+	width: min(560px, 94vw);
+	padding: 0.55rem 0.6rem;
+	border-radius: var(--radius-lg);
+}
+
+.board__composer-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+.board__composer-row--meta {
+	justify-content: space-between;
+}
+
+.board__input {
+	flex: 1;
+	min-width: 0;
+	max-height: 110px;
+	padding: 0.55rem 0.7rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	background: var(--glass-bg-quiet);
+	color: var(--text);
+	font-family: var(--font-body);
+	font-size: 0.9rem;
+	line-height: 1.4;
+	resize: none;
+}
+.board__input::placeholder {
+	color: var(--text-dim);
+}
+.board__input:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 1px;
+}
+
+.board__attach {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: 34px;
+	block-size: 34px;
+	flex: none;
+	border: 1px solid var(--glass-border);
+	border-radius: 50%;
+	background: var(--glass-bg-quiet);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.board__attach:hover {
+	color: var(--text-strong);
+	background: var(--glass-bg);
+}
+.board__attach:focus-within {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+.board__attach input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+.board__attach svg {
+	inline-size: 17px;
+	block-size: 17px;
+	pointer-events: none;
+}
+
+.board__preview {
+	inline-size: 30px;
+	block-size: 30px;
+	object-fit: cover;
+	border-radius: 50%;
+	border: 1px solid var(--glass-border-strong);
+	flex: none;
+}
+
+.board__send {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex: none;
+	padding: 0.5rem 0.9rem;
+	border: 1px solid var(--glass-border-strong);
+	border-radius: var(--radius-pill);
+	background: var(--accent-soft);
+	color: var(--text-strong);
+	font-size: 0.86rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.board__send:hover:not(:disabled) {
+	background: var(--glass-bg-raised);
+	transform: translateY(-1px);
+}
+.board__send:disabled {
+	opacity: 0.55;
+	cursor: progress;
+}
+.board__send:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+.board__send svg {
+	inline-size: 15px;
+	block-size: 15px;
+}
+
+.board__slider-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-dim);
+	cursor: pointer;
+}
+.board__slider-label input {
+	inline-size: 110px;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+.board__slider-label input:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.board__archive-open {
+	padding: 0.3rem 0.7rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-quiet);
+	color: var(--text-muted);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	cursor: pointer;
+}
+.board__archive-open:hover {
+	color: var(--text-strong);
+	background: var(--glass-bg);
+}
+.board__archive-open:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.board__status {
+	margin: 0;
+	min-height: 1.1em;
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-dim);
+	text-align: center;
+}
+
+/* --- Archive dialog ---------------------------------------------------------- */
+
+.board__archive {
+	position: fixed;
+	inset: 8vh auto auto 50%;
+	transform: translateX(-50%);
+	z-index: var(--z-modal);
+	pointer-events: auto;
+	display: grid;
+	grid-template-rows: auto 1fr;
+	gap: 0.7rem;
+	width: min(680px, 94vw);
+	max-height: 84vh;
+	padding: 1rem 1.1rem;
+	border-radius: var(--radius-xl);
+}
+
+.board__archive-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.board__archive-title {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: var(--text-title);
+	color: var(--text-strong);
+}
+.board__archive-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: 34px;
+	block-size: 34px;
+	border: 1px solid var(--glass-border);
+	border-radius: 50%;
+	background: var(--glass-bg-quiet);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.board__archive-close:hover {
+	color: var(--text-strong);
+}
+.board__archive-close:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+.board__archive-close svg {
+	inline-size: 15px;
+	block-size: 15px;
+}
+
+.board__archive-list {
+	margin: 0;
+	padding: 0.2rem 0.3rem 0.2rem 0;
+	list-style: none;
+	overflow-y: auto;
+	display: grid;
+	gap: 0.5rem;
+}
+.board-archive__row {
+	display: grid;
+	gap: 0.25rem;
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	background: var(--glass-bg-quiet);
+}
+.board-archive__row time {
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-dim);
+}
+.board-archive__row p {
+	margin: 0;
+	font-size: var(--text-small);
+	color: var(--text);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+.board-archive__img {
+	inline-size: 72px;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--glass-border);
+}
+
+/* Narrow screens: composer owns the bottom; the music pill moves to the top
+   right so the two never fight for the same corner. */
+@media (max-width: 720px) {
+	.board__composer {
+		width: 96vw;
+		bottom: 10px;
+	}
+	.board__slider-label input {
+		inline-size: 80px;
+	}
+}

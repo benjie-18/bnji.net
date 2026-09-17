@@ -1,0 +1,147 @@
+---
+/**
+ * ContactSection — the closing call to action ("07 / CONTACT").
+ *
+ * Deliberately form-free: two real links (email, GitHub) beat a contact form
+ * that needs a backend, a spam filter and a mailbox nobody checks. When a form
+ * becomes worth it, it belongs here and nowhere else.
+ *
+ * Shared by the homepage and /contact/, so the message cannot drift between the
+ * two.
+ */
+import { SITE, SOCIAL_LINKS } from '../data/site';
+import GlassButton from './GlassButton.astro';
+import GlassPanel from './GlassPanel.astro';
+
+interface Props {
+	/** Show the full panel with meta rows (used on /contact/). */
+	detailed?: boolean;
+	/** Section index for the eyebrow; hidden when omitted. */
+	index?: string;
+	titleId?: string;
+}
+
+const { detailed = false, index = '07', titleId = 'contact-title' } = Astro.props;
+
+const META = [
+	{ label: 'Response', value: 'Usually within a day or two' },
+	{ label: 'Open to', value: 'Projects, collaboration, interesting problems' },
+	{ label: 'Elsewhere', value: SOCIAL_LINKS.map((link) => link.label).join(' · ') },
+];
+---
+
+<section class="section" id="contact" aria-labelledby={titleId}>
+	<div class="container">
+		<GlassPanel pad="lg" reveal starReactive class="contact">
+			{index && <p class="eyebrow">{index} / CONTACT</p>}
+
+			<h2 class="contact__title text-luminous" id={titleId} data-parallax="-0.05">
+				LET&rsquo;S BUILD SOMETHING
+			</h2>
+
+			<p class="lead contact__lead">
+				A project, a question about the stack, or an idea that needs someone to
+				actually build it — the inbox is open.
+			</p>
+
+			<div class="actions-stack contact__actions">
+				<GlassButton
+					href={`mailto:${SITE.email}`}
+					variant="primary"
+					size="lg"
+					magnetic
+					iconBefore="mail"
+				>
+					{SITE.email}
+				</GlassButton>
+				<GlassButton href={SITE.github} size="lg" magnetic iconBefore="github" target="_blank">
+					{SITE.githubHandle}
+				</GlassButton>
+			</div>
+
+			{
+				detailed && (
+					<dl class="contact__meta">
+						{META.map((row) => (
+							<div class="contact__meta-row">
+								<dt>{row.label}</dt>
+								<dd>{row.value}</dd>
+							</div>
+						))}
+					</dl>
+				)
+			}
+		</GlassPanel>
+	</div>
+</section>
+
+<style>
+	.contact {
+		display: grid;
+		justify-items: center;
+		text-align: center;
+		gap: clamp(1rem, 2.4vw, 1.5rem);
+		padding-block: clamp(2.5rem, 7vw, 5rem);
+	}
+
+	.contact__title {
+		font-size: clamp(2.2rem, 8vw, 5.5rem);
+		font-weight: 250;
+		letter-spacing: var(--tracking-tight);
+		line-height: 0.98;
+		margin: 0;
+		/* Long uppercase strings must be able to break on a phone instead of
+		   forcing horizontal overflow. */
+		overflow-wrap: anywhere;
+	}
+
+	.contact__lead {
+		text-align: center;
+		margin-inline: auto;
+	}
+
+	.contact__actions {
+		justify-content: center;
+		margin-block-start: 0.4rem;
+	}
+
+	.contact__meta {
+		display: grid;
+		gap: 0.7rem;
+		inline-size: 100%;
+		max-width: 620px;
+		margin: 0;
+		margin-block-start: 1rem;
+		padding-block-start: 1.4rem;
+		border-block-start: 1px solid rgba(255, 255, 255, 0.07);
+		text-align: start;
+	}
+
+	.contact__meta-row {
+		display: grid;
+		grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+		gap: 1rem;
+		align-items: baseline;
+	}
+
+	.contact__meta dt {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.contact__meta dd {
+		margin: 0;
+		font-size: 0.93rem;
+		color: var(--text-muted);
+	}
+
+	@media (max-width: 560px) {
+		.contact__meta-row {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0.2rem;
+		}
+	}
+</style>

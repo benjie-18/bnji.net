@@ -1,0 +1,232 @@
+/* ==========================================================================
+   BNJI.NET — Lab primitives
+   --------------------------------------------------------------------------
+   Imported by src/pages/lab.astro ONLY, so none of this ships to the rest of
+   the site. Experiments share these classes for their stage, controls and
+   readouts, which is what keeps three very different prototypes looking like
+   they belong to the same place.
+
+   Isolation rules for experiments live in src/data/lab.ts and AGENTS.md:
+   own subtree, own rAF loops, no writes to :root.
+   ========================================================================== */
+
+.lab-stage {
+	position: relative;
+	inline-size: 100%;
+	aspect-ratio: 16 / 9;
+	min-block-size: 220px;
+	border-radius: var(--radius-md);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	background:
+		radial-gradient(120% 100% at 50% 0%, rgba(127, 212, 255, 0.05), transparent 62%),
+		rgba(0, 0, 0, 0.35);
+	overflow: hidden;
+	/* Keeps an experiment's canvas inside its own rounded frame. */
+	isolation: isolate;
+}
+
+.lab-canvas {
+	position: absolute;
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	display: block;
+}
+
+.lab-hint {
+	position: absolute;
+	inset-block-end: 0.6rem;
+	inset-inline-start: 0.8rem;
+	color: var(--text-faint);
+	pointer-events: none;
+}
+
+/* --- Controls ------------------------------------------------------------- */
+
+.lab-controls {
+	display: grid;
+	gap: 0.85rem;
+	margin-block-start: 1.1rem;
+}
+
+@media (min-width: 720px) {
+	.lab-controls {
+		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+		gap: 1rem 1.5rem;
+	}
+}
+
+.lab-control {
+	display: grid;
+	gap: 0.4rem;
+}
+
+.lab-control__label {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.6rem;
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.lab-control output {
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: 0.04em;
+	color: var(--accent-strong);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Range inputs keep their native semantics (keyboard operable, announced with
+   a value); only the track and thumb are restyled. */
+.lab-range {
+	-webkit-appearance: none;
+	appearance: none;
+	inline-size: 100%;
+	block-size: 22px;
+	background: transparent;
+	cursor: pointer;
+}
+
+.lab-range::-webkit-slider-runnable-track {
+	block-size: 3px;
+	border-radius: var(--radius-pill);
+	background: rgba(255, 255, 255, 0.14);
+}
+
+.lab-range::-moz-range-track {
+	block-size: 3px;
+	border-radius: var(--radius-pill);
+	background: rgba(255, 255, 255, 0.14);
+}
+
+.lab-range::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	inline-size: 14px;
+	block-size: 14px;
+	margin-block-start: -5.5px;
+	border-radius: 50%;
+	background: var(--text-strong);
+	border: 1px solid rgba(127, 212, 255, 0.6);
+	box-shadow: 0 0 12px rgba(127, 212, 255, 0.5);
+}
+
+.lab-range::-moz-range-thumb {
+	inline-size: 14px;
+	block-size: 14px;
+	border-radius: 50%;
+	background: var(--text-strong);
+	border: 1px solid rgba(127, 212, 255, 0.6);
+	box-shadow: 0 0 12px rgba(127, 212, 255, 0.5);
+}
+
+.lab-range:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 4px;
+	border-radius: var(--radius-xs);
+}
+
+.lab-select {
+	inline-size: 100%;
+	padding: 0.45em 0.7em;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--glass-border);
+	background: rgba(255, 255, 255, 0.04);
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: 0.78rem;
+}
+
+.lab-button {
+	justify-self: start;
+	align-self: end;
+	padding: 0.55em 1.1em;
+	border-radius: var(--radius-pill);
+	border: 1px solid var(--glass-border);
+	background: rgba(255, 255, 255, 0.04);
+	color: var(--text-muted);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	cursor: pointer;
+	transition:
+		color var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out);
+}
+
+.lab-button:hover {
+	color: var(--text-strong);
+	border-color: var(--glass-border-strong);
+	background: rgba(255, 255, 255, 0.08);
+}
+
+/* --- Readouts ------------------------------------------------------------- */
+
+/* The generated snippet: experiments print the numbers they are using so a
+   good result can be copied straight back into tokens.css or a component. */
+.lab-code {
+	margin-block-start: 1.1rem;
+	padding: 0.95rem 1.1rem;
+	border-radius: var(--radius-md);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	background: rgba(0, 0, 0, 0.4);
+	font-family: var(--font-mono);
+	font-size: 0.76rem;
+	line-height: 1.6;
+	color: var(--text-muted);
+	overflow-x: auto;
+	white-space: pre;
+	tab-size: 2;
+}
+
+.lab-code__title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-block-start: 1.1rem;
+	color: var(--text-faint);
+}
+
+/* Live numeric readouts (fps, particle count). */
+.lab-stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1.2rem;
+	margin-block-start: 0.9rem;
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.lab-stats strong {
+	color: var(--accent-strong);
+	font-weight: 400;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Shown instead of the canvas when an experiment cannot run. */
+.lab-fallback {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-content: center;
+	text-align: center;
+	gap: 0.5rem;
+	padding: 1.5rem;
+	color: var(--text-muted);
+	font-size: 0.92rem;
+}
+
+.lab-fallback[hidden] {
+	display: none;
+}

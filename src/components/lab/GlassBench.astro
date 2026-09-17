@@ -1,0 +1,289 @@
+---
+/**
+ * Lab experiment — Liquid Glass Bench.
+ *
+ * A test surface for the glass design system. Blur is only visible over
+ * something with detail, so the sample sits on a small lit backdrop; the sliders
+ * then write the token values as inline custom properties on the sample element
+ * alone.
+ *
+ * ISOLATION
+ *  - Rule 3 in src/data/lab.ts: experiments never write to :root. Everything is
+ *    set on [data-bench-sample], so the rest of the page keeps using the real
+ *    tokens from styles/tokens.css.
+ *  - No animation loop at all — this is CSS plus input events, which is why it
+ *    is the cheapest experiment on the page.
+ */
+---
+
+<div class="bench">
+	<div class="lab-stage bench-stage">
+		<div class="bench-backdrop" aria-hidden="true">
+			<span class="bench-backdrop__blob bench-backdrop__blob--1"></span>
+			<span class="bench-backdrop__blob bench-backdrop__blob--2"></span>
+			<span class="bench-backdrop__grid"></span>
+		</div>
+
+		<div class="bench-sample" data-glass data-bench-sample>
+			<p class="bench-sample__label mono">glass sample</p>
+			<p class="bench-sample__title">Translucent, not transparent</p>
+			<p class="bench-sample__body">
+				The right amount of blur should let the backdrop through as colour
+				and light, never as readable detail.
+			</p>
+			<div class="bench-sample__row">
+				<span class="chip chip--accent">token</span>
+				<span class="chip">surface</span>
+				<span class="chip">blur</span>
+			</div>
+		</div>
+	</div>
+
+	<div class="lab-controls">
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Fill opacity <output data-bench-out="fill">0.045</output>
+			</span>
+			<input class="lab-range" type="range" min="0" max="0.2" step="0.005" value="0.045" data-bench-in="fill"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Blur <output data-bench-out="blur">24px</output>
+			</span>
+			<input class="lab-range" type="range" min="0" max="60" step="1" value="24" data-bench-in="blur" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Saturation <output data-bench-out="saturate">165%</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="100"
+				max="260"
+				step="5"
+				value="165"
+				data-bench-in="saturate"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Border <output data-bench-out="border">0.10</output>
+			</span>
+			<input class="lab-range" type="range" min="0" max="0.4" step="0.01" value="0.1" data-bench-in="border"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Highlight <output data-bench-out="highlight">0.075</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="0"
+				max="0.25"
+				step="0.005"
+				value="0.075"
+				data-bench-in="highlight"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Shadow depth <output data-bench-out="shadow">60px</output>
+			</span>
+			<input class="lab-range" type="range" min="0" max="140" step="5" value="60" data-bench-in="shadow" />
+		</label>
+
+		<button class="lab-button" type="button" data-bench-reset>Reset to site tokens</button>
+	</div>
+
+	<div class="lab-code__title">
+		<span class="mono">styles/tokens.css</span>
+		<button class="lab-button" type="button" data-bench-copy>Copy</button>
+	</div>
+	<pre class="lab-code" data-bench-code></pre>
+</div>
+
+<script>
+	const EXPERIMENT = 'glass-bench';
+	const root = document.querySelector<HTMLElement>(`[data-lab-experiment="${EXPERIMENT}"]`);
+	const sample = root?.querySelector<HTMLElement>('[data-bench-sample]');
+
+	if (root && sample) {
+		const codeBlock = root.querySelector<HTMLElement>('[data-bench-code]');
+		const inputs = Array.from(root.querySelectorAll<HTMLInputElement>('[data-bench-in]'));
+		const outputs = new Map<string, HTMLOutputElement>();
+		root.querySelectorAll<HTMLOutputElement>('[data-bench-out]').forEach((output) => {
+			outputs.set(output.dataset.benchOut ?? '', output);
+		});
+
+		// Values mirror styles/tokens.css at the time of writing; "Reset" returns
+		// to them rather than to whatever the sliders happen to say.
+		const DEFAULTS = { fill: 0.045, blur: 24, saturate: 165, border: 0.1, highlight: 0.075, shadow: 60 };
+		type BenchKey = keyof typeof DEFAULTS;
+		const values: Record<BenchKey, number> = { ...DEFAULTS };
+
+		function format(key: BenchKey, value: number): string {
+			if (key === 'blur' || key === 'shadow') return `${value}px`;
+			if (key === 'saturate') return `${value}%`;
+			return value.toFixed(3);
+		}
+
+		function apply() {
+			// Inline custom properties on the sample only: glass.css reads these
+			// variables, so overriding them locally restyles just this surface and
+			// its pseudo-elements.
+			sample.style.setProperty('--glass-bg', `rgba(255,255,255,${values.fill})`);
+			sample.style.setProperty('--glass-blur', `${values.blur}px`);
+			sample.style.setProperty('--glass-saturate', `${values.saturate}%`);
+			sample.style.setProperty('--glass-border', `rgba(255,255,255,${values.border})`);
+			sample.style.setProperty('--glass-highlight', `rgba(255,255,255,${values.highlight})`);
+			sample.style.setProperty(
+				'--glass-shadow',
+				`0 ${Math.round(values.shadow / 3)}px ${values.shadow}px -${Math.round(values.shadow / 2.5)}px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.45)`,
+			);
+
+			if (codeBlock) {
+				codeBlock.textContent = [
+					`--glass-bg: rgba(255, 255, 255, ${values.fill});`,
+					`--glass-blur: ${values.blur}px;`,
+					`--glass-saturate: ${values.saturate}%;`,
+					`--glass-border: rgba(255, 255, 255, ${values.border});`,
+					`--glass-highlight: rgba(255, 255, 255, ${values.highlight});`,
+					`--glass-shadow: 0 ${Math.round(values.shadow / 3)}px ${values.shadow}px -${Math.round(
+						values.shadow / 2.5,
+					)}px rgba(0, 0, 0, 0.9);`,
+				].join('\n');
+			}
+		}
+
+		inputs.forEach((input) => {
+			const key = (input.dataset.benchIn ?? '') as BenchKey;
+			input.addEventListener('input', () => {
+				const value = Number(input.value);
+				values[key] = value;
+				const output = outputs.get(key);
+				if (output) output.textContent = format(key, value);
+				apply();
+			});
+		});
+
+		root.querySelector('[data-bench-reset]')?.addEventListener('click', () => {
+			(Object.keys(DEFAULTS) as BenchKey[]).forEach((key) => {
+				values[key] = DEFAULTS[key];
+				const input = inputs.find((candidate) => candidate.dataset.benchIn === key);
+				if (input) input.value = String(DEFAULTS[key]);
+				const output = outputs.get(key);
+				if (output) output.textContent = format(key, DEFAULTS[key]);
+			});
+			apply();
+		});
+
+		root.querySelector('[data-bench-copy]')?.addEventListener('click', async (event) => {
+			const button = event.currentTarget as HTMLButtonElement;
+			const label = button.textContent ?? 'Copy';
+			try {
+				await navigator.clipboard.writeText(codeBlock?.textContent ?? '');
+				button.textContent = 'Copied';
+			} catch {
+				button.textContent = 'Select the text instead';
+			}
+			window.setTimeout(() => {
+				button.textContent = label;
+			}, 1800);
+		});
+
+		apply();
+	}
+</script>
+
+<style>
+	/* The sample is centred over a lit backdrop; the stage itself is the frame
+	   (styles/lab.css), so nothing here needs to know about the rest of the site. */
+	.bench-stage {
+		display: grid;
+		place-items: center;
+		padding: clamp(1rem, 3vw, 2rem);
+		aspect-ratio: 16 / 10;
+	}
+
+	.bench-backdrop {
+		position: absolute;
+		inset: 0;
+		overflow: hidden;
+	}
+
+	.bench-backdrop__blob {
+		position: absolute;
+		border-radius: 50%;
+		filter: blur(2px);
+	}
+
+	.bench-backdrop__blob--1 {
+		inset-block-start: -18%;
+		inset-inline-start: 6%;
+		inline-size: 46%;
+		aspect-ratio: 1;
+		background: radial-gradient(circle, rgba(127, 212, 255, 0.5), rgba(127, 212, 255, 0) 68%);
+	}
+
+	.bench-backdrop__blob--2 {
+		inset-block-end: -26%;
+		inset-inline-end: 2%;
+		inline-size: 54%;
+		aspect-ratio: 1;
+		background: radial-gradient(circle, rgba(255, 154, 108, 0.42), rgba(255, 154, 108, 0) 66%);
+	}
+
+	/* A ruled grid gives the blur something structural to smear, which is what
+	   makes the effect measurable rather than decorative. */
+	.bench-backdrop__grid {
+		position: absolute;
+		inset: 0;
+		background-image:
+			repeating-linear-gradient(to right, rgba(255, 255, 255, 0.14) 0 1px, transparent 1px 34px),
+			repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 0 1px, transparent 1px 34px);
+		opacity: 0.5;
+	}
+
+	.bench-sample {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		gap: 0.55rem;
+		inline-size: min(420px, 100%);
+		padding: clamp(1.1rem, 2.6vw, 1.6rem);
+		border-radius: var(--radius-lg);
+	}
+
+	.bench-sample__label {
+		color: var(--text-faint);
+	}
+
+	.bench-sample__title {
+		font-family: var(--font-display);
+		font-size: 1.25rem;
+		font-weight: 400;
+		letter-spacing: var(--tracking-snug);
+		color: var(--text-strong);
+	}
+
+	.bench-sample__body {
+		font-size: 0.92rem;
+		line-height: 1.6;
+		color: var(--text-muted);
+	}
+
+	.bench-sample__row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin-block-start: 0.3rem;
+	}
+</style>

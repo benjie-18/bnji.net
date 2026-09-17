@@ -1,0 +1,119 @@
+---
+/**
+ * PageHeader — the opening block of every inner page.
+ *
+ * One component so /about/, /projects/, /blog/, /lab/ and /contact/ all start
+ * with the same rhythm: mono eyebrow, large luminous h1, lead paragraph,
+ * optional actions and optional mono meta chips.
+ *
+ * Load sequence mirrors the hero at a shorter scale (200/340/520/680ms) so inner
+ * pages feel like the same environment rather than a different template.
+ */
+import Chip from './Chip.astro';
+
+interface Props {
+	title: string;
+	description?: string;
+	/** Mono eyebrow label, e.g. "PROJECTS". */
+	label?: string;
+	/** Mono index shown before the label, e.g. "02". */
+	index?: string;
+	/** id applied to the h1; pages use it for aria-labelledby. */
+	titleId?: string;
+	/** Mono meta rows rendered as chips under the lead. */
+	meta?: string[];
+}
+
+const { title, description, label, index, titleId = 'page-title', meta = [] } = Astro.props;
+---
+
+<header class="page-header">
+	<div class="container">
+		<div class="page-header__inner" data-parallax="-0.05">
+			{
+				(label || index) && (
+					<p class="eyebrow" data-load style="--load-delay: 200ms">
+						{index && <span>{index}</span>}
+						{index && label && <span class="page-header__slash" aria-hidden="true">/</span>}
+						{label && <span>{label}</span>}
+					</p>
+				)
+			}
+
+			<h1
+				class="page-header__title text-luminous"
+				id={titleId}
+				data-load="emerge"
+				style="--load-delay: 340ms"
+			>
+				{title}
+			</h1>
+
+			{
+				description && (
+					<p class="lead page-header__lead" data-load style="--load-delay: 520ms">
+						{description}
+					</p>
+				)
+			}
+
+			<div class="page-header__extra" data-load style="--load-delay: 680ms">
+				<slot name="actions" />
+				{
+					meta.length > 0 && (
+						<ul class="page-header__meta" role="list">
+							{meta.map((item) => (
+								<li>
+									<Chip>{item}</Chip>
+								</li>
+							))}
+						</ul>
+					)
+				}
+			</div>
+		</div>
+	</div>
+</header>
+
+<style>
+	.page-header {
+		padding-block: clamp(3rem, 9vh, 6.5rem) clamp(1.5rem, 4vh, 3rem);
+	}
+
+	.page-header__inner {
+		display: grid;
+		gap: clamp(0.8rem, 2vw, 1.2rem);
+		justify-items: start;
+	}
+
+	.page-header__slash {
+		color: var(--text-faint);
+	}
+
+	.page-header__title {
+		font-size: clamp(2.4rem, 7vw, 5rem);
+		font-weight: 250;
+		letter-spacing: var(--tracking-tight);
+		line-height: 1;
+		margin: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.page-header__lead {
+		max-width: 60ch;
+	}
+
+	.page-header__extra {
+		display: grid;
+		gap: 1rem;
+		justify-items: start;
+		margin-block-start: 0.4rem;
+	}
+
+	.page-header__meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		list-style: none;
+	}
+</style>

@@ -1,0 +1,24 @@
+{
+	"name": "BNJI.NET — Lorem Ipsum Dolor",
+	"short_name": "BNJI",
+	"description": "A digital hub: lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor."
+	"start_url": "/",
+	"scope": "/",
+	"display": "minimal-ui",
+	"background_color": "#020204",
+	"theme_color": "#020204",
+	"icons": [
+		{
+			"src": "/favicon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any"
+		},
+		{
+			"src": "/apple-touch-icon.png",
+			"sizes": "180x180",
+			"type": "image/png",
+			"purpose": "any"
+		}
+	]
+}

@@ -1,0 +1,298 @@
+/* ==========================================================================
+   BNJI.NET — design tokens
+   --------------------------------------------------------------------------
+   Single source of truth for colour, type, spacing, radii, motion and layout
+   numbers. Components consume these variables and should never hard-code a
+   colour, radius or duration of their own; to re-skin the entire site, edit
+   this file only.
+
+   TWO THEMES
+   ----------
+   :root carries the DARK "space" theme (the primary identity): near-black,
+   stars, and — since the dual-theme update — richer pink/violet/magenta
+   atmospheric lighting. [data-theme='light'] carries the Frutiger Aero light
+   theme: sky blues, aqua, fresh greens, white gloss, bubbles and clouds.
+   The attribute is set on <html> by the pre-paint script in BaseHead.astro and
+   toggled at runtime by scripts/theme.ts. Every component reads tokens, so a
+   theme switch never touches component CSS.
+   ========================================================================== */
+
+:root {
+	/* The dark theme owns the default color-scheme so form controls,
+	   scrollbars and the browser UI match without per-element hacks. */
+	color-scheme: dark;
+
+	/* --- Space background ---------------------------------------------- */
+	/* Almost black, but never a flat #000 field: the aurora layers below add
+	   depth. Deliberately cool and very low alpha — this must not read as a
+	   purple gradient. */
+	--bg: #020204;
+	--bg-void: #000000;
+	/* Atmospheric lighting: cool blues plus the expanded pink/violet/magenta
+	   nebula band. Alphas stay low; this is lighting, not wallpaper. */
+	--aurora-1: rgba(64, 132, 226, 0.085);
+	--aurora-2: rgba(38, 178, 178, 0.055);
+	--aurora-3: rgba(124, 108, 224, 0.05);
+	--nebula-pink: rgba(255, 92, 178, 0.055);
+	--nebula-violet: rgba(148, 88, 255, 0.06);
+	--nebula-magenta: rgba(255, 64, 214, 0.04);
+	--star-color: 226, 238, 255; /* rgb triplet, consumed by scripts/starfield.ts */
+	--shooting-star-color: 200, 226, 255;
+	/* Cursor halo (dark): stellar blue with a violet rim. */
+	--cursor-core: rgba(140, 200, 255, 0.09);
+	--cursor-mid: rgba(168, 120, 255, 0.05);
+	--cursor-rim: rgba(255, 110, 190, 0.045);
+
+	/* --- Text ------------------------------------------------------------ */
+	/* Contrast is measured against --bg (and against glass, which is only a
+	   few percent lighter). --text-dim is reserved for large display type and
+	   mono labels, never for body copy. */
+	--text: #eef2f8; /* 15.9:1 */
+	--text-strong: #ffffff;
+	--text-muted: rgba(226, 233, 244, 0.72); /* ~9:1 */
+	--text-dim: rgba(226, 233, 244, 0.5); /* ~4.9:1 — large text only */
+	--text-faint: rgba(226, 233, 244, 0.34); /* hairlines / decorative only */
+	--text-inverse: #05070c;
+
+	/* --- Accent ---------------------------------------------------------- */
+	/* One cool accent, used sparingly: focus rings, active nav, links inside
+	   prose, status dots. Accent colour is never a large fill. */
+	--accent: #7fd4ff;
+	--accent-strong: #c3ecff; /* 12.4:1 on --bg — used for focus rings */
+	--accent-soft: rgba(127, 212, 255, 0.14);
+	--accent-line: rgba(127, 212, 255, 0.34);
+	--accent-2: #ff8ad4; /* pink companion, dark theme only, decorative */
+	--signal-live: #79e6b0;
+	--signal-soon: #ffd68a;
+	--signal-idle: rgba(226, 233, 244, 0.4);
+
+	/* --- Glass surfaces --------------------------------------------------- */
+	/* The whole glass system is these tokens plus glass.css. Keep them here so
+	   GlassPanel/GlassButton and any [data-glass] element cannot drift.
+	   Dark glass: faint white film over the void, lit from above. */
+	--glass-bg: rgba(255, 255, 255, 0.045);
+	--glass-bg-raised: rgba(255, 255, 255, 0.07);
+	--glass-bg-quiet: rgba(255, 255, 255, 0.026);
+	--glass-bg-fallback: rgba(10, 12, 20, 0.86); /* no-backdrop-filter browsers */
+	--glass-border: rgba(255, 255, 255, 0.1);
+	--glass-border-strong: rgba(255, 255, 255, 0.2);
+	--glass-highlight: rgba(255, 255, 255, 0.075); /* faint internal top edge */
+	/* Edge light: the lit rim gradient (top-left hot, bottom-right cool). */
+	--glass-edge-a: rgba(255, 255, 255, 0.34);
+	--glass-edge-b: rgba(255, 255, 255, 0.04);
+	--glass-edge-c: rgba(127, 212, 255, 0.16);
+	/* Internal refraction: bottom bounce light + environmental colour bleed. */
+	--glass-refraction: rgba(127, 212, 255, 0.05);
+	--glass-env-bleed: rgba(148, 88, 255, 0.045);
+	--glass-specular: rgba(255, 255, 255, 0.16); /* moving highlight on hover */
+	--glass-blur: 24px;
+	--glass-saturate: 165%;
+	--glass-brightness: 1.04;
+	/* Ambient shadow: large offset, very large spread, no hard edge. */
+	--glass-shadow:
+		0 20px 60px -24px rgba(0, 0, 0, 0.9), 0 2px 12px rgba(0, 0, 0, 0.45);
+	--glass-shadow-raised:
+		0 28px 80px -28px rgba(0, 0, 0, 0.95), 0 4px 18px rgba(0, 0, 0, 0.5);
+	/* Hover lift: tighter shadow plus a faint accent bloom. */
+	--glass-glow: 0 0 44px -18px rgba(127, 212, 255, 0.55);
+	/* Radius of the pointer-tracked highlight; set per surface where useful. */
+	--glass-spot: 260px;
+	/* Pointer position, written by scripts/interactions.ts on [data-glass]. */
+	--mouse-x: 50%;
+	--mouse-y: 0%;
+
+	/* --- Frutiger Aero (light theme) environment -------------------------- */
+	/* Consumed only under [data-theme='light'] via aero.css, but declared here
+	   so both themes' environment values live in one audited place. */
+	--aero-sky-top: #7ec9f2;
+	--aero-sky-mid: #bfe6f7;
+	--aero-sky-bottom: #eafbff;
+	--aero-sun: rgba(255, 255, 240, 0.85);
+	--aero-cloud: rgba(255, 255, 255, 0.75);
+	--aero-bubble: rgba(255, 255, 255, 0.55);
+	--aero-bubble-rim: rgba(255, 255, 255, 0.9);
+	--aero-bokeh: rgba(120, 226, 255, 0.35);
+	--aero-green: rgba(96, 226, 160, 0.4);
+
+	/* --- Radii ------------------------------------------------------------ */
+	--radius-xs: 8px;
+	--radius-sm: 12px;
+	--radius-md: 18px;
+	--radius-lg: 24px;
+	--radius-xl: 32px;
+	--radius-pill: 999px;
+
+	/* --- Type ------------------------------------------------------------- */
+	/* Display/UI = system stack: it is what "premium and native" means on every
+	   platform and costs zero bytes. Body = the Atkinson Hyperlegible files
+	   already vendored in public/fonts (legibility-first, self-hosted, ~23 KB
+	   each). Mono carries the technical voice: labels, tags, ports, hashes. */
+	--font-display:
+		system-ui, -apple-system, 'SF Pro Display', 'Segoe UI Variable Display', 'Segoe UI',
+		Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
+	--font-body: 'Atkinson', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono:
+		ui-monospace, 'SF Mono', SFMono-Regular, 'JetBrains Mono', Menlo, Consolas,
+		'Liberation Mono', monospace;
+
+	/* Hero wordmark: the single largest type on the site. */
+	--text-hero: clamp(4.5rem, 14vw, 13rem);
+	--text-display: clamp(2.1rem, 5.2vw, 4rem);
+	--text-title: clamp(1.4rem, 2.4vw, 2.1rem);
+	--text-lead: clamp(1.05rem, 1.35vw, 1.3rem);
+	--text-body: 1rem;
+	--text-small: 0.9rem;
+	/* Mono labels are uppercase + tracked; never below 11px effective. */
+	--text-micro: 0.7rem;
+
+	--tracking-tight: -0.045em;
+	--tracking-snug: -0.02em;
+	--tracking-mono: 0.16em;
+
+	--leading-tight: 1.05;
+	--leading-snug: 1.35;
+	--leading-body: 1.7;
+
+	/* --- Layout ----------------------------------------------------------- */
+	--content-width: 1200px;
+	--content-width-narrow: 760px;
+	--gutter: clamp(1.15rem, 4vw, 2.5rem);
+	--section-y: clamp(4.5rem, 12vh, 9rem);
+	--grid-gap: clamp(1rem, 2vw, 1.75rem);
+	--nav-height: 60px;
+	--nav-offset: clamp(12px, 2vw, 22px);
+	/* Anchor targets must clear the floating nav. */
+	--scroll-pad: calc(var(--nav-height) + var(--nav-offset) + 16px);
+
+	/* --- Motion ----------------------------------------------------------- */
+	/* Hierarchy: background drifts (very slow), display type eases (slow),
+	   sections reveal (moderate), cards subtle, buttons immediate. */
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+	--ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
+	--dur-instant: 120ms;
+	--dur-fast: 200ms;
+	--dur-base: 340ms;
+	--dur-slow: 720ms;
+	--dur-drift: 90s;
+	--reveal-distance: 20px;
+	--hover-lift: -3px;
+
+	/* --- Spacing scale ---------------------------------------------------- */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+	--space-7: 3rem;
+	--space-8: 4.5rem;
+
+	/* --- Stacking order --------------------------------------------------- */
+	/* Explicit scale so no component has to invent a z-index. */
+	--z-aurora: 0;
+	--z-stars: 1;
+	--z-aero: 1;
+	--z-content: 2;
+	--z-board: 15;
+	--z-nav: 20;
+	--z-cursor: 30;
+	--z-skip: 40;
+	--z-player: 25;
+	--z-intro: 50;
+	--z-modal: 60;
+}
+
+/* ==========================================================================
+   LIGHT THEME — Frutiger Aero
+   --------------------------------------------------------------------------
+   Glossy, buoyant, nature-meets-technology: sky gradient field, white cloud
+   masses, aqua/green light, inflated white glass with hot specular edges.
+   Contrast is re-measured against the light field: body text is a deep teal
+   (#0b3d52 on #dff3fc ≈ 9.6:1), never pure black.
+   ========================================================================== */
+[data-theme='light'] {
+	color-scheme: light;
+
+	--bg: #dff3fc;
+	--bg-void: #9fd6ef;
+	--aurora-1: rgba(255, 255, 255, 0.65); /* sun bloom, top left */
+	--aurora-2: rgba(64, 200, 255, 0.35); /* aqua light, right */
+	--aurora-3: rgba(96, 226, 160, 0.28); /* fresh green, low */
+	--nebula-pink: transparent;
+	--nebula-violet: transparent;
+	--nebula-magenta: transparent;
+	--star-color: 255, 255, 255;
+	--shooting-star-color: 255, 255, 255;
+	/* Cursor halo (light): a bright aqua lens with a green caustic rim. */
+	--cursor-core: rgba(0, 190, 235, 0.14);
+	--cursor-mid: rgba(120, 230, 255, 0.1);
+	--cursor-rim: rgba(96, 226, 160, 0.12);
+
+	--text: #0b3d52; /* 9.6:1 on --bg */
+	--text-strong: #062b3a;
+	--text-muted: rgba(9, 55, 74, 0.78); /* ~7:1 */
+	--text-dim: rgba(9, 55, 74, 0.62); /* ~5:1 — large text only */
+	--text-faint: rgba(9, 55, 74, 0.42); /* hairlines / decorative only */
+	--text-inverse: #f2fbff;
+
+	--accent: #0092c8; /* 4.6:1 on --bg */
+	--accent-strong: #00658c; /* 6.9:1 — focus rings */
+	--accent-soft: rgba(0, 146, 200, 0.14);
+	--accent-line: rgba(0, 146, 200, 0.42);
+	--accent-2: #00a878; /* green companion, decorative */
+	--signal-live: #0f9960;
+	--signal-soon: #a05a00;
+	--signal-idle: rgba(9, 55, 74, 0.45);
+
+	/* Light glass: inflated white translucency — the Aero "soap bubble". */
+	--glass-bg: rgba(255, 255, 255, 0.42);
+	--glass-bg-raised: rgba(255, 255, 255, 0.6);
+	--glass-bg-quiet: rgba(255, 255, 255, 0.3);
+	--glass-bg-fallback: rgba(244, 252, 255, 0.92);
+	--glass-border: rgba(255, 255, 255, 0.72);
+	--glass-border-strong: rgba(255, 255, 255, 0.95);
+	--glass-highlight: rgba(255, 255, 255, 0.85);
+	--glass-edge-a: rgba(255, 255, 255, 0.95);
+	--glass-edge-b: rgba(255, 255, 255, 0.25);
+	--glass-edge-c: rgba(0, 190, 235, 0.45);
+	--glass-refraction: rgba(0, 190, 235, 0.12);
+	--glass-env-bleed: rgba(96, 226, 160, 0.12);
+	--glass-specular: rgba(255, 255, 255, 0.75);
+	--glass-blur: 20px;
+	--glass-saturate: 180%;
+	--glass-brightness: 1.06;
+	--glass-shadow:
+		0 18px 48px -20px rgba(21, 110, 160, 0.35), 0 2px 10px rgba(30, 130, 180, 0.16),
+		inset 0 -10px 24px -18px rgba(0, 146, 200, 0.35);
+	--glass-shadow-raised:
+		0 26px 64px -24px rgba(21, 110, 160, 0.42), 0 4px 16px rgba(30, 130, 180, 0.2),
+		inset 0 -12px 28px -18px rgba(0, 146, 200, 0.4);
+	--glass-glow: 0 0 40px -14px rgba(0, 190, 235, 0.55);
+}
+
+/* Phones get less blur. backdrop-filter is the most expensive effect on the
+   site and mobile panels are smaller and fewer; the visual difference at 14px
+   is negligible while the fill-rate cost is roughly halved. */
+@media (max-width: 720px) {
+	:root {
+		--glass-blur: 14px;
+		--glass-saturate: 140%;
+		--glass-spot: 180px;
+		--nav-height: 54px;
+	}
+}
+
+/* Reduced motion: collapse the motion tokens instead of chasing individual
+   animations. Anything reading a duration/easing variable inherits the calm
+   behaviour automatically. (animations.css handles the hard overrides.) */
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--dur-instant: 0ms;
+		--dur-fast: 0ms;
+		--dur-base: 0ms;
+		--dur-slow: 0ms;
+		--reveal-distance: 0px;
+		--hover-lift: 0px;
+	}
+}

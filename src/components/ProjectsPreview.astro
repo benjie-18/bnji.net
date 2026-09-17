@@ -1,0 +1,48 @@
+---
+/**
+ * ProjectsPreview — featured projects on the homepage ("02 / PROJECTS").
+ *
+ * Content comes from src/data/projects.ts. The layout is deliberately
+ * asymmetric (one flagship card, then an offset pair) rather than a row of
+ * identical cards: the composition should emphasise the selected work while
+ * still accepting a fourth or fifth project later without a redesign.
+ */
+import { getFeaturedProjects } from '../data/projects';
+import ProjectCard from './ProjectCard.astro';
+import SectionHeading from './SectionHeading.astro';
+
+const FEATURED_LIMIT = 3;
+const featured = getFeaturedProjects(FEATURED_LIMIT);
+
+/** Bento spans, in order. Add a project to data/projects.ts and it picks up the
+ *  fallback span without touching this component. */
+const SPANS = [12, 7, 5];
+---
+
+<section class="section" id="projects" aria-labelledby="projects-title">
+	<div class="container">
+		<SectionHeading
+			index="02"
+			label="PROJECTS"
+			titleId="projects-title"
+			title="Selected work"
+			description="Live work, placeholders and ideas — the status chip on each card says which is which."
+			actionHref="/projects/"
+			actionLabel="All projects"
+		/>
+
+		<div class="bento">
+			{
+				featured.map((project, index) => (
+					<ProjectCard
+						project={project}
+						index={index}
+						feature={index === 0}
+						span={SPANS[index] ?? 6}
+						revealDelay={index * 90}
+					/>
+				))
+			}
+		</div>
+	</div>
+</section>

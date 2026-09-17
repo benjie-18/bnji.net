@@ -1,0 +1,248 @@
+---
+/**
+ * Lab experiment — Starfield Tuner.
+ *
+ * The site's own background engine (src/scripts/starfield.ts) running in a small
+ * frame with live controls. The point is not the demo, it is the numbers: tune
+ * the sky here, then copy the printed options into Starfield.astro.
+ *
+ * ISOLATION
+ *  - Own canvas, own engine instance; nothing queries outside
+ *    [data-lab-experiment="starfield-tuner"].
+ *  - Paused by IntersectionObserver when scrolled offscreen, so the Lab page
+ *    never runs two animation loops for something nobody can see.
+ *  - No global CSS writes: every value goes to this instance's options object.
+ */
+---
+
+<div class="tuner">
+	<div class="lab-stage">
+		<canvas class="lab-canvas" data-tuner-canvas aria-hidden="true"></canvas>
+		<p class="lab-fallback" data-tuner-fallback hidden>
+			This experiment needs a 2D canvas, which this browser did not provide.
+		</p>
+		<p class="lab-hint mono">pointer response is live</p>
+	</div>
+
+	<div class="lab-controls">
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Density <output data-tuner-out="starsPerMegapixel">145</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="20"
+				max="420"
+				step="5"
+				value="145"
+				data-tuner-in="starsPerMegapixel"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Twinkle <output data-tuner-out="twinkle">1.0</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="0"
+				max="3"
+				step="0.1"
+				value="1"
+				data-tuner-in="twinkle"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Cursor radius <output data-tuner-out="pointerRadius">150</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="0"
+				max="320"
+				step="10"
+				value="150"
+				data-tuner-in="pointerRadius"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Drift <output data-tuner-out="drift">1.1</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="0"
+				max="6"
+				step="0.1"
+				value="1.1"
+				data-tuner-in="drift"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Frame cap <output data-tuner-out="targetFps">30</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="5"
+				max="60"
+				step="5"
+				value="30"
+				data-tuner-in="targetFps"
+			/>
+		</label>
+
+		<button class="lab-button" type="button" data-tuner-reset>Reset to site defaults</button>
+	</div>
+
+	<div class="lab-code__title">
+		<span class="mono">createStarfield(canvas, options)</span>
+		<button class="lab-button" type="button" data-tuner-copy>Copy</button>
+	</div>
+	<pre class="lab-code" data-tuner-code></pre>
+
+	<p class="lab-stats">
+		<span>stars <strong data-tuner-stat="count">0</strong></span>
+		<span>canvas <strong data-tuner-stat="size">0x0</strong></span>
+	</p>
+</div>
+
+<script>
+	import { createStarfield } from '../../scripts/starfield';
+
+	const EXPERIMENT = 'starfield-tuner';
+	const root = document.querySelector<HTMLElement>(
+		`[data-lab-experiment="${EXPERIMENT}"]`,
+	);
+	const canvas = root?.querySelector<HTMLCanvasElement>('[data-tuner-canvas]');
+
+	if (root && canvas) {
+		const fallback = root.querySelector<HTMLElement>('[data-tuner-fallback]');
+		const codeBlock = root.querySelector<HTMLElement>('[data-tuner-code]');
+		const inputs = Array.from(root.querySelectorAll<HTMLInputElement>('[data-tuner-in]'));
+		const outputs = new Map<string, HTMLOutputElement>();
+		root.querySelectorAll<HTMLOutputElement>('[data-tuner-out]').forEach((output) => {
+			outputs.set(output.dataset.tunerOut ?? '', output);
+		});
+
+		// Defaults mirror the site background so the printed snippet can be pasted
+		// straight into Starfield.astro.
+		const DEFAULTS: Record<string, number> = {
+			starsPerMegapixel: 145,
+			twinkle: 1,
+			pointerRadius: 150,
+			drift: 1.1,
+			targetFps: 30,
+		};
+		// Options that are baked into each star when it is created, so changing
+		// them needs a fresh population rather than a live write.
+		const NEEDS_REGENERATE = new Set(['starsPerMegapixel', 'twinkle']);
+
+		const field = createStarfield(canvas, { ...DEFAULTS });
+
+		if (!canvas.getContext('2d')) {
+			canvas.hidden = true;
+			if (fallback) fallback.hidden = false;
+		}
+
+		const stats = {
+			count: root.querySelector<HTMLElement>('[data-tuner-stat="count"]'),
+			size: root.querySelector<HTMLElement>('[data-tuner-stat="size"]'),
+		};
+
+		function printOptions() {
+			if (!codeBlock) return;
+			const lines = Object.entries(DEFAULTS).map(([key]) => {
+				const value = field.options[key as keyof typeof field.options];
+				return `  ${key}: ${value},`;
+			});
+			codeBlock.textContent = `{\n${lines.join('\n')}\n}`;
+			if (stats.count) {
+				stats.count.textContent = String(field.count());
+			}
+			if (stats.size) {
+				stats.size.textContent = `${canvas.clientWidth}x${canvas.clientHeight}`;
+			}
+		}
+
+		inputs.forEach((input) => {
+			const key = input.dataset.tunerIn ?? '';
+			input.addEventListener('input', () => {
+				const value = Number(input.value);
+				const output = outputs.get(key);
+				if (output) {
+					output.textContent = Number.isInteger(value) ? String(value) : value.toFixed(1);
+				}
+				// Write into the live options object, then let the engine decide
+				// whether the population has to be rebuilt.
+				(field.options as unknown as Record<string, number>)[key] = value;
+				if (NEEDS_REGENERATE.has(key)) field.regenerate();
+				printOptions();
+			});
+		});
+
+		root.querySelector('[data-tuner-reset]')?.addEventListener('click', () => {
+			inputs.forEach((input) => {
+				const key = input.dataset.tunerIn ?? '';
+				const value = DEFAULTS[key];
+				if (typeof value !== 'number') return;
+				input.value = String(value);
+				const output = outputs.get(key);
+				if (output) {
+					output.textContent = Number.isInteger(value) ? String(value) : value.toFixed(1);
+				}
+				(field.options as unknown as Record<string, number>)[key] = value;
+			});
+			field.regenerate();
+			printOptions();
+		});
+
+		root.querySelector('[data-tuner-copy]')?.addEventListener('click', async (event) => {
+			const button = event.currentTarget as HTMLButtonElement;
+			const text = codeBlock?.textContent ?? '';
+			const label = button.textContent ?? 'Copy';
+			try {
+				await navigator.clipboard.writeText(text);
+				button.textContent = 'Copied';
+			} catch {
+				// Clipboard needs a secure context and a user gesture; say so
+				// instead of failing silently.
+				button.textContent = 'Select the text instead';
+			}
+			window.setTimeout(() => {
+				button.textContent = label;
+			}, 1800);
+		});
+
+		// Only animate while the experiment is actually on screen.
+		if (typeof IntersectionObserver !== 'undefined') {
+			const observer = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						if (entry.isIntersecting) field.resume();
+						else field.pause();
+					}
+				},
+				{ rootMargin: '10% 0px' },
+			);
+			observer.observe(root);
+		}
+
+		window.addEventListener('resize', printOptions, { passive: true });
+		printOptions();
+	}
+</script>
+
+<style>
+	.tuner {
+		display: block;
+	}
+</style>

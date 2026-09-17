@@ -1,0 +1,47 @@
+---
+/**
+ * Chip — small mono label for tags, metadata and status.
+ *
+ * Deliberately NOT a glass surface: a page can carry thirty of these, and
+ * thirty backdrop-filtered, pointer-tracked panels is exactly the kind of
+ * invisible cost that ruins a phone's frame budget. The .chip rule in
+ * styles/glass.css gives them the same border/fill language without the blur.
+ */
+type Tone = 'default' | 'accent' | 'live' | 'soon' | 'idle';
+
+interface Props {
+	tone?: Tone;
+	class?: string;
+	/** Adds a leading status dot (used for live/soon services). */
+	dot?: boolean;
+	as?: 'span' | 'li' | 'p';
+}
+
+const { tone = 'default', dot = false, as: Tag = 'span', class: className = '' } = Astro.props;
+
+// Only two tones own a colour; everything else uses the neutral dot.
+const dotTone = tone === 'live' || tone === 'soon' ? tone : 'idle';
+---
+
+<Tag class:list={['chip', tone !== 'default' && `chip--${tone}`, className]}>
+	{dot && <span class:list={['dot', `dot--${dotTone}`]} aria-hidden="true"></span>}
+	<slot />
+</Tag>
+
+<style>
+	.chip--live {
+		border-color: rgba(121, 230, 176, 0.3);
+		color: var(--signal-live);
+		background: rgba(121, 230, 176, 0.08);
+	}
+
+	.chip--soon {
+		border-color: rgba(255, 214, 138, 0.24);
+		color: var(--signal-soon);
+		background: rgba(255, 214, 138, 0.06);
+	}
+
+	.chip--idle {
+		color: var(--text-dim);
+	}
+</style>

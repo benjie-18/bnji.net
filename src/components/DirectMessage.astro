@@ -1,0 +1,212 @@
+---
+/**
+ * DirectMessage — private visitor→owner message form (/contact/).
+ *
+ * Submits to the /api/dm boundary, which delivers through the provider chosen
+ * in src/config/integrations.config.ts (Discord webhook or ntfy desktop
+ * notification). Credentials live ONLY in Worker environment secrets
+ * (DISCORD_WEBHOOK_URL / NTFY_URL) — the browser never sees them.
+ *
+ * States rendered: checking · ready · not_configured · sending · sent ·
+ * invalid · rate_limited · upstream_error. Each is announced through the
+ * aria-live status line, and the not_configured state explains exactly where
+ * the owner has to fill configuration in.
+ */
+import GlassPanel from './GlassPanel.astro';
+import SectionHeading from './SectionHeading.astro';
+---
+
+<section class="section section--tight dm" id="direct-message" aria-labelledby="dm-title">
+	<div class="container">
+		<SectionHeading
+			label="PRIVATE MESSAGE"
+			titleId="dm-title"
+			title="Send a note only the owner reads"
+			description="Delivered outside the website — a Discord webhook or a desktop push — so it never appears on the public board."
+		/>
+
+		<GlassPanel pad="lg" reveal class="dm__panel" data-dm-root data-state="checking">
+			<form class="dm__form" data-dm-form novalidate>
+				<label class="dm__label mono" for="dm-message">Message</label>
+				<textarea
+					id="dm-message"
+					class="dm__textarea"
+					data-dm-message
+					rows="4"
+					required
+					placeholder="Lorem ipsum dolor sit amet… (private, not published)"
+				></textarea>
+
+				<label class="dm__label mono" for="dm-contact">Reply address (optional)</label>
+				<input
+					id="dm-contact"
+					class="dm__input"
+					type="text"
+					data-dm-contact
+					autocomplete="email"
+					placeholder="you@somewhere.example"
+				/>
+
+				<div class="dm__actions">
+					<button class="dm__submit" type="submit" data-dm-submit>
+						<span data-dm-submit-label>Send privately</span>
+					</button>
+					<p class="dm__status mono" data-dm-status role="status" aria-live="polite">
+						Checking whether private delivery is configured…
+					</p>
+				</div>
+			</form>
+		</GlassPanel>
+	</div>
+</section>
+
+<script>
+	const root = document.querySelector<HTMLElement>('[data-dm-root]');
+	const form = root?.querySelector<HTMLFormElement>('[data-dm-form]');
+	const message = root?.querySelector<HTMLTextAreaElement>('[data-dm-message]');
+	const contact = root?.querySelector<HTMLInputElement>('[data-dm-contact]');
+	const submit = root?.querySelector<HTMLButtonElement>('[data-dm-submit]');
+	const label = root?.querySelector<HTMLElement>('[data-dm-submit-label]');
+	const status = root?.querySelector<HTMLElement>('[data-dm-status]');
+
+	if (root && form && message && contact && submit && label && status) {
+		const setState = (state: string, text: string) => {
+			root.dataset.state = state;
+			status.textContent = text;
+			submit.disabled = state === 'sending' || state === 'not_configured';
+		};
+
+		// Ask the server whether a delivery provider + secrets are configured.
+		fetch('/api/dm')
+			.then((r) => r.json() as Promise<{ enabled: boolean; maxLength: number }>)
+			.then((info) => {
+				if (info.enabled) {
+					setState('ready', `Private delivery is on. Max ${info.maxLength} characters.`);
+					message.maxLength = info.maxLength;
+				} else {
+					setState(
+						'not_configured',
+						'Private delivery is not configured yet. Owner: pick a provider in src/config/integrations.config.ts, then set its secret (DISCORD_WEBHOOK_URL or NTFY_URL) in the Worker environment.',
+					);
+				}
+			})
+			.catch(() => setState('not_configured', 'Could not reach the message service.'));
+
+		form.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			const text = message.value.trim();
+			if (text.length === 0) {
+				setState('invalid', 'Write a message first.');
+				return;
+			}
+			setState('sending', 'Sending…');
+			label.textContent = 'Sending…';
+			try {
+				const response = await fetch('/api/dm', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ message: text, contact: contact.value.trim() }),
+				});
+				const data = (await response.json()) as { state: string; retryAfter?: number };
+				if (data.state === 'sent') {
+					setState('sent', 'Delivered. Thank you.');
+					form.reset();
+				} else if (data.state === 'rate_limited') {
+					setState('rate_limited', `Too soon — wait ${data.retryAfter ?? 30}s and try again.`);
+				} else if (data.state === 'invalid') {
+					setState('invalid', 'That message was rejected (empty or too long).');
+				} else if (data.state === 'not_configured') {
+					setState('not_configured', 'Private delivery is not configured on this deployment.');
+				} else {
+					setState('upstream_error', 'Delivery failed upstream. Try again later.');
+				}
+			} catch {
+				setState('upstream_error', 'Network error — nothing was sent.');
+			} finally {
+				label.textContent = 'Send privately';
+			}
+		});
+	}
+</script>
+
+<style>
+	.dm__panel {
+		max-width: var(--content-width-narrow);
+		margin-inline: auto;
+	}
+	.dm__form {
+		display: grid;
+		gap: 0.55rem;
+	}
+	.dm__label {
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+	.dm__textarea,
+	.dm__input {
+		width: 100%;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-md);
+		background: var(--glass-bg-quiet);
+		color: var(--text);
+		font-family: var(--font-body);
+		font-size: 0.95rem;
+	}
+	.dm__textarea {
+		resize: vertical;
+		min-height: 96px;
+	}
+	.dm__textarea:focus-visible,
+	.dm__input:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 1px;
+	}
+	.dm__actions {
+		display: flex;
+		align-items: center;
+		gap: 0.9rem;
+		flex-wrap: wrap;
+	}
+	.dm__submit {
+		padding: 0.55rem 1.1rem;
+		border: 1px solid var(--glass-border-strong);
+		border-radius: var(--radius-pill);
+		background: var(--accent-soft);
+		color: var(--text-strong);
+		font-weight: 600;
+		font-size: 0.9rem;
+		cursor: pointer;
+		transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+	}
+	.dm__submit:hover:not(:disabled) {
+		background: var(--glass-bg-raised);
+		transform: translateY(-1px);
+	}
+	.dm__submit:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+	.dm__submit:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+	.dm__status {
+		margin: 0;
+		flex: 1;
+		min-width: 200px;
+		font-size: var(--text-micro);
+		letter-spacing: 0.08em;
+		color: var(--text-dim);
+	}
+	[data-dm-root][data-state='sent'] .dm__status {
+		color: var(--signal-live);
+	}
+	[data-dm-root][data-state='rate_limited'] .dm__status,
+	[data-dm-root][data-state='invalid'] .dm__status,
+	[data-dm-root][data-state='upstream_error'] .dm__status {
+		color: var(--signal-soon);
+	}
+</style>

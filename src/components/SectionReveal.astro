@@ -1,0 +1,33 @@
+---
+/**
+ * SectionReveal — a wrapper that opts its content into the scroll entrance.
+ *
+ * It exists so a section can be revealed without each component re-declaring the
+ * same attribute and stagger: <SectionReveal delay={120}>...</SectionReveal>.
+ *
+ * The entrance itself is CSS (styles/animations.css) and applies only when
+ * `html.js` is set and the visitor has not asked for reduced motion, so a
+ * no-JavaScript visit shows the content immediately. scripts/scroll.ts adds
+ * `.is-visible` once the element scrolls into view.
+ */
+type TagName = 'div' | 'section' | 'article' | 'aside' | 'li' | 'header' | 'ul';
+
+interface Props {
+	as?: TagName;
+	/** Stagger in ms. Written as --reveal-delay, which animations.css reads. */
+	delay?: number;
+	id?: string;
+	class?: string;
+}
+
+const { as: Tag = 'div', delay = 0, id, class: className = '' } = Astro.props;
+---
+
+<Tag
+	id={id}
+	class={className || undefined}
+	data-reveal
+	style={delay ? `--reveal-delay: ${delay}ms` : undefined}
+>
+	<slot />
+</Tag>

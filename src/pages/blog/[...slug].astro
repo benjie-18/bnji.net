@@ -1,21 +1,35 @@
 ---
-import { type CollectionEntry, getCollection } from 'astro:content';
-import BlogPost from '../../layouts/BlogPost.astro';
+/**
+ * /blog/<slug>/ — one prerendered page per entry in the blog collection.
+ *
+ * Astro's content layer does the work: getStaticPaths() enumerates the posts,
+ * render() turns Markdown/MDX into components, and BlogPost.astro supplies the
+ * shell. Previous/next links are computed here from the same ordered list the
+ * index uses (newest first), so the pager always matches the index.
+ */
 import { render } from 'astro:content';
+import BlogPost from '../../layouts/BlogPost.astro';
+import { getBlogPosts } from '../../data/blog';
 
 export async function getStaticPaths() {
-	const posts = await getCollection('blog');
-	return posts.map((post) => ({
+	const posts = await getBlogPosts();
+
+	return posts.map((post, index) => ({
 		params: { slug: post.id },
-		props: post,
+		props: {
+			post,
+			// posts is newest-first: the previous entry is older (index + 1),
+			// the next entry is newer (index - 1).
+			previous: posts[index + 1],
+			next: posts[index - 1],
+		},
 	}));
 }
-type Props = CollectionEntry<'blog'>;
 
-const post = Astro.props;
+const { post, previous, next } = Astro.props;
 const { Content } = await render(post);
 ---
 
-<BlogPost {...post.data}>
+<BlogPost post={post} previous={previous} next={next}>
 	<Content />
 </BlogPost>

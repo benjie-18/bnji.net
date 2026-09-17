@@ -1,0 +1,145 @@
+---
+/**
+ * AboutPreview — the identity section (homepage "01 / IDENTITY").
+ *
+ * Short by design: a statement panel plus a mono fact sheet. It should say who
+ * this is without turning into a résumé — the full version lives on /about/.
+ */
+import Chip from './Chip.astro';
+import GlassPanel from './GlassPanel.astro';
+import SectionHeading from './SectionHeading.astro';
+import { SITE } from '../data/site';
+
+/** Glass identity chips. */
+const CHIPS = ['Lorem', 'Ipsum', 'Dolor', 'Sit'] as const;
+
+/** Mono fact sheet. Kept here because it is homepage copy, not shared data. */
+const FACTS = [
+	{ label: 'Lorem', value: 'Ipsum dolor sit amet' },
+	{ label: 'Consectetur', value: 'Adipiscing elit sed do' },
+	{ label: 'Eiusmod', value: 'Tempor incididunt ut labore' },
+	{ label: 'Magna', value: 'Aliqua ut enim ad minim' },
+] as const;
+---
+
+<section class="section" id="identity" aria-labelledby="identity-title">
+	<div class="container">
+		<SectionHeading
+			index="01"
+			label="IDENTITY"
+			titleId="identity-title"
+			title="One hub where everything lives together."
+			description="Not a portfolio grid and not a blog. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor."
+			actionHref="/about/"
+			actionLabel="About this site"
+		/>
+
+		<div class="about-grid">
+			<GlassPanel reveal pad="lg" class="about-statement">
+				<p class="about-copy">
+					Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+					tempor incididunt ut labore et dolore magna aliqua ut enim ad minim.
+				</p>
+				<ul class="about-chips" role="list">
+					{CHIPS.map((chip) => <li><Chip tone="accent">{chip}</Chip></li>)}
+				</ul>
+			</GlassPanel>
+
+			<GlassPanel reveal revealDelay={120} pad="md" variant="quiet" class="about-facts">
+				<dl class="about-facts__list">
+					{
+						FACTS.map((fact) => (
+							<div class="about-facts__row">
+								<dt>{fact.label}</dt>
+								<dd>{fact.value}</dd>
+							</div>
+						))
+					}
+				</dl>
+			</GlassPanel>
+		</div>
+	</div>
+</section>
+
+<style>
+	.about-grid {
+		display: grid;
+		gap: var(--grid-gap);
+	}
+
+	@media (min-width: 900px) {
+		.about-grid {
+			grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+			align-items: stretch;
+		}
+	}
+
+	.about-statement {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		justify-content: center;
+	}
+
+	.about-copy {
+		font-size: clamp(1.15rem, 2.1vw, 1.6rem);
+		line-height: 1.5;
+		color: var(--text);
+		max-width: 34ch;
+		font-weight: 400;
+	}
+
+	.about-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		list-style: none;
+	}
+
+	.about-facts {
+		display: flex;
+		align-items: center;
+	}
+
+	.about-facts__list {
+		display: grid;
+		gap: 0.9rem;
+		inline-size: 100%;
+		margin: 0;
+	}
+
+	.about-facts__row {
+		display: grid;
+		grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
+		gap: 1rem;
+		align-items: baseline;
+		padding-block-end: 0.85rem;
+		border-block-end: 1px solid rgba(255, 255, 255, 0.06);
+	}
+
+	.about-facts__row:last-child {
+		border-block-end: 0;
+		padding-block-end: 0;
+	}
+
+	.about-facts__row dt {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.about-facts__row dd {
+		margin: 0;
+		font-size: 0.95rem;
+		color: var(--text-muted);
+	}
+
+	@media (max-width: 520px) {
+		.about-facts__row {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0.25rem;
+		}
+	}
+</style>

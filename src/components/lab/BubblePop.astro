@@ -1,0 +1,220 @@
+---
+/**
+ * Lab — Bubble Pop. A genuinely playable micro-arcade toy.
+ *
+ * Glossy bubbles rise through a canvas; clicking/tapping (or pressing Space
+ * to pop the lowest bubble, for keyboard players) pops them for points, with
+ * a combo streak for quick consecutive pops. Reduced motion: bubbles hold
+ * still and remain poppable — the game stays playable, calmer.
+ *
+ * Isolation contract: owns its subtree + rAF; pauses out of view and when the
+ * tab is hidden; never touches global CSS.
+ */
+---
+
+<div class="bubble-pop" data-bubble-pop>
+	<div class="bubble-pop__hud mono">
+		<span>score <b data-bp-score>0</b></span>
+		<span>combo <b data-bp-combo>×1</b></span>
+		<span>popped <b data-bp-popped>0</b></span>
+	</div>
+	<canvas class="bubble-pop__canvas" data-bp-canvas aria-label="Bubble pop game field"></canvas>
+	<p class="bubble-pop__help mono">
+		Click or tap bubbles · <kbd>Space</kbd> pops the lowest one · misses break the combo
+	</p>
+</div>
+
+<script>
+	import { prefersReducedMotion, isPageVisible } from '../../scripts/environment';
+
+	const root = document.currentScript?.closest?.('[data-bubble-pop]') as HTMLElement | null;
+	const host = root ?? document.querySelector<HTMLElement>('[data-bubble-pop]');
+	const canvas = host?.querySelector<HTMLCanvasElement>('[data-bp-canvas]');
+	const scoreEl = host?.querySelector<HTMLElement>('[data-bp-score]');
+	const comboEl = host?.querySelector<HTMLElement>('[data-bp-combo]');
+	const poppedEl = host?.querySelector<HTMLElement>('[data-bp-popped]');
+
+	if (host && canvas && scoreEl && comboEl && poppedEl) {
+		const ctx = canvas.getContext('2d');
+		if (ctx) {
+			const reduced = prefersReducedMotion();
+			type Bubble = { x: number; y: number; r: number; v: number; hue: number; wobble: number };
+			let bubbles: Bubble[] = [];
+			let score = 0;
+			let combo = 1;
+			let popped = 0;
+			let lastPop = 0;
+			let frame = 0;
+			let last = 0;
+			let width = 0;
+			let height = 0;
+
+			const measure = () => {
+				const rect = canvas.getBoundingClientRect();
+				width = Math.max(1, rect.width);
+				height = Math.max(1, rect.height);
+				const dpr = Math.min(2, window.devicePixelRatio || 1);
+				canvas.width = Math.round(width * dpr);
+				canvas.height = Math.round(height * dpr);
+				ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			};
+
+			const spawn = () => {
+				if (bubbles.length > 14) return;
+				bubbles.push({
+					x: 30 + Math.random() * (width - 60),
+					y: height + 30,
+					r: 16 + Math.random() * 26,
+					v: 26 + Math.random() * 34,
+					hue: Math.floor(Math.random() * 360),
+					wobble: Math.random() * Math.PI * 2,
+				});
+			};
+
+			const draw = () => {
+				ctx.clearRect(0, 0, width, height);
+				for (const b of bubbles) {
+					const gradient = ctx.createRadialGradient(
+						b.x - b.r * 0.35,
+						b.y - b.r * 0.4,
+						b.r * 0.1,
+						b.x,
+						b.y,
+						b.r,
+					);
+					gradient.addColorStop(0, 'rgba(255,255,255,0.9)');
+					gradient.addColorStop(0.35, `hsla(${b.hue}, 85%, 80%, 0.5)`);
+					gradient.addColorStop(0.9, `hsla(${b.hue}, 85%, 70%, 0.28)`);
+					gradient.addColorStop(1, `hsla(${b.hue}, 90%, 88%, 0.75)`);
+					ctx.fillStyle = gradient;
+					ctx.beginPath();
+					ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.strokeStyle = `hsla(${b.hue}, 90%, 92%, 0.8)`;
+					ctx.lineWidth = 1;
+					ctx.stroke();
+				}
+			};
+
+			const loop = (now: number) => {
+				frame = requestAnimationFrame(loop);
+				if (!isPageVisible()) return;
+				const dt = last ? Math.min((now - last) / 1000, 0.05) : 0.016;
+				last = now;
+				if (!reduced) {
+					for (const b of bubbles) {
+						b.y -= b.v * dt;
+						b.wobble += dt * 1.6;
+						b.x += Math.sin(b.wobble) * 12 * dt;
+					}
+					bubbles = bubbles.filter((b) => b.y > -b.r - 10);
+					if (Math.random() < dt * 1.4) spawn();
+				}
+				draw();
+			};
+
+			const popAt = (x: number, y: number): boolean => {
+				for (let i = bubbles.length - 1; i >= 0; i--) {
+					const b = bubbles[i];
+					if (Math.hypot(b.x - x, b.y - y) <= b.r + 6) {
+						bubbles.splice(i, 1);
+						const now = performance.now();
+						combo = now - lastPop < 900 ? Math.min(combo + 1, 9) : 1;
+						lastPop = now;
+						score += 10 * combo;
+						popped += 1;
+						scoreEl.textContent = String(score);
+						comboEl.textContent = `×${combo}`;
+						poppedEl.textContent = String(popped);
+						return true;
+					}
+				}
+				return false;
+			};
+
+			canvas.addEventListener('pointerdown', (event) => {
+				const rect = canvas.getBoundingClientRect();
+				if (!popAt(event.clientX - rect.left, event.clientY - rect.top)) {
+					combo = 1;
+					comboEl.textContent = '×1';
+				}
+			});
+
+			host.addEventListener('keydown', (event) => {
+				if (event.key !== ' ' || host !== document.activeElement) return;
+				event.preventDefault();
+				const lowest = bubbles.reduce<Bubble | null>(
+					(acc, b) => (!acc || b.y > acc.y ? b : acc),
+					null,
+				);
+				if (lowest) popAt(lowest.x, lowest.y);
+			});
+			host.tabIndex = 0;
+
+			const observer = new IntersectionObserver((entries) => {
+				for (const entry of entries) {
+					if (entry.isIntersecting && !frame) {
+						last = 0;
+						frame = requestAnimationFrame(loop);
+					} else if (!entry.isIntersecting && frame) {
+						cancelAnimationFrame(frame);
+						frame = 0;
+					}
+				}
+			});
+			observer.observe(host);
+			measure();
+			for (let i = 0; i < 6; i++) {
+				spawn();
+				if (bubbles[i]) bubbles[i].y = Math.random() * height;
+			}
+			draw();
+			window.addEventListener('resize', measure);
+		}
+	}
+</script>
+
+<style>
+	.bubble-pop {
+		display: grid;
+		gap: 0.6rem;
+	}
+	.bubble-pop:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 4px;
+		border-radius: var(--radius-md);
+	}
+	.bubble-pop__hud {
+		display: flex;
+		gap: 1.2rem;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+	.bubble-pop__hud b {
+		color: var(--text-strong);
+		font-weight: 600;
+	}
+	.bubble-pop__canvas {
+		inline-size: 100%;
+		block-size: min(46vh, 380px);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		cursor: crosshair;
+		touch-action: manipulation;
+	}
+	.bubble-pop__help {
+		margin: 0;
+		font-size: var(--text-micro);
+		letter-spacing: 0.06em;
+		color: var(--text-faint);
+	}
+	.bubble-pop__help kbd {
+		padding: 0.05rem 0.35rem;
+		border: 1px solid var(--glass-border);
+		border-radius: 6px;
+		font-family: var(--font-mono);
+	}
+</style>

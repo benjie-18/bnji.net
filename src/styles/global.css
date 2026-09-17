@@ -1,155 +1,667 @@
-/*
-  The CSS in this style tag is based off of Bear Blog's default CSS.
-  https://github.com/HermanMartinus/bearblog/blob/297026a877bc2ab2b3bdfbd6b9f7961c350917dd/templates/styles/blog/default.css
-  License MIT: https://github.com/HermanMartinus/bearblog/blob/master/LICENSE.md
- */
+/* ==========================================================================
+   BNJI.NET — global base
+   --------------------------------------------------------------------------
+   Import order matters: tokens define the variables, glass and animations
+   consume them, then the base layer below applies them to real elements.
 
-:root {
-	--accent: #2337ff;
-	--accent-dark: #000d8a;
-	--black: 15, 18, 25;
-	--gray: 96, 115, 159;
-	--gray-light: 229, 233, 240;
-	--gray-dark: 34, 41, 57;
-	--gray-gradient: rgba(var(--gray-light), 50%), #fff;
-	--box-shadow:
-		0 2px 6px rgba(var(--gray), 25%), 0 8px 24px rgba(var(--gray), 33%),
-		0 16px 32px rgba(var(--gray), 33%);
-}
+   Scope of this file: reset, background, typography, layout primitives
+   (.container / .section / .eyebrow), long-form prose and utilities.
+   Component-specific layout belongs in that component's scoped <style> block;
+   anything repeated by two or more components belongs here.
+   ========================================================================== */
+
+@import './tokens.css';
+@import './glass.css';
+@import './animations.css';
+
+/* --- Fonts ---------------------------------------------------------------- */
+/* Self-hosted, already vendored, no third-party requests. Atkinson Hyperlegible
+   is a legibility-first face, which is why body copy uses it while UI and
+   display type use the platform's own font. */
+
 @font-face {
-	font-family: "Atkinson";
-	src: url("/fonts/atkinson-regular.woff") format("woff");
+	font-family: 'Atkinson';
+	src: url('/fonts/atkinson-regular.woff') format('woff');
 	font-weight: 400;
 	font-style: normal;
 	font-display: swap;
 }
+
 @font-face {
-	font-family: "Atkinson";
-	src: url("/fonts/atkinson-bold.woff") format("woff");
+	font-family: 'Atkinson';
+	src: url('/fonts/atkinson-bold.woff') format('woff');
 	font-weight: 700;
 	font-style: normal;
 	font-display: swap;
 }
-body {
-	font-family: "Atkinson", sans-serif;
+
+/* --- Reset ---------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+* {
 	margin: 0;
-	padding: 0;
-	text-align: left;
-	background: linear-gradient(var(--gray-gradient)) no-repeat;
-	background-size: 100% 600px;
-	word-wrap: break-word;
+}
+
+html {
+	/* Anchors and the skip link must clear the floating nav. */
+	scroll-padding-top: var(--scroll-pad);
+	scroll-behavior: smooth;
+	/* Text stays legible if a visitor increases their root font size. */
+	-webkit-text-size-adjust: 100%;
+	background: var(--bg);
+}
+
+body {
+	min-height: 100dvh;
+	font-family: var(--font-body);
+	font-size: var(--text-body);
+	line-height: var(--leading-body);
+	color: var(--text);
+	background: transparent;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 	overflow-wrap: break-word;
-	color: rgb(var(--gray-dark));
-	font-size: 20px;
-	line-height: 1.7;
+	/* Safety net: a stray decorative element can never create a horizontal
+	   scrollbar. `clip` (not `hidden`) keeps position: fixed and sticky working. */
+	overflow-x: clip;
 }
-main {
-	width: 720px;
-	max-width: calc(100% - 2em);
-	margin: auto;
-	padding: 3em 1em;
+
+img,
+picture,
+svg,
+canvas,
+video {
+	display: block;
+	max-width: 100%;
 }
+
+img {
+	height: auto;
+}
+
+input,
+button,
+textarea,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	background: none;
+	border: 0;
+	padding: 0;
+}
+
+ul,
+ol {
+	padding: 0;
+}
+
+/* --- Background layers ---------------------------------------------------- */
+/* Painting order: html background -> .aurora-layer -> starfield canvas ->
+   content (main/header/footer carry --z-content). */
+
+.aurora-layer {
+	position: fixed;
+	inset: -12vmax;
+	z-index: var(--z-aurora);
+	pointer-events: none;
+	background:
+		radial-gradient(46% 38% at 18% 12%, var(--aurora-1), transparent 68%),
+		radial-gradient(40% 34% at 84% 26%, var(--aurora-2), transparent 70%),
+		radial-gradient(52% 44% at 62% 92%, var(--aurora-3), transparent 72%);
+}
+
+/* Vignette: keeps the edges of the viewport darker than the centre so glass
+   panels always sit on a low-luminance field. */
+.vignette-layer {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-aurora);
+	pointer-events: none;
+	background: radial-gradient(120% 90% at 50% 42%, transparent 42%, var(--bg-void) 100%);
+}
+
+/* --- Structural shells ---------------------------------------------------- */
+
+.site-main,
+.site-footer {
+	position: relative;
+	z-index: var(--z-content);
+}
+
+/* The nav floats above everything but must not become an invisible wall: the
+   dock spans the viewport while staying pointer-transparent, and only the pill
+   itself (Header.astro) re-enables pointer events. */
+.nav-dock {
+	position: fixed;
+	inset-block-start: var(--nav-offset);
+	inset-inline: 0;
+	z-index: var(--z-nav);
+	display: flex;
+	justify-content: center;
+	padding-inline: var(--gutter);
+	pointer-events: none;
+}
+
+/* Content must clear the floating nav; sections add their own rhythm on top. */
+.site-main {
+	padding-block-start: calc(var(--nav-height) + var(--nav-offset));
+}
+
+/* No JavaScript: a disclosure button that cannot open would hide the whole
+   navigation on a phone, so the dock stops floating and the links stay inline.
+   Header.astro keeps the visual styling; only the shell changes here. */
+@media (max-width: 899px) {
+	html:not(.js) .nav-dock {
+		position: static;
+		padding-block: 0.75rem;
+	}
+
+	html:not(.js) .site-main {
+		padding-block-start: 0;
+	}
+}
+
+.container {
+	width: 100%;
+	max-width: var(--content-width);
+	margin-inline: auto;
+	padding-inline: var(--gutter);
+}
+
+.container--narrow {
+	max-width: var(--content-width-narrow);
+}
+
+.section {
+	padding-block: var(--section-y);
+}
+
+/* Grid used by bento layouts; children set their own --span. */
+.bento {
+	display: grid;
+	gap: var(--grid-gap);
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.bento > * {
+	grid-column: span var(--span, 12);
+	min-width: 0; /* lets long mono values wrap instead of overflowing */
+}
+
+@media (max-width: 900px) {
+	.bento > * {
+		grid-column: span 12;
+	}
+}
+
+/* --- Typography ----------------------------------------------------------- */
+
 h1,
 h2,
 h3,
 h4,
 h5,
 h6 {
-	margin: 0 0 0.5rem 0;
-	color: rgb(var(--black));
-	line-height: 1.2;
+	font-family: var(--font-display);
+	font-weight: 400;
+	line-height: var(--leading-tight);
+	letter-spacing: var(--tracking-snug);
+	color: var(--text-strong);
+	text-wrap: balance;
 }
+
 h1 {
-	font-size: 3.052em;
+	font-size: var(--text-display);
+	letter-spacing: var(--tracking-tight);
 }
 h2 {
-	font-size: 2.441em;
+	font-size: var(--text-title);
 }
 h3 {
-	font-size: 1.953em;
+	font-size: 1.2rem;
 }
 h4 {
-	font-size: 1.563em;
+	font-size: 1.05rem;
 }
-h5 {
-	font-size: 1.25em;
+
+p {
+	text-wrap: pretty;
 }
+
+a {
+	color: var(--accent);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.22em;
+	transition: color var(--dur-fast) var(--ease-out);
+}
+
+a:hover {
+	color: var(--accent-strong);
+}
+
 strong,
 b {
 	font-weight: 700;
+	color: var(--text-strong);
 }
-a {
+
+/* Focus must never depend on hover. One obvious ring everywhere, including on
+   glass where an outline would otherwise disappear against the border. */
+:where(a, button, summary, input, textarea, select, [tabindex]):focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 3px;
+	border-radius: var(--radius-xs);
+}
+
+::selection {
+	background: rgba(127, 212, 255, 0.28);
+	color: var(--text-strong);
+}
+
+/* --- Section furniture ---------------------------------------------------- */
+
+/* Mono index label above every section heading, e.g. "02 / PROJECTS". */
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.7em;
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.eyebrow::before {
+	content: '';
+	inline-size: 22px;
+	block-size: 1px;
+	background: linear-gradient(to right, transparent, var(--accent-line));
+}
+
+.section-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: var(--space-4) var(--space-6);
+	margin-bottom: clamp(1.75rem, 4vw, 3rem);
+}
+
+.section-head__text {
+	max-width: 62ch;
+	display: grid;
+	gap: 0.7rem;
+}
+
+.section-head__title {
+	font-size: var(--text-display);
+	font-weight: 300;
+	letter-spacing: var(--tracking-tight);
+}
+
+.lead {
+	font-size: var(--text-lead);
+	line-height: 1.6;
+	color: var(--text-muted);
+	max-width: 62ch;
+}
+
+.muted {
+	color: var(--text-muted);
+}
+
+.dim {
+	color: var(--text-dim);
+}
+
+.mono {
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+/* Status dots used by the system/network panels. */
+.dot {
+	inline-size: 7px;
+	block-size: 7px;
+	border-radius: 50%;
+	background: var(--signal-idle);
+	flex: none;
+}
+.dot--live {
+	background: var(--signal-live);
+	box-shadow: 0 0 10px rgba(121, 230, 176, 0.7);
+}
+.dot--soon {
+	background: var(--signal-soon);
+}
+
+/* Hairline separator inside panels. */
+.rule {
+	block-size: 1px;
+	border: 0;
+	background: linear-gradient(
+		to right,
+		transparent,
+		rgba(255, 255, 255, 0.12) 18%,
+		rgba(255, 255, 255, 0.12) 82%,
+		transparent
+	);
+	margin-block: var(--space-5);
+}
+
+/* --- Long-form prose (blog) ---------------------------------------------- */
+
+.prose {
+	font-size: 1.0625rem;
+	line-height: 1.78;
+	color: var(--text-muted);
+}
+
+.prose > * + * {
+	margin-block-start: 1.15em;
+}
+
+.prose h2,
+.prose h3,
+.prose h4 {
+	margin-block: 1.9em 0.6em;
+	color: var(--text-strong);
+	scroll-margin-top: var(--scroll-pad);
+}
+
+.prose h2 {
+	font-size: 1.6rem;
+	font-weight: 400;
+	letter-spacing: var(--tracking-snug);
+}
+
+.prose h3 {
+	font-size: 1.25rem;
+	font-weight: 400;
+}
+
+.prose h4,
+.prose h5,
+.prose h6 {
+	font-size: 1.05rem;
+	font-weight: 500;
+	font-family: var(--font-mono);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.prose strong {
+	color: var(--text-strong);
+}
+
+.prose a {
 	color: var(--accent);
+	text-decoration: underline;
 }
-a:hover {
-	color: var(--accent);
+
+.prose ul,
+.prose ol {
+	padding-inline-start: 1.2em;
+	display: grid;
+	gap: 0.45em;
 }
-p {
-	margin-bottom: 1em;
+
+.prose ul {
+	list-style: none;
+	padding-inline-start: 1.35em;
 }
-.prose p {
-	margin-bottom: 2em;
+
+.prose ul > li {
+	position: relative;
 }
-textarea {
-	width: 100%;
-	font-size: 16px;
+
+.prose ul > li::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: -1.1em;
+	inset-block-start: 0.72em;
+	inline-size: 5px;
+	block-size: 5px;
+	border-radius: 50%;
+	background: var(--accent-line);
 }
-input {
-	font-size: 16px;
+
+.prose ol {
+	list-style: decimal;
 }
-table {
-	width: 100%;
+
+.prose ol > li::marker {
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	color: var(--text-dim);
 }
-img {
-	max-width: 100%;
-	height: auto;
-	border-radius: 8px;
+
+.prose blockquote {
+	padding: 0.2em 0 0.2em 1.25em;
+	border-inline-start: 2px solid var(--accent-line);
+	color: var(--text);
+	font-size: 1.1em;
+	line-height: 1.6;
 }
-code {
-	padding: 2px 5px;
-	background-color: rgb(var(--gray-light));
-	border-radius: 2px;
+
+.prose code {
+	font-family: var(--font-mono);
+	font-size: 0.86em;
+	padding: 0.16em 0.42em;
+	border-radius: var(--radius-xs);
+	background: rgba(255, 255, 255, 0.07);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	color: var(--accent-strong);
 }
-pre {
-	padding: 1.5em;
-	border-radius: 8px;
+
+.prose pre {
+	padding: 1.15em 1.25em;
+	border-radius: var(--radius-md);
+	background: rgba(255, 255, 255, 0.035);
+	border: 1px solid var(--glass-border);
+	overflow-x: auto;
+	font-size: 0.875rem;
+	line-height: 1.65;
+	tab-size: 2;
 }
-pre > code {
+
+.prose pre code {
 	all: unset;
+	font-family: var(--font-mono);
+	font-size: inherit;
+	color: inherit;
 }
-blockquote {
-	border-left: 4px solid var(--accent);
-	padding: 0 0 0 20px;
-	margin: 0px;
-	font-size: 1.333em;
+
+.prose img {
+	border-radius: var(--radius-md);
+	border: 1px solid var(--glass-border);
 }
-hr {
-	border: none;
-	border-top: 1px solid rgb(var(--gray-light));
+
+.prose hr {
+	border: 0;
+	block-size: 1px;
+	background: linear-gradient(
+		to right,
+		transparent,
+		rgba(255, 255, 255, 0.14) 20%,
+		rgba(255, 255, 255, 0.14) 80%,
+		transparent
+	);
+	margin-block: 2.4em;
 }
-@media (max-width: 720px) {
-	body {
-		font-size: 18px;
-	}
-	main {
-		padding: 1em;
+
+.prose table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.95rem;
+}
+
+.prose th,
+.prose td {
+	text-align: start;
+	padding: 0.6em 0.8em;
+	border-block-end: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.prose th {
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	font-weight: 400;
+}
+
+/* --- Display type --------------------------------------------------------- */
+
+/* Large headings get a near-white vertical gradient plus a faint bloom, which
+   reads as luminosity rather than a glow. The @supports wrapper matters: with
+   `color: transparent` a browser that lacks background-clip:text would render
+   invisible text, so the solid colour is the default and the gradient is the
+   enhancement. Forced-colours mode always gets a solid system colour. */
+.text-luminous {
+	color: var(--text-strong);
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+	.text-luminous {
+		background-image: linear-gradient(
+			178deg,
+			#ffffff 6%,
+			rgba(238, 244, 255, 0.88) 44%,
+			rgba(166, 205, 255, 0.6) 98%
+		);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+		text-shadow: 0 0 90px rgba(127, 212, 255, 0.14);
 	}
 }
 
+@media (forced-colors: active) {
+	.text-luminous {
+		background-image: none;
+		color: CanvasText;
+		text-shadow: none;
+	}
+}
+
+/* Row of buttons that becomes a full-width stack on phones. Shared by the hero,
+   contact section, 404 and page headers, so no component needs to reach into
+   GlassButton's scoped styles with :global(). */
+.actions-stack {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.7rem;
+}
+
+@media (max-width: 720px) {
+	.actions-stack {
+		flex-direction: column;
+		align-items: stretch;
+		inline-size: 100%;
+	}
+
+	.actions-stack > .magnetic,
+	.actions-stack > .glass-button {
+		inline-size: 100%;
+	}
+
+	.actions-stack > .magnetic > .glass-button {
+		inline-size: 100%;
+	}
+}
+
+/* --- Utilities ------------------------------------------------------------ */
+
+/* Visually hidden but available to assistive tech. Used for the expanded hero
+   heading, icon-only controls and skip link. */
 .sr-only {
-	border: 0;
-	padding: 0;
-	margin: 0;
 	position: absolute !important;
-	height: 1px;
-	width: 1px;
+	inline-size: 1px;
+	block-size: 1px;
+	padding: 0;
+	margin: -1px;
 	overflow: hidden;
-	/* IE6, IE7 - a 0 height clip, off to the bottom right of the visible 1px box */
-	clip: rect(1px 1px 1px 1px);
-	/* maybe deprecated but we need to support legacy browsers */
-	clip: rect(1px, 1px, 1px, 1px);
-	/* modern browsers, clip-path works inwards from each corner */
 	clip-path: inset(50%);
-	/* added line to stop words getting smushed together (as they go onto separate lines and some screen readers do not understand line feeds as a space */
 	white-space: nowrap;
+	border: 0;
+}
+
+.skip-link {
+	position: fixed;
+	inset-block-start: var(--space-3);
+	inset-inline-start: var(--space-3);
+	z-index: var(--z-skip);
+	transform: translateY(-160%);
+	padding: 0.7em 1.2em;
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-raised);
+	border: 1px solid var(--glass-border-strong);
+	backdrop-filter: blur(var(--glass-blur));
+	-webkit-backdrop-filter: blur(var(--glass-blur));
+	color: var(--text-strong);
+	font-family: var(--font-display);
+	font-size: var(--text-small);
+	text-decoration: none;
+	transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.skip-link:focus-visible {
+	transform: none;
+}
+
+/* Thin, unobtrusive scrollbars for the few scrollable regions (code, tables). */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+*::-webkit-scrollbar {
+	inline-size: 8px;
+	block-size: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.16);
+	border-radius: var(--radius-pill);
+}
+
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+/* Forced-colors (Windows high contrast): drop the decorative glass so content
+   keeps working with the user's own palette. */
+@media (forced-colors: active) {
+	[data-glass],
+	.glass,
+	.glass-button {
+		border: 1px solid CanvasText;
+		background: Canvas;
+		color: CanvasText;
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
+	[data-glass]::before,
+	[data-glass]::after,
+	.aurora-layer,
+	.vignette-layer {
+		display: none;
+	}
 }

@@ -1,0 +1,31 @@
+---
+/**
+ * Starfield — the site background.
+ *
+ * One fixed, pointer-transparent <canvas> behind every page. All of the
+ * behaviour (density, twinkle, cursor response, parallax, reduced-motion and
+ * touch handling) lives in src/scripts/starfield.ts; this component only
+ * provides the element, its paint order and its place in the load sequence.
+ *
+ * `data-load="fade"` means the sky is the first thing to arrive (0ms), before
+ * the nav, the wordmark and the rest of the page — and, because animations.css
+ * gates every hiding rule behind `html.js` + `prefers-reduced-motion:
+ * no-preference`, the canvas is simply visible when either is unavailable.
+ *
+ * The sky is decorative: aria-hidden, nothing focusable. If the canvas cannot
+ * be created the aurora and vignette layers still give the page its depth.
+ */
+---
+
+<canvas class="starfield" data-starfield data-load="fade" aria-hidden="true"></canvas>
+
+<style>
+	.starfield {
+		position: fixed;
+		inset: 0;
+		z-index: var(--z-stars);
+		inline-size: 100%;
+		block-size: 100%;
+		pointer-events: none;
+	}
+</style>
