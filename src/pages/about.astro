@@ -1,62 +1,183 @@
 ---
-import Layout from '../layouts/BlogPost.astro';
+/**
+ * /about/ — the long-form version of the homepage identity section.
+ *
+ * Copy lives here rather than in data/ because it is prose specific to one page;
+ * anything reused (name, location, tagline, socials) comes from data/site.ts.
+ */
+import Chip from '../components/Chip.astro';
+import GlassPanel from '../components/GlassPanel.astro';
+import ProfileCard from '../components/ProfileCard.astro';
+import PageHeader from '../components/PageHeader.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import { SITE } from '../data/site';
+import Layout from '../layouts/Layout.astro';
+
+const PRINCIPLES = [
+	{
+		title: 'Simple underneath, deliberate on top',
+		body: 'Astro, a handful of TypeScript modules and CSS custom properties. Nothing here needs a framework to move a star two pixels to the left.',
+	},
+	{
+		title: 'Data before markup',
+		body: 'Projects, navigation, services and experiments are typed arrays in src/data/. Changing the site usually means editing a value, not a component.',
+	},
+	{
+		title: 'Readable by machines too',
+		body: 'This site is partly maintained by a local coding agent. Small files, obvious names and an AGENTS.md are not bureaucracy — they are how the work gets done.',
+	},
+] as const;
+
+const TOOLBOX = [
+	'Lorem',
+	'Ipsum',
+	'Dolor',
+	'Sit',
+	'Amet',
+	'Consectetur',
+	'Adipiscing',
+	'Elit',
+] as const;
+
+const title = `About ${SITE.author.name}`;
+const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SITE.author.location}. ${SITE.author.tagline}`;
 ---
 
-<Layout
-	title="About Me"
-	description="Lorem ipsum dolor sit amet"
-	pubDate={new Date('August 08 2021')}
-	heroImage="/blog-placeholder-about.jpg"
->
-	<p>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
-		labore et dolore magna aliqua. Vitae ultricies leo integer malesuada nunc vel risus commodo
-		viverra. Adipiscing enim eu turpis egestas pretium. Euismod elementum nisi quis eleifend quam
-		adipiscing. In hac habitasse platea dictumst vestibulum. Sagittis purus sit amet volutpat. Netus
-		et malesuada fames ac turpis egestas. Eget magna fermentum iaculis eu non diam phasellus
-		vestibulum lorem. Varius sit amet mattis vulputate enim. Habitasse platea dictumst quisque
-		sagittis. Integer quis auctor elit sed vulputate mi. Dictumst quisque sagittis purus sit amet.
-	</p>
+<Layout title="About" description={description}>
+	<PageHeader
+		index="01"
+		label="IDENTITY"
+		title={title}
+		titleId="page-title"
+		description={SITE.author.tagline}
+		meta={[SITE.author.location, SITE.author.role, 'Est. ' + SITE.foundedYear]}
+	/>
 
-	<p>
-		Morbi tristique senectus et netus. Id semper risus in hendrerit gravida rutrum quisque non
-		tellus. Habitasse platea dictumst quisque sagittis purus sit amet. Tellus molestie nunc non
-		blandit massa. Cursus vitae congue mauris rhoncus. Accumsan tortor posuere ac ut. Fringilla urna
-		porttitor rhoncus dolor. Elit ullamcorper dignissim cras tincidunt lobortis. In cursus turpis
-		massa tincidunt dui ut ornare lectus. Integer feugiat scelerisque varius morbi enim nunc.
-		Bibendum neque egestas congue quisque egestas diam. Cras ornare arcu dui vivamus arcu felis
-		bibendum. Dignissim suspendisse in est ante in nibh mauris. Sed tempus urna et pharetra pharetra
-		massa massa ultricies mi.
-	</p>
+	<div class="container">
+		<div class="about-body">
+			<section class="section section--tight" aria-labelledby="card-title">
+				<h2 id="card-title" class="sr-only">Profile card</h2>
+				<ProfileCard />
+			</section>
+			<section class="section section--tight" aria-labelledby="story-title">
+				<SectionHeading
+					label="STORY"
+					titleId="story-title"
+					title="Systems that stay understandable."
+				/>
+				<GlassPanel pad="lg" reveal class="prose">
+					<p>
+						Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+						tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+						veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
+						commodo consequat duis aute irure dolor.
+					</p>
+					<p>
+						The site itself is part of the work. It is prerendered Astro served from
+						a Cloudflare Worker, with a canvas starfield, a glass design system built
+						on CSS custom properties, and no client-side framework. Everything
+						animated is animated with <code>opacity</code> and <code>transform</code>,
+						and everything that reacts to a pointer stops reacting if you ask your
+						operating system for less motion.
+					</p>
+					<p>
+						Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium
+						doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo
+						inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+					</p>
+				</GlassPanel>
+			</section>
 
-	<p>
-		Mollis nunc sed id semper risus in. Convallis a cras semper auctor neque. Diam sit amet nisl
-		suscipit. Lacus viverra vitae congue eu consequat ac felis donec. Egestas integer eget aliquet
-		nibh praesent tristique magna sit amet. Eget magna fermentum iaculis eu non diam. In vitae
-		turpis massa sed elementum. Tristique et egestas quis ipsum suspendisse ultrices. Eget lorem
-		dolor sed viverra ipsum. Vel turpis nunc eget lorem dolor sed viverra. Posuere ac ut consequat
-		semper viverra nam. Laoreet suspendisse interdum consectetur libero id faucibus. Diam phasellus
-		vestibulum lorem sed risus ultricies tristique. Rhoncus dolor purus non enim praesent elementum
-		facilisis. Ultrices tincidunt arcu non sodales neque. Tempus egestas sed sed risus pretium quam
-		vulputate. Viverra suspendisse potenti nullam ac tortor vitae purus faucibus ornare. Fringilla
-		urna porttitor rhoncus dolor purus non. Amet dictum sit amet justo donec enim.
-	</p>
+			<section class="section section--tight" aria-labelledby="principles-title">
+				<SectionHeading
+					label="PRINCIPLES"
+					titleId="principles-title"
+					title="Three rules this site keeps"
+				/>
+				<div class="principles">
+					{
+						PRINCIPLES.map((principle, index) => (
+							<GlassPanel pad="md" reveal revealDelay={index * 90} class="principle">
+								<span class="principle__index">{String(index + 1).padStart(2, '0')}</span>
+								<h3 class="principle__title">{principle.title}</h3>
+								<p class="principle__body">{principle.body}</p>
+							</GlassPanel>
+						))
+					}
+				</div>
+			</section>
 
-	<p>
-		Mattis ullamcorper velit sed ullamcorper morbi tincidunt. Tortor posuere ac ut consequat semper
-		viverra. Tellus mauris a diam maecenas sed enim ut sem viverra. Venenatis urna cursus eget nunc
-		scelerisque viverra mauris in. Arcu ac tortor dignissim convallis aenean et tortor at. Curabitur
-		gravida arcu ac tortor dignissim convallis aenean et tortor. Egestas tellus rutrum tellus
-		pellentesque eu. Fusce ut placerat orci nulla pellentesque dignissim enim sit amet. Ut enim
-		blandit volutpat maecenas volutpat blandit aliquam etiam. Id donec ultrices tincidunt arcu. Id
-		cursus metus aliquam eleifend mi.
-	</p>
-
-	<p>
-		Tempus quam pellentesque nec nam aliquam sem. Risus at ultrices mi tempus imperdiet. Id porta
-		nibh venenatis cras sed felis eget velit. Ipsum a arcu cursus vitae. Facilisis magna etiam
-		tempor orci eu lobortis elementum. Tincidunt dui ut ornare lectus sit. Quisque non tellus orci
-		ac. Blandit libero volutpat sed cras. Nec tincidunt praesent semper feugiat nibh sed pulvinar
-		proin gravida. Egestas integer eget aliquet nibh praesent tristique magna.
-	</p>
+			<section class="section section--tight" aria-labelledby="toolbox-title">
+				<SectionHeading
+					label="TOOLBOX"
+					titleId="toolbox-title"
+					title="What is usually running"
+				/>
+				<GlassPanel variant="quiet" pad="md" reveal>
+					<ul class="toolbox" role="list">
+						{TOOLBOX.map((tool) => <li><Chip>{tool}</Chip></li>)}
+					</ul>
+				</GlassPanel>
+			</section>
+		</div>
+	</div>
 </Layout>
+
+<style>
+	.section--tight {
+		padding-block: clamp(2.5rem, 6vh, 4.5rem);
+	}
+
+	.about-body {
+		padding-block-end: clamp(3rem, 8vh, 6rem);
+	}
+
+	.about-body .prose {
+		font-size: 1.02rem;
+	}
+
+	.principles {
+		display: grid;
+		gap: var(--grid-gap);
+	}
+
+	@media (min-width: 900px) {
+		.principles {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	.principle {
+		display: grid;
+		gap: 0.6rem;
+		align-content: start;
+		block-size: 100%;
+	}
+
+	.principle__index {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.16em;
+		color: var(--accent);
+		opacity: 0.8;
+	}
+
+	.principle__title {
+		font-size: 1.1rem;
+		font-weight: 450;
+		letter-spacing: var(--tracking-snug);
+	}
+
+	.principle__body {
+		color: var(--text-muted);
+		font-size: 0.94rem;
+		line-height: 1.62;
+	}
+
+	.toolbox {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		list-style: none;
+	}
+</style>

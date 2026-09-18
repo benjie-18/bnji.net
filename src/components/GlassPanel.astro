@@ -1,0 +1,106 @@
+---
+/**
+ * GlassPanel — the reusable translucent surface.
+ *
+ * Every panel, card, tile and sheet on the site is a GlassPanel (or a bare
+ * `data-glass` element), which is what stops the visual language from drifting
+ * between components. The surface itself is defined once in styles/glass.css
+ * from the tokens in styles/tokens.css; this component only chooses variants.
+ *
+ * Variants compose because glass.css matches them as attribute tokens:
+ *   <GlassPanel variant={['raised', 'interactive']} />  ->  data-glass="raised interactive"
+ *
+ * `reveal` opts the panel into the scroll entrance handled by scripts/scroll.ts.
+ */
+type GlassVariant = 'raised' | 'quiet' | 'interactive';
+type TagName = 'div' | 'section' | 'article' | 'aside' | 'li' | 'header' | 'footer' | 'figure';
+type Radius = 'sm' | 'md' | 'lg' | 'xl';
+type Padding = 'none' | 'sm' | 'md' | 'lg';
+
+interface Props {
+	as?: TagName;
+	/** One variant or a list; omitted means the default surface. */
+	variant?: GlassVariant | GlassVariant[];
+	radius?: Radius;
+	pad?: Padding;
+	reveal?: boolean;
+	/** Stagger in ms, applied through --reveal-delay. */
+	revealDelay?: number;
+	/** Marks the panel as a soft light source for the starfield. */
+	starReactive?: boolean;
+	id?: string;
+	class?: string;
+	/** Bento grid span out of 12; sets --span consumed by .bento in global.css. */
+	span?: number;
+	/** Extra inline styles (custom properties, per-instance overrides). */
+	style?: string;
+}
+
+const {
+	as: Tag = 'div',
+	variant,
+	radius = 'lg',
+	pad = 'md',
+	reveal = false,
+	revealDelay = 0,
+	starReactive = false,
+	id,
+	class: className = '',
+	span,
+	style,
+} = Astro.props;
+
+const variants = (Array.isArray(variant) ? variant : variant ? [variant] : []).join(' ');
+
+// Inline style is reserved for custom properties: everything visual belongs in
+// tokens/glass/animations so it can be changed in one place.
+const styleAttribute =
+	[
+		span ? `--span: ${span}` : '',
+		// animations.css reads the stagger from a custom property, not from an
+		// attribute, because CSS cannot turn an attribute value into a delay.
+		reveal && revealDelay ? `--reveal-delay: ${revealDelay}ms` : '',
+		style ?? '',
+	]
+		.filter(Boolean)
+		.join('; ') || undefined;
+---
+
+<Tag
+	id={id}
+	class:list={[
+		'glass-panel',
+		radius !== 'lg' && `glass-panel--radius-${radius}`,
+		pad !== 'none' && `glass-panel--pad-${pad}`,
+		className,
+	]}
+	data-glass={variants}
+	data-reveal={reveal ? true : undefined}
+	data-star-reactive={starReactive ? true : undefined}
+	style={styleAttribute}
+>
+	<slot />
+</Tag>
+
+<style>
+	/* Radius lg is the [data-glass] default, so only the overrides need rules. */
+	.glass-panel--radius-sm {
+		border-radius: var(--radius-sm);
+	}
+	.glass-panel--radius-md {
+		border-radius: var(--radius-md);
+	}
+	.glass-panel--radius-xl {
+		border-radius: var(--radius-xl);
+	}
+
+	.glass-panel--pad-sm {
+		padding: clamp(0.85rem, 1.6vw, 1.15rem);
+	}
+	.glass-panel--pad-md {
+		padding: clamp(1.15rem, 2.4vw, 1.75rem);
+	}
+	.glass-panel--pad-lg {
+		padding: clamp(1.5rem, 3.6vw, 2.75rem);
+	}
+</style>

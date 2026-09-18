@@ -1,0 +1,122 @@
+---
+/**
+ * GlassButton — one button/link visual for the whole site.
+ *
+ * Renders a real <a> when given an href and a real <button> otherwise; it never
+ * produces a clickable <div>. Hover, pressed and keyboard-focus states are
+ * defined in styles/glass.css so every call site behaves identically.
+ *
+ * `magnetic` wraps the control in MagneticButton.astro (a separate element on
+ * purpose: the magnetic transform must not fight the button's own hover lift,
+ * and the hit target must never move out from under the pointer).
+ */
+import Icon, { type IconName } from './Icon.astro';
+import MagneticButton from './MagneticButton.astro';
+
+type Variant = 'primary' | 'default' | 'quiet';
+type Size = 'sm' | 'md' | 'lg';
+
+interface Props {
+	href?: string;
+	variant?: Variant;
+	size?: Size;
+	/** Optional trailing icon, e.g. "arrow-right" for a "see all" affordance. */
+	icon?: IconName;
+	/** Leading icon instead of trailing. */
+	iconBefore?: IconName;
+	magnetic?: boolean;
+	type?: 'button' | 'submit';
+	target?: string;
+	rel?: string;
+	ariaLabel?: string;
+	disabled?: boolean;
+	class?: string;
+}
+
+const {
+	href,
+	variant = 'default',
+	size = 'md',
+	icon,
+	iconBefore,
+	magnetic = false,
+	type = 'button',
+	target,
+	rel,
+	ariaLabel,
+	disabled = false,
+	class: className = '',
+} = Astro.props;
+
+const classes = [
+	'glass-button',
+	variant !== 'default' && `glass-button--${variant}`,
+	size !== 'md' && `glass-button--${size}`,
+	className,
+];
+
+// External links get noopener by default; callers can override with `rel`.
+const linkRel = rel ?? (target === '_blank' ? 'noopener noreferrer' : undefined);
+---
+
+{
+	magnetic ? (
+		<MagneticButton class="glass-button-wrap">
+			{href ? (
+				<a
+					href={disabled ? undefined : href}
+					class:list={classes}
+					data-glass=""
+					target={target}
+					rel={linkRel}
+					aria-label={ariaLabel}
+					aria-disabled={disabled || undefined}
+					tabindex={disabled ? -1 : undefined}
+				>
+					{iconBefore && <Icon name={iconBefore} size={size === 'sm' ? 13 : 16} />}
+					<slot />
+					{icon && <Icon name={icon} size={size === 'sm' ? 13 : 16} />}
+				</a>
+			) : (
+				<button
+					type={type}
+					class:list={classes}
+					data-glass=""
+					aria-label={ariaLabel}
+					disabled={disabled || undefined}
+				>
+					{iconBefore && <Icon name={iconBefore} size={size === 'sm' ? 13 : 16} />}
+					<slot />
+					{icon && <Icon name={icon} size={size === 'sm' ? 13 : 16} />}
+				</button>
+			)}
+		</MagneticButton>
+	) : href ? (
+		<a
+			href={disabled ? undefined : href}
+			class:list={classes}
+			data-glass=""
+			target={target}
+			rel={linkRel}
+			aria-label={ariaLabel}
+			aria-disabled={disabled || undefined}
+			tabindex={disabled ? -1 : undefined}
+		>
+			{iconBefore && <Icon name={iconBefore} size={size === 'sm' ? 13 : 16} />}
+			<slot />
+			{icon && <Icon name={icon} size={size === 'sm' ? 13 : 16} />}
+		</a>
+	) : (
+		<button
+			type={type}
+			class:list={classes}
+			data-glass=""
+			aria-label={ariaLabel}
+			disabled={disabled || undefined}
+		>
+			{iconBefore && <Icon name={iconBefore} size={size === 'sm' ? 13 : 16} />}
+			<slot />
+			{icon && <Icon name={icon} size={size === 'sm' ? 13 : 16} />}
+		</button>
+	)
+}

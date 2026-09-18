@@ -1,0 +1,396 @@
+---
+/**
+ * Lab experiment — Orbit Field.
+ *
+ * A few hundred particles under a pointer gravity well, integrated with
+ * semi-implicit Euler and clamped so a fast flick cannot explode the
+ * simulation.
+ *
+ * Two deliberate choices worth knowing before editing:
+ *  - Trails come from fading the previous frame with `destination-out` instead of
+ *    clearing it. That is one composite operation per frame and it keeps the CSS
+ *    backdrop visible behind the canvas.
+ *  - Unlike the site background, this experiment DOES respond to touch. The
+ *    homepage starfield disables pointer effects on touch devices because a
+ *    cursor halo is meaningless there; an explicit playground is different. The
+ *    stage keeps `touch-action: pan-y`, so vertical scrolling is never captured
+ *    and the page can always be scrolled away with one finger.
+ */
+---
+
+<div class="orbit">
+	<div class="lab-stage orbit-stage">
+		<canvas class="lab-canvas" data-orbit-canvas aria-hidden="true"></canvas>
+		<p class="lab-fallback" data-orbit-fallback hidden>
+			This experiment needs a 2D canvas, which this browser did not provide.
+		</p>
+		<p class="lab-hint mono">pointer attracts &middot; press to repel</p>
+	</div>
+
+	<div class="lab-controls">
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Particles <output data-orbit-out="count">180</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="20"
+				max="500"
+				step="10"
+				value="180"
+				data-orbit-in="count"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Gravity <output data-orbit-out="gravity">1.0</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="0"
+				max="3"
+				step="0.1"
+				value="1"
+				data-orbit-in="gravity"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Damping <output data-orbit-out="damping">0.985</output>
+			</span>
+			<input
+				class="lab-range"
+				type="range"
+				min="0.9"
+				max="1"
+				step="0.005"
+				value="0.985"
+				data-orbit-in="damping"
+			/>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">Mode</span>
+			<select class="lab-select" data-orbit-mode>
+				<option value="orbit" selected>Orbit (tangential)</option>
+				<option value="swarm">Swarm (follows pointer)</option>
+				<option value="calm">Calm (no pointer force)</option>
+			</select>
+		</label>
+
+		<button class="lab-button" type="button" data-orbit-scatter>Scatter</button>
+	</div>
+
+	<p class="lab-stats">
+		<span>fps <strong data-orbit-stat="fps">0</strong></span>
+		<span>particles <strong data-orbit-stat="particles">0</strong></span>
+		<span>avg speed <strong data-orbit-stat="speed">0</strong></span>
+	</p>
+</div>
+
+<script>
+	import { clamp, prefersReducedMotion } from '../../scripts/environment';
+
+	const EXPERIMENT = 'orbit-field';
+	const root = document.querySelector<HTMLElement>(`[data-lab-experiment="${EXPERIMENT}"]`);
+	const canvas = root?.querySelector<HTMLCanvasElement>('[data-orbit-canvas]');
+	const context = canvas?.getContext('2d');
+
+	if (root && canvas && context) {
+		const fallback = root.querySelector<HTMLElement>('[data-orbit-fallback]');
+		const outputs = new Map<string, HTMLOutputElement>();
+		root.querySelectorAll<HTMLOutputElement>('[data-orbit-out]').forEach((output) => {
+			outputs.set(output.dataset.orbitOut ?? '', output);
+		});
+		const stats = {
+			fps: root.querySelector<HTMLElement>('[data-orbit-stat="fps"]'),
+			particles: root.querySelector<HTMLElement>('[data-orbit-stat="particles"]'),
+			speed: root.querySelector<HTMLElement>('[data-orbit-stat="speed"]'),
+		};
+
+		const reducedMotion = prefersReducedMotion();
+		const isSmallScreen = window.matchMedia('(max-width: 720px)').matches;
+
+		const settings = {
+			count: isSmallScreen ? 90 : 180,
+			gravity: 1,
+			damping: 0.985,
+			mode: 'orbit' as 'orbit' | 'swarm' | 'calm',
+		};
+
+		type Particle = { x: number; y: number; vx: number; vy: number; radius: number };
+
+		let particles: Particle[] = [];
+		let width = 0;
+		let height = 0;
+		let pointerX = 0;
+		let pointerY = 0;
+		let pointerActive = false;
+		let pressed = false;
+		let frame = 0;
+		let paused = false;
+		let lastTime = 0;
+		let fpsFrames = 0;
+		let fpsClock = 0;
+
+		const MAX_DPR = 2;
+		/** Speed ceiling in px/s. Without it a well-timed flick ejects particles. */
+		const MAX_SPEED = 620;
+
+		function measure() {
+			const box = canvas.getBoundingClientRect();
+			const nextWidth = Math.max(1, Math.round(box.width));
+			const nextHeight = Math.max(1, Math.round(box.height));
+			const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+			if (nextWidth === width && nextHeight === height) return;
+			width = nextWidth;
+			height = nextHeight;
+			canvas.width = Math.round(width * dpr);
+			canvas.height = Math.round(height * dpr);
+			context.setTransform(dpr, 0, 0, dpr, 0, 0);
+		}
+
+		function seed(index: number, total: number): Particle {
+			// Ring distribution with tangential velocity: the field starts as a
+			// disc rather than a random cloud, which reads better immediately.
+			const angle = (index / total) * Math.PI * 2;
+			const radius = (0.18 + 0.3 * Math.random()) * Math.min(width, height);
+			const x = width / 2 + Math.cos(angle) * radius;
+			const y = height / 2 + Math.sin(angle) * radius;
+			const tangential = 42 + Math.random() * 46;
+			return {
+				x,
+				y,
+				vx: -Math.sin(angle) * tangential,
+				vy: Math.cos(angle) * tangential,
+				radius: 0.5 + Math.random() * 1.3,
+			};
+		}
+
+		function populate() {
+			const total = Math.round(settings.count);
+			particles = Array.from({ length: total }, (_unused, index) => seed(index, total));
+			if (stats.particles) stats.particles.textContent = String(total);
+		}
+
+		function step(delta: number) {
+			const centerX = width / 2;
+			const centerY = height / 2;
+			let speedTotal = 0;
+
+			for (const particle of particles) {
+				// Weak pull to the centre keeps the field on screen without
+				// collapsing it into a dot.
+				let ax = (centerX - particle.x) * 0.35;
+				let ay = (centerY - particle.y) * 0.35;
+
+				if (pointerActive && settings.mode !== 'calm') {
+					const dx = pointerX - particle.x;
+					const dy = pointerY - particle.y;
+					const distanceSquared = dx * dx + dy * dy + 400;
+					// Inverse-square, clamped by the +400 term so a particle sitting
+					// exactly on the pointer is pushed, not accelerated infinitely.
+					const force = (settings.mode === 'swarm' ? 26000 : 15000) * settings.gravity;
+					const direction = pressed ? -1 : 1;
+					const magnitude = (direction * force) / distanceSquared;
+					ax += dx * magnitude;
+					ay += dy * magnitude;
+				}
+
+				// Semi-implicit Euler: integrate velocity first, then position.
+				particle.vx = clamp((particle.vx + ax * delta) * settings.damping, -MAX_SPEED, MAX_SPEED);
+				particle.vy = clamp((particle.vy + ay * delta) * settings.damping, -MAX_SPEED, MAX_SPEED);
+				particle.x += particle.vx * delta;
+				particle.y += particle.vy * delta;
+
+				// Soft walls: bounce with energy loss instead of wrapping, so the
+				// field keeps its shape.
+				if (particle.x < 0) {
+					particle.x = 0;
+					particle.vx = Math.abs(particle.vx) * 0.6;
+				} else if (particle.x > width) {
+					particle.x = width;
+					particle.vx = -Math.abs(particle.vx) * 0.6;
+				}
+				if (particle.y < 0) {
+					particle.y = 0;
+					particle.vy = Math.abs(particle.vy) * 0.6;
+				} else if (particle.y > height) {
+					particle.y = height;
+					particle.vy = -Math.abs(particle.vy) * 0.6;
+				}
+
+				speedTotal += Math.hypot(particle.vx, particle.vy);
+			}
+
+			if (stats.speed) {
+				stats.speed.textContent = (speedTotal / Math.max(1, particles.length)).toFixed(0);
+			}
+		}
+
+		function draw() {
+			// Fade the previous frame towards transparency (see the header note).
+			context.globalCompositeOperation = 'destination-out';
+			context.fillStyle = 'rgba(0,0,0,0.22)';
+			context.fillRect(0, 0, width, height);
+			context.globalCompositeOperation = 'source-over';
+
+			for (const particle of particles) {
+				const speed = Math.hypot(particle.vx, particle.vy);
+				const alpha = clamp(0.28 + speed / 420, 0.28, 1);
+				const warm = pressed ? '255, 196, 150' : '206, 232, 255';
+				context.fillStyle = `rgba(${warm},${alpha.toFixed(3)})`;
+				context.beginPath();
+				context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+				context.fill();
+			}
+		}
+
+		function loop(now: number) {
+			frame = requestAnimationFrame(loop);
+			if (paused || document.hidden) return;
+
+			const delta = lastTime ? clamp((now - lastTime) / 1000, 0, 0.05) : 0.016;
+			lastTime = now;
+
+			fpsFrames += 1;
+			fpsClock += delta;
+			if (fpsClock >= 0.5) {
+				if (stats.fps) stats.fps.textContent = String(Math.round(fpsFrames / fpsClock));
+				fpsFrames = 0;
+				fpsClock = 0;
+			}
+
+			step(delta);
+			draw();
+		}
+
+		function stop() {
+			cancelAnimationFrame(frame);
+			frame = 0;
+			lastTime = 0;
+		}
+
+		function start() {
+			if (frame || paused || reducedMotion) return;
+			frame = requestAnimationFrame(loop);
+		}
+
+		/* --- Pointer ------------------------------------------------------ */
+
+		canvas.addEventListener(
+			'pointermove',
+			(event) => {
+				const box = canvas.getBoundingClientRect();
+				pointerX = event.clientX - box.left;
+				pointerY = event.clientY - box.top;
+				pointerActive = true;
+			},
+			{ passive: true },
+		);
+		canvas.addEventListener('pointerdown', () => {
+			pressed = true;
+		});
+		canvas.addEventListener('pointerup', () => {
+			pressed = false;
+		});
+		canvas.addEventListener('pointerleave', () => {
+			pointerActive = false;
+			pressed = false;
+		});
+
+		/* --- Controls ----------------------------------------------------- */
+
+		root.querySelectorAll<HTMLInputElement>('[data-orbit-in]').forEach((input) => {
+			const key = input.dataset.orbitIn as 'count' | 'gravity' | 'damping';
+			input.value = String(settings[key]);
+			const output = outputs.get(key);
+			if (output) output.textContent = String(settings[key]);
+
+			input.addEventListener('input', () => {
+				const value = Number(input.value);
+				settings[key] = value;
+				if (output) {
+					output.textContent = key === 'count' ? String(value) : value.toFixed(key === 'damping' ? 3 : 1);
+				}
+				if (key === 'count') populate();
+			});
+		});
+
+		root.querySelector<HTMLSelectElement>('[data-orbit-mode]')?.addEventListener('change', (event) => {
+			settings.mode = (event.currentTarget as HTMLSelectElement).value as typeof settings.mode;
+		});
+
+		root.querySelector('[data-orbit-scatter]')?.addEventListener('click', () => {
+			for (const particle of particles) {
+				particle.vx += (Math.random() - 0.5) * 520;
+				particle.vy += (Math.random() - 0.5) * 520;
+			}
+			if (reducedMotion) {
+				step(0.016);
+				draw();
+			}
+		});
+
+		/* --- Lifecycle ---------------------------------------------------- */
+
+		if (typeof ResizeObserver !== 'undefined') {
+			new ResizeObserver(() => {
+				measure();
+				if (reducedMotion) draw();
+			}).observe(canvas);
+		} else {
+			window.addEventListener('resize', measure, { passive: true });
+		}
+
+		if (typeof IntersectionObserver !== 'undefined') {
+			new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						paused = !entry.isIntersecting;
+						if (paused) stop();
+						else start();
+					}
+				},
+				{ rootMargin: '10% 0px' },
+			).observe(root);
+		}
+
+		document.addEventListener('visibilitychange', () => {
+			if (document.hidden) stop();
+			else start();
+		});
+
+		measure();
+		populate();
+
+		if (reducedMotion) {
+			// One composed frame, no simulation: the field still looks like the
+			// experiment, it just does not move.
+			if (fallback && !context) fallback.hidden = false;
+			draw();
+		} else {
+			start();
+		}
+	} else if (canvas && !context) {
+		const fallback = root?.querySelector<HTMLElement>('[data-orbit-fallback]');
+		canvas.hidden = true;
+		if (fallback) fallback.hidden = false;
+	}
+</script>
+
+<style>
+	/* Vertical scrolling must never be captured by the stage (see header note). */
+	.orbit-stage {
+		touch-action: pan-y;
+		cursor: crosshair;
+	}
+
+	.orbit-stage .lab-canvas {
+		touch-action: pan-y;
+	}
+</style>

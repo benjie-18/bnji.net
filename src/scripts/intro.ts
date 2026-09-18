@@ -1,0 +1,95 @@
+/**
+ * BNJI.NET — opening scroll sequence (homepage).
+ *
+ * A scroll-SCRUBBED cinematic, not a timed animation: every visual property
+ * is a pure function of scroll progress p ∈ [0, 1]:
+ *
+ *   p = scrollY / (spacerHeight - viewportHeight)
+ *
+ *   - white field with a single blue glowing star;
+ *   - the star scales (ease-in curve) and rotates smoothly with p, growing
+ *     until its energy field fills the viewport;
+ *   - in the last 14% the white field and the star cross-fade into the real
+ *     homepage (layer opacity → 0, then hidden so it costs nothing);
+ *   - scrolling back up scrubs the sequence in reverse — it is a lens on the
+ *     scroll position, never a trap.
+ *
+ * Escape hatches (all verified):
+ *   - prefers-reduced-motion or a completed/skipped session: the pre-paint
+ *     script sets html[data-intro="off"]; CSS removes the spacer and layer, so
+ *     there is nothing to scroll through and nothing to get stuck in;
+ *   - a persistent "Skip intro" button jumps straight to the homepage start;
+ *   - without JavaScript the spacer is display:none (html:not(.js)), so no
+ *     dead scroll region exists.
+ *
+ * Cost model: one scroll listener writing two transforms + one opacity inside
+ * a rAF coalescer; the layer is hidden entirely outside 0 < p < 1.
+ */
+import { INTRO_CONFIG } from '../config/access.config';
+import { createFrameScheduler, prefersReducedMotion } from './environment';
+
+export function initIntro(): void {
+	const root = document.documentElement;
+	if (!INTRO_CONFIG.enabled || root.dataset.intro === 'off' || prefersReducedMotion()) return;
+
+	const layer = document.querySelector<HTMLElement>('[data-intro-layer]');
+	const spacer = document.querySelector<HTMLElement>('[data-intro-spacer]');
+	const star = document.querySelector<HTMLElement>('[data-intro-star]');
+	const energy = document.querySelector<HTMLElement>('[data-intro-energy]');
+	const skip = document.querySelector<HTMLButtonElement>('[data-intro-skip]');
+	if (!layer || !spacer || !star || !energy) return;
+
+	const smoothstep = (edge0: number, edge1: number, x: number) => {
+		const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+		return t * t * (3 - 2 * t);
+	};
+
+	const update = () => {
+		const spacerHeight = spacer.offsetHeight;
+		const denom = Math.max(1, spacerHeight - window.innerHeight);
+		const p = Math.min(1, Math.max(0, window.scrollY / denom));
+
+		if (p <= 0.001) {
+			layer.hidden = false;
+			layer.style.opacity = '1';
+			star.style.transform = 'translate3d(-50%, -50%, 0) scale(1) rotate(0deg)';
+			energy.style.opacity = '0';
+			return;
+		}
+		if (p >= 1) {
+			// Fully transitioned: stop compositing the layer at all.
+			layer.hidden = true;
+			return;
+		}
+		layer.hidden = false;
+
+		// Ease-in growth: slow at first, then dominant — the star "arrives".
+		const growth = Math.pow(p, 1.7);
+		const scale = 1 + growth * 46;
+		const rotate = p * 420;
+		star.style.transform = `translate3d(-50%, -50%, 0) scale(${scale.toFixed(2)}) rotate(${rotate.toFixed(1)}deg)`;
+
+		// Blue energy floods the field as the star gets close.
+		energy.style.opacity = smoothstep(0.55, 0.92, p).toFixed(3);
+
+		// Cross-fade into the homepage over the final 14%.
+		layer.style.opacity = (1 - smoothstep(0.86, 1, p)).toFixed(3);
+	};
+
+	const schedule = createFrameScheduler(update);
+	window.addEventListener('scroll', schedule, { passive: true });
+	window.addEventListener('resize', schedule, { passive: true });
+	update();
+
+	if (skip) {
+		skip.addEventListener('click', () => {
+			try {
+				sessionStorage.setItem(INTRO_CONFIG.sessionKey, '1');
+			} catch {
+				/* storage blocked: skip still works for this click */
+			}
+			const target = spacer.offsetTop + spacer.offsetHeight - window.innerHeight + 2;
+			window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+		});
+	}
+}

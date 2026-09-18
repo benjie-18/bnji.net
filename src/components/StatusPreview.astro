@@ -1,0 +1,291 @@
+---
+/**
+ * StatusPreview — the AI / homelab section ("04 / SYSTEM").
+ *
+ * Rendered entirely from src/data/ai-stack.ts and src/data/network.ts. The
+ * stack is expected to change (different models, different services), so this
+ * component describes the *shape* of the system — a prompt path, a host, a
+ * delivery loop and a hostname registry — and never hard-codes today's setup.
+ * When the hardware or models change, the data file changes and this file does
+ * not.
+ *
+ * Performance note: the pipeline nodes are plain bordered tiles, not glass
+ * surfaces. They sit inside a panel that already has backdrop-filter, and
+ * nesting blurred surfaces costs fill rate for no visible gain.
+ */
+import { AI_PIPELINE, AI_STACK_FACTS, AI_STACK_NOTE, WORKFLOW_STEPS } from '../data/ai-stack';
+import GlassPanel from './GlassPanel.astro';
+import Icon from './Icon.astro';
+import NetworkGrid from './NetworkGrid.astro';
+import SectionHeading from './SectionHeading.astro';
+
+/** Visual weight per node kind — the model and the output are the two ends of
+ *  the story, so they carry the accent. */
+const ACCENTED_KINDS = new Set(['model', 'output']);
+---
+
+<section class="section" id="system" aria-labelledby="system-title">
+	<div class="container">
+		<SectionHeading
+			index="04"
+			label="SYSTEM"
+			titleId="system-title"
+			title="AI &amp; homelab"
+			description="One workstation, a GPU, and a chain of small services that turn a chat message into a deployed change on this site."
+			actionHref="/projects/"
+			actionLabel="The details"
+		/>
+
+		<div class="bento">
+			<GlassPanel pad="lg" reveal span={12} class="system-panel">
+				<p class="system-label">Prompt path</p>
+
+				<ol class="pipeline" role="list">
+					{
+						AI_PIPELINE.map((node, index) => (
+							<li class="pipeline__item">
+								<div
+									class:list={[
+										'pipeline__node',
+										ACCENTED_KINDS.has(node.kind) && 'pipeline__node--accent',
+									]}
+								>
+									<span class="pipeline__label">{node.label}</span>
+									<span class="pipeline__detail">{node.detail}</span>
+								</div>
+								{index < AI_PIPELINE.length - 1 && (
+									<span class="pipeline__arrow" aria-hidden="true">
+										<Icon name="arrow-right" size={14} />
+									</span>
+								)}
+							</li>
+						))
+					}
+				</ol>
+
+				<p class="system-note">{AI_STACK_NOTE}</p>
+
+				<hr class="rule" />
+
+				<p class="system-label">Delivery loop</p>
+				<ol class="workflow" role="list">
+					{
+						WORKFLOW_STEPS.map((step, index) => (
+							<li>
+								<span class="workflow__index">{String(index + 1).padStart(2, '0')}</span>
+								{step}
+							</li>
+						))
+					}
+				</ol>
+			</GlassPanel>
+
+			<GlassPanel variant="quiet" pad="md" reveal revealDelay={100} span={5} class="facts">
+				<p class="system-label">Host</p>
+				<dl class="facts__list">
+					{
+						AI_STACK_FACTS.map((fact) => (
+							<div class="facts__row">
+								<dt>{fact.label}</dt>
+								<dd>{fact.value}</dd>
+							</div>
+						))
+					}
+				</dl>
+			</GlassPanel>
+
+			<NetworkGrid span={7} revealDelay={180} />
+		</div>
+	</div>
+</section>
+
+<style>
+	.system-panel {
+		display: grid;
+		gap: 1.1rem;
+	}
+
+	.system-label {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	/* --- Prompt path ------------------------------------------------------ */
+
+	.pipeline {
+		list-style: none;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: stretch;
+		gap: 0.4rem;
+		margin: 0;
+	}
+
+	.pipeline__item {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex: 1 1 auto;
+	}
+
+	.pipeline__node {
+		display: grid;
+		gap: 0.2rem;
+		flex: 1 1 auto;
+		min-width: 0;
+		padding: 0.7rem 0.85rem;
+		border-radius: var(--radius-md);
+		border: 1px solid rgba(255, 255, 255, 0.09);
+		background: rgba(255, 255, 255, 0.035);
+		transition:
+			border-color var(--dur-base) var(--ease-out),
+			background-color var(--dur-base) var(--ease-out);
+	}
+
+	.pipeline__node--accent {
+		border-color: var(--accent-line);
+		background: rgba(127, 212, 255, 0.07);
+	}
+
+	/* Hovering the panel walks the chain: cheap, and it makes the flow legible
+	   without any JavaScript. */
+	.pipeline:hover .pipeline__node {
+		border-color: rgba(255, 255, 255, 0.16);
+	}
+
+	.pipeline__label {
+		font-family: var(--font-display);
+		font-size: 0.98rem;
+		font-weight: 500;
+		letter-spacing: -0.01em;
+		color: var(--text-strong);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.pipeline__detail {
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		letter-spacing: 0.04em;
+		color: var(--text-dim);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.pipeline__arrow {
+		display: inline-flex;
+		color: var(--accent);
+		opacity: 0.6;
+		flex: none;
+	}
+
+	.system-note {
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		line-height: 1.65;
+		max-width: 78ch;
+	}
+
+	/* --- Delivery loop ---------------------------------------------------- */
+
+	.workflow {
+		list-style: none;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem 0.5rem;
+		margin: 0;
+		counter-reset: none;
+	}
+
+	.workflow li {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.45em;
+		padding: 0.35em 0.7em;
+		border-radius: var(--radius-pill);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: rgba(255, 255, 255, 0.025);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		letter-spacing: 0.08em;
+		text-transform: lowercase;
+		color: var(--text-muted);
+	}
+
+	.workflow__index {
+		color: var(--accent);
+		opacity: 0.7;
+		font-size: 0.62rem;
+	}
+
+	/* --- Host facts ------------------------------------------------------- */
+
+	.facts {
+		display: grid;
+		gap: 1rem;
+		align-content: start;
+	}
+
+	.facts__list {
+		display: grid;
+		gap: 0.75rem;
+		margin: 0;
+	}
+
+	.facts__row {
+		display: grid;
+		gap: 0.2rem;
+		padding-block-end: 0.7rem;
+		border-block-end: 1px solid rgba(255, 255, 255, 0.055);
+	}
+
+	.facts__row:last-child {
+		border-block-end: 0;
+		padding-block-end: 0;
+	}
+
+	.facts__row dt {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.facts__row dd {
+		margin: 0;
+		font-size: 0.9rem;
+		line-height: 1.5;
+		color: var(--text-muted);
+		overflow-wrap: anywhere;
+	}
+
+	/* --- Narrow screens: the chain reads top to bottom -------------------- */
+
+	@media (max-width: 860px) {
+		.pipeline {
+			flex-direction: column;
+		}
+
+		.pipeline__item {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.25rem;
+		}
+
+		.pipeline__arrow {
+			align-self: center;
+			transform: rotate(90deg);
+		}
+
+		.pipeline__label,
+		.pipeline__detail {
+			white-space: normal;
+		}
+	}
+</style>

@@ -1,0 +1,73 @@
+---
+/**
+ * BlogPreview — recent writing on the homepage ("05 / WRITING").
+ *
+ * Posts come from the Astro content collection through src/data/blog.ts, so the
+ * ordering, draft filtering and URLs are identical here, on /blog/ and in the
+ * RSS feed. Adding a post is still "drop a markdown file in src/content/blog/".
+ */
+import { getRecentBlogPosts } from '../data/blog';
+import PostCard from './PostCard.astro';
+import SectionHeading from './SectionHeading.astro';
+
+const PREVIEW_COUNT = 3;
+const posts = await getRecentBlogPosts(PREVIEW_COUNT);
+---
+
+<section class="section" id="writing" aria-labelledby="writing-title">
+	<div class="container">
+		<SectionHeading
+			index="05"
+			label="WRITING"
+			titleId="writing-title"
+			title="From the blog"
+			description="Notes on what I build and what breaks along the way — Astro, local AI, Docker, hardware and the occasional dead end worth writing down."
+			actionHref="/blog/"
+			actionLabel="All posts"
+		/>
+
+		<div class="post-list">
+			{
+				posts.map((post, index) => (
+					<PostCard post={post} index={index} revealDelay={index * 90} />
+				))
+			}
+		</div>
+
+		<p class="writing-foot">
+			<span class="mono">Subscribe</span>
+			<a href="/rss.xml" rel="alternate">RSS feed</a>
+		</p>
+	</div>
+</section>
+
+<style>
+	/* Rows rather than cards: the projects section already uses large tiles, and
+	   a dense typographic list keeps the two sections visually distinct. */
+	.post-list {
+		display: grid;
+		gap: 0.7rem;
+	}
+
+	.writing-foot {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		margin-block-start: 1.5rem;
+	}
+
+	.writing-foot a {
+		font-family: var(--font-mono);
+		font-size: var(--text-small);
+		letter-spacing: 0.06em;
+		color: var(--text-muted);
+		text-decoration: none;
+		border-block-end: 1px solid var(--accent-line);
+		border-radius: 2px;
+		transition: color var(--dur-fast) var(--ease-out);
+	}
+
+	.writing-foot a:hover {
+		color: var(--accent-strong);
+	}
+</style>

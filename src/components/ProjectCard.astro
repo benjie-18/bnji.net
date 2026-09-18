@@ -1,0 +1,255 @@
+---
+/**
+ * ProjectCard — one project, rendered from the Project type in data/projects.ts.
+ *
+ * The card is a GlassPanel with the "interactive" variant, so hover lift, focus
+ * ring and pointer highlight all come from the shared glass system.
+ *
+ * Clickability: when a project has an href the *title* is the link and
+ * .stretched-link makes the whole card clickable (styles in glass.css). That
+ * keeps exactly one link in the accessibility tree with a meaningful name,
+ * instead of wrapping the card in an <a> full of block content. Projects without
+ * a link render a status chip instead — no dead affordance.
+ */
+import type { Project } from '../data/projects';
+import { PROJECT_STATUS_LABEL } from '../data/projects';
+import Chip from './Chip.astro';
+import GlassPanel from './GlassPanel.astro';
+import Icon from './Icon.astro';
+
+interface Props {
+	project: Project;
+	/** Position in the list, rendered as a mono index ("01"). */
+	index?: number;
+	/** Large layout: more padding, longer copy, wider grid span. */
+	feature?: boolean;
+	revealDelay?: number;
+	/** Bento span out of 12, forwarded to GlassPanel. */
+	span?: number;
+}
+
+const { project, index = 0, feature = false, revealDelay = 0, span } = Astro.props;
+
+const isExternal = /^https?:\/\//.test(project.href ?? '');
+const statusTone =
+	project.status === 'public' ? 'live' : project.status === 'wip' ? 'soon' : 'idle';
+---
+
+<GlassPanel
+	as="article"
+	variant="interactive"
+	pad={feature ? 'lg' : 'md'}
+	reveal
+	revealDelay={revealDelay}
+	span={span}
+	id={`project-${project.slug}`}
+	class:list={['project-card', feature && 'project-card--feature']}
+>
+	<div class="project-card__top">
+		<span class="project-card__index">{String(index + 1).padStart(2, '0')}</span>
+		<Chip tone={statusTone} dot>{PROJECT_STATUS_LABEL[project.status]}</Chip>
+	</div>
+
+	{
+		project.image && (
+			<img
+				class="project-card__image"
+				src={project.image}
+				alt=""
+				width="800"
+				height="450"
+				loading="lazy"
+				decoding="async"
+			/>
+		)
+	}
+
+	<h3 class="project-card__title">
+		{
+			project.href ? (
+				<a
+					class="stretched-link"
+					href={project.href}
+					rel={isExternal ? 'noopener noreferrer' : undefined}
+				>
+					{project.title}
+				</a>
+			) : (
+				project.title
+			)
+		}
+	</h3>
+
+	<p class="project-card__description">{project.description}</p>
+
+	{feature && project.detail && <p class="project-card__detail">{project.detail}</p>}
+
+	{
+		project.meta && (
+			<dl class="project-card__meta">
+				{project.meta.map((row) => (
+					<div class="project-card__meta-row">
+						<dt>{row.label}</dt>
+						<dd>{row.value}</dd>
+					</div>
+				))}
+			</dl>
+		)
+	}
+
+	<div class="project-card__foot">
+		<ul class="project-card__tags" role="list">
+			{project.tags.map((tag) => <li><Chip>{tag}</Chip></li>)}
+		</ul>
+
+		{
+			project.href && (
+				<span class="project-card__cta">
+					{isExternal ? 'Visit' : 'Open'}
+					<Icon name={isExternal ? 'arrow-up-right' : 'arrow-right'} size={13} />
+				</span>
+			)
+		}
+	</div>
+</GlassPanel>
+
+<style>
+	.project-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
+		block-size: 100%;
+	}
+
+	.project-card__top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.project-card__index {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.16em;
+		color: var(--text-faint);
+	}
+
+	.project-card__image {
+		inline-size: 100%;
+		aspect-ratio: 16 / 9;
+		object-fit: cover;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--glass-border);
+	}
+
+	.project-card__title {
+		font-size: var(--text-title);
+		font-weight: 350;
+		letter-spacing: var(--tracking-snug);
+		line-height: 1.15;
+	}
+
+	.project-card--feature .project-card__title {
+		font-size: clamp(1.7rem, 3vw, 2.4rem);
+	}
+
+	.project-card__title a {
+		color: var(--text-strong);
+		text-decoration: none;
+		border-radius: var(--radius-xs);
+	}
+
+	.project-card__title a:hover {
+		color: var(--accent-strong);
+	}
+
+	.project-card__description {
+		color: var(--text-muted);
+		font-size: 0.98rem;
+		line-height: 1.62;
+		max-width: 56ch;
+	}
+
+	.project-card--feature .project-card__description {
+		font-size: var(--text-lead);
+	}
+
+	.project-card__detail {
+		color: var(--text-dim);
+		font-size: 0.92rem;
+		line-height: 1.65;
+		max-width: 62ch;
+	}
+
+	/* Technical summary: mono key/value rows inside a quiet inset. */
+	.project-card__meta {
+		display: grid;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0.85rem 1rem;
+		border-radius: var(--radius-md);
+		border: 1px solid rgba(255, 255, 255, 0.07);
+		background: rgba(255, 255, 255, 0.022);
+	}
+
+	.project-card__meta-row {
+		display: grid;
+		grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr);
+		gap: 0.75rem;
+		align-items: baseline;
+	}
+
+	.project-card__meta dt {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.project-card__meta dd {
+		margin: 0;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		line-height: 1.5;
+		color: var(--text-muted);
+		overflow-wrap: anywhere;
+	}
+
+	.project-card__foot {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-block-start: auto;
+		padding-block-start: 0.35rem;
+	}
+
+	.project-card__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		list-style: none;
+	}
+
+	.project-card__cta {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4em;
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--text-dim);
+		transition: color var(--dur-fast) var(--ease-out);
+	}
+
+	/* The CTA is not itself the link (the stretched title link is), so it reacts
+	   to the card being hovered or focused rather than to its own pointer state. */
+	.project-card:hover .project-card__cta,
+	.project-card:focus-within .project-card__cta {
+		color: var(--accent-strong);
+	}
+</style>

@@ -1,0 +1,162 @@
+/* ==========================================================================
+   BNJI.NET — environment layers (Frutiger Aero light sky + dark nebula)
+   --------------------------------------------------------------------------
+   The site's atmosphere, per theme:
+
+   LIGHT (Frutiger Aero): a sky field instead of a void. Sun bloom, drifting
+   cloud masses, floating soap bubbles with specular rims, bokeh sparkle and a
+   water-like gloss along the bottom of the viewport. Everything is gradients
+   + transform-only animation: no filters on large layers, no layout work.
+
+   DARK (space, expanded): the existing aurora plus a pink/violet/magenta
+   nebula band (token-driven from tokens.css) so the night sky gained colour
+   without losing its restraint.
+
+   All motion here is disabled under prefers-reduced-motion; bubbles then rest
+   as static highlights and clouds stop drifting.
+   ========================================================================== */
+
+/* --- Light sky field ------------------------------------------------------ */
+
+[data-theme='light'] html,
+html[data-theme='light'] {
+	background: linear-gradient(
+		180deg,
+		var(--aero-sky-top),
+		var(--aero-sky-mid) 46%,
+		var(--aero-sky-bottom) 100%
+	);
+}
+
+html[data-theme='light'] body {
+	background: linear-gradient(
+		180deg,
+		var(--aero-sky-top),
+		var(--aero-sky-mid) 46%,
+		var(--aero-sky-bottom) 100%
+	);
+	background-attachment: fixed;
+}
+
+/* The aero sky layer: sun bloom + cloud masses + bokeh. One fixed layer, four
+   soft radial gradients — the "environmental imagery" of the Aero language
+   without shipping a single photograph. */
+.aero-sky {
+	position: fixed;
+	inset: -14vmax;
+	z-index: var(--z-aero);
+	pointer-events: none;
+	display: none;
+	background:
+		/* sun bloom, upper right */
+		radial-gradient(38% 30% at 82% 6%, var(--aero-sun), transparent 70%),
+		/* cloud mass, left */
+		radial-gradient(46% 26% at 12% 22%, var(--aero-cloud), transparent 72%),
+		/* cloud mass, right low */
+		radial-gradient(52% 24% at 88% 62%, var(--aero-cloud), transparent 74%),
+		/* bokeh sparkle */
+		radial-gradient(9% 9% at 30% 68%, var(--aero-bokeh), transparent 70%),
+		radial-gradient(7% 7% at 64% 34%, var(--aero-bokeh), transparent 70%),
+		radial-gradient(5% 5% at 48% 82%, var(--aero-green), transparent 70%),
+		/* water-like gloss along the bottom */
+		linear-gradient(to top, rgba(255, 255, 255, 0.5), transparent 22%);
+	will-change: transform;
+	animation: aero-drift var(--dur-drift) var(--ease-soft) infinite alternate;
+}
+
+html[data-theme='light'] .aero-sky {
+	display: block;
+}
+
+/* Clouds drift by transforming the whole layer a few percent — compositor
+   only, no repaint of the gradients. */
+@keyframes aero-drift {
+	from {
+		transform: translate3d(-1.5%, -0.8%, 0) scale(1.02);
+	}
+	to {
+		transform: translate3d(1.5%, 0.8%, 0) scale(1.05);
+	}
+}
+
+/* --- Soap bubbles ---------------------------------------------------------- */
+/* Individual bubbles are rendered by AeroSky.astro as spans with inline size/
+   position/duration. The look: transparent sphere with a hot specular dot at
+   the upper left, a thin bright rim and a refracted colour band at the bottom
+   — the canonical Aero bubble. */
+.aero-bubble {
+	position: absolute;
+	border-radius: 50%;
+	background:
+		radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 26%),
+		radial-gradient(circle at 68% 76%, var(--aero-bokeh), rgba(255, 255, 255, 0) 42%),
+		radial-gradient(
+			circle at 50% 50%,
+			rgba(255, 255, 255, 0.06) 58%,
+			var(--aero-bubble) 78%,
+			var(--aero-bubble-rim) 96%,
+			rgba(255, 255, 255, 0.4) 100%
+		);
+	box-shadow:
+		inset 0 -6px 14px -8px rgba(0, 146, 200, 0.5),
+		inset 0 4px 10px -6px rgba(255, 255, 255, 0.9),
+		0 6px 18px -10px rgba(30, 130, 180, 0.35);
+	opacity: 0;
+	animation: aero-bubble-rise linear infinite;
+	will-change: transform, opacity;
+}
+
+@keyframes aero-bubble-rise {
+	0% {
+		transform: translate3d(0, 12vh, 0) scale(0.86);
+		opacity: 0;
+	}
+	12% {
+		opacity: var(--bubble-opacity, 0.5);
+	}
+	86% {
+		opacity: var(--bubble-opacity, 0.5);
+	}
+	100% {
+		transform: translate3d(var(--bubble-sway, 3vw), -108vh, 0) scale(1.06);
+		opacity: 0;
+	}
+}
+
+/* --- Dark nebula band ------------------------------------------------------ */
+/* The dark theme's aurora layer gains three extra radials (pink, violet,
+   magenta) so the night sky reads richer. Tokens collapse them to
+   `transparent` in light mode, so one rule serves both themes. */
+.aurora-layer {
+	background:
+		radial-gradient(46% 38% at 18% 12%, var(--aurora-1), transparent 68%),
+		radial-gradient(40% 34% at 84% 26%, var(--aurora-2), transparent 70%),
+		radial-gradient(52% 44% at 62% 92%, var(--aurora-3), transparent 72%),
+		radial-gradient(44% 30% at 74% 74%, var(--nebula-pink), transparent 70%),
+		radial-gradient(38% 34% at 26% 58%, var(--nebula-violet), transparent 72%),
+		radial-gradient(30% 24% at 52% 18%, var(--nebula-magenta), transparent 70%);
+}
+
+/* Light theme: softer vignette (the sky is bright; edges cool instead of
+   black), and the starfield canvas rests — the sky owns the light mode. */
+html[data-theme='light'] .vignette-layer {
+	background: radial-gradient(120% 90% at 50% 42%, transparent 46%, rgba(111, 180, 214, 0.28) 100%);
+}
+
+html[data-theme='light'] .starfield {
+	display: none;
+}
+
+/* The dark theme hides the aero sky entirely (it is display:none by default). */
+
+/* --- Reduced motion -------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+	.aero-sky {
+		animation: none;
+	}
+	.aero-bubble {
+		animation: none;
+		opacity: var(--bubble-opacity, 0.4);
+		transform: none;
+	}
+}

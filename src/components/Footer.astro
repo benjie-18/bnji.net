@@ -1,62 +1,220 @@
 ---
-const today = new Date();
+/**
+ * Footer — the closing panel of the site.
+ *
+ * Same glass and space language as the rest of the page, deliberately quieter:
+ * a large wordmark, the copyright line, real links, and the reserved
+ * destinations rendered as inert "soon" text (never as dead links).
+ *
+ * Links come from src/data/navigation.ts and src/data/site.ts.
+ */
+import { FOOTER_NAV, FUTURE_NAV } from '../data/navigation';
+import { SITE, SOCIAL_LINKS } from '../data/site';
+import BrandMark from './BrandMark.astro';
+
+// Rendered at build time. The site is prerendered, so this is the year of the
+// last deploy rather than of the request — rebuilds keep it current.
+const year = new Date().getFullYear();
 ---
 
-<footer>
-	&copy; {today.getFullYear()} Your name here. All rights reserved.
-	<div class="social-links">
-		<a href="https://m.webtoo.ls/@astro" target="_blank">
-			<span class="sr-only">Follow Astro on Mastodon</span>
-			<svg
-				viewBox="0 0 16 16"
-				aria-hidden="true"
-				width="32"
-				height="32"
-				astro-icon="social/mastodon"
-				><path
-					fill="currentColor"
-					d="M11.19 12.195c2.016-.24 3.77-1.475 3.99-2.603.348-1.778.32-4.339.32-4.339 0-3.47-2.286-4.488-2.286-4.488C12.062.238 10.083.017 8.027 0h-.05C5.92.017 3.942.238 2.79.765c0 0-2.285 1.017-2.285 4.488l-.002.662c-.004.64-.007 1.35.011 2.091.083 3.394.626 6.74 3.78 7.57 1.454.383 2.703.463 3.709.408 1.823-.1 2.847-.647 2.847-.647l-.06-1.317s-1.303.41-2.767.36c-1.45-.05-2.98-.156-3.215-1.928a3.614 3.614 0 0 1-.033-.496s1.424.346 3.228.428c1.103.05 2.137-.064 3.188-.189zm1.613-2.47H11.13v-4.08c0-.859-.364-1.295-1.091-1.295-.804 0-1.207.517-1.207 1.541v2.233H7.168V5.89c0-1.024-.403-1.541-1.207-1.541-.727 0-1.091.436-1.091 1.296v4.079H3.197V5.522c0-.859.22-1.541.66-2.046.456-.505 1.052-.764 1.793-.764.856 0 1.504.328 1.933.983L8 4.39l.417-.695c.429-.655 1.077-.983 1.934-.983.74 0 1.336.259 1.791.764.442.505.661 1.187.661 2.046v4.203z"
-				></path></svg
-			>
-		</a>
-		<a href="https://twitter.com/astrodotbuild" target="_blank">
-			<span class="sr-only">Follow Astro on Twitter</span>
-			<svg viewBox="0 0 16 16" aria-hidden="true" width="32" height="32" astro-icon="social/twitter"
-				><path
-					fill="currentColor"
-					d="M5.026 15c6.038 0 9.341-5.003 9.341-9.334 0-.14 0-.282-.006-.422A6.685 6.685 0 0 0 16 3.542a6.658 6.658 0 0 1-1.889.518 3.301 3.301 0 0 0 1.447-1.817 6.533 6.533 0 0 1-2.087.793A3.286 3.286 0 0 0 7.875 6.03a9.325 9.325 0 0 1-6.767-3.429 3.289 3.289 0 0 0 1.018 4.382A3.323 3.323 0 0 1 .64 6.575v.045a3.288 3.288 0 0 0 2.632 3.218 3.203 3.203 0 0 1-.865.115 3.23 3.23 0 0 1-.614-.057 3.283 3.283 0 0 0 3.067 2.277A6.588 6.588 0 0 1 .78 13.58a6.32 6.32 0 0 1-.78-.045A9.344 9.344 0 0 0 5.026 15z"
-				></path></svg
-			>
-		</a>
-		<a href="https://github.com/withastro/astro" target="_blank">
-			<span class="sr-only">Go to Astro's GitHub repo</span>
-			<svg viewBox="0 0 16 16" aria-hidden="true" width="32" height="32" astro-icon="social/github"
-				><path
-					fill="currentColor"
-					d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"
-				></path></svg
-			>
-		</a>
+<footer class="site-footer">
+	<div class="container">
+		<div class="footer-panel" data-glass data-reveal>
+			<div class="footer-top">
+				<div class="footer-identity">
+					<p class="footer-word" aria-hidden="true">{SITE.name}</p>
+					<p class="footer-tagline">
+						<BrandMark size={14} />
+						{SITE.author.tagline}
+					</p>
+				</div>
+
+				<div class="footer-columns">
+					<nav class="footer-column" aria-label="Site">
+						<p class="footer-heading">Site</p>
+						<ul role="list">
+							{FOOTER_NAV.map((item) => <li><a href={item.href}>{item.label}</a></li>)}
+						</ul>
+					</nav>
+
+					<nav class="footer-column" aria-label="Elsewhere">
+						<p class="footer-heading">Elsewhere</p>
+						<ul role="list">
+							{
+								SOCIAL_LINKS.map((link) => (
+									<li>
+										<a href={link.href} rel={link.rel ?? 'noopener noreferrer'}>
+											{link.label}
+											{link.handle && <span class="footer-handle">{link.handle}</span>}
+										</a>
+									</li>
+								))
+							}
+						</ul>
+					</nav>
+
+					<div class="footer-column">
+						<p class="footer-heading">Incoming</p>
+						<ul class="footer-soon" role="list">
+							{
+								FUTURE_NAV.map((item) => (
+									<li>
+										<span class="chip" title={item.description}>
+											{item.label}
+											<em>soon</em>
+										</span>
+									</li>
+								))
+							}
+						</ul>
+					</div>
+				</div>
+			</div>
+
+			<hr class="rule" />
+
+			<div class="footer-base">
+				<p class="footer-copy">
+					&copy; {year} {SITE.author.name}
+				</p>
+				<p class="footer-stack mono">Astro · Cloudflare Workers · prerendered</p>
+				<a class="footer-top-link" href="#top">
+					Back to top <span aria-hidden="true">&uarr;</span>
+				</a>
+			</div>
+		</div>
 	</div>
 </footer>
+
 <style>
-	footer {
-		padding: 2em 1em 6em 1em;
-		background: linear-gradient(var(--gray-gradient)) no-repeat;
-		color: rgb(var(--gray));
-		text-align: center;
+	.site-footer {
+		padding-block: clamp(3rem, 8vh, 6rem) calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
 	}
-	.social-links {
+
+	.footer-panel {
+		padding: clamp(1.5rem, 3.4vw, 2.75rem);
+	}
+
+	.footer-top {
+		display: grid;
+		gap: clamp(1.75rem, 4vw, 3rem);
+	}
+
+	@media (min-width: 860px) {
+		.footer-top {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+			align-items: start;
+		}
+	}
+
+	/* Large but low-contrast: the wordmark should read as atmosphere, not as a
+	   second hero competing with the one at the top of the page. */
+	.footer-word {
+		font-family: var(--font-display);
+		font-size: clamp(3rem, 8vw, 5.5rem);
+		font-weight: 200;
+		letter-spacing: 0.06em;
+		line-height: 0.95;
+		color: transparent;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.08));
+		-webkit-background-clip: text;
+		background-clip: text;
+	}
+
+	.footer-tagline {
 		display: flex;
-		justify-content: center;
-		gap: 1em;
-		margin-top: 1em;
+		align-items: center;
+		gap: 0.55rem;
+		margin-block-start: 0.9rem;
+		font-size: var(--text-small);
+		color: var(--text-muted);
+		max-width: 34ch;
 	}
-	.social-links a {
+
+	.footer-columns {
+		display: grid;
+		gap: clamp(1.5rem, 3vw, 2.5rem);
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+	}
+
+	.footer-heading {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		font-weight: 400;
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+		margin-block-end: 0.85rem;
+	}
+
+	.footer-column ul {
+		list-style: none;
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.footer-column a {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		color: var(--text-muted);
+		font-size: var(--text-small);
 		text-decoration: none;
-		color: rgb(var(--gray));
+		border-radius: var(--radius-xs);
+		transition: color var(--dur-fast) var(--ease-out);
 	}
-	.social-links a:hover {
-		color: rgb(var(--gray-dark));
+
+	.footer-column a:hover {
+		color: var(--text-strong);
+	}
+
+	.footer-handle {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+	}
+
+	.footer-soon {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+
+	.footer-soon .chip em {
+		font-style: normal;
+		color: var(--text-faint);
+	}
+
+	.footer-base {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem 1.5rem;
+	}
+
+	.footer-copy,
+	.footer-stack {
+		color: var(--text-dim);
+		font-size: var(--text-small);
+	}
+
+	.footer-stack {
+		color: var(--text-faint);
+	}
+
+	.footer-top-link {
+		margin-inline-start: auto;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		text-decoration: none;
+		border-radius: var(--radius-pill);
+		transition: color var(--dur-fast) var(--ease-out);
+	}
+
+	.footer-top-link:hover {
+		color: var(--accent-strong);
 	}
 </style>

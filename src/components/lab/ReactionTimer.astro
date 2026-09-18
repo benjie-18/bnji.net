@@ -1,0 +1,179 @@
+---
+/**
+ * Lab — Reaction Timer. Measures response latency in milliseconds.
+ *
+ * Wait for the pad to glow, then click it or press Space as fast as possible.
+ * Five rounds; median and best are reported. False starts are detected and
+ * cost the round. Entirely event-driven (one setTimeout per round, cleared on
+ * cancel): no animation loop, no layout work, no theme dependence.
+ *
+ * Accessible by design: the pad is a button, state changes are announced via
+ * an aria-live line, and the keyboard path (Space/Enter on the focused pad)
+ * is identical to the pointer path.
+ */
+---
+
+<div class="reaction" data-reaction>
+	<button class="reaction__pad" type="button" data-rt-pad data-state="idle">
+		<span class="reaction__pad-label" data-rt-label>Start round 1 / 5</span>
+		<span class="reaction__pad-ms mono" data-rt-ms></span>
+	</button>
+
+	<div class="reaction__hud mono">
+		<span>round <b data-rt-round>0</b>/5</span>
+		<span>best <b data-rt-best>—</b></span>
+		<span>median <b data-rt-median>—</b></span>
+	</div>
+	<p class="reaction__status mono" data-rt-status role="status" aria-live="polite">
+		Press start, wait for the glow, then respond as fast as you can.
+	</p>
+</div>
+
+<script>
+	const host =
+		(document.currentScript?.closest?.('[data-reaction]') as HTMLElement | null) ??
+		document.querySelector<HTMLElement>('[data-reaction]');
+	const pad = host?.querySelector<HTMLButtonElement>('[data-rt-pad]');
+	const label = host?.querySelector<HTMLElement>('[data-rt-label]');
+	const msEl = host?.querySelector<HTMLElement>('[data-rt-ms]');
+	const roundEl = host?.querySelector<HTMLElement>('[data-rt-round]');
+	const bestEl = host?.querySelector<HTMLElement>('[data-rt-best]');
+	const medianEl = host?.querySelector<HTMLElement>('[data-rt-median]');
+	const statusEl = host?.querySelector<HTMLElement>('[data-rt-status]');
+
+	if (host && pad && label && msEl && roundEl && bestEl && medianEl && statusEl) {
+		type Phase = 'idle' | 'waiting' | 'go' | 'result';
+		let phase: Phase = 'idle';
+		let timer = 0;
+		let goAt = 0;
+		const results: number[] = [];
+
+		const set = (next: Phase, text: string, ms = '') => {
+			phase = next;
+			pad.dataset.state = next;
+			label.textContent = text;
+			msEl.textContent = ms;
+		};
+
+		const stats = () => {
+			roundEl.textContent = String(results.length);
+			if (results.length === 0) return;
+			const sorted = [...results].sort((a, b) => a - b);
+			bestEl.textContent = `${sorted[0]} ms`;
+			const mid = Math.floor(sorted.length / 2);
+			const median =
+				sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+			medianEl.textContent = `${median} ms`;
+		};
+
+		const beginRound = () => {
+			set('waiting', 'Wait for the glow…');
+			statusEl.textContent = 'Not yet…';
+			timer = window.setTimeout(() => {
+				goAt = performance.now();
+				set('go', 'NOW — click or Space');
+				statusEl.textContent = 'Go!';
+			}, 1200 + Math.random() * 2800);
+		};
+
+		const respond = () => {
+			if (phase === 'waiting') {
+				clearTimeout(timer);
+				set('result', 'False start — click to retry this round');
+				statusEl.textContent = 'Too early. The pad was not glowing yet.';
+				return;
+			}
+			if (phase === 'go') {
+				const ms = Math.round(performance.now() - goAt);
+				results.push(ms);
+				stats();
+				const done = results.length >= 5;
+				set(
+					'result',
+					done ? 'Session complete — click to reset' : `Click to start round ${results.length + 1}`,
+					`${ms} ms`,
+				);
+				statusEl.textContent = done
+					? `Five rounds done. Best ${bestEl.textContent}, median ${medianEl.textContent}.`
+					: `${ms} ms recorded.`;
+				return;
+			}
+			// idle or result: start / continue / reset
+			if (phase === 'result' && results.length >= 5) {
+				results.length = 0;
+				stats();
+				roundEl.textContent = '0';
+				bestEl.textContent = '—';
+				medianEl.textContent = '—';
+			}
+			beginRound();
+		};
+
+		pad.addEventListener('click', respond);
+	}
+</script>
+
+<style>
+	.reaction {
+		display: grid;
+		gap: 0.7rem;
+	}
+	.reaction__pad {
+		position: relative;
+		display: grid;
+		place-items: center;
+		gap: 0.4rem;
+		min-height: 180px;
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-lg);
+		background: var(--glass-bg-quiet);
+		color: var(--text);
+		cursor: pointer;
+		transition: background-color var(--dur-instant) linear, border-color var(--dur-instant) linear;
+	}
+	.reaction__pad:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 3px;
+	}
+	.reaction__pad[data-state='waiting'] {
+		background: var(--accent-soft);
+		color: var(--text-muted);
+	}
+	.reaction__pad[data-state='go'] {
+		background: color-mix(in srgb, var(--signal-live) 34%, transparent);
+		border-color: var(--signal-live);
+		color: var(--text-strong);
+	}
+	.reaction__pad[data-state='result'] {
+		background: var(--glass-bg);
+	}
+	.reaction__pad-label {
+		font-family: var(--font-display);
+		font-size: var(--text-title);
+		font-weight: 600;
+		letter-spacing: var(--tracking-snug);
+	}
+	.reaction__pad-ms {
+		font-size: var(--text-lead);
+		color: var(--accent);
+		min-height: 1.4em;
+	}
+	.reaction__hud {
+		display: flex;
+		gap: 1.2rem;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+	.reaction__hud b {
+		color: var(--text-strong);
+		font-weight: 600;
+	}
+	.reaction__status {
+		margin: 0;
+		font-size: var(--text-micro);
+		letter-spacing: 0.06em;
+		color: var(--text-faint);
+	}
+</style>

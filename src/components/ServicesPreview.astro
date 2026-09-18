@@ -1,0 +1,153 @@
+---
+/**
+ * ServicesPreview — current interests ("03 / INTERESTS").
+ *
+ * Rendered from src/data/interests.ts as a bento grid with mixed spans (7/5/5/7)
+ * so the section reads as a set of concerns rather than a template's
+ * three-card feature row. Each tile can carry a route; tiles without one stay
+ * inert instead of pretending to be links.
+ */
+import { INTERESTS } from '../data/interests';
+import Chip from './Chip.astro';
+import GlassPanel from './GlassPanel.astro';
+import Icon from './Icon.astro';
+import SectionHeading from './SectionHeading.astro';
+---
+
+<section class="section" id="interests" aria-labelledby="interests-title">
+	<div class="container">
+		<SectionHeading
+			index="03"
+			label="INTERESTS"
+			titleId="interests-title"
+			title="What I spend time on"
+			description="Four overlapping areas. Most weeks a change in one of them shows up in the other three."
+		/>
+
+		<div class="bento">
+			{
+				INTERESTS.map((interest, index) => (
+					<GlassPanel
+						as="article"
+						variant="interactive"
+						pad="md"
+						reveal
+						revealDelay={index * 80}
+						span={interest.span ?? 6}
+						class="interest"
+					>
+						<p class="interest__label">
+							<span class="interest__index">{String(index + 1).padStart(2, '0')}</span>
+							{interest.label}
+						</p>
+
+						<h3 class="interest__title">
+							{interest.href ? (
+								<a class="stretched-link" href={interest.href}>
+									{interest.title}
+								</a>
+							) : (
+								interest.title
+							)}
+						</h3>
+
+						<p class="interest__description">{interest.description}</p>
+
+						<div class="interest__foot">
+							<ul class="interest__tags" role="list">
+								{interest.tags.map((tag) => (
+									<li>
+										<Chip>{tag}</Chip>
+									</li>
+								))}
+							</ul>
+							{interest.href && (
+								<span class="interest__cta" aria-hidden="true">
+									<Icon name="arrow-up-right" size={14} />
+								</span>
+							)}
+						</div>
+					</GlassPanel>
+				))
+			}
+		</div>
+	</div>
+</section>
+
+<style>
+	.interest {
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+		block-size: 100%;
+	}
+
+	.interest__label {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+
+	.interest__index {
+		color: var(--accent);
+		opacity: 0.75;
+	}
+
+	.interest__title {
+		font-size: clamp(1.25rem, 2vw, 1.6rem);
+		font-weight: 350;
+		letter-spacing: var(--tracking-snug);
+		line-height: 1.2;
+	}
+
+	.interest__title a {
+		color: var(--text-strong);
+		text-decoration: none;
+	}
+
+	.interest__title a:hover {
+		color: var(--accent-strong);
+	}
+
+	.interest__description {
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		line-height: 1.62;
+		max-width: 46ch;
+	}
+
+	.interest__foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-block-start: auto;
+		padding-block-start: 0.4rem;
+	}
+
+	.interest__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		list-style: none;
+	}
+
+	.interest__cta {
+		display: inline-flex;
+		color: var(--text-faint);
+		transition:
+			color var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-out);
+	}
+
+	.interest:hover .interest__cta,
+	.interest:focus-within .interest__cta {
+		color: var(--accent-strong);
+		transform: translate(2px, -2px);
+	}
+</style>

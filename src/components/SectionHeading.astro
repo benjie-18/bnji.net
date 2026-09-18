@@ -1,0 +1,116 @@
+---
+/**
+ * SectionHeading — the header block shared by every homepage section and page.
+ *
+ * Keeps three things consistent across the site: the mono index eyebrow
+ * ("02 / PROJECTS"), the heading level (h2 by default, so each page keeps a
+ * single h1), and the optional action link on the right.
+ */
+interface Props {
+	/** Mono index, e.g. "02". Rendered before the label with a slash. */
+	index?: string;
+	/** Mono label, e.g. "PROJECTS". */
+	label?: string;
+	title: string;
+	description?: string;
+	/** Heading element. Use 'h1' only for a page's main heading. */
+	as?: 'h1' | 'h2' | 'h3';
+	/** Optional "see all" style action rendered opposite the title. */
+	actionHref?: string;
+	actionLabel?: string;
+	/** id for the wrapper <header>. */
+	id?: string;
+	/**
+	 * id for the heading element itself. Sections should point
+	 * aria-labelledby here rather than at the wrapper, so a screen reader
+	 * announces the title and not the eyebrow/description as well.
+	 */
+	titleId?: string;
+	class?: string;
+}
+
+const {
+	index,
+	label,
+	title,
+	description,
+	as: Tag = 'h2',
+	actionHref,
+	actionLabel,
+	id,
+	titleId,
+	class: className = '',
+} = Astro.props;
+---
+
+<header class:list={['section-head', className]} id={id}>
+	<div class="section-head__text">
+		{
+			(index || label) && (
+				<p class="eyebrow">
+					{index && <span>{index}</span>}
+					{index && label && <span class="section-head__slash" aria-hidden="true">/</span>}
+					{label && <span>{label}</span>}
+				</p>
+			)
+		}
+		<Tag class="section-head__title" id={titleId}>{title}</Tag>
+		{description && <p class="lead">{description}</p>}
+	</div>
+
+	{
+		actionHref && (
+			<a class="section-head__action" href={actionHref}>
+				{actionLabel ?? 'View all'}
+				<span aria-hidden="true">&rarr;</span>
+			</a>
+		)
+	}
+</header>
+
+<style>
+	/* The eyebrow's leading dash comes from global.css; the index/label pair is
+	   separated by a dimmed slash so screen readers hear "02 PROJECTS". */
+	.section-head__slash {
+		color: var(--text-faint);
+	}
+
+	.section-head__action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5em;
+		padding: 0.5em 0.9em;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		text-decoration: none;
+		white-space: nowrap;
+		transition:
+			color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out),
+			background-color var(--dur-fast) var(--ease-out);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.section-head__action:hover {
+			color: var(--text-strong);
+			border-color: var(--glass-border-strong);
+			background: var(--glass-bg);
+		}
+	}
+
+	.section-head__action :last-child {
+		transition: transform var(--dur-fast) var(--ease-out);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.section-head__action:hover :last-child {
+			transform: translateX(3px);
+		}
+	}
+</style>

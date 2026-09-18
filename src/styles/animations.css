@@ -1,0 +1,216 @@
+/* ==========================================================================
+   BNJI.NET — motion
+   --------------------------------------------------------------------------
+   Every animation on the site is defined here so the motion language can be
+   read (and disabled) in one place.
+
+   Three rules this file enforces
+   ------------------------------
+   1. Animate compositor-friendly properties only: opacity, transform, and
+      short controlled filter changes. Nothing here animates layout.
+   2. Nothing may start hidden unless JavaScript is running. Every hiding rule
+      is guarded by BOTH `@media (prefers-reduced-motion: no-preference)` and
+      the `html.js` class (set by an inline script in <head>), so with JS off
+      or reduced motion on, content is simply visible.
+   3. Motion is layered by speed: background ~90s, display type ~700ms,
+      sections ~720ms, cards ~340ms, buttons ~120-200ms.
+
+   Declarative attributes (see AGENTS.md):
+      data-load          page-load entrance, staggered via --load-delay
+      data-reveal        scroll entrance, gets .is-visible from scripts/scroll.ts
+      data-parallax      slow scroll offset, value = strength (e.g. 0.05)
+      data-magnetic      small pointer attraction (scripts/interactions.ts)
+      data-glass         liquid-glass surface (styles in glass.css)
+      data-star-reactive area that brightens nearby stars (scripts/starfield.ts)
+
+   Never put data-reveal and data-parallax on the same element: both own
+   `transform`. Wrap one inside the other instead.
+   ========================================================================== */
+
+/* --- Keyframes ------------------------------------------------------------ */
+
+@keyframes bnji-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes bnji-rise {
+	from {
+		opacity: 0;
+		transform: translate3d(0, var(--reveal-distance), 0);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* Hero wordmark: a slightly longer travel plus a controlled blur lift. The
+   blur is the one filter animation on the site and runs once, on one element. */
+@keyframes bnji-emerge {
+	from {
+		opacity: 0;
+		transform: translate3d(0, 26px, 0) scale(0.985);
+		filter: blur(10px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+		filter: blur(0);
+	}
+}
+
+/* Background aurora: translate only, so the layer stays composited and never
+   re-rasterises. ~2 minutes for a full cycle — felt, not seen. */
+@keyframes bnji-drift {
+	0% {
+		transform: translate3d(-1.5%, -1%, 0);
+	}
+	50% {
+		transform: translate3d(1.5%, 1.5%, 0);
+	}
+	100% {
+		transform: translate3d(-1.5%, -1%, 0);
+	}
+}
+
+@keyframes bnji-pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.4;
+		transform: scale(0.78);
+	}
+}
+
+@keyframes bnji-orbit {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* --- Page-load sequence --------------------------------------------------- */
+/* Timings used by the homepage: background 0ms, nav 200ms, wordmark 400ms,
+   subtitle 650ms, call to action 850ms. */
+
+@media (prefers-reduced-motion: no-preference) {
+	html.js [data-load] {
+		opacity: 0;
+		animation: bnji-rise var(--dur-slow) var(--ease-out) forwards;
+		animation-delay: var(--load-delay, 0ms);
+	}
+
+	html.js [data-load='emerge'] {
+		animation-name: bnji-emerge;
+		animation-duration: 1000ms;
+	}
+
+	html.js [data-load='fade'] {
+		animation-name: bnji-fade-in;
+		animation-duration: 1400ms;
+	}
+
+	/* --- Scroll reveal ---------------------------------------------------- */
+
+	html.js [data-reveal] {
+		opacity: 0;
+		transform: translate3d(0, var(--reveal-distance), 0);
+		transition:
+			opacity var(--dur-slow) var(--ease-out),
+			transform var(--dur-slow) var(--ease-out);
+		transition-delay: var(--reveal-delay, 0ms);
+	}
+
+	html.js [data-reveal].is-visible {
+		opacity: 1;
+		transform: none;
+	}
+
+	/* --- Parallax --------------------------------------------------------- */
+	/* scripts/scroll.ts writes --parallax-y; the CSS owns the transform so the
+	   JS never touches a layout property. */
+
+	[data-parallax] {
+		transform: translate3d(0, var(--parallax-y, 0px), 0);
+		will-change: transform;
+	}
+}
+
+/* --- Interactive primitives ----------------------------------------------- */
+
+/* Magnetic wrappers. CSS owns the spring back; scripts/interactions.ts only
+   writes the transform while the pointer is inside. */
+[data-magnetic] {
+	display: inline-flex;
+	transition: transform var(--dur-base) var(--ease-spring);
+	will-change: transform;
+}
+
+/* While tracking, the follow has to be near-instant or the control feels like
+   it is lagging behind the cursor. */
+[data-magnetic].is-magnetised {
+	transition-duration: 90ms;
+	transition-timing-function: linear;
+}
+
+/* --- Always-on ambient motion (independent of the .js guard) -------------- */
+
+.aurora-layer {
+	animation: bnji-drift var(--dur-drift) linear infinite;
+	will-change: transform;
+}
+
+.dot--live {
+	animation: bnji-pulse 2.8s var(--ease-soft) infinite;
+}
+
+/* Small screens: the aurora layer is proportionally larger than the viewport
+   and phones have less fill rate to spare, so the drift stops and the gradient
+   simply stays put. */
+@media (max-width: 720px) {
+	.aurora-layer {
+		animation: none;
+		will-change: auto;
+	}
+}
+
+/* --- Reduced motion ------------------------------------------------------- */
+/* The guard above already prevents hidden states, but ambient loops and any
+   transition/animation that slipped through are neutralised here. */
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 1ms !important;
+		animation-delay: 0ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 1ms !important;
+		transition-delay: 0ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	[data-reveal],
+	[data-load],
+	[data-parallax] {
+		opacity: 1 !important;
+		transform: none !important;
+		filter: none !important;
+	}
+
+	.aurora-layer {
+		animation: none !important;
+		will-change: auto;
+	}
+
+	.dot--live {
+		animation: none !important;
+	}
+}

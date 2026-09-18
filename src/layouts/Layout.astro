@@ -1,0 +1,77 @@
+---
+/**
+ * Layout — the shell every page renders inside.
+ *
+ * Paint order, back to front:
+ *   html background (--bg) -> aurora layer -> vignette -> starfield canvas ->
+ *   content (main / header / footer) -> cursor glow.
+ * The z-index scale for that stack lives in styles/tokens.css.
+ *
+ * The single <script> at the bottom is the whole client bundle: boot() starts
+ * the starfield, pointer interactions and scroll choreography. Everything else
+ * on the page is HTML and CSS, which is why the site still works when the
+ * script is slow, blocked or absent (see the html.js guards in animations.css).
+ */
+import AeroSky from '../components/AeroSky.astro';
+import BaseHead from '../components/BaseHead.astro';
+import CursorGlow from '../components/CursorGlow.astro';
+import MessageBoard from '../components/MessageBoard.astro';
+import MusicPlayer from '../components/MusicPlayer.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import Starfield from '../components/Starfield.astro';
+import { SITE } from '../data/site';
+import { boot } from '../scripts/boot';
+
+interface Props {
+	title?: string;
+	description?: string;
+	image?: string;
+	type?: 'website' | 'article';
+	publishedTime?: Date | string;
+	modifiedTime?: Date | string;
+	noindex?: boolean;
+}
+
+const { title, description, image, type, publishedTime, modifiedTime, noindex } = Astro.props;
+---
+
+<!doctype html>
+<html lang={SITE.locale}>
+	<head>
+		<BaseHead
+			title={title}
+			description={description}
+			image={image}
+			type={type}
+			publishedTime={publishedTime}
+			modifiedTime={modifiedTime}
+			noindex={noindex}
+		/>
+	</head>
+	<body>
+		<a class="skip-link" href="#main">Skip to content</a>
+
+		<div class="aurora-layer" aria-hidden="true"></div>
+		<div class="vignette-layer" aria-hidden="true"></div>
+		<Starfield />
+		<AeroSky />
+		<CursorGlow />
+
+		<Header />
+
+		<main id="main" class="site-main">
+			<slot />
+		</main>
+
+		<Footer />
+
+		<MessageBoard />
+		<MusicPlayer />
+
+		<script>
+			import { boot } from '../scripts/boot';
+			boot();
+		</script>
+	</body>
+</html>

@@ -1,0 +1,269 @@
+---
+/**
+ * /lab/ — the interactive experimentation area.
+ *
+ * Registry: src/data/lab.ts. Implementations: src/components/lab/*.astro.
+ * Shared primitives (stage, controls, readouts): src/styles/lab.css, which is
+ * imported here only, so no other page pays for it.
+ *
+ * Astro cannot import a component from a runtime string, so the registry's
+ * `component` keys resolve through the static map below. Adding an experiment is
+ * three steps: new component in src/components/lab/, new entry in data/lab.ts,
+ * one line in COMPONENTS.
+ *
+ * Isolation contract (also documented in data/lab.ts and AGENTS.md): each
+ * experiment owns its DOM subtree and its own animation loops, pauses when
+ * offscreen, and never writes to :root — so a broken or expensive prototype can
+ * degrade itself without taking the page with it.
+ */
+import GlassPanel from '../components/GlassPanel.astro';
+import Icon from '../components/Icon.astro';
+import PageHeader from '../components/PageHeader.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import Chip from '../components/Chip.astro';
+import GlassBench from '../components/lab/GlassBench.astro';
+import OrbitField from '../components/lab/OrbitField.astro';
+import BubblePop from '../components/lab/BubblePop.astro';
+import MemoryPairs from '../components/lab/MemoryPairs.astro';
+import ReactionTimer from '../components/lab/ReactionTimer.astro';
+import StarfieldTuner from '../components/lab/StarfieldTuner.astro';
+import { EXPERIMENTS, LAB_STATUS_LABEL, type Experiment, type LabComponentKey } from '../data/lab';
+import { SITE } from '../data/site';
+import Layout from '../layouts/Layout.astro';
+import '../styles/lab.css';
+
+const COMPONENTS = {
+	StarfieldTuner,
+	GlassBench,
+	OrbitField,
+	BubblePop,
+	MemoryPairs,
+	ReactionTimer,
+} as const;
+
+type RunnableExperiment = Experiment & { component: LabComponentKey };
+
+const runnable = EXPERIMENTS.filter(
+	(experiment): experiment is RunnableExperiment =>
+		experiment.status === 'live' && experiment.component !== undefined,
+);
+const backlog = EXPERIMENTS.filter((experiment) => experiment.status !== 'live');
+
+const description = `Interactive experiments by ${SITE.author.name} — canvas starfields, a live bench for the glass design tokens, particle physics and the ideas still waiting for a weekend.`;
+---
+
+<Layout title="Lab" description={description}>
+	<PageHeader
+		index="06"
+		label="LAB"
+		titleId="page-title"
+		title="The Lab"
+		description="Prototypes that are allowed to be strange. Each one runs in its own frame, with its own animation loop, and pauses the moment it scrolls out of view."
+		meta={[`${runnable.length} runnable`, `${backlog.length} in the backlog`, 'Isolated by contract']}
+	/>
+
+	<div class="container lab-body">
+		{
+			runnable.map((experiment, index) => {
+				const ExperimentComponent = COMPONENTS[experiment.component];
+				return (
+					<section
+						class="lab-experiment"
+						id={experiment.slug}
+						data-lab-experiment={experiment.slug}
+						aria-labelledby={`${experiment.slug}-title`}
+					>
+						<GlassPanel pad="lg" reveal>
+							<header class="lab-experiment__head">
+								<div class="lab-experiment__heading">
+									<p class="eyebrow">
+										<span>{String(index + 1).padStart(2, '0')}</span>
+										<span class="lab-experiment__slash" aria-hidden="true">/</span>
+										<span>EXPERIMENT</span>
+									</p>
+									<h2 class="lab-experiment__title" id={`${experiment.slug}-title`}>
+										{experiment.title}
+									</h2>
+								</div>
+								<Chip tone="live" dot>
+									{LAB_STATUS_LABEL[experiment.status]}
+								</Chip>
+							</header>
+
+							<p class="lab-experiment__description">{experiment.description}</p>
+
+							{experiment.question && (
+								<p class="lab-experiment__question">
+									<span class="mono">Question</span>
+									{experiment.question}
+								</p>
+							)}
+
+							<ul class="lab-experiment__tags" role="list">
+								{experiment.tags.map((tag) => (
+									<li>
+										<Chip>{tag}</Chip>
+									</li>
+								))}
+							</ul>
+
+							<ExperimentComponent />
+						</GlassPanel>
+					</section>
+				);
+			})
+		}
+
+		<section class="lab-backlog" aria-labelledby="backlog-title">
+			<SectionHeading
+				label="BACKLOG"
+				titleId="backlog-title"
+				title="Not built yet"
+				description="Ideas and half-finished things. They live here so they are written down rather than half-implemented on the homepage."
+			/>
+
+			<div class="lab-backlog__list">
+				{
+					backlog.map((experiment, index) => (
+						<GlassPanel
+							variant="quiet"
+							radius="md"
+							pad="md"
+							reveal
+							revealDelay={index * 70}
+							class="backlog-item"
+						>
+							<div class="backlog-item__head">
+								<h3 class="backlog-item__title">{experiment.title}</h3>
+								<Chip tone={experiment.status === 'wip' ? 'soon' : 'idle'}>
+									{LAB_STATUS_LABEL[experiment.status]}
+								</Chip>
+							</div>
+							<p class="backlog-item__description">{experiment.description}</p>
+							{experiment.question && (
+								<p class="backlog-item__question">
+									<Icon name="compass" size={13} />
+									{experiment.question}
+								</p>
+							)}
+						</GlassPanel>
+					))
+				}
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.lab-body {
+		display: grid;
+		gap: clamp(1.5rem, 4vw, 2.75rem);
+		padding-block-end: clamp(3rem, 8vh, 6rem);
+	}
+
+	.lab-experiment__head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.75rem 1.5rem;
+	}
+
+	.lab-experiment__heading {
+		display: grid;
+		gap: 0.6rem;
+	}
+
+	.lab-experiment__slash {
+		color: var(--text-faint);
+	}
+
+	.lab-experiment__title {
+		font-size: var(--text-title);
+		font-weight: 350;
+		letter-spacing: var(--tracking-snug);
+	}
+
+	.lab-experiment__description {
+		margin-block-start: 0.9rem;
+		color: var(--text-muted);
+		font-size: 0.98rem;
+		line-height: 1.65;
+		max-width: 74ch;
+	}
+
+	.lab-experiment__question {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.6rem;
+		margin-block-start: 0.8rem;
+		padding-inline-start: 0.9rem;
+		border-inline-start: 2px solid var(--accent-line);
+		color: var(--text);
+		font-size: 0.95rem;
+		font-style: italic;
+	}
+
+	.lab-experiment__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		list-style: none;
+		margin-block: 1rem 1.4rem;
+	}
+
+	/* --- Backlog ---------------------------------------------------------- */
+
+	.lab-backlog {
+		display: grid;
+		gap: clamp(1.25rem, 3vw, 2rem);
+	}
+
+	.lab-backlog__list {
+		display: grid;
+		gap: var(--grid-gap);
+	}
+
+	@media (min-width: 760px) {
+		.lab-backlog__list {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	.backlog-item {
+		display: grid;
+		gap: 0.55rem;
+		align-content: start;
+		block-size: 100%;
+	}
+
+	.backlog-item__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.backlog-item__title {
+		font-size: 1.05rem;
+		font-weight: 450;
+		letter-spacing: var(--tracking-snug);
+	}
+
+	.backlog-item__description {
+		color: var(--text-muted);
+		font-size: 0.92rem;
+		line-height: 1.6;
+	}
+
+	.backlog-item__question {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--text-dim);
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+	}
+</style>

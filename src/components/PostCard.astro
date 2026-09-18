@@ -1,0 +1,215 @@
+---
+/**
+ * PostCard — one blog entry.
+ *
+ * Two layouts from one component: `variant="row"` for the homepage and blog
+ * index (compact, typographic, no image by default) and `variant="tile"` for
+ * feature spots. Images are opt-in because every post currently ships a
+ * placeholder photo; the card is designed to read as complete without one.
+ *
+ * The title carries the link and .stretched-link makes the whole card clickable,
+ * so there is exactly one named link per post in the accessibility tree.
+ */
+import type { BlogPost } from '../data/blog';
+import { getReadingTime, postUrl } from '../data/blog';
+import Chip from './Chip.astro';
+import FormattedDate from './FormattedDate.astro';
+import GlassPanel from './GlassPanel.astro';
+import Icon from './Icon.astro';
+
+interface Props {
+	post: BlogPost;
+	variant?: 'row' | 'tile';
+	showImage?: boolean;
+	revealDelay?: number;
+	/** Mono index shown in the row variant. */
+	index?: number;
+}
+
+const { post, variant = 'row', showImage = false, revealDelay = 0, index } = Astro.props;
+const minutes = getReadingTime(post);
+---
+
+<GlassPanel
+	as="article"
+	variant="interactive"
+	pad={variant === 'tile' ? 'md' : 'sm'}
+	radius={variant === 'tile' ? 'lg' : 'md'}
+	reveal
+	revealDelay={revealDelay}
+	class:list={['post', `post--${variant}`]}
+>
+	{
+		showImage && post.data.heroImage && (
+			<img
+				class="post__image"
+				src={post.data.heroImage}
+				alt=""
+				width="720"
+				height="360"
+				loading="lazy"
+				decoding="async"
+			/>
+		)
+	}
+
+	<div class="post__body">
+		<p class="post__meta">
+			{typeof index === 'number' && <span class="post__index">{String(index + 1).padStart(2, '0')}</span>}
+			<span class="post__date">
+				<FormattedDate date={post.data.pubDate} />
+			</span>
+			<span class="post__sep" aria-hidden="true">·</span>
+			<span class="post__minutes">{minutes} min read</span>
+		</p>
+
+		<h3 class="post__title">
+			<a class="stretched-link" href={postUrl(post)}>{post.data.title}</a>
+		</h3>
+
+		<p class="post__description">{post.data.description}</p>
+
+		{
+			post.data.tags && post.data.tags.length > 0 && (
+				<ul class="post__tags" role="list">
+					{post.data.tags.map((tag: string) => (
+						<li>
+							<Chip>{tag}</Chip>
+						</li>
+					))}
+				</ul>
+			)
+		}
+	</div>
+
+	<span class="post__cta" aria-hidden="true">
+		<Icon name="arrow-right" size={15} />
+	</span>
+</GlassPanel>
+
+<style>
+	.post {
+		display: flex;
+		align-items: center;
+		gap: clamp(0.9rem, 2vw, 1.5rem);
+		block-size: 100%;
+	}
+
+	.post--tile {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.9rem;
+	}
+
+	.post__body {
+		display: grid;
+		gap: 0.45rem;
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+
+	.post__image {
+		inline-size: 100%;
+		aspect-ratio: 2 / 1;
+		object-fit: cover;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--glass-border);
+	}
+
+	.post__meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+
+	.post__index {
+		color: var(--accent);
+		opacity: 0.7;
+	}
+
+	.post__sep {
+		color: var(--text-faint);
+	}
+
+	.post__title {
+		font-size: clamp(1.1rem, 1.8vw, 1.4rem);
+		font-weight: 400;
+		letter-spacing: var(--tracking-snug);
+		line-height: 1.25;
+	}
+
+	.post--tile .post__title {
+		font-size: var(--text-title);
+	}
+
+	.post__title a {
+		color: var(--text-strong);
+		text-decoration: none;
+	}
+
+	.post__title a:hover {
+		color: var(--accent-strong);
+	}
+
+	.post__description {
+		color: var(--text-muted);
+		font-size: 0.93rem;
+		line-height: 1.6;
+		max-width: 68ch;
+		/* Two lines keeps rows an even height without truncating mid-word. */
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.post--tile .post__description {
+		-webkit-line-clamp: 4;
+		line-clamp: 4;
+	}
+
+	.post__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+		list-style: none;
+		margin-block-start: 0.2rem;
+	}
+
+	.post__cta {
+		display: inline-flex;
+		flex: none;
+		color: var(--text-faint);
+		transition:
+			color var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-out);
+	}
+
+	.post:hover .post__cta,
+	.post:focus-within .post__cta {
+		color: var(--accent-strong);
+		transform: translateX(4px);
+	}
+
+	.post--tile .post__cta {
+		display: none;
+	}
+
+	@media (max-width: 620px) {
+		.post--row {
+			align-items: flex-start;
+		}
+
+		.post__description {
+			-webkit-line-clamp: 3;
+			line-clamp: 3;
+		}
+	}
+</style>

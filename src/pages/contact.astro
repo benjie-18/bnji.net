@@ -1,0 +1,147 @@
+---
+/**
+ * /contact/ — the full version of the homepage contact section.
+ *
+ * Still form-free on purpose: a contact form needs a backend, a spam filter and
+ * a mailbox that gets checked, and none of those improve on two direct links.
+ * If that ever changes, ContactSection.astro is the only file that should grow.
+ */
+import ContactSection from '../components/ContactSection.astro';
+import DirectMessage from '../components/DirectMessage.astro';
+import GlassPanel from '../components/GlassPanel.astro';
+import Icon from '../components/Icon.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { SOCIAL_LINKS } from '../data/site';
+import Layout from '../layouts/Layout.astro';
+
+const CHANNELS = [
+	{
+		icon: 'mail' as const,
+		title: 'Email',
+		body: 'Best for anything with a deadline, a project idea, or a question that needs more than one sentence.',
+		link: SOCIAL_LINKS.find((item) => item.label === 'Email'),
+	},
+	{
+		icon: 'github' as const,
+		title: 'GitHub',
+		body: 'Best for code: an issue on a repository, a pull request, or a bug you found on this site.',
+		link: SOCIAL_LINKS.find((item) => item.label === 'GitHub'),
+	},
+];
+---
+
+<Layout
+	title="Contact"
+	description="Leave a message: the public board, a private note to the owner, or the placeholder contact channels."
+>
+	<PageHeader
+		index="07"
+		label="CONTACT"
+		titleId="page-title"
+		title="Leave a message"
+		description="One inbox, one placeholder profile, and a public board for everyone."
+		meta={['Public board', 'Private notes']}
+	/>
+
+	<div class="container contact-body">
+		<div class="contact-channels">
+			{
+				CHANNELS.map((channel, index) => (
+					<GlassPanel variant="interactive" pad="md" reveal revealDelay={index * 90} class="channel">
+						<span class="channel__icon">
+							<Icon name={channel.icon} size={18} />
+						</span>
+						<h2 class="channel__title">{channel.title}</h2>
+						<p class="channel__body">{channel.body}</p>
+						{channel.link ? (
+							<a class="channel__link" href={channel.link.href} rel={channel.link.rel ?? 'noopener noreferrer'}>
+								{channel.link.handle ?? channel.link.label}
+								<Icon name="arrow-up-right" size={13} />
+							</a>
+						) : (
+							<span class="channel__link channel__link--empty">Unavailable</span>
+						)}
+					</GlassPanel>
+				))
+			}
+		</div>
+
+		<ContactSection detailed index="" />
+
+		<DirectMessage />
+	</div>
+</Layout>
+
+<style>
+	.contact-body {
+		display: grid;
+		gap: clamp(1.5rem, 4vw, 2.5rem);
+		padding-block-end: clamp(3rem, 8vh, 6rem);
+	}
+
+	.contact-channels {
+		display: grid;
+		gap: var(--grid-gap);
+	}
+
+	@media (min-width: 860px) {
+		.contact-channels {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	.channel {
+		display: grid;
+		gap: 0.6rem;
+		align-content: start;
+		block-size: 100%;
+	}
+
+	.channel__icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		inline-size: 34px;
+		block-size: 34px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--glass-border);
+		background: rgba(255, 255, 255, 0.04);
+		color: var(--accent-strong);
+	}
+
+	.channel__title {
+		font-size: 1.1rem;
+		font-weight: 450;
+		letter-spacing: var(--tracking-snug);
+	}
+
+	.channel__body {
+		color: var(--text-muted);
+		font-size: 0.92rem;
+		line-height: 1.6;
+	}
+
+	.channel__link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45em;
+		margin-block-start: 0.2rem;
+		font-family: var(--font-mono);
+		font-size: 0.76rem;
+		letter-spacing: 0.06em;
+		color: var(--accent);
+		text-decoration: none;
+		border-block-end: 1px solid var(--accent-line);
+		border-radius: 2px;
+		overflow-wrap: anywhere;
+	}
+
+	.channel__link:hover {
+		color: var(--accent-strong);
+	}
+
+	.channel__link--empty {
+		color: var(--text-faint);
+		border-block-end-color: transparent;
+	}
+</style>

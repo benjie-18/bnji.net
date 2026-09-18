@@ -1,0 +1,69 @@
+---
+/**
+ * CursorGlow — a theme-aware halo that follows a real mouse pointer.
+ *
+ * scripts/interactions.ts moves it with translate3d only. It is hidden (and the
+ * JS bails out) on touch devices and when the visitor prefers reduced motion,
+ * because a simulated cursor on a phone is both distracting and wasteful.
+ *
+ * The two themes get two different materials, not two colours of the same
+ * blob:
+ *   - dark:  a stellar nebula halo — blue core, violet mid, pink rim — with a
+ *     faint diffraction ring, like light bending around a small gravity well.
+ *   - light: a Frutiger Aero water lens — bright aqua core, green caustic rim
+ *     and a hot specular dot, as if a droplet were travelling with the cursor.
+ *
+ * It sits above content but never intercepts pointer events.
+ */
+---
+
+<div class="cursor-glow" data-cursor-glow aria-hidden="true"></div>
+
+<style>
+	.cursor-glow {
+		position: fixed;
+		inset-block-start: 0;
+		inset-inline-start: 0;
+		z-index: var(--z-cursor);
+		inline-size: 340px;
+		block-size: 340px;
+		/* Offset by half so translate3d(x, y) places the centre on the pointer. */
+		margin-block-start: -170px;
+		margin-inline-start: -170px;
+		pointer-events: none;
+		opacity: 0;
+		border-radius: 50%;
+		/* Dark: stellar halo with a diffraction ring. */
+		background:
+			radial-gradient(circle at 38% 34%, rgba(255, 255, 255, 0.1), transparent 18%),
+			radial-gradient(circle, var(--cursor-core) 0%, var(--cursor-mid) 34%, var(--cursor-rim) 52%, transparent 70%),
+			radial-gradient(circle, transparent 44%, rgba(168, 120, 255, 0.05) 47%, transparent 52%);
+		transition: opacity var(--dur-base) var(--ease-out);
+		will-change: transform, opacity;
+	}
+
+	/* Light: water lens — aqua core, caustic green rim, specular dot. */
+	:global(html[data-theme='light']) .cursor-glow {
+		background:
+			radial-gradient(circle at 36% 32%, rgba(255, 255, 255, 0.55), transparent 22%),
+			radial-gradient(circle, var(--cursor-core) 0%, var(--cursor-mid) 30%, var(--cursor-rim) 50%, transparent 68%),
+			radial-gradient(circle, transparent 42%, rgba(0, 190, 235, 0.16) 46%, rgba(255, 255, 255, 0.28) 48%, transparent 54%);
+		mix-blend-mode: multiply;
+	}
+
+	/* No halo without a hovering pointer, and none at all for reduced motion. */
+	@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+		.cursor-glow {
+			display: none;
+		}
+	}
+
+	@media (max-width: 720px) {
+		.cursor-glow {
+			inline-size: 220px;
+			block-size: 220px;
+			margin-block-start: -110px;
+			margin-inline-start: -110px;
+		}
+	}
+</style>

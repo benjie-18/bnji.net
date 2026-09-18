@@ -1,85 +1,265 @@
 ---
-import type { CollectionEntry } from 'astro:content';
-import BaseHead from '../components/BaseHead.astro';
-import Header from '../components/Header.astro';
-import Footer from '../components/Footer.astro';
+/**
+ * BlogPost — layout for a single entry from the `blog` content collection.
+ *
+ * Takes the whole collection entry (not just its frontmatter) so it can derive
+ * the URL, reading time and article metadata itself. Rendering the post body is
+ * still the route's job: src/pages/blog/[...slug].astro passes <Content /> into
+ * the default slot.
+ */
+import Chip from '../components/Chip.astro';
 import FormattedDate from '../components/FormattedDate.astro';
+import GlassButton from '../components/GlassButton.astro';
+import Icon from '../components/Icon.astro';
+import { getReadingTime, postUrl } from '../data/blog';
+import type { BlogPost as BlogPostEntry } from '../data/blog';
+import Layout from './Layout.astro';
 
-type Props = CollectionEntry<'blog'>['data'];
+interface Props {
+	post: BlogPostEntry;
+	/** Optional adjacent posts for the pager at the end of the article. */
+	previous?: BlogPostEntry;
+	next?: BlogPostEntry;
+}
 
-const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
+const { post, previous, next } = Astro.props;
+const { title, description, pubDate, updatedDate, heroImage, tags } = post.data;
+const minutes = getReadingTime(post);
+const permalink = postUrl(post);
 ---
 
-<html lang="en">
-	<head>
-		<BaseHead title={title} description={description} />
-		<style>
-			main {
-				width: calc(100% - 2em);
-				max-width: 100%;
-				margin: 0;
-			}
-			.hero-image {
-				width: 100%;
-			}
-			.hero-image img {
-				display: block;
-				margin: 0 auto;
-				border-radius: 12px;
-				box-shadow: var(--box-shadow);
-			}
-			.prose {
-				width: 720px;
-				max-width: calc(100% - 2em);
-				margin: auto;
-				padding: 1em;
-				color: rgb(var(--gray-dark));
-			}
-			.title {
-				margin-bottom: 1em;
-				padding: 1em 0;
-				text-align: center;
-				line-height: 1;
-			}
-			.title h1 {
-				margin: 0 0 0.5em 0;
-			}
-			.date {
-				margin-bottom: 0.5em;
-				color: rgb(var(--gray));
-			}
-			.last-updated-on {
-				font-style: italic;
-			}
-		</style>
-	</head>
+<Layout
+	title={title}
+	description={description}
+	image={heroImage}
+	type="article"
+	publishedTime={pubDate}
+	modifiedTime={updatedDate}
+>
+	<article class="entry">
+		<header class="entry__header container container--narrow">
+			<a class="entry__back" href="/blog/">
+				<Icon name="arrow-right" size={14} class="entry__back-icon" />
+				All posts
+			</a>
 
-	<body>
-		<Header />
-		<main>
-			<article>
-				<div class="hero-image">
-					{heroImage && <img width={1020} height={510} src={heroImage} alt="" />}
+			<h1 class="entry__title" data-load="emerge" style="--load-delay: 260ms">{title}</h1>
+
+			<p class="entry__meta" data-load style="--load-delay: 440ms">
+				<span class="entry__date">
+					<FormattedDate date={pubDate} />
+				</span>
+				<span class="entry__sep" aria-hidden="true">·</span>
+				<span>{minutes} min read</span>
+				{
+					updatedDate && (
+						<span class="entry__updated">
+							<span class="entry__sep" aria-hidden="true">·</span>
+							Updated <FormattedDate date={updatedDate} />
+						</span>
+					)
+				}
+			</p>
+
+			{
+				tags && tags.length > 0 && (
+					<ul class="entry__tags" role="list" data-load style="--load-delay: 560ms">
+						{tags.map((tag: string) => (
+							<li>
+								<Chip tone="accent">{tag}</Chip>
+							</li>
+						))}
+					</ul>
+				)
+			}
+		</header>
+
+		{
+			heroImage && (
+				<div class="entry__hero container container--narrow" data-load style="--load-delay: 620ms">
+					<img
+						src={heroImage}
+						alt=""
+						width="1020"
+						height="510"
+						loading="eager"
+						decoding="async"
+					/>
 				</div>
-				<div class="prose">
-					<div class="title">
-						<div class="date">
-							<FormattedDate date={pubDate} />
-							{
-								updatedDate && (
-									<div class="last-updated-on">
-										Last updated on <FormattedDate date={updatedDate} />
-									</div>
-								)
-							}
-						</div>
-						<h1>{title}</h1>
-						<hr />
-					</div>
-					<slot />
-				</div>
-			</article>
-		</main>
-		<Footer />
-	</body>
-</html>
+			)
+		}
+
+		<div class="prose entry__body container container--narrow">
+			<slot />
+		</div>
+
+		<footer class="entry__footer container container--narrow">
+			<hr class="rule" />
+			<nav class="entry__pager" aria-label="More posts">
+				{
+					previous ? (
+						<a class="entry__pager-link" href={postUrl(previous)} rel="prev">
+							<span class="mono">Previous</span>
+							<span class="entry__pager-title">{previous.data.title}</span>
+						</a>
+					) : (
+						<span />
+					)
+				}
+				{
+					next ? (
+						<a class="entry__pager-link entry__pager-link--next" href={postUrl(next)} rel="next">
+							<span class="mono">Next</span>
+							<span class="entry__pager-title">{next.data.title}</span>
+						</a>
+					) : (
+						<span />
+					)
+				}
+			</nav>
+
+			<div class="entry__actions actions-stack">
+				<GlassButton href="/blog/" icon="arrow-right">Back to the blog</GlassButton>
+				<GlassButton href={permalink} variant="quiet" icon="arrow-up-right">
+					Permalink
+				</GlassButton>
+			</div>
+		</footer>
+	</article>
+</Layout>
+
+<style>
+	.entry {
+		padding-block: clamp(2rem, 6vh, 4rem) clamp(3rem, 8vh, 6rem);
+	}
+
+	.entry__header {
+		display: grid;
+		gap: 1rem;
+		justify-items: start;
+	}
+
+	.entry__back {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5em;
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--text-dim);
+		text-decoration: none;
+		border-radius: var(--radius-pill);
+		transition: color var(--dur-fast) var(--ease-out);
+	}
+
+	.entry__back:hover {
+		color: var(--accent-strong);
+	}
+
+	/* Points the arrow back to the left without duplicating the icon. */
+	.entry__back-icon {
+		transform: rotate(180deg);
+	}
+
+	.entry__title {
+		font-size: clamp(2rem, 5vw, 3.4rem);
+		font-weight: 300;
+		letter-spacing: var(--tracking-tight);
+		line-height: 1.06;
+		margin: 0;
+	}
+
+	.entry__meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.55rem;
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+
+	.entry__sep {
+		color: var(--text-faint);
+	}
+
+	.entry__updated {
+		font-style: normal;
+		color: var(--text-faint);
+	}
+
+	.entry__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		list-style: none;
+	}
+
+	.entry__hero {
+		margin-block: clamp(1.5rem, 4vh, 2.5rem);
+	}
+
+	.entry__hero img {
+		inline-size: 100%;
+		aspect-ratio: 2 / 1;
+		object-fit: cover;
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--glass-border);
+		box-shadow: var(--glass-shadow);
+	}
+
+	.entry__body {
+		margin-block-start: clamp(1.5rem, 4vh, 2.5rem);
+	}
+
+	.entry__footer {
+		margin-block-start: clamp(2.5rem, 6vh, 4rem);
+	}
+
+	.entry__pager {
+		display: grid;
+		gap: 0.9rem;
+		margin-block-end: 1.75rem;
+	}
+
+	@media (min-width: 720px) {
+		.entry__pager {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	.entry__pager-link {
+		display: grid;
+		gap: 0.3rem;
+		padding: 0.9rem 1.1rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		text-decoration: none;
+		transition:
+			border-color var(--dur-fast) var(--ease-out),
+			background-color var(--dur-fast) var(--ease-out);
+	}
+
+	.entry__pager-link:hover {
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+	}
+
+	.entry__pager-link--next {
+		text-align: end;
+	}
+
+	.entry__pager-title {
+		font-family: var(--font-display);
+		font-size: 1rem;
+		color: var(--text-strong);
+	}
+
+	.entry__actions {
+		justify-content: flex-start;
+	}
+</style>

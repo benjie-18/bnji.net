@@ -1,0 +1,42 @@
+---
+/**
+ * BrandMark — the BNJI glyph: a four-point star inside an orbit ring.
+ *
+ * Shared by the nav, the footer and the 404 so the mark cannot drift.
+ * Decorative by default; pass labelled={true} only if it is the sole content
+ * of a link or button (callers otherwise provide their own accessible name).
+ */
+interface Props {
+	size?: number;
+	class?: string;
+	labelled?: boolean;
+}
+
+const { size = 22, class: className = '', labelled = false } = Astro.props;
+---
+
+<svg
+	class:list={['brand-mark', className]}
+	width={size}
+	height={size}
+	viewBox="0 0 32 32"
+	fill="none"
+	aria-hidden={labelled ? undefined : 'true'}
+	role={labelled ? 'img' : undefined}
+>
+	{labelled && <title>BNJI</title>}
+	<circle cx="16" cy="16" r="12.25" stroke="currentColor" stroke-opacity="0.28" stroke-width="1"
+	></circle>
+	<path
+		d="M16 3.4c.9 5.6 2.6 8.6 5.1 10.1 1.5.9 3.2 1.4 4.9 1.5-1.7.2-3.4.7-4.9 1.5-2.5 1.5-4.2 4.5-5.1 10.1-.9-5.6-2.6-8.6-5.1-10.1-1.5-.8-3.2-1.3-4.9-1.5 1.7-.1 3.4-.6 4.9-1.5C13.4 12 15.1 9 16 3.4Z"
+		fill="currentColor"></path>
+	<circle cx="25.4" cy="8.2" r="1.15" fill="currentColor" fill-opacity="0.55"></circle>
+</svg>
+
+<style>
+	.brand-mark {
+		color: var(--accent-strong);
+		flex: none;
+		filter: drop-shadow(0 0 8px rgba(127, 212, 255, 0.45));
+	}
+</style>

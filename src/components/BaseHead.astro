@@ -1,47 +1,167 @@
 ---
-// Import the global.css file here so that it is included on
-// all pages through the use of the <BaseHead /> component.
+/**
+ * BaseHead — every document <head> concern, in one component.
+ *
+ * Title, description, canonical URL, Open Graph, Twitter/X, favicon, theme
+ * colour, feed discovery, font preloads and JSON-LD all come from here, fed by
+ * src/data/site.ts. Pages pass at most a title and a description; nothing is
+ * hand-duplicated per page.
+ *
+ * Canonical rule: URLs are resolved against SITE.url, never against Astro.url.
+ * Deriving them from the request would leak whatever host served the page —
+ * localhost in dev, the *.workers.dev preview host on a branch deployment.
+ */
 import '../styles/global.css';
+import '../styles/aero.css';
+import { SITE, absoluteUrl, pageTitle } from '../data/site';
 
 interface Props {
-	title: string;
-	description: string;
+	/** Page title. Omit on the homepage; it already carries the site title. */
+	title?: string;
+	description?: string;
+	/** Absolute or root-relative image. Defaults to the branded cover. */
 	image?: string;
+	type?: 'website' | 'article';
+	publishedTime?: Date | string;
+	modifiedTime?: Date | string;
+	/** True for pages that should stay out of search indexes. */
+	noindex?: boolean;
 }
 
-const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const {
+	title,
+	description = SITE.description,
+	image = SITE.defaultImage,
+	type = 'website',
+	publishedTime,
+	modifiedTime,
+	noindex = false,
+} = Astro.props;
 
-const { title, description, image = '/blog-placeholder-1.jpg' } = Astro.props;
+const fullTitle = pageTitle(title);
+const canonical = absoluteUrl(Astro.url.pathname.replace(/index\.html$/, ''));
+const ogImage = absoluteUrl(image);
+
+function toIso(value?: Date | string): string | undefined {
+	if (!value) return undefined;
+	const date = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+/** Compact identity graph. Keeps search results consistent with the site. */
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@graph': [
+		{
+			'@type': 'Person',
+			name: SITE.author.name,
+			url: absoluteUrl('/'),
+			description: SITE.author.role,
+			address: { '@type': 'PostalAddress', addressLocality: SITE.author.location },
+			sameAs: [SITE.github],
+		},
+		{
+			'@type': 'WebSite',
+			name: SITE.fullName,
+			url: absoluteUrl('/'),
+			inLanguage: SITE.locale,
+			author: { '@type': 'Person', name: SITE.author.name },
+		},
+		...(type === 'article'
+			? [
+					{
+						'@type': 'BlogPosting',
+						headline: fullTitle,
+						description,
+						image: ogImage,
+						url: canonical,
+						datePublished: toIso(publishedTime),
+						dateModified: toIso(modifiedTime) ?? toIso(publishedTime),
+						author: { '@type': 'Person', name: SITE.author.name },
+					},
+				]
+			: []),
+	],
+};
 ---
 
-<!-- Global Metadata -->
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="generator" content={Astro.generator} />
 
-<!-- Font preloads -->
+<!-- Progressive enhancement flag. Inline and un-bundled on purpose: it must run
+     before first paint so animations.css never hides content from a visitor
+     whose JavaScript is blocked, slow or disabled. -->
+<!-- Pre-paint: runs before first frame so there is never a flash of the wrong
+     theme, and so reduced-motion / returning visitors never enter the scroll
+     intro. Inline and un-bundled on purpose; it must not wait for the bundle. -->
+<script is:inline>
+	(function () {
+		var root = document.documentElement;
+		root.classList.add('js');
+		var theme = 'dark';
+		try {
+			theme = localStorage.getItem('bnji-theme') === 'light' ? 'light' : 'dark';
+		} catch (e) {}
+		root.dataset.theme = theme;
+		var meta = document.querySelector('meta[name="theme-color"]');
+		if (meta) meta.content = theme === 'light' ? '#bfe6f7' : '#020204';
+		var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		var seen = false;
+		try {
+			seen = sessionStorage.getItem('bnji-intro-done') === '1';
+		} catch (e) {}
+		if (reduced || seen) root.dataset.intro = 'off';
+	})();
+</script>
+
+<!-- Identity -->
+<title>{fullTitle}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonical} />
+<meta name="theme-color" content={SITE.themeColor} />
+<meta name="color-scheme" content="dark" />
+<meta name="author" content={SITE.author.name} />
+{noindex && <meta name="robots" content="noindex, nofollow" />}
+
+<!-- Icons -->
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+
+<!-- Feed discovery -->
+<link
+	rel="alternate"
+	type="application/rss+xml"
+	title={`${SITE.fullName} — feed`}
+	href={absoluteUrl('/rss.xml')}
+/>
+
+<!-- Fonts: self-hosted, preloaded because body copy uses them above the fold. -->
 <link rel="preload" href="/fonts/atkinson-regular.woff" as="font" type="font/woff" crossorigin />
 <link rel="preload" href="/fonts/atkinson-bold.woff" as="font" type="font/woff" crossorigin />
 
-<!-- Canonical URL -->
-<link rel="canonical" href={canonicalURL} />
-
-<!-- Primary Meta Tags -->
-<title>{title}</title>
-<meta name="title" content={title} />
-<meta name="description" content={description} />
-
-<!-- Open Graph / Facebook -->
-<meta property="og:type" content="website" />
-<meta property="og:url" content={Astro.url} />
-<meta property="og:title" content={title} />
+<!-- Open Graph -->
+<meta property="og:type" content={type} />
+<meta property="og:site_name" content={SITE.fullName} />
+<meta property="og:locale" content={SITE.locale} />
+<meta property="og:url" content={canonical} />
+<meta property="og:title" content={fullTitle} />
 <meta property="og:description" content={description} />
-<meta property="og:image" content={new URL(image, Astro.url)} />
+<meta property="og:image" content={ogImage} />
+<meta property="og:image:alt" content={`${SITE.fullName} — ${SITE.author.tagline}`} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+{publishedTime && <meta property="article:published_time" content={toIso(publishedTime)} />}
+{modifiedTime && <meta property="article:modified_time" content={toIso(modifiedTime)} />}
 
-<!-- Twitter -->
-<meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:url" content={Astro.url} />
-<meta property="twitter:title" content={title} />
-<meta property="twitter:description" content={description} />
-<meta property="twitter:image" content={new URL(image, Astro.url)} />
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:url" content={canonical} />
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={ogImage} />
+<meta name="twitter:image:alt" content={`${SITE.fullName} — ${SITE.author.tagline}`} />
+
+<!-- Structured data -->
+<script type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>

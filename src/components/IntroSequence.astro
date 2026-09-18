@@ -1,0 +1,155 @@
+---
+/**
+ * IntroSequence — the cinematic opening of the homepage (scroll-scrubbed).
+ *
+ * Renders two things:
+ *   1. an in-flow spacer (INTRO_CONFIG.scrollHeights viewports tall) that
+ *      gives the sequence its scroll distance, pushing the real homepage
+ *      below it; and
+ *   2. a fixed white layer with a single blue glowing star that zooms and
+ *      rotates with scroll progress until its energy fills the viewport and
+ *      cross-fades into the site (scripts/intro.ts owns the maths).
+ *
+ * Never a trap:
+ *   - html[data-intro="off"] (set pre-paint for reduced-motion visitors and
+ *     for anyone who skipped/completed once this session) removes the spacer
+ *     and the layer entirely;
+ *   - html:not(.js) removes the spacer, so no dead scroll region exists
+ *     without JavaScript;
+ *   - the Skip button jumps straight to the homepage and remembers.
+ */
+import { INTRO_CONFIG } from '../config/access.config';
+---
+
+{
+	INTRO_CONFIG.enabled && (
+		<>
+			<div
+				class="intro-spacer"
+				data-intro-spacer
+				style={`--intro-height: ${INTRO_CONFIG.scrollHeights * 100}vh`}
+				aria-hidden="true"
+			></div>
+
+			<div class="intro-layer" data-intro-layer aria-hidden="true">
+				<div class="intro-energy" data-intro-energy></div>
+				<div class="intro-star" data-intro-star>
+					<svg viewBox="0 0 200 200" fill="none">
+						<defs>
+							<radialGradient id="intro-glow" cx="0.5" cy="0.5" r="0.5">
+								<stop offset="0" stop-color="#bfe4ff" stop-opacity="0.95" />
+								<stop offset="0.35" stop-color="#4aa8ff" stop-opacity="0.55" />
+								<stop offset="1" stop-color="#4aa8ff" stop-opacity="0" />
+							</radialGradient>
+							<linearGradient id="intro-core" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#ffffff" />
+								<stop offset="1" stop-color="#7cc4ff" />
+							</linearGradient>
+						</defs>
+						<circle cx="100" cy="100" r="98" fill="url(#intro-glow)" />
+						<path
+							d="M100 18c4.6 30 13.6 46.6 26.8 55.2 7.9 5 16.8 7.6 26.2 8.4-9.4.8-18.3 3.4-26.2 8.4-13.2 8.6-22.2 25.2-26.8 55.2-4.6-30-13.6-46.6-26.8-55.2-7.9-5-16.8-7.6-26.2-8.4 9.4-.8 18.3-3.4 26.2-8.4C86.4 64.6 95.4 48 100 18Z"
+							fill="url(#intro-core)"
+						/>
+					</svg>
+				</div>
+			</div>
+
+			<button class="intro-skip mono" type="button" data-intro-skip>Skip intro ↓</button>
+		</>
+	)
+}
+
+<script>
+	import { initIntro } from '../scripts/intro';
+	initIntro();
+</script>
+
+<style>
+	/* Scroll distance for the sequence. Removed for reduced motion / skipped
+	   sessions (pre-paint attribute) and for no-JS visitors. */
+	.intro-spacer {
+		height: calc(var(--intro-height, 320vh));
+		pointer-events: none;
+	}
+	html:not(.js) .intro-spacer,
+	html[data-intro='off'] .intro-spacer {
+		display: none;
+	}
+
+	.intro-layer {
+		position: fixed;
+		inset: 0;
+		z-index: var(--z-intro);
+		pointer-events: none;
+		background: #ffffff;
+		will-change: opacity;
+	}
+	html:not(.js) .intro-layer,
+	html[data-intro='off'] .intro-layer {
+		display: none;
+	}
+
+	.intro-star {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		inline-size: min(34vmin, 260px);
+		aspect-ratio: 1;
+		transform: translate3d(-50%, -50%, 0);
+		will-change: transform;
+	}
+	.intro-star svg {
+		inline-size: 100%;
+		block-size: 100%;
+		display: block;
+	}
+
+	/* The blue energy field that floods the white as the star arrives. */
+	.intro-energy {
+		position: absolute;
+		inset: -20%;
+		opacity: 0;
+		background:
+			radial-gradient(58% 58% at 50% 50%, rgba(122, 196, 255, 0.95), rgba(74, 168, 255, 0.55) 46%, transparent 74%),
+			radial-gradient(90% 90% at 50% 50%, rgba(191, 228, 255, 0.5), transparent 70%);
+		will-change: opacity;
+	}
+
+	.intro-skip {
+		position: fixed;
+		left: var(--gutter);
+		bottom: var(--gutter);
+		z-index: calc(var(--z-intro) + 1);
+		padding: 0.5rem 1rem;
+		border: 1px solid rgba(10, 60, 90, 0.25);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.85);
+		color: #0b3d52;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+	}
+	.intro-skip:hover {
+		background: #ffffff;
+		transform: translateY(-1px);
+	}
+	.intro-skip:focus-visible {
+		outline: 2px solid #00658c;
+		outline-offset: 2px;
+	}
+	html:not(.js) .intro-skip,
+	html[data-intro='off'] .intro-skip {
+		display: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.intro-spacer,
+		.intro-layer,
+		.intro-skip {
+			display: none;
+		}
+	}
+</style>

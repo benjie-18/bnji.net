@@ -1,0 +1,186 @@
+---
+/**
+ * LabPreview — the entry point to /lab/ ("06 / LAB").
+ *
+ * The teaser is CSS-only on purpose. The Lab already runs real canvases, so the
+ * homepage advertises them with three orbiting dots on the compositor instead of
+ * starting a second animation loop on every page view.
+ */
+import { EXPERIMENTS, getRunnableExperiments } from '../data/lab';
+import GlassButton from './GlassButton.astro';
+import GlassPanel from './GlassPanel.astro';
+import SectionHeading from './SectionHeading.astro';
+
+const runnable = getRunnableExperiments().length;
+const upcoming = EXPERIMENTS.filter((experiment) => experiment.status !== 'live').length;
+---
+
+<section class="section" id="lab" aria-labelledby="lab-title">
+	<div class="container">
+		<SectionHeading
+			index="06"
+			label="LAB"
+			titleId="lab-title"
+			title="Interactive experiments"
+			description="Prototypes that are allowed to be strange. Each one runs in its own sandbox on /lab/ so an experiment can never take the site down with it."
+			actionHref="/lab/"
+			actionLabel="Open the Lab"
+		/>
+
+		<GlassPanel pad="lg" reveal starReactive class="lab-panel">
+			<div class="lab-panel__text">
+				<p class="lab-panel__count">
+					<span class="lab-panel__number">{String(runnable).padStart(2, '0')}</span>
+					<span class="mono">runnable now</span>
+				</p>
+				<p class="lab-panel__copy">
+					Canvas starfields, a live bench for the glass tokens, pointer gravity, and
+					{upcoming > 0 ? ` ${upcoming} more ideas waiting for a weekend` : ' more ideas as they come'}.
+				</p>
+				<div class="actions-stack lab-panel__actions">
+					<GlassButton href="/lab/" variant="primary" magnetic icon="flask">
+						Enter the Lab
+					</GlassButton>
+					<GlassButton href="/projects/" variant="quiet" magnetic icon="arrow-right">
+						See what graduated
+					</GlassButton>
+				</div>
+			</div>
+
+			<div class="lab-orbit" aria-hidden="true">
+				<span class="lab-orbit__ring"></span>
+				<span class="lab-orbit__ring lab-orbit__ring--2"></span>
+				<span class="lab-orbit__spin">
+					<span class="lab-orbit__dot"></span>
+				</span>
+				<span class="lab-orbit__spin lab-orbit__spin--reverse">
+					<span class="lab-orbit__dot lab-orbit__dot--2"></span>
+				</span>
+				<span class="lab-orbit__core"></span>
+			</div>
+		</GlassPanel>
+	</div>
+</section>
+
+<style>
+	.lab-panel {
+		display: grid;
+		gap: clamp(1.5rem, 4vw, 3rem);
+		align-items: center;
+	}
+
+	@media (min-width: 900px) {
+		.lab-panel {
+			grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+		}
+	}
+
+	.lab-panel__text {
+		display: grid;
+		gap: 1.1rem;
+		justify-items: start;
+	}
+
+	.lab-panel__count {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.7rem;
+	}
+
+	.lab-panel__number {
+		font-family: var(--font-display);
+		font-size: clamp(2.4rem, 5vw, 3.4rem);
+		font-weight: 250;
+		letter-spacing: var(--tracking-tight);
+		line-height: 1;
+		color: var(--accent-strong);
+	}
+
+	.lab-panel__copy {
+		color: var(--text-muted);
+		font-size: var(--text-lead);
+		line-height: 1.6;
+		max-width: 48ch;
+	}
+
+	.lab-panel__actions {
+		margin-block-start: 0.3rem;
+	}
+
+	/* --- Orbit teaser ----------------------------------------------------- */
+	/* Transform-only animation on two small dots: it stays on the compositor,
+	   costs effectively nothing, and is disabled entirely for reduced motion
+	   (animations.css neutralises animation-duration). */
+
+	.lab-orbit {
+		position: relative;
+		inline-size: min(260px, 62vw);
+		aspect-ratio: 1;
+		margin-inline: auto;
+		display: grid;
+		place-items: center;
+	}
+
+	.lab-orbit__ring {
+		position: absolute;
+		inset: 8%;
+		border-radius: 50%;
+		border: 1px solid rgba(255, 255, 255, 0.09);
+	}
+
+	.lab-orbit__ring--2 {
+		inset: 28%;
+		border-color: rgba(127, 212, 255, 0.16);
+	}
+
+	.lab-orbit__spin {
+		position: absolute;
+		inset: 8%;
+		animation: bnji-orbit 22s linear infinite;
+	}
+
+	.lab-orbit__spin--reverse {
+		inset: 28%;
+		animation-duration: 14s;
+		animation-direction: reverse;
+	}
+
+	.lab-orbit__dot {
+		position: absolute;
+		inset-block-start: -3px;
+		inset-inline-start: 50%;
+		inline-size: 6px;
+		block-size: 6px;
+		margin-inline-start: -3px;
+		border-radius: 50%;
+		background: var(--accent-strong);
+		box-shadow: 0 0 14px rgba(127, 212, 255, 0.8);
+	}
+
+	.lab-orbit__dot--2 {
+		inline-size: 4px;
+		block-size: 4px;
+		margin-inline-start: -2px;
+		background: var(--signal-live);
+		box-shadow: 0 0 12px rgba(121, 230, 176, 0.75);
+	}
+
+	.lab-orbit__core {
+		inline-size: 12px;
+		block-size: 12px;
+		border-radius: 50%;
+		background: radial-gradient(circle, #ffffff, rgba(127, 212, 255, 0.35) 60%, transparent 72%);
+		box-shadow: 0 0 30px rgba(127, 212, 255, 0.45);
+	}
+
+	@media (max-width: 900px) {
+		.lab-panel__text {
+			justify-items: center;
+			text-align: center;
+		}
+
+		.lab-panel__actions {
+			justify-content: center;
+		}
+	}
+</style>
