@@ -1,13 +1,30 @@
 ---
 /**
- * MessageBoard — the public visitor message board (global overlay).
+ * MessageBoard — the public visitor message board.
+ *
+ * Mounted ONLY on its own route (/board/, src/pages/board.astro) — it is no
+ * longer a global overlay. This component is the feature's entire footprint
+ * on a page: it imports styles/board.css and boots scripts/board.ts, so
+ * removing <MessageBoard /> from a layout removes every trace (CSS, JS,
+ * listeners) from that page.
  *
  * Structure:
  *   - a fixed, pointer-transparent field that holds one floating element per
  *     message: glossy Frutiger Aero bubbles in the light theme, glowing star
  *     orbs in the dark theme (styles/board.css, switched by html[data-theme]);
  *   - a composer anchored bottom-centre at all times: text, optional image,
- *     send, plus the visible-count slider and the full-archive button;
+ *     send, plus the visible-count slider and the full-archive button.
+ *     Mobile-safe: dvh/svh sizing, env(safe-area-inset-*) padding, and a
+ *     --kb-inset hook (scripts/board.ts) that lifts it above the virtual
+ *     keyboard so it never covers the field or its own slider. The control
+ *     strip (visible-count slider, list-view toggle, archive button) is
+ *     docked ABOVE the composer as its own glass pill, so the two never
+ *     overlap at any viewport or keyboard state;
+ *   - a plain, non-physics LIST VIEW of the same messages — one toggle in the
+ *     control strip flips between the sky and a static, keyboard- and
+ *     screen-reader-reachable <ol>. It renders the messages the existing
+ *     fetch/pagination state already holds (scripts/board.ts syncListView);
+ *     it never fetches on its own;
  *   - an archive dialog listing every message ever sent.
  *
  * The UI talks only to /api/board; persistence, validation, rate limiting and
@@ -16,8 +33,14 @@
  *
  * Behaviour guarantees: physics float elements upward and let them collide;
  * dragging keeps interacting with neighbours; new posts spawn above the
- * composer and rise; only the N most recent load initially (slider 3-30);
- * reduced motion gets a calm static grid; everything is keyboard reachable.
+ * composer and rise; bubbles/stars are sized to fit their own text/image
+ * content (no fixed diameter); dark theme renders a real five-point star
+ * (clip-path), light theme a soap bubble; only the 10 most recent load
+ * initially, and the slider
+ * (3-30) walks older CURSOR pages — never the full history in one fetch;
+ * polling pauses entirely while the tab is hidden and revalidates with
+ * ETags; reduced motion gets a calm static grid; everything is keyboard
+ * reachable.
  */
 import '../styles/board.css';
 import { BOARD_CONFIG } from '../config/board.config';
@@ -34,9 +57,12 @@ import { BOARD_CONFIG } from '../config/board.config';
 				class="board__input"
 				data-board-text
 				rows="1"
-				maxlength={BOARD_CONFIG.maxTextLength}
-				placeholder="Leave a public message… (lorem ipsum welcome)"
+				aria-describedby="board-counter"
+				placeholder="Leave a public message… (lorem ipsum welcome). Enter sends, Shift+Enter adds a newline."
 			></textarea>
+			<span id="board-counter" class="board__counter mono" data-board-counter>
+				0/{BOARD_CONFIG.maxTextLength}
+			</span>
 
 			<label class="board__attach" title="Attach an image (PNG, JPEG, WebP or GIF, 400 KB max)">
 				<span class="sr-only">Attach an image</span>
@@ -60,7 +86,7 @@ import { BOARD_CONFIG } from '../config/board.config';
 			</button>
 		</div>
 
-		<div class="board__composer-row board__composer-row--meta">
+		<div class="board__composer-row board__composer-row--meta" data-glass="raised">
 			<label class="board__slider-label mono" for="board-count">
 				Visible
 				<input
@@ -74,6 +100,15 @@ import { BOARD_CONFIG } from '../config/board.config';
 				/>
 				<span class="mono" data-board-slider-value>{BOARD_CONFIG.defaultVisible}</span>
 			</label>
+			<button
+				class="board__view-toggle mono"
+				type="button"
+				data-board-view-toggle
+				aria-pressed="false"
+				aria-controls="board-listview"
+			>
+				List view
+			</button>
 			<button class="board__archive-open mono" type="button" data-board-archive-open>
 				All messages
 			</button>
@@ -81,6 +116,22 @@ import { BOARD_CONFIG } from '../config/board.config';
 
 		<p class="board__status mono" data-board-status role="status" aria-live="polite"></p>
 	</form>
+
+	<section
+		class="board__listview"
+		id="board-listview"
+		data-glass="raised"
+		data-board-listview
+		role="region"
+		aria-label="Message board, list view"
+		tabindex="0"
+		hidden
+	>
+		<p class="board__listview-note mono">
+			The same messages as the sky, newest first — no dragging required.
+		</p>
+		<ol class="board__listview-items" data-board-list-items role="list"></ol>
+	</section>
 
 	<div class="board__archive" data-glass="raised" data-board-archive role="dialog" aria-modal="true" aria-label="Every message ever sent" hidden>
 		<header class="board__archive-head">

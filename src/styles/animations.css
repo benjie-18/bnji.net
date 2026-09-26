@@ -181,6 +181,35 @@
 	}
 }
 
+/* --- Reduced visual effects (settings store) ------------------------------- */
+/* html[data-reduced-effects='on'] is set PRE-PAINT by BaseHead's inline
+   script and kept in sync by scripts/settings.ts, so a visitor who asked for
+   calm never sees a single decorative animation frame. Same treatment as the
+   reduced-motion block below, scoped to the site's own decorative motion
+   (reveals, parallax, ambient loops) — OS-level reduced motion additionally
+   neutralises every transition/animation duration, which a site preference
+   should not override. The JS halves of this gate live in scripts/scroll.ts
+   (observers/listeners skipped) and scripts/starfield.ts (static sky). */
+
+html[data-reduced-effects='on'] [data-reveal],
+html[data-reduced-effects='on'] [data-load],
+html[data-reduced-effects='on'] [data-parallax] {
+	opacity: 1 !important;
+	transform: none !important;
+	filter: none !important;
+	transition: none !important;
+	animation: none !important;
+}
+
+html[data-reduced-effects='on'] .aurora-layer {
+	animation: none !important;
+	will-change: auto;
+}
+
+html[data-reduced-effects='on'] .dot--live {
+	animation: none !important;
+}
+
 /* --- Reduced motion ------------------------------------------------------- */
 /* The guard above already prevents hidden states, but ambient loops and any
    transition/animation that slipped through are neutralised here. */

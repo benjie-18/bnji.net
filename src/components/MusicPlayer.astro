@@ -1,18 +1,26 @@
 ---
 /**
- * MusicPlayer — floating background-music control (bottom right).
+ * MusicPlayer — the small, unobtrusive music control (bottom right).
  *
- * Source configuration lives in src/config/music.config.ts (one place, all
- * providers). This component never hard-codes a source. It renders a compact
- * glass pill: play/pause, mute, volume and a live status line, with loading,
- * error and disabled states driven by [data-state] from scripts/music.ts.
+ * One compact glass pill: a status dot, play/pause and mute. That is the
+ * whole footprint — VOLUME LIVES IN THE SETTINGS OVERLAY, and every audio
+ * preference flows through the settings store (scripts/settings.ts); this
+ * component renders no slider and persists nothing.
  *
- * Autoplay: impossible by construction — every start path is a click handler,
- * and no media or player script is fetched before the first gesture.
+ * States ([data-state], driven by scripts/music.ts): idle, loading, playing,
+ * paused, blocked, error, disabled — including the explicit autoplay-blocked
+ * affordance: playback is attempted on page load, and when the browser
+ * refuses, the play button grows a pulsing ring and the dot turns attention-
+ * amber until a real click happens. No workaround is attempted.
+ *
+ * data-provider on the root switches the only provider-specific surface:
+ * Spotify exposes no transport API, so its embed IS the control — it mounts
+ * visibly above the pill on play and unmounts on pause. YouTube's iframe and
+ * the file provider's audio element stay invisible; the pill is their UI.
  *
  * Placement: fixed bottom-right so it never collides with the message-board
- * composer (bottom centre) or the nav (top centre). Collapses to an icon-only
- * pill on narrow screens.
+ * composer (bottom centre) or the nav (top centre); on phones it moves under
+ * the nav, same as before.
  */
 import { MUSIC_SOURCE } from '../config/music.config';
 
@@ -24,10 +32,13 @@ const providerLabel =
 	class="music-player"
 	data-glass="raised"
 	data-music-player
+	data-provider={MUSIC_SOURCE.provider}
 	data-state="idle"
 	role="group"
-	aria-label="Background music"
+	aria-label={`Background music (${providerLabel})`}
 >
+	<span class="music-player__dot" aria-hidden="true"></span>
+
 	<button class="music-player__btn" type="button" data-music-play aria-label="Play music">
 		<svg class="music-player__icon music-player__icon--play" viewBox="0 0 24 24" aria-hidden="true">
 			<path d="M8.5 5.8v12.4L19 12 8.5 5.8Z" fill="currentColor" />
@@ -52,22 +63,11 @@ const providerLabel =
 		</svg>
 	</button>
 
-	<label class="music-player__volume">
-		<span class="sr-only">Music volume</span>
-		<input
-			type="range"
-			min="0"
-			max="100"
-			step="5"
-			value={String(Math.round(MUSIC_SOURCE.defaultVolume * 100))}
-			data-music-volume
-		/>
-	</label>
-
 	<p class="music-player__status mono" data-music-status aria-live="polite">Music off</p>
-	<span class="music-player__provider mono" title={`Provider: ${providerLabel}`}>{providerLabel}</span>
 
-	<!-- Hidden host for provider embeds (YouTube iframe / Spotify iframe). -->
+	<!-- Provider embed host: hidden for youtube (API-driven, pill is the UI),
+	     visible above the pill for spotify (the embed is the UI), unused for
+	     file/none. -->
 	<div class="music-player__embed" data-music-embed aria-hidden="true"></div>
 </div>
 
@@ -79,19 +79,62 @@ const providerLabel =
 		z-index: var(--z-player);
 		display: flex;
 		align-items: center;
-		gap: 0.55rem;
-		padding: 0.45rem 0.85rem 0.45rem 0.45rem;
+		gap: 0.45rem;
+		padding: 0.3rem 0.7rem 0.3rem 0.55rem;
 		border-radius: var(--radius-pill);
-		max-width: min(92vw, 380px);
 	}
 
+	/* --- status dot: the "is anything happening" glance ------------------- */
+	.music-player__dot {
+		inline-size: 7px;
+		block-size: 7px;
+		flex: none;
+		border-radius: 50%;
+		background: var(--text-dim);
+		transition: background-color var(--dur-base) var(--ease-out);
+	}
+	.music-player[data-state='playing'] .music-player__dot {
+		background: var(--accent);
+		animation: music-dot-pulse 2.6s var(--ease-soft) infinite;
+	}
+	.music-player[data-state='loading'] .music-player__dot {
+		background: var(--accent);
+		animation: music-dot-blink 0.9s linear infinite;
+	}
+	.music-player[data-state='blocked'] .music-player__dot,
+	.music-player[data-state='error'] .music-player__dot {
+		background: var(--signal-soon);
+	}
+	.music-player[data-state='disabled'] .music-player__dot {
+		opacity: 0.5;
+	}
+	@keyframes music-dot-pulse {
+		0%,
+		100% {
+			box-shadow: 0 0 0 0 rgba(122, 196, 255, 0.45);
+		}
+		50% {
+			box-shadow: 0 0 0 4px rgba(122, 196, 255, 0);
+		}
+	}
+	@keyframes music-dot-blink {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.3;
+		}
+	}
+
+	/* --- buttons ----------------------------------------------------------- */
 	.music-player__btn {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		inline-size: 34px;
-		block-size: 34px;
+		inline-size: 28px;
+		block-size: 28px;
 		flex: none;
 		border: 1px solid var(--glass-border);
 		border-radius: 50%;
@@ -112,9 +155,9 @@ const providerLabel =
 		opacity: 0.55;
 		cursor: not-allowed;
 	}
-	.music-player__icon {
-		inline-size: 16px;
-		block-size: 16px;
+	.music-player__btn svg {
+		inline-size: 13px;
+		block-size: 13px;
 	}
 
 	/* Icon + spinner state machine, pure CSS against [data-state]. */
@@ -134,8 +177,8 @@ const providerLabel =
 	}
 	.music-player[data-state='loading'] .music-player__spinner {
 		display: block;
-		inline-size: 16px;
-		block-size: 16px;
+		inline-size: 13px;
+		block-size: 13px;
 		border-radius: 50%;
 		border: 2px solid var(--glass-border-strong);
 		border-top-color: var(--accent);
@@ -144,6 +187,23 @@ const providerLabel =
 	@keyframes music-spin {
 		to {
 			transform: rotate(360deg);
+		}
+	}
+
+	/* The blocked autoplay affordance: small, but unmistakably a play button
+	   — an attention ring pulses around it until the visitor clicks. */
+	.music-player[data-state='blocked'] .music-player__btn[data-music-play] {
+		color: var(--text-strong);
+		border-color: var(--accent-strong);
+		animation: music-blocked-ring 1.8s var(--ease-soft) infinite;
+	}
+	@keyframes music-blocked-ring {
+		0%,
+		100% {
+			box-shadow: 0 0 0 0 rgba(122, 196, 255, 0.4);
+		}
+		55% {
+			box-shadow: 0 0 0 6px rgba(122, 196, 255, 0);
 		}
 	}
 
@@ -158,22 +218,7 @@ const providerLabel =
 		display: none;
 	}
 
-	.music-player__volume {
-		display: inline-flex;
-		align-items: center;
-		inline-size: 76px;
-		flex: none;
-	}
-	.music-player__volume input {
-		inline-size: 100%;
-		accent-color: var(--accent);
-		cursor: pointer;
-	}
-	.music-player__volume input:disabled {
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-
+	/* --- status line ------------------------------------------------------- */
 	.music-player__status {
 		margin: 0;
 		font-size: var(--text-micro);
@@ -183,24 +228,17 @@ const providerLabel =
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 12ch;
+		max-width: 10ch;
+	}
+	.music-player[data-state='playing'] .music-player__status {
+		color: var(--text-muted);
+	}
+	.music-player[data-state='blocked'] .music-player__status {
+		color: var(--accent-strong);
 	}
 	.music-player[data-state='error'] .music-player__status {
 		color: var(--signal-soon);
 	}
-	.music-player__provider {
-		display: none;
-	}
-
-	.music-player__embed {
-		position: absolute;
-		inset: 0;
-		overflow: hidden;
-		pointer-events: none;
-		opacity: 0;
-	}
-
-	/* Error / disabled read clearly at a glance. */
 	.music-player[data-state='disabled'] {
 		opacity: 0.72;
 	}
@@ -209,27 +247,58 @@ const providerLabel =
 		border-color: var(--signal-soon);
 	}
 
-	/* On phones the message-board composer owns the bottom edge: the pill
-	   moves under the nav instead of competing for the corner. */
+	/* --- provider embed host ----------------------------------------------- */
+	/* Default: invisible box for the YouTube API iframe (the pill is the UI). */
+	.music-player__embed {
+		position: absolute;
+		inset: 0;
+		overflow: hidden;
+		pointer-events: none;
+		opacity: 0;
+	}
+
+	/* Spotify: the embed is the control surface (no transport API exists), so
+	   it mounts visibly above the pill and takes pointer events. Empty host
+	   (paused → unmounted) collapses away entirely. */
+	.music-player[data-provider='spotify'] .music-player__embed:not(:empty) {
+		position: fixed;
+		right: var(--gutter);
+		bottom: calc(var(--gutter) + 44px);
+		inset: auto;
+		inline-size: min(320px, calc(100vw - 2 * var(--gutter)));
+		overflow: visible;
+		pointer-events: auto;
+		opacity: 1;
+		border-radius: var(--radius-md);
+		box-shadow: var(--glass-shadow-raised);
+	}
+
+	/* On phones the pill lives under the nav rather than in the bottom
+	   corner: on /board/ that corner belongs to the message-board composer,
+	   and keeping one consistent phone placement everywhere avoids the pill
+	   jumping between pages. */
 	@media (max-width: 720px) {
 		.music-player {
 			top: calc(var(--nav-offset) + var(--nav-height) + 8px);
 			bottom: auto;
 		}
+		.music-player[data-provider='spotify'] .music-player__embed:not(:empty) {
+			top: calc(var(--nav-offset) + var(--nav-height) + 52px);
+			bottom: auto;
+		}
 	}
 
 	@media (max-width: 560px) {
-		.music-player__volume {
-			display: none;
-		}
 		.music-player__status {
-			max-width: 8ch;
+			max-width: 7ch;
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.music-player__dot,
+		.music-player[data-state='blocked'] .music-player__btn[data-music-play],
 		.music-player[data-state='loading'] .music-player__spinner {
-			animation-duration: 2s;
+			animation: none;
 		}
 	}
 </style>

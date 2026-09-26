@@ -56,8 +56,12 @@ function timingSafeEqual(a: string, b: string): boolean {
 	return diff === 0;
 }
 
-/** True when the request carries a valid session signature for the rule. */
-async function hasValidSession(ctx: AccessContext, secret: string): Promise<boolean> {
+/** True when the request carries a valid session signature for THIS rule. */
+async function hasValidSession(
+	ctx: AccessContext,
+	secret: string,
+	rule: RouteAccessRule,
+): Promise<boolean> {
 	const cookie = ctx.cookies.get(SESSION_COOKIE)?.value;
 	if (!cookie) return false;
 	const [payload, signature] = cookie.split('.');
@@ -68,7 +72,12 @@ async function hasValidSession(ctx: AccessContext, secret: string): Promise<bool
 	const [pattern, expiry] = payload.split(':');
 	const expires = Number(expiry);
 	if (!Number.isFinite(expires) || expires < Date.now() / 1000) return false;
-	return pattern !== undefined;
+	// The session must have been issued for the rule being enforced: one
+	// rule's session never authorizes another rule's routes. (issueSession
+	// bakes rule.pattern into the signed payload; without this comparison a
+	// valid signature for ANY pattern passed EVERY rule.)
+	if (pattern === undefined) return false;
+	return timingSafeEqual(pattern, rule.pattern);
 }
 
 /**
@@ -114,7 +123,7 @@ export async function isAuthorized(
 	// the only honest behaviour: an unconfigured guard must not open the door.
 	if (!env.ACCESS_SECRET && !env.ACCESS_TOKEN && !env.ACCESS_PASSWORD_SHA) return false;
 
-	if (env.ACCESS_SECRET && (await hasValidSession(ctx, env.ACCESS_SECRET))) return true;
+	if (env.ACCESS_SECRET && (await hasValidSession(ctx, env.ACCESS_SECRET, rule))) return true;
 
 	if (rule.auth === 'token' && env.ACCESS_TOKEN) {
 		const header = ctx.request.headers.get('authorization') ?? '';

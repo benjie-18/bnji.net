@@ -11,12 +11,14 @@
  *      cross-fades into the site (scripts/intro.ts owns the maths).
  *
  * Never a trap:
- *   - html[data-intro="off"] (set pre-paint for reduced-motion visitors and
- *     for anyone who skipped/completed once this session) removes the spacer
- *     and the layer entirely;
+ *   - html[data-intro="off"] (set pre-paint from the settings store for
+ *     visitors who disabled the intro, and always for reduced-motion
+ *     visitors) removes the spacer and the layer entirely;
  *   - html:not(.js) removes the spacer, so no dead scroll region exists
  *     without JavaScript;
- *   - the Skip button jumps straight to the homepage and remembers.
+ *   - the sequence is a lens on scroll position, never modal — scrolling up
+ *     rewinds it, scrolling down finishes it. The enable/disable control
+ *     lives in the Settings overlay (settings store: introEnabled), not here.
  */
 import { INTRO_CONFIG } from '../config/access.config';
 ---
@@ -54,8 +56,6 @@ import { INTRO_CONFIG } from '../config/access.config';
 					</svg>
 				</div>
 			</div>
-
-			<button class="intro-skip mono" type="button" data-intro-skip>Skip intro ↓</button>
 		</>
 	)
 }
@@ -66,8 +66,9 @@ import { INTRO_CONFIG } from '../config/access.config';
 </script>
 
 <style>
-	/* Scroll distance for the sequence. Removed for reduced motion / skipped
-	   sessions (pre-paint attribute) and for no-JS visitors. */
+	/* Scroll distance for the sequence. Removed for reduced motion, when the
+	   intro is disabled in Settings (pre-paint html[data-intro='off']), and
+	   for no-JS visitors. */
 	.intro-spacer {
 		height: calc(var(--intro-height, 320vh));
 		pointer-events: none;
@@ -116,39 +117,9 @@ import { INTRO_CONFIG } from '../config/access.config';
 		will-change: opacity;
 	}
 
-	.intro-skip {
-		position: fixed;
-		left: var(--gutter);
-		bottom: var(--gutter);
-		z-index: calc(var(--z-intro) + 1);
-		padding: 0.5rem 1rem;
-		border: 1px solid rgba(10, 60, 90, 0.25);
-		border-radius: var(--radius-pill);
-		background: rgba(255, 255, 255, 0.85);
-		color: #0b3d52;
-		font-size: var(--text-micro);
-		letter-spacing: var(--tracking-mono);
-		text-transform: uppercase;
-		cursor: pointer;
-		transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-	}
-	.intro-skip:hover {
-		background: #ffffff;
-		transform: translateY(-1px);
-	}
-	.intro-skip:focus-visible {
-		outline: 2px solid #00658c;
-		outline-offset: 2px;
-	}
-	html:not(.js) .intro-skip,
-	html[data-intro='off'] .intro-skip {
-		display: none;
-	}
-
 	@media (prefers-reduced-motion: reduce) {
 		.intro-spacer,
-		.intro-layer,
-		.intro-skip {
+		.intro-layer {
 			display: none;
 		}
 	}

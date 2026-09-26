@@ -12,17 +12,24 @@
  *   provider: 'none'     — player renders a disabled, explained state.
  *   provider: 'youtube' — fill `youtube.videoId` (the ?v= part of a YouTube
  *                          URL). Playback uses the official IFrame API, loaded
- *                          only after the visitor presses play.
+ *                          at page start so the autoplay attempt can run; the
+ *                          iframe itself stays hidden (the pill is the UI).
  *   provider: 'spotify' — fill `spotify.id` (track/album/playlist ID) and
  *                          `spotify.type`. Playback uses Spotify's embed
- *                          iframe; Spotify exposes no volume API, so the
- *                          player disables volume/mute for this provider.
+ *                          iframe, mounted VISIBLE above the pill: Spotify
+ *                          exposes no transport/volume API, so the embed's
+ *                          own UI is the control surface and the pill's
+ *                          mute button is disabled for this provider.
  *   provider: 'file'    — fill `file.url` with a direct audio URL (mp3/ogg/
  *                          wav, same-origin or CORS-enabled). Full transport:
  *                          play/pause, volume, mute, loading and error states.
  *
- * Autoplay: never. Browsers block audible autoplay; the player only starts
- * after an explicit user gesture, for every provider.
+ * Autoplay: ATTEMPTED on page load, never forced. When the browser refuses
+ * (the usual case for audible audio), the pill shows its tap-to-play
+ * affordance (data-state="blocked") — or, for Spotify, the embed's own play
+ * button does. The refusal is never worked around. Volume/mute preferences
+ * live in the settings store (scripts/settings.ts), not here; defaultVolume
+ * only seeds it.
  *
  * PUBLIC vs SECRET: all values here are PUBLIC identifiers (they end up in
  * shipped HTML/JS). Never put API keys or private URLs in this file.

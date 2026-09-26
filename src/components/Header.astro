@@ -6,26 +6,48 @@
  * destination can be added without touching this file. The nav arrives at 200ms
  * in the load sequence, right after the starfield.
  *
+ * The pill's tool cluster carries the settings GEAR ([data-settings-open]),
+ * which opens the SettingsOverlay (Layout.astro) via scripts/settings-overlay.ts.
+ * The theme toggle that used to sit here now lives inside that overlay.
+ *
+ * Structure: four top-level entries — Home, Projects ▾, Board, Me ▾. The two
+ * groups are disclosure dropdowns: a real <button> trigger (aria-expanded /
+ * aria-controls) plus a glass panel (data-glass="raised" — the same token-
+ * driven surface system as the pill, correct in both themes by construction;
+ * no hand-rolled backdrop-filter here). Grouped destinations appear ONLY
+ * inside their dropdown.
+ *
+ * Dropdown behaviour lives in scripts/interactions.ts → initNavDropdowns:
+ * arrow keys move through items, Escape closes and returns focus to the
+ * trigger, Tab is trapped inside the open group, tap opens / tap-outside
+ * closes, panels near the right viewport edge flip to right-aligned, and
+ * focus leaving the group closes it.
+ *
  * Responsive contract
  * -------------------
- *  - >= 900px: brand + inline links inside one pill.
+ *  - >= 900px: brand + inline entries inside one pill; dropdown panels float
+ *    under their trigger.
  *  - <  900px: brand + a disclosure button; the same list becomes a glass sheet
- *    under the pill. Closed means `visibility: hidden`, so its links leave both
- *    the layout and the tab order.
- *  - No JavaScript: the sheet is shown inline and the dock stops floating
- *    (rules in global.css), because a menu button that cannot open is worse
- *    than a slightly taller bar.
+ *    under the pill. Inside the sheet, dropdown panels go position:static and
+ *    accordion open under their trigger. Closed means `visibility: hidden`, so
+ *    links leave both the layout and the tab order.
+ *  - No JavaScript: triggers cannot open, so a no-JS rule hides them and lays
+ *    the group links out inline (desktop) / stacked (sheet) — every route stays
+ *    reachable, mirroring the existing no-JS sheet rule in global.css.
  *
- * Boundary note: this component styles the pill and the list container. The
- * links themselves are HeaderLink.astro, which owns every `.nav-link` rule
- * including its mobile variant. The dock's own positioning (fixed, centred,
- * pointer-transparent) lives in global.css with the other structural shells.
+ * Boundary note: this component styles the pill, the list container and the
+ * dropdown chrome. The links themselves are HeaderLink.astro, which owns every
+ * `.nav-link` rule including the dropdown variant. The dock's own positioning
+ * (fixed, centred, pointer-transparent) lives in global.css.
  */
-import { PRIMARY_NAV } from '../data/navigation';
+import { isNavGroup, PRIMARY_NAV } from '../data/navigation';
 import { SITE } from '../data/site';
 import BrandMark from './BrandMark.astro';
 import HeaderLink from './HeaderLink.astro';
-import ThemeToggle from './ThemeToggle.astro';
+
+const path = Astro.url.pathname.replace(/index\.html$/, '');
+/** Same prefix rule as HeaderLink: a group trigger lights up for its children. */
+const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href || path.startsWith(href));
 ---
 
 <!-- <header> so every page gets a real banner landmark, not a bare div. -->
@@ -39,15 +61,88 @@ import ThemeToggle from './ThemeToggle.astro';
 
 		<ul class="nav-list" id="primary-navigation" data-nav-panel role="list">
 			{
-				PRIMARY_NAV.map((item) => (
-					<li>
-						<HeaderLink href={item.href}>{item.label}</HeaderLink>
-					</li>
-				))
+				PRIMARY_NAV.map((entry) =>
+					isNavGroup(entry) ? (
+						<li class="nav-group" data-nav-group>
+							<button
+								class:list={[
+									'nav-group__trigger',
+									{ 'is-active': entry.items.some((item) => isCurrent(item.href)) },
+								]}
+								type="button"
+								data-nav-dropdown-trigger
+								aria-expanded="false"
+								aria-controls={`nav-dropdown-${entry.slug}`}
+							>
+								{entry.label}
+								<svg class="nav-group__chevron" viewBox="0 0 12 12" aria-hidden="true">
+									<path
+										d="M2.5 4.5 6 8l3.5-3.5"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							</button>
+							<div
+								class="nav-dropdown"
+								id={`nav-dropdown-${entry.slug}`}
+								data-glass="raised"
+								data-nav-dropdown
+								aria-label={entry.label}
+							>
+								<ul role="list">
+									{entry.items.map((item) => (
+										<li>
+											<HeaderLink href={item.href} class="nav-dropdown__link">
+												{item.label}
+											</HeaderLink>
+										</li>
+									))}
+								</ul>
+							</div>
+						</li>
+					) : (
+						<li>
+							<HeaderLink href={entry.href}>{entry.label}</HeaderLink>
+						</li>
+					),
+				)
 			}
 		</ul>
 
-		<ThemeToggle />
+		<!-- Tool cluster: the settings gear (the reserved slot is now taken).
+		     It opens the SettingsOverlay mounted once in Layout.astro; the
+		     controller in scripts/settings-overlay.ts binds [data-settings-open]
+		     triggers, so the markup here is just the button. The theme toggle
+		     that used to live here moved INTO the overlay (settings store). -->
+		<div class="nav-tools">
+			<button
+				class="settings-gear"
+				type="button"
+				data-settings-open
+				aria-label="Settings"
+				aria-expanded="false"
+				aria-controls="settings-overlay"
+			>
+				<svg class="settings-gear__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path
+						d="M12 15.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Z"
+						stroke="currentColor"
+						stroke-width="1.7"
+					/>
+					<path
+						d="M19.4 14.4a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.86 2.86l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.11a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.86-2.86l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.11a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.86-2.86l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.11a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.86 2.86l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.11a1.7 1.7 0 0 0-1.49 1.4Z"
+						stroke="currentColor"
+						stroke-width="1.7"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</button>
+		</div>
 
 		<button
 			class="nav-toggle"
@@ -125,6 +220,213 @@ import ThemeToggle from './ThemeToggle.astro';
 		margin: 0;
 	}
 
+	/* Tool cluster (settings gear today; room for more round buttons). */
+	.nav-tools {
+		display: flex;
+		align-items: center;
+		gap: 0.15rem;
+	}
+
+	/* The gear wears exactly the language the theme toggle used to: a 34px
+	   glass-rimmed round button (tokens, so both themes), lift on hover,
+	   accent outline on keyboard focus. */
+	.settings-gear {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		inline-size: 34px;
+		block-size: 34px;
+		flex: none;
+		border: 1px solid var(--glass-border);
+		border-radius: 50%;
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out),
+			background-color var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-out);
+	}
+
+	.settings-gear:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+		transform: translateY(-1px);
+	}
+
+	.settings-gear:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	.settings-gear[aria-expanded='true'] {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+	}
+
+	.settings-gear__icon {
+		inline-size: 18px;
+		block-size: 18px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.settings-gear,
+		.settings-gear:hover {
+			transition: none;
+			transform: none;
+		}
+	}
+
+	/* --- Dropdown groups ---------------------------------------------------- */
+	/* Trigger mirrors the .nav-link visual rhythm. HeaderLink.astro owns the
+	   actual .nav-link rules (component boundary), so the handful of matching
+	   declarations here are deliberate duplication of *look*, not of logic. */
+
+	.nav-group {
+		position: relative;
+		display: flex;
+	}
+
+	.nav-group__trigger {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4em;
+		padding: 0.42em 0.85em;
+		border-radius: var(--radius-pill);
+		border: 1px solid transparent;
+		background: none;
+		font-family: var(--font-display);
+		font-size: 0.9rem;
+		font-weight: 450;
+		letter-spacing: 0.004em;
+		line-height: 1.3;
+		color: var(--text-muted);
+		cursor: pointer;
+		white-space: nowrap;
+		transition:
+			color var(--dur-fast) var(--ease-out),
+			background-color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.nav-group__trigger:hover {
+			color: var(--text-strong);
+			background: var(--nav-hover);
+		}
+	}
+
+	/* A child route is current: the trigger wears the same active pill a
+	   HeaderLink would (aria-current lives on the link inside). */
+	.nav-group__trigger.is-active {
+		color: var(--text-strong);
+		background: var(--nav-active);
+		border-color: var(--glass-border);
+		box-shadow: inset 0 1px 0 var(--glass-highlight);
+	}
+
+	.nav-group__trigger:focus-visible {
+		color: var(--text-strong);
+		outline-offset: 2px;
+	}
+
+	.nav-group__chevron {
+		inline-size: 10px;
+		flex: none;
+		color: var(--text-dim);
+		transition: transform var(--dur-fast) var(--ease-out);
+	}
+
+	.nav-group.is-open .nav-group__chevron {
+		transform: rotate(180deg);
+	}
+
+	/* Panel: glass comes from data-glass="raised" (styles/glass.css) — themed
+	   by tokens, so dark and light are both correct for free. The descendant
+	   selector outranks the bare [data-glass] rule's position: relative.
+	   Closed = visibility:hidden, so links leave the tab order (same contract
+	   as the mobile sheet). */
+	.nav-group .nav-dropdown {
+		position: absolute;
+		inset-block-start: calc(100% + 10px);
+		inset-inline-start: 0;
+		z-index: 2;
+		display: grid;
+		min-inline-size: 13rem;
+		padding: 0.5rem;
+		border-radius: var(--radius-lg);
+		opacity: 0;
+		visibility: hidden;
+		transform: translate3d(0, -8px, 0);
+		pointer-events: none;
+		transition:
+			opacity var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-out),
+			visibility 0s linear var(--dur-fast);
+	}
+
+	.nav-group.is-open .nav-dropdown {
+		opacity: 1;
+		visibility: visible;
+		transform: none;
+		pointer-events: auto;
+		transition:
+			opacity var(--dur-base) var(--ease-out),
+			transform var(--dur-base) var(--ease-spring),
+			visibility 0s;
+	}
+
+	/* Edge-aware flip: initNavDropdowns measures the panel against the right
+	   viewport edge on every open and toggles this. */
+	.nav-group .nav-dropdown--flip {
+		inset-inline-start: auto;
+		inset-inline-end: 0;
+	}
+
+	.nav-group .nav-dropdown ul {
+		display: grid;
+		gap: 0.1rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	/* --- No JavaScript: triggers cannot open, so lay the group links out
+	   inline (desktop) / stacked (sheet) — every route stays reachable. The
+	   panel loses its glass chrome and becomes a plain flex row. ----------- */
+	:global(html:not(.js)) .nav-group__trigger {
+		display: none;
+	}
+
+	:global(html:not(.js)) .nav-group .nav-dropdown {
+		position: static;
+		display: flex;
+		min-inline-size: 0;
+		padding: 0;
+		opacity: 1;
+		visibility: visible;
+		transform: none;
+		pointer-events: auto;
+		border: 0;
+		background: none;
+		box-shadow: none;
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
+	:global(html:not(.js)) .nav-group .nav-dropdown::before,
+	:global(html:not(.js)) .nav-group .nav-dropdown::after {
+		content: none;
+	}
+
+	:global(html:not(.js)) .nav-group .nav-dropdown ul {
+		display: flex;
+		align-items: center;
+		gap: 0.1rem;
+	}
+
 	.nav-toggle {
 		display: none;
 		align-items: center;
@@ -186,9 +488,12 @@ import ThemeToggle from './ThemeToggle.astro';
 			   the pill, and an element with backdrop-filter becomes a "backdrop
 			   root" for its descendants — the sheet could only blur the pill's own
 			   already-blurred backdrop, which renders flat and costs fill rate on
-			   the devices that can least afford it. A near-solid dark panel over a
-			   near-black page is visually the same thing, so that is what it is. */
-			background: rgba(6, 8, 14, 0.94);
+			   the devices that can least afford it. A near-solid panel over the
+			   page is visually the same thing, so that is what it is: --nav-sheet-bg
+			   is the historical near-black in the dark theme and a sky-tinted
+			   near-white in the light theme (tokens.css), so the sheet never lands
+			   dark-on-light or vice versa. */
+			background: var(--nav-sheet-bg);
 			/* Closed: invisible AND unreachable by keyboard and screen reader. */
 			opacity: 0;
 			visibility: hidden;
@@ -217,5 +522,37 @@ import ThemeToggle from './ThemeToggle.astro';
 		.nav-toggle[aria-expanded='true'] .nav-toggle-bars span:last-child {
 			transform: translateY(-3.25px) rotate(-45deg);
 		}
+
+		/* Dropdowns inside the sheet: an accordion, not a floating panel. The
+		   sheet is position:static territory — no edge flip can overflow it. */
+		.nav-group {
+			display: grid;
+			gap: 0.1rem;
+		}
+
+		.nav-group__trigger {
+			inline-size: 100%;
+			justify-content: space-between;
+			padding: 0.72em 0.95em;
+			font-size: 1rem;
+			border-radius: var(--radius-md);
+		}
+
+		.nav-group .nav-dropdown {
+			position: static;
+			min-inline-size: 0;
+			padding: 0.25rem 0.5rem 0.5rem;
+			transform: none;
+		}
+
+		.nav-group.is-open .nav-dropdown {
+			transform: none;
+		}
+
+		:global(html:not(.js)) .nav-group .nav-dropdown ul {
+			flex-direction: column;
+			align-items: stretch;
+		}
 	}
+
 </style>

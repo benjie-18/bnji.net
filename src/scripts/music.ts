@@ -1,26 +1,57 @@
 /**
- * BNJI.NET — background music player runtime.
+ * BNJI.NET — background music runtime.
  *
- * One player, four interchangeable sources (src/config/music.config.ts):
+ * The site UI is the small pill (components/MusicPlayer.astro): play/pause,
+ * mute and a status dot — nothing else. Volume lives in the Settings overlay.
+ * All audio preference (volume, mute) flows through the central settings
+ * store (scripts/settings.ts): the pill's mute button, the overlay's Audio
+ * rows and this module are three views of ONE state; nothing here persists
+ * anything itself.
  *
+ * Autoplay policy (honest)
+ * ------------------------
+ * Playback is ATTEMPTED on page load. Browsers routinely refuse unmuted
+ * autoplay; when the attempt is refused we do not work around the refusal —
+ * the pill falls into [data-state="blocked"], a small but clearly visible
+ * tap-to-play affordance, and waits for a real gesture. (Muted autoplay is
+ * generally allowed, so with the store's mute on, the attempt usually
+ * succeeds silently.)
+ *
+ * Three providers, three genuinely distinct surfaces
+ * ---------------------------------------------------
+ *   'file'    — HTMLAudioElement. Real events (playing/pause/waiting/error),
+ *               a real transport (volume, mute, resume), and a precise
+ *               blocked detection: play() rejects with NotAllowedError.
+ *               The pill is the whole UI.
+ *   'youtube' — official IFrame API in a hidden iframe. Events arrive via
+ *               onStateChange; volume/mute through the API. The API fires NO
+ *               "autoplay refused" event, so a non-gesture attempt is probed
+ *               once after it settles (getPlayerState) and reported as
+ *               blocked if the video never started. The pill is the whole UI.
+ *   'spotify' — embed iframe with ZERO transport API: no events, no volume,
+ *               no mute. Pretending otherwise would be a lie, so the embed
+ *               itself is the control surface: it mounts VISIBLE on every
+ *               play attempt (including the load-time autoplay attempt) and
+ *               unmounts on pause. Whether autoplay actually started is
+ *               visible inside the embed — Spotify's own play button is the
+ *               blocked affordance. The pill's mute button is disabled and
+ *               says why.
  *   'none'    — disabled, explained state. Nothing loads, nothing plays.
- *   'file'    — direct audio URL via HTMLAudioElement. Full transport:
- *               play/pause, volume, mute, loading and error states.
- *   'youtube' — official IFrame API, script tag injected ONLY after the first
- *               user-initiated play. play/pause/volume/mute via the API.
- *   'spotify' — Spotify embed iframe mounted on user-initiated play; unmounted
- *               on pause (Spotify exposes no transport API). Volume/mute are
- *               disabled for this provider and say so in their tooltips.
- *
- * Autoplay policy: playback NEVER starts without an explicit user gesture.
- * There is no preload of media or player scripts before the first click.
  *
  * The player writes its state to [data-state] on the player root; all visuals
- * (spinner, error, disabled) are CSS against that attribute.
+ * (dot colour, spinner, blocked pulse, error) are CSS against that attribute.
  */
 import { MUSIC_SOURCE } from '../config/music.config';
+import { getSettings, setSetting, subscribeSettings } from './settings';
 
-export type MusicState = 'idle' | 'loading' | 'playing' | 'paused' | 'error' | 'disabled';
+export type MusicState =
+	| 'idle'
+	| 'loading'
+	| 'playing'
+	| 'paused'
+	| 'blocked'
+	| 'error'
+	| 'disabled';
 
 type PlayerRoot = HTMLElement & { dataset: DOMStringMap & { state?: MusicState } };
 
@@ -33,6 +64,8 @@ type YtPlayer = {
 	setVolume: (v: number) => void;
 	mute: () => void;
 	unMute: () => void;
+	/** YT player state: 1 playing, 2 paused, 3 buffering, 5 cued. */
+	getPlayerState?: () => number;
 	destroy: () => void;
 };
 
@@ -45,10 +78,9 @@ export function initMusicPlayer(): void {
 
 	const playButton = root.querySelector<HTMLButtonElement>('[data-music-play]');
 	const muteButton = root.querySelector<HTMLButtonElement>('[data-music-mute]');
-	const volume = root.querySelector<HTMLInputElement>('[data-music-volume]');
 	const status = root.querySelector<HTMLElement>('[data-music-status]');
 	const embedHost = root.querySelector<HTMLElement>('[data-music-embed]');
-	if (!playButton || !muteButton || !volume || !status || !embedHost) return;
+	if (!playButton || !muteButton || !status || !embedHost) return;
 
 	const config = MUSIC_SOURCE;
 	const setState = (state: MusicState, message?: string) => {
@@ -58,20 +90,22 @@ export function initMusicPlayer(): void {
 		playButton.disabled = state === 'disabled' || state === 'loading';
 	};
 
+	/* Spotify exposes no volume/mute API — the pill says so instead of
+	   pretending its buttons do something. */
 	const supportsVolume = config.provider === 'file' || config.provider === 'youtube';
 	if (!supportsVolume) {
-		for (const control of [muteButton, volume]) {
-			control.disabled = true;
-			control.title = 'Volume control is not available for the Spotify embed provider.';
-			control.setAttribute('aria-disabled', 'true');
-		}
+		muteButton.disabled = true;
+		muteButton.title = 'The Spotify embed controls its own audio — use the embed.';
+		muteButton.setAttribute('aria-disabled', 'true');
 	}
 
-	/* --- transport abstraction -------------------------------------------- */
+	/* --- transport state (per provider; see the header for the surfaces) ---- */
 	let audio: HTMLAudioElement | null = null;
 	let yt: YtPlayer | null = null;
 	let ytReady: Promise<YtPlayer> | null = null;
 	let spotifyFrame: HTMLIFrameElement | null = null;
+	/** Set once the visitor clicks play: the YouTube blocked-probe stands down. */
+	let userActed = false;
 
 	const configured =
 		(config.provider === 'file' && config.file.url !== '') ||
@@ -84,44 +118,110 @@ export function initMusicPlayer(): void {
 		return;
 	}
 
-	const play = async () => {
+	/* --- settings-store binding (volume + mute) ------------------------------ */
+	// Single applier: store → pill UI → transport. Called at init, on every
+	// store change, and after a transport object comes into existence. The
+	// pill has no volume slider of its own — the Settings overlay owns it.
+	const applyAudio = () => {
+		const settings = getSettings();
+		muteButton.setAttribute('aria-pressed', String(settings.muted));
+		if (config.provider === 'file' && audio) {
+			audio.volume = settings.volume;
+			audio.muted = settings.muted;
+		} else if (config.provider === 'youtube' && yt) {
+			yt.setVolume(Math.round(settings.volume * 100));
+			if (settings.muted) yt.mute();
+			else yt.unMute();
+		}
+		// spotify/none: no transport API — the preference stays in the store
+		// and applies the moment a controllable provider is configured.
+	};
+	applyAudio();
+	subscribeSettings(applyAudio);
+
+	/* --- 'file' surface: HTMLAudioElement ----------------------------------- */
+
+	const ensureAudio = (): HTMLAudioElement => {
+		if (audio) return audio;
+		audio = new Audio(config.file.url);
+		audio.loop = true;
+		// The load-time autoplay attempt needs the stream, so this is 'auto'
+		// now — the old 'none' + first-gesture contract was deliberately
+		// replaced by the autoplay-attempt task.
+		audio.preload = 'auto';
+		audio.addEventListener('playing', () => setState('playing', config.file.title || 'Playing'));
+		audio.addEventListener('pause', () => setState('paused'));
+		audio.addEventListener('waiting', () => setState('loading'));
+		audio.addEventListener('error', () => setState('error', 'Could not load the audio source.'));
+		applyAudio(); // stored volume + mute onto the fresh element
+		return audio;
+	};
+
+	const attemptFile = async () => {
 		setState('loading');
 		try {
-			if (config.provider === 'file') {
-				if (!audio) {
-					audio = new Audio(config.file.url);
-					audio.loop = true;
-					audio.preload = 'none';
-					audio.volume = Number(volume.value) / 100;
-					audio.addEventListener('playing', () => setState('playing', config.file.title || 'Playing'));
-					audio.addEventListener('pause', () => setState('paused'));
-					audio.addEventListener('waiting', () => setState('loading'));
-					audio.addEventListener('error', () =>
-						setState('error', 'Could not load the audio source.'),
-					);
-				}
-				await audio.play();
-				setState('playing', config.file.title || 'Playing');
-			} else if (config.provider === 'youtube') {
-				ytReady = ytReady ?? loadYouTubePlayer(embedHost, config.youtube.videoId, (state) => {
-					if (state === 'playing') setState('playing', 'YouTube source');
-					else if (state === 'paused') setState('paused');
-					else if (state === 'error') setState('error', 'YouTube source unavailable.');
-					else if (state === 'loading') setState('loading');
-				});
-				yt = await ytReady;
-				yt.setVolume(Number(volume.value));
-				yt.playVideo();
-			} else if (config.provider === 'spotify') {
-				if (!spotifyFrame) {
-					spotifyFrame = mountSpotify(embedHost, config.spotify.id, config.spotify.type);
-				}
-				// The embed autoplays once mounted — which is this gesture.
-				setState('playing', 'Spotify source');
+			await ensureAudio().play();
+			setState('playing', config.file.title || 'Playing');
+		} catch (error) {
+			// Precise blocked detection: the DOM spec names the refusal.
+			if (error instanceof DOMException && error.name === 'NotAllowedError') {
+				setState('blocked');
+			} else {
+				setState('error', 'Playback failed.');
+			}
+		}
+	};
+
+	/* --- 'youtube' surface: IFrame API, hidden iframe ----------------------- */
+
+	const attemptYouTube = async (gesture: boolean) => {
+		setState('loading');
+		try {
+			ytReady = ytReady ?? loadYouTubePlayer(embedHost, config.youtube.videoId, (state) => {
+				if (state === 'playing') setState('playing', 'YouTube source');
+				else if (state === 'paused') setState('paused');
+				else if (state === 'error') setState('error', 'YouTube source unavailable.');
+				else if (state === 'loading') setState('loading');
+			});
+			yt = await ytReady;
+			applyAudio(); // stored volume + mute onto the fresh player
+			yt.playVideo();
+			if (!gesture) {
+				// The IFrame API fires no "autoplay refused" event. Probe once
+				// after the attempt has had time to settle: anything other
+				// than playing/buffering means the browser said no. Stands
+				// down if the visitor clicked in the meantime.
+				window.setTimeout(() => {
+					if (userActed || !yt) return;
+					const state = yt.getPlayerState?.() ?? 1;
+					if (state !== 1 && state !== 3) setState('blocked');
+				}, 1500);
 			}
 		} catch {
-			setState('error', 'Playback was blocked or failed.');
+			setState('error', 'YouTube source unavailable.');
 		}
+	};
+
+	/* --- 'spotify' surface: the embed IS the control ------------------------ */
+
+	const attemptSpotify = () => {
+		if (!spotifyFrame) {
+			spotifyFrame = mountSpotify(embedHost, config.spotify.id, config.spotify.type);
+		}
+		// No events exist to wait for. 'playing' here means "the embed is
+		// mounted and it is Spotify's turn": if the browser blocked the
+		// embed's autoplay, Spotify's own play button inside the (visible)
+		// embed is the affordance — we cannot detect that from outside and
+		// do not pretend to.
+		setState('playing', 'Spotify embed');
+	};
+
+	/* --- unified attempt / pause -------------------------------------------- */
+
+	const attempt = (gesture: boolean): void => {
+		if (config.provider === 'file') void attemptFile();
+		else if (config.provider === 'youtube') void attemptYouTube(gesture);
+		else if (config.provider === 'spotify') attemptSpotify();
 	};
 
 	const pause = () => {
@@ -136,23 +236,24 @@ export function initMusicPlayer(): void {
 	};
 
 	playButton.addEventListener('click', () => {
-		if (root.dataset.state === 'playing') pause();
-		else void play();
+		userActed = true;
+		const state = root.dataset.state;
+		if (state === 'playing' || state === 'loading') pause();
+		else attempt(true);
 	});
 
+	// The pill's mute button writes to the store; the subscription
+	// (applyAudio) echoes it onto the button and the transport. One loop, one
+	// source of truth — the Settings overlay's mute row moves in lockstep.
 	muteButton.addEventListener('click', () => {
-		const muted = muteButton.getAttribute('aria-pressed') === 'true';
-		muteButton.setAttribute('aria-pressed', String(!muted));
-		if (config.provider === 'file' && audio) audio.muted = !muted;
-		else if (config.provider === 'youtube' && yt) (!muted ? yt.mute : yt.unMute)();
+		setSetting('muted', muteButton.getAttribute('aria-pressed') !== 'true');
 	});
 
-	volume.addEventListener('input', () => {
-		if (config.provider === 'file' && audio) audio.volume = Number(volume.value) / 100;
-		else if (config.provider === 'youtube' && yt) yt.setVolume(Number(volume.value));
-	});
-
+	/* --- autoplay attempt on load ------------------------------------------- */
+	// Refusals are not worked around: they land in the 'blocked' affordance
+	// (file/youtube) or inside Spotify's own embed UI.
 	setState('idle');
+	attempt(false);
 }
 
 function defaultStatus(state: MusicState): string {
@@ -163,6 +264,8 @@ function defaultStatus(state: MusicState): string {
 			return 'Playing';
 		case 'paused':
 			return 'Paused';
+		case 'blocked':
+			return 'Tap to play';
 		case 'error':
 			return 'Playback error';
 		case 'disabled':
@@ -216,17 +319,22 @@ function loadYouTubePlayer(
 	});
 }
 
+/**
+ * Mount the Spotify embed — visibly: with no transport API, the embed's own
+ * UI is the only honest control surface (and its internal play button is the
+ * autoplay-blocked affordance). The component's CSS positions it above the
+ * pill; the host is empty again once pause() unmounts it.
+ */
 function mountSpotify(host: HTMLElement, id: string, type: 'track' | 'album' | 'playlist'): HTMLIFrameElement {
 	const frame = document.createElement('iframe');
 	frame.title = 'Spotify player';
-	frame.loading = 'lazy';
 	frame.allow = 'encrypted-media; autoplay; clipboard-write; fullscreen';
 	frame.src = `https://open.spotify.com/embed/${type}/${id}?utm_source=generator&theme=0`;
-	frame.style.width = '1px';
+	frame.style.width = '100%';
 	frame.style.height = '80px';
-	frame.style.position = 'absolute';
-	frame.style.opacity = '0';
-	frame.style.pointerEvents = 'none';
+	frame.style.border = '0';
+	frame.style.borderRadius = 'var(--radius-md, 12px)';
+	frame.style.display = 'block';
 	host.appendChild(frame);
 	return frame;
 }

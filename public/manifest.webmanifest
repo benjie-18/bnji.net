@@ -1,7 +1,7 @@
 {
 	"name": "BNJI.NET — Lorem Ipsum Dolor",
 	"short_name": "BNJI",
-	"description": "A digital hub: lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor."
+	"description": "A digital hub: lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.",
 	"start_url": "/",
 	"scope": "/",
 	"display": "minimal-ui",

@@ -19,7 +19,9 @@ export type IconName =
 	| 'spark'
 	| 'terminal'
 	| 'server'
-	| 'compass';
+	| 'compass'
+	| 'globe'
+	| 'rss';
 
 interface Props {
 	name: IconName;
@@ -41,6 +43,9 @@ const STROKE_PATHS: Partial<Record<IconName, string>> = {
 	server:
 		'M4 5.5h16v5H4zM4 13.5h16v5H4zM7.5 8h.01M7.5 16h.01M11 8h5M11 16h5',
 	compass: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Zm3.8 4.7-2 5.6-5.6 2 2-5.6Z',
+	globe:
+		'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Zm0 0c2.3 2.5 3.5 5.4 3.5 8.5s-1.2 6-3.5 8.5c-2.3-2.5-3.5-5.4-3.5-8.5s1.2-6 3.5-8.5ZM3.9 9.5h16.2M3.9 14.5h16.2',
+	rss: 'M4.5 11.5a8 8 0 0 1 8 8M4.5 4.5a15 15 0 0 1 15 15M5 18.1a0.9 0.9 0 1 0 0 1.8 0.9 0.9 0 0 0 0-1.8Z',
 };
 
 /** Filled brand icons: 16x16 viewBox. */

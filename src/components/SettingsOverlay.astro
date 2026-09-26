@@ -1,0 +1,191 @@
+---
+/**
+ * SettingsOverlay — the site's single settings surface, opened by the header
+ * gear (Header.astro, [data-settings-open]).
+ *
+ * It is a VIEW, not an owner: every control here is bound two-way to the
+ * central settings store (scripts/settings.ts) by scripts/settings-overlay.ts.
+ * Nothing in this file keeps local state; remove the overlay and the store,
+ * persistence and pre-paint application all keep working.
+ *
+ * Contents (one field each in the store):
+ *   Appearance — theme (dark/light radios), UI scale, advanced glass effects;
+ *   Motion     — opening sequence (intro), reduced visual effects,
+ *                performance mode, cursor effects, star/particle density;
+ *   Audio      — mute, volume.
+ *
+ * Every control drives real behaviour (the store's header comment maps each
+ * field to its consumer). The hint text under each label says exactly what
+ * the setting does — no control pretends to do more than it does.
+ *
+ * Accessibility: role="dialog" + aria-modal, labelled by its title; the
+ * controller traps Tab inside while open, closes on Escape or backdrop click,
+ * and returns focus to the gear on close. Native inputs (radio/checkbox/
+ * range) carry the semantics — no custom widgets to re-implement a11y for.
+ *
+ * Mounted once per page by Layout.astro. Styles: styles/settings.css
+ * (imported below), glass via data-glass="raised" — token-driven, both
+ * themes, no hand-rolled backdrop-filter.
+ */
+import '../styles/settings.css';
+---
+
+<div class="settings-backdrop" data-settings-backdrop hidden></div>
+
+<section
+	class="settings-overlay"
+	id="settings-overlay"
+	data-glass="raised"
+	data-settings-overlay
+	role="dialog"
+	aria-modal="true"
+	aria-labelledby="settings-title"
+	tabindex="-1"
+	hidden
+>
+	<header class="settings-overlay__head">
+		<h2 class="settings-overlay__title" id="settings-title">Settings</h2>
+		<button class="settings-overlay__close" type="button" data-settings-close>
+			<span class="sr-only">Close settings</span>
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+			</svg>
+		</button>
+	</header>
+
+	<p class="settings-overlay__note mono">
+		Saved on this device only. Theme and the opening sequence apply immediately; the
+		other controls are stored and light up as their wiring lands.
+	</p>
+
+	<!-- Appearance -->
+	<fieldset class="settings-group">
+		<legend class="settings-group__title mono">Appearance</legend>
+
+		<div class="settings-row">
+			<span class="settings-row__label" id="settings-theme-label">Theme</span>
+			<div class="settings-segment" role="radiogroup" aria-labelledby="settings-theme-label">
+				<label class="settings-segment__option">
+					<input type="radio" name="settings-theme" value="dark" data-setting="theme" />
+					<span class="mono">Dark</span>
+				</label>
+				<label class="settings-segment__option">
+					<input type="radio" name="settings-theme" value="light" data-setting="theme" />
+					<span class="mono">Light</span>
+				</label>
+			</div>
+		</div>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-uiscale">
+				UI scale
+				<span class="settings-row__hint">scales the whole rem-based layout; applied before first paint</span>
+			</label>
+			<span class="settings-row__control">
+				<input
+					id="settings-uiscale"
+					type="range"
+					min="80"
+					max="130"
+					step="5"
+					data-setting="uiScale"
+				/>
+				<output class="mono" data-setting-output="uiScale">100%</output>
+			</span>
+		</div>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-glass">
+				Advanced glass effects
+				<span class="settings-row__hint">off: flat tinted surfaces — no blur, internal optics or pointer specular</span>
+			</label>
+			<input id="settings-glass" type="checkbox" class="settings-switch" data-setting="advancedGlass" />
+		</div>
+	</fieldset>
+
+	<!-- Motion & effects -->
+	<fieldset class="settings-group">
+		<legend class="settings-group__title mono">Motion &amp; effects</legend>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-intro">
+				Opening sequence
+				<span class="settings-row__hint">the homepage scroll intro; changes apply on the next page load</span>
+			</label>
+			<input id="settings-intro" type="checkbox" class="settings-switch" data-setting="introEnabled" />
+		</div>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-reduced">
+				Reduced visual effects
+				<span class="settings-row__hint">calms decorative motion: reveals, parallax, ambient drift, cursor halo; static sky</span>
+			</label>
+			<input id="settings-reduced" type="checkbox" class="settings-switch" data-setting="reducedEffects" />
+		</div>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-perf">
+				Performance mode
+				<span class="settings-row__hint">cheaper rendering: capped starfield (30fps, no meteors) and no aero environment layer</span>
+			</label>
+			<input id="settings-perf" type="checkbox" class="settings-switch" data-setting="performanceMode" />
+		</div>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-cursor">
+				Cursor effects
+				<span class="settings-row__hint">the cursor halo and the starfield's response to your pointer</span>
+			</label>
+			<input id="settings-cursor" type="checkbox" class="settings-switch" data-setting="cursorEffects" />
+		</div>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-density">
+				Star / particle density
+				<span class="settings-row__hint">star population, live — 0% is an empty sky</span>
+			</label>
+			<span class="settings-row__control">
+				<input
+					id="settings-density"
+					type="range"
+					min="0"
+					max="100"
+					step="10"
+					data-setting="starDensity"
+				/>
+				<output class="mono" data-setting-output="starDensity">100%</output>
+			</span>
+		</div>
+	</fieldset>
+
+	<!-- Audio -->
+	<fieldset class="settings-group">
+		<legend class="settings-group__title mono">Audio</legend>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-muted">
+				Mute audio
+				<span class="settings-row__hint">syncs with the player pill's mute button, both directions (not Spotify embeds)</span>
+			</label>
+			<input id="settings-muted" type="checkbox" class="settings-switch" data-setting="muted" />
+		</div>
+
+		<div class="settings-row">
+			<label class="settings-row__label" for="settings-volume">
+				Volume
+				<span class="settings-row__hint">the player's level for file/YouTube sources — the pill has no slider, this is it (Spotify embeds control their own audio)</span>
+			</label>
+			<span class="settings-row__control">
+				<input
+					id="settings-volume"
+					type="range"
+					min="0"
+					max="100"
+					step="5"
+					data-setting="volume"
+				/>
+				<output class="mono" data-setting-output="volume">60%</output>
+			</span>
+		</div>
+	</fieldset>
+</section>

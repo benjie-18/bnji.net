@@ -12,11 +12,28 @@
 
    The composer is anchored bottom-centre at ALL times (the brief's anchor),
    and the archive is a modal dialog above everything.
+
+   Mounting: the board lives on its own route (/board/) — this file is
+   imported only by components/MessageBoard.astro, so no other page pays
+   for it.
+
+   Mobile safety: sizes use dynamic/small viewport units (dvh/svh) and the
+   composer respects env(safe-area-inset-*). When the virtual keyboard opens,
+   scripts/board.ts measures the visual viewport and publishes the hidden
+   bottom height as --kb-inset on the board root; the field shrinks and the
+   composer (slider included) rides above the keyboard, so neither covers
+   the other. Without JS the dvh/svh + safe-area rules alone still keep the
+   composer usable.
    ========================================================================== */
 
 .board {
 	position: fixed;
 	inset: 0;
+	/* dvh tracks the dynamic viewport (Android keyboard resizes it); the
+	   --kb-inset term covers browsers where the layout viewport stays put
+	   while the keyboard eats the visual one (iOS Safari). Over-constrained
+	   on purpose: with height set, `bottom: 0` from inset is ignored. */
+	height: calc(100dvh - var(--kb-inset, 0px));
 	z-index: var(--z-board);
 	pointer-events: none;
 	overflow: hidden;
@@ -55,15 +72,19 @@
 	}
 }
 
+/* Content-sized: scripts/board.ts measures the wrapped text (and the image
+   block) with a hidden probe wearing these exact classes, then sets the li's
+   width/height — so the box FITS the message instead of a fixed diameter.
+   Padding is absolute (not %) because the box is no longer square. */
 .board-msg__grab {
 	display: grid;
 	place-items: center;
-	gap: 0.35rem;
+	gap: 0.4rem;
 	inline-size: 100%;
-	aspect-ratio: 1;
-	padding: 16%;
+	block-size: 100%;
+	padding: 0.85rem 1.15rem;
 	border: 1px solid transparent;
-	border-radius: 50%;
+	border-radius: 999px; /* pill: reads as a bubble at any aspect */
 	text-align: center;
 	font-family: var(--font-body);
 	font-size: 0.76rem;
@@ -94,14 +115,16 @@
 }
 
 .board-msg__img {
-	inline-size: 38%;
-	aspect-ratio: 1;
+	display: block;
+	inline-size: 72px;
+	block-size: 72px;
 	object-fit: cover;
 	border-radius: 50%;
 	border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
-/* Light: glossy aero bubble, hue-tinted. */
+/* Light: glossy aero bubble, hue-tinted. The pill radius on the base rule
+   keeps it bubble-like at every content size. */
 html[data-theme='light'] .board-msg__grab {
 	color: #0b3d52;
 	background:
@@ -120,7 +143,17 @@ html[data-theme='light'] .board-msg__grab {
 		inset 0 3px 8px -4px rgba(255, 255, 255, 0.9);
 }
 
-/* Dark: star orb with sparkle + glow. */
+/* Dark: an actual five-point star — clip-path carves the real silhouette out
+   of the hue-gradient body (it used to be a circle with a star-sounding class
+   name). Consequences handled here:
+     - clip-path clips box-shadow, so the outer glow moves to a drop-shadow
+       filter on the unclipped li, which follows the star's outline;
+     - star points eat the corners, so padding grows to keep text inside the
+       star's centre band;
+     - the border would be carved away mid-edge — dropped for the dark shape. */
+html[data-theme='dark'] .board-msg {
+	filter: drop-shadow(0 0 12px hsla(var(--hue), 90%, 70%, 0.5));
+}
 html[data-theme='dark'] .board-msg__grab {
 	color: #081018;
 	background: radial-gradient(
@@ -130,10 +163,22 @@ html[data-theme='dark'] .board-msg__grab {
 		hsla(var(--hue), 82%, 46%, 0.16) 72%,
 		transparent 78%
 	);
-	border-color: hsla(var(--hue), 90%, 80%, 0.35);
-	box-shadow:
-		0 0 26px -4px hsla(var(--hue), 90%, 70%, 0.45),
-		inset 0 0 18px -8px hsla(var(--hue), 95%, 88%, 0.8);
+	border-color: transparent;
+	box-shadow: none;
+	padding: 1.35rem 1.9rem;
+	clip-path: polygon(
+		50% 0%,
+		61% 35%,
+		98% 35%,
+		68% 57%,
+		79% 91%,
+		50% 70%,
+		21% 91%,
+		32% 57%,
+		2% 35%,
+		39% 35%
+	);
+	border-radius: 0;
 }
 
 /* Four-point sparkle behind dark orbs — the "star" read. */
@@ -178,15 +223,22 @@ html[data-theme='dark'] .board-msg::before {
 .board__composer {
 	position: fixed;
 	left: 50%;
-	bottom: var(--gutter);
+	/* Rides above the virtual keyboard: --kb-inset is the keyboard overlap
+	   published by scripts/board.ts (0 when no keyboard / no JS). */
+	bottom: calc(var(--gutter) + var(--kb-inset, 0px));
 	transform: translateX(-50%);
 	z-index: calc(var(--z-board) + 1);
 	pointer-events: auto;
 	display: grid;
 	gap: 0.4rem;
 	width: min(560px, 94vw);
-	padding: 0.55rem 0.6rem;
+	/* Safe-area padding keeps content clear of the home indicator; the panel
+	   itself may extend into the inset. */
+	padding: 0.55rem 0.6rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+	padding-left: calc(0.6rem + env(safe-area-inset-left, 0px));
+	padding-right: calc(0.6rem + env(safe-area-inset-right, 0px));
 	border-radius: var(--radius-lg);
+	transition: bottom var(--dur-fast) var(--ease-out);
 }
 
 .board__composer-row {
@@ -194,8 +246,25 @@ html[data-theme='dark'] .board-msg::before {
 	align-items: center;
 	gap: 0.5rem;
 }
-.board__composer-row--meta {
-	justify-content: space-between;
+/* The control strip (visible-count slider, list-view toggle, archive button)
+   is docked ABOVE the fixed composer as its own glass pill — out of the
+   composer's flow, so the two can never overlap, at any viewport size, with
+   any safe-area inset, keyboard open or closed (it rides the composer's
+   --kb-inset automatically because it is positioned against the composer).
+   Glass comes from data-glass="raised" in the markup; the compound selector
+   outranks the bare [data-glass] position rule. */
+.board__composer .board__composer-row--meta {
+	position: absolute;
+	bottom: calc(100% + 0.55rem);
+	left: 50%;
+	transform: translateX(-50%);
+	justify-content: center;
+	gap: 0.65rem;
+	white-space: nowrap;
+	max-width: 100%;
+	padding: 0.3rem 0.85rem;
+	border-radius: var(--radius-pill);
+	pointer-events: auto;
 }
 
 .board__input {
@@ -261,6 +330,55 @@ html[data-theme='dark'] .board-msg::before {
 	border-radius: 50%;
 	border: 1px solid var(--glass-border-strong);
 	flex: none;
+}
+
+/* n/250 counter. Deliberately not aria-live: it would narrate every
+   keystroke; screen readers get the state from the disabled Send button and
+   the status line announcements instead. */
+.board__counter {
+	flex: none;
+	align-self: flex-end;
+	padding-inline: 0.15rem 0.3rem;
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-dim);
+	white-space: nowrap;
+}
+.board__counter.is-over {
+	color: var(--signal-soon);
+	font-weight: 700;
+}
+
+.board__send:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* Same mono-chip language as the archive button. */
+.board__view-toggle {
+	padding: 0.3rem 0.7rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-quiet);
+	color: var(--text-muted);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.board__view-toggle:hover {
+	color: var(--text-strong);
+	background: var(--glass-bg);
+}
+.board__view-toggle:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+.board__view-toggle[aria-pressed='true'] {
+	color: var(--text-strong);
+	border-color: var(--glass-border-strong);
+	box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
 
 .board__send {
@@ -344,11 +462,88 @@ html[data-theme='dark'] .board-msg::before {
 	text-align: center;
 }
 
+/* --- List view (plain, accessible, non-physics) ------------------------------ */
+/* A static, scrollable <ol> of the same messages the sky shows, for reading
+   without drag or motion. Compound selector again outranks [data-glass]'s
+   position: relative. Sized in svh/dvh like the archive dialog and lifted by
+   --kb-inset so the keyboard never swallows it. */
+.board .board__listview {
+	position: fixed;
+	inset: 14svh auto auto 50%;
+	transform: translateX(-50%);
+	z-index: calc(var(--z-board) + 2);
+	pointer-events: auto;
+	display: grid;
+	gap: 0.6rem;
+	width: min(560px, 94vw);
+	max-height: min(66svh, calc(100dvh - 20svh - var(--kb-inset, 0px)));
+	overflow: auto;
+	overscroll-behavior: contain;
+	padding: 0.9rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
+	border-radius: var(--radius-xl);
+}
+
+.board__listview:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.board__listview-note {
+	margin: 0;
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-dim);
+	text-align: center;
+}
+
+.board__listview-items {
+	display: grid;
+	gap: 0.5rem;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.board-listview__item {
+	display: grid;
+	gap: 0.3rem;
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	background: var(--glass-bg-quiet);
+}
+
+.board-listview__item time {
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-dim);
+}
+
+.board-listview__item p {
+	margin: 0;
+	color: var(--text);
+	font-size: 0.92rem;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.board-listview__img {
+	inline-size: 96px;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--glass-border);
+}
+
 /* --- Archive dialog ---------------------------------------------------------- */
 
 .board__archive {
 	position: fixed;
-	inset: 8vh auto auto 50%;
+	/* svh: sized against the SMALL viewport so the dialog fits even with
+	   browser chrome (or a keyboard) at its largest. */
+	inset: 8svh auto auto 50%;
 	transform: translateX(-50%);
 	z-index: var(--z-modal);
 	pointer-events: auto;
@@ -356,8 +551,8 @@ html[data-theme='dark'] .board-msg::before {
 	grid-template-rows: auto 1fr;
 	gap: 0.7rem;
 	width: min(680px, 94vw);
-	max-height: 84vh;
-	padding: 1rem 1.1rem;
+	max-height: min(84svh, calc(100dvh - 10svh - var(--kb-inset, 0px)));
+	padding: 1rem 1.1rem calc(1rem + env(safe-area-inset-bottom, 0px));
 	border-radius: var(--radius-xl);
 }
 
@@ -438,9 +633,19 @@ html[data-theme='dark'] .board-msg::before {
 @media (max-width: 720px) {
 	.board__composer {
 		width: 96vw;
-		bottom: 10px;
+		bottom: calc(10px + var(--kb-inset, 0px));
 	}
 	.board__slider-label input {
 		inline-size: 80px;
+	}
+
+	/* Three controls don't fit one line at 375px: the strip wraps into a
+	   two-row glass chip, still docked above the composer. */
+	.board__composer .board__composer-row--meta {
+		width: max-content;
+		max-width: 96vw;
+		flex-wrap: wrap;
+		justify-content: center;
+		border-radius: var(--radius-lg);
 	}
 }

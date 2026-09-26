@@ -15,15 +15,21 @@
  *   [data-glass]        liquid-glass surface (writes --mouse-x / --mouse-y)
  *   [data-magnetic]     small pointer attraction wrapper
  *   [data-nav-toggle] / [data-nav-panel]  mobile navigation disclosure
+ *   [data-nav-group] / [data-nav-dropdown-trigger] / [data-nav-dropdown]
+ *                               header dropdown groups (touch included —
+ *                               the nav disclosures are the pointer-only
+ *                               rule's deliberate exception)
  */
 
 import { clamp, createFrameScheduler, hasFinePointer, prefersReducedMotion } from './environment';
+import { getSettings, subscribeSettings } from './settings';
 
 /** Guards, so importing this module twice can never double-bind listeners. */
 let cursorGlowStarted = false;
 let glassTrackingStarted = false;
 let magneticStarted = false;
 let navToggleStarted = false;
+let navDropdownsStarted = false;
 
 /* -------------------------------------------------------------------------- */
 /* Cursor glow                                                                */
@@ -47,6 +53,14 @@ export function initCursorGlow(): void {
 		glow.hidden = true;
 		return;
 	}
+
+	// Settings-store gate: the halo is a cursor effect, so cursorEffects=off
+	// or reducedEffects=on keeps it hidden. Listeners stay attached and the
+	// flag is checked per event, so toggling in the Settings overlay works
+	// live in both directions without re-initialising anything. (CSS mirrors
+	// this pre-paint: CursorGlow.astro hides the element on the same flags.)
+	let cursorOn = getSettings().cursorEffects && !getSettings().reducedEffects;
+	glow.hidden = !cursorOn;
 
 	let targetX = 0;
 	let targetY = 0;
@@ -89,11 +103,23 @@ export function initCursorGlow(): void {
 		if (!frame) frame = requestAnimationFrame(settle);
 	};
 
+	subscribeSettings((settings) => {
+		const next = settings.cursorEffects && !settings.reducedEffects;
+		if (next === cursorOn) return;
+		cursorOn = next;
+		glow.hidden = !next;
+		if (!next) {
+			// Fade the halo out where it stands instead of freezing it mid-air.
+			visible = false;
+			kick();
+		}
+	});
+
 	window.addEventListener(
 		'pointermove',
 		(event) => {
 			// Ignore pen/touch so a stylus tap does not spawn a cursor halo.
-			if (event.pointerType !== 'mouse') return;
+			if (event.pointerType !== 'mouse' || !cursorOn) return;
 			targetX = event.clientX;
 			targetY = event.clientY;
 			if (!visible) {
@@ -150,6 +176,15 @@ export function initGlassTracking(): void {
 	glassTrackingStarted = true;
 	if (!hasFinePointer()) return;
 
+	// The tracked specular lives in [data-glass]::after, which glass.css
+	// removes entirely when advancedGlass is off — writing --mouse-x/--mouse-y
+	// then would be work for nothing. Flag-checked per event, so the overlay
+	// toggle applies live.
+	let trackingOn = getSettings().advancedGlass;
+	subscribeSettings((settings) => {
+		trackingOn = settings.advancedGlass;
+	});
+
 	let pending: HTMLElement | null = null;
 	let pendingX = 0;
 	let pendingY = 0;
@@ -164,6 +199,7 @@ export function initGlassTracking(): void {
 	document.addEventListener(
 		'pointermove',
 		(event) => {
+			if (!trackingOn) return;
 			const target = event.target as Element | null;
 			const surface = target?.closest?.('[data-glass]') as HTMLElement | null;
 			if (!surface) return;
@@ -316,4 +352,223 @@ export function initNavToggle(): void {
 		// Safari < 14 fallback.
 		desktop.addListener(onBreakpointChange);
 	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Header dropdown groups                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Disclosure dropdowns for the header pill (Projects ▾, Me ▾).
+ *
+ * Pattern: a real <button> trigger with aria-expanded/aria-controls plus a
+ * glass panel of links — the APG disclosure-navigation pattern, extended with
+ * the keyboard affordances the brief asks for:
+ *
+ *   - ArrowDown/ArrowUp move through the panel's links (from the trigger:
+ *     open first, focus first/last); Home/End jump;
+ *   - Escape closes and returns focus to the trigger — stopPropagation keeps
+ *     the mobile sheet's own document-level Escape handler from also closing
+ *     the sheet underneath;
+ *   - Tab is trapped: while a group is open, focus cycles trigger → links →
+ *     trigger and never leaks to the page behind;
+ *   - focusout that leaves the group closes it (blur dismissal);
+ *   - pointerdown anywhere outside closes every group (tap-outside, and the
+ *     same listener serves mouse clicks — no separate click handler);
+ *   - the trigger click toggles, which covers touch taps, mouse clicks and
+ *     keyboard Enter/Space on the <button> in one code path;
+ *   - edge-aware placement: on every open (desktop only — inside the mobile
+ *     sheet panels are position:static and cannot overflow) the panel is
+ *     measured against the right viewport edge and flips to right-aligned
+ *     when it would render off-screen; a resize re-places any open panel;
+ *   - breakpoint changes close everything, mirroring initNavToggle.
+ *
+ * Progressive enhancement: without JS the panel never gets .is-open, and a
+ * no-JS stylesheet in Header.astro lays the links out inline instead.
+ */
+export function initNavDropdowns(): void {
+	if (navDropdownsStarted) return;
+	navDropdownsStarted = true;
+
+	const roots = Array.from(document.querySelectorAll<HTMLElement>('[data-nav-group]'));
+	if (roots.length === 0) return;
+
+	type DropdownGroup = {
+		root: HTMLElement;
+		trigger: HTMLButtonElement;
+		panel: HTMLElement;
+		links: HTMLElement[];
+	};
+
+	const groups: DropdownGroup[] = [];
+	for (const root of roots) {
+		const trigger = root.querySelector<HTMLButtonElement>('[data-nav-dropdown-trigger]');
+		const panel = root.querySelector<HTMLElement>('[data-nav-dropdown]');
+		if (!trigger || !panel) continue;
+		groups.push({
+			root,
+			trigger,
+			panel,
+			links: Array.from(panel.querySelectorAll<HTMLElement>('a[href]')),
+		});
+	}
+	if (groups.length === 0) return;
+
+	const desktop = matchMedia('(min-width: 900px)');
+	const isOpen = (group: DropdownGroup) => group.root.classList.contains('is-open');
+
+	const closeGroup = (group: DropdownGroup, restoreFocus = false) => {
+		if (!isOpen(group)) return;
+		group.root.classList.remove('is-open');
+		group.trigger.setAttribute('aria-expanded', 'false');
+		if (restoreFocus) group.trigger.focus();
+	};
+
+	const closeAll = (except?: DropdownGroup) => {
+		for (const group of groups) {
+			if (group !== except) closeGroup(group);
+		}
+	};
+
+	/** Right-edge check. visibility:hidden panels still have layout, so the
+	 *  measurement works before the panel becomes visible. */
+	const place = (group: DropdownGroup) => {
+		group.panel.classList.remove('nav-dropdown--flip');
+		if (!desktop.matches) return; // static accordion inside the sheet
+		const EDGE_MARGIN = 8;
+		const triggerRect = group.trigger.getBoundingClientRect();
+		const panelWidth = group.panel.offsetWidth || 208; // 13rem fallback
+		if (triggerRect.left + panelWidth > window.innerWidth - EDGE_MARGIN) {
+			group.panel.classList.add('nav-dropdown--flip');
+		}
+	};
+
+	const openGroup = (group: DropdownGroup) => {
+		closeAll(group);
+		place(group);
+		group.root.classList.add('is-open');
+		group.trigger.setAttribute('aria-expanded', 'true');
+	};
+
+	for (const group of groups) {
+		// One toggle path for mouse click, touch tap and button activation.
+		group.trigger.addEventListener('click', () => {
+			if (isOpen(group)) closeGroup(group);
+			else openGroup(group);
+		});
+
+		group.root.addEventListener('keydown', (event) => {
+			const focusables = [group.trigger, ...group.links];
+			const active = document.activeElement as HTMLElement | null;
+			const index = active ? focusables.indexOf(active) : -1;
+
+			if (event.key === 'Escape') {
+				if (!isOpen(group)) return;
+				// Keep the mobile sheet open: its Escape handler sits on
+				// document, and this bubble-phase stop runs first.
+				event.stopPropagation();
+				closeGroup(group, true);
+				return;
+			}
+
+			if (!isOpen(group)) {
+				// Closed: arrows open (focus first/last link); Enter/Space are
+				// native button activation and arrive as click.
+				if (event.key === 'ArrowDown' && active === group.trigger) {
+					event.preventDefault();
+					openGroup(group);
+					group.links[0]?.focus();
+				} else if (event.key === 'ArrowUp' && active === group.trigger) {
+					event.preventDefault();
+					openGroup(group);
+					group.links[group.links.length - 1]?.focus();
+				}
+				return;
+			}
+
+			switch (event.key) {
+				case 'ArrowDown': {
+					event.preventDefault();
+					const next = index < 0 ? 0 : (index + 1) % focusables.length;
+					focusables[next]?.focus();
+					break;
+				}
+				case 'ArrowUp': {
+					event.preventDefault();
+					const prev = index <= 0 ? focusables.length - 1 : index - 1;
+					focusables[prev]?.focus();
+					break;
+				}
+				case 'Home': {
+					event.preventDefault();
+					group.links[0]?.focus();
+					break;
+				}
+				case 'End': {
+					event.preventDefault();
+					group.links[group.links.length - 1]?.focus();
+					break;
+				}
+				case 'Tab': {
+					// Focus trap: cycle within trigger + links while open.
+					const last = focusables.length - 1;
+					if (index < 0) {
+						// Focus is somewhere inside the panel but not on an item
+						// (e.g. the panel container): pull it into the cycle.
+						event.preventDefault();
+						focusables[event.shiftKey ? last : 0]?.focus();
+					} else if (!event.shiftKey && index === last) {
+						event.preventDefault();
+						focusables[0]?.focus();
+					} else if (event.shiftKey && index === 0) {
+						event.preventDefault();
+						focusables[last]?.focus();
+					}
+					break;
+				}
+				default:
+					break;
+			}
+		});
+
+		// Blur dismissal: focus left the group entirely.
+		group.root.addEventListener('focusout', (event) => {
+			const next = (event as FocusEvent).relatedTarget as Node | null;
+			if (next && group.root.contains(next)) return;
+			closeGroup(group);
+		});
+
+		// Navigating away closes the panel so a back-navigation never lands on
+		// a stale open dropdown (same rule as the mobile sheet).
+		group.panel.addEventListener('click', (event) => {
+			if ((event.target as Element | null)?.closest('a')) closeGroup(group);
+		});
+	}
+
+	// Tap/click outside every group closes them all.
+	document.addEventListener(
+		'pointerdown',
+		(event) => {
+			const target = event.target as Element | null;
+			if (target?.closest('[data-nav-group]')) return;
+			closeAll();
+		},
+		{ passive: true },
+	);
+
+	// Leaving phone widths with a panel open would leave stale state behind.
+	const onBreakpointChange = () => closeAll();
+	if (typeof desktop.addEventListener === 'function') {
+		desktop.addEventListener('change', onBreakpointChange);
+	} else {
+		// Safari < 14 fallback.
+		desktop.addListener(onBreakpointChange);
+	}
+
+	// Re-check the edge flip while a panel is open (rotation, window resize).
+	window.addEventListener('resize', () => {
+		for (const group of groups) {
+			if (isOpen(group)) place(group);
+		}
+	});
 }

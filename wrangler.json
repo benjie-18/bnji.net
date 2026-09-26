@@ -7,6 +7,20 @@
 		"directory": "./dist",
 		"binding": "ASSETS"
 	},
+	"d1_databases": [
+		{
+			"binding": "BOARD_DB",
+			"database_name": "bnji-board",
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "migrations"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "BOARD_KV",
+			"id": "00000000000000000000000000000000"
+		}
+	],
 	"observability": {
 		"enabled": true
 	},

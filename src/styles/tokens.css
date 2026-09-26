@@ -101,18 +101,63 @@
 	--mouse-x: 50%;
 	--mouse-y: 0%;
 
-	/* --- Frutiger Aero (light theme) environment -------------------------- */
-	/* Consumed only under [data-theme='light'] via aero.css, but declared here
-	   so both themes' environment values live in one audited place. */
-	--aero-sky-top: #7ec9f2;
-	--aero-sky-mid: #bfe6f7;
-	--aero-sky-bottom: #eafbff;
-	--aero-sun: rgba(255, 255, 240, 0.85);
-	--aero-cloud: rgba(255, 255, 255, 0.75);
-	--aero-bubble: rgba(255, 255, 255, 0.55);
-	--aero-bubble-rim: rgba(255, 255, 255, 0.9);
-	--aero-bokeh: rgba(120, 226, 255, 0.35);
-	--aero-green: rgba(96, 226, 160, 0.4);
+	/* --- Frutiger Aero (light theme) painted scene ------------------------- */
+	/* Consumed only under [data-theme='light'] via aero.css + AeroSky.astro,
+	   but declared here so every environment value lives in one audited place.
+	   This block is deliberately larger than a typical token group: it is a
+	   purpose-built illustration palette (sky, meadow, bloom, clouds, orbs,
+	   bokeh), not general UI colour. */
+	/* Sky: four stops — deep blue overhead to near-white at the horizon. */
+	--aero-sky-1: #2f84c9;
+	--aero-sky-2: #6fc3e8;
+	--aero-sky-3: #cdf1ff;
+	--aero-sky-4: #eafcff;
+	/* Meadow band anchoring the bottom of the viewport, plus the soft
+	   highlight line along its top edge (sky light reflecting off the grass). */
+	--aero-meadow-1: #8fe0b0;
+	--aero-meadow-2: #4fae78;
+	--aero-meadow-edge: rgba(234, 252, 255, 0.7); /* --aero-sky-4, softened */
+	/* Sunlight bloom: warm white radial. Sits upper-LEFT so the lighting
+	   agrees with the orbs' specular highlights (also upper-left). */
+	--aero-bloom: rgba(255, 254, 242, 0.35);
+	/* Floating glossy orbs — primary (aqua) and secondary (green). Each paints
+	   base → mid → edge in one radial gradient for volume. */
+	--aero-orb-1-base: #eafeff;
+	--aero-orb-1-mid: #8fdcef;
+	--aero-orb-1-edge: #3fa9c9;
+	--aero-orb-2-base: #f4fff0;
+	--aero-orb-2-mid: #a8e6b0;
+	--aero-orb-2-edge: #4fae78;
+	/* Orb optics: the specular highlight ellipse (upper-left) and the thin
+	   rim-light arc (lower-right) — the pair that reads as painted glass. */
+	--aero-orb-specular: rgba(255, 255, 255, 0.95);
+	--aero-orb-rim: rgba(255, 255, 255, 0.85);
+	/* Orb cast shadows, derived from each orb's edge colour at 40%. */
+	--aero-orb-1-shadow: rgba(63, 169, 201, 0.4);
+	--aero-orb-2-shadow: rgba(79, 174, 120, 0.4);
+	/* Cloud tones: white at three densities for the lit puffs, plus a cool
+	   shadow tone that sits underneath them to give clusters volume. */
+	--aero-cloud-bright: rgba(255, 255, 255, 0.8);
+	--aero-cloud-mid: rgba(255, 255, 255, 0.65);
+	--aero-cloud-soft: rgba(255, 255, 255, 0.55);
+	--aero-cloud-shadow: #c9e9f5;
+	/* Bokeh: white at low opacity, three densities, varying radii. */
+	--aero-bokeh-soft: rgba(255, 255, 255, 0.25);
+	--aero-bokeh-mid: rgba(255, 255, 255, 0.4);
+	--aero-bokeh-bright: rgba(255, 255, 255, 0.55);
+	/* Footer wordmark atmosphere in the light theme: --text-strong (#062b3a)
+	   faded, mirroring the dark theme's white fade in Footer.astro. */
+	--aero-wordmark-top: rgba(6, 43, 58, 0.46);
+	--aero-wordmark-bottom: rgba(6, 43, 58, 0.1);
+
+	/* --- Nav surfaces ------------------------------------------------------ */
+	/* Hover/active washes for nav links + triggers, and the near-solid
+	   background of the mobile sheet. Dark values are the historical literals
+	   (rendering is unchanged); the light theme overrides all three so nav
+	   states stay visible against the painted sky. */
+	--nav-hover: rgba(255, 255, 255, 0.05);
+	--nav-active: rgba(255, 255, 255, 0.085);
+	--nav-sheet-bg: rgba(6, 8, 14, 0.94);
 
 	/* --- Radii ------------------------------------------------------------ */
 	--radius-xs: 8px;
@@ -269,6 +314,13 @@
 		0 26px 64px -24px rgba(21, 110, 160, 0.42), 0 4px 16px rgba(30, 130, 180, 0.2),
 		inset 0 -12px 28px -18px rgba(0, 146, 200, 0.4);
 	--glass-glow: 0 0 40px -14px rgba(0, 190, 235, 0.55);
+
+	/* Nav surfaces on the painted sky: --accent (#0092c8) washes for
+	   hover/active, and a near-solid sky-tinted sheet (--aero-sky-4 at the
+	   dark sheet's 94% opacity) instead of the dark panel. */
+	--nav-hover: rgba(0, 146, 200, 0.08);
+	--nav-active: rgba(0, 146, 200, 0.15);
+	--nav-sheet-bg: rgba(234, 252, 255, 0.94);
 }
 
 /* Phones get less blur. backdrop-filter is the most expensive effect on the

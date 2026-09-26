@@ -15,8 +15,8 @@
 import AeroSky from '../components/AeroSky.astro';
 import BaseHead from '../components/BaseHead.astro';
 import CursorGlow from '../components/CursorGlow.astro';
-import MessageBoard from '../components/MessageBoard.astro';
 import MusicPlayer from '../components/MusicPlayer.astro';
+import SettingsOverlay from '../components/SettingsOverlay.astro';
 import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
 import Starfield from '../components/Starfield.astro';
@@ -66,8 +66,8 @@ const { title, description, image, type, publishedTime, modifiedTime, noindex } 
 
 		<Footer />
 
-		<MessageBoard />
 		<MusicPlayer />
+		<SettingsOverlay />
 
 		<script>
 			import { boot } from '../scripts/boot';

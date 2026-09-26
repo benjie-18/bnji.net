@@ -1,132 +1,367 @@
 /* ==========================================================================
-   BNJI.NET — environment layers (Frutiger Aero light sky + dark nebula)
+   BNJI.NET — environment layers (Frutiger Aero painted scene + dark nebula)
    --------------------------------------------------------------------------
    The site's atmosphere, per theme:
 
-   LIGHT (Frutiger Aero): a sky field instead of a void. Sun bloom, drifting
-   cloud masses, floating soap bubbles with specular rims, bokeh sparkle and a
-   water-like gloss along the bottom of the viewport. Everything is gradients
-   + transform-only animation: no filters on large layers, no layout work.
+   LIGHT (Frutiger Aero): a PAINTED SCENE, not a flat wash — a four-stop sky
+   gradient (html/body), a warm sunlight bloom upper-left, three volumetric
+   cloud clusters built from overlapping soft-edged puffs (cool shadow tone
+   below, whites above), scattered bokeh circles, a meadow band anchoring the
+   bottom of the viewport with a soft highlight line at its top edge, and two
+   glossy floating orbs (aqua primary, green secondary). Each orb paints a
+   base radial gradient for volume, a specular highlight ellipse offset
+   upper-left and a thin rim-light arc along the lower-right edge — the
+   highlight + rim pair is what makes them read as painted glass rather than
+   flat circles. Markup: src/components/AeroSky.astro; every colour is a
+   --aero-* token from tokens.css.
 
    DARK (space, expanded): the existing aurora plus a pink/violet/magenta
    nebula band (token-driven from tokens.css) so the night sky gained colour
    without losing its restraint.
 
-   All motion here is disabled under prefers-reduced-motion; bubbles then rest
-   as static highlights and clouds stop drifting.
+   Cost model: gradients + transform-only animation on the compositor; no
+   filters on large layers, no layout work, zero JavaScript.
+
+   Gating (see the bottom of this file): the whole layer is display:none in
+   the dark theme; performance mode drops it entirely; the settings store's
+   reduced-effects flag simplifies the scene to sky gradient + meadow band
+   (no clouds, orbs, bokeh or bloom); prefers-reduced-motion keeps the scene
+   painted but freezes every animation, matching the repo's freeze-not-hide
+   convention for OS-level motion preference.
    ========================================================================== */
 
 /* --- Light sky field ------------------------------------------------------ */
 
-[data-theme='light'] html,
 html[data-theme='light'] {
 	background: linear-gradient(
 		180deg,
-		var(--aero-sky-top),
-		var(--aero-sky-mid) 46%,
-		var(--aero-sky-bottom) 100%
+		var(--aero-sky-1),
+		var(--aero-sky-2) 38%,
+		var(--aero-sky-3) 72%,
+		var(--aero-sky-4) 100%
 	);
 }
 
 html[data-theme='light'] body {
 	background: linear-gradient(
 		180deg,
-		var(--aero-sky-top),
-		var(--aero-sky-mid) 46%,
-		var(--aero-sky-bottom) 100%
+		var(--aero-sky-1),
+		var(--aero-sky-2) 38%,
+		var(--aero-sky-3) 72%,
+		var(--aero-sky-4) 100%
 	);
 	background-attachment: fixed;
 }
 
-/* The aero sky layer: sun bloom + cloud masses + bokeh. One fixed layer, four
-   soft radial gradients — the "environmental imagery" of the Aero language
-   without shipping a single photograph. */
+/* The scene layer itself: fixed, pointer-transparent, viewport-sized. The sky
+   gradient lives on html/body (so it survives this layer being dropped by
+   performance mode); everything below is the layer's furniture. DOM order =
+   depth order: bloom (farthest) → bokeh → clouds → meadow → orbs (nearest). */
 .aero-sky {
 	position: fixed;
-	inset: -14vmax;
+	inset: 0;
 	z-index: var(--z-aero);
 	pointer-events: none;
 	display: none;
-	background:
-		/* sun bloom, upper right */
-		radial-gradient(38% 30% at 82% 6%, var(--aero-sun), transparent 70%),
-		/* cloud mass, left */
-		radial-gradient(46% 26% at 12% 22%, var(--aero-cloud), transparent 72%),
-		/* cloud mass, right low */
-		radial-gradient(52% 24% at 88% 62%, var(--aero-cloud), transparent 74%),
-		/* bokeh sparkle */
-		radial-gradient(9% 9% at 30% 68%, var(--aero-bokeh), transparent 70%),
-		radial-gradient(7% 7% at 64% 34%, var(--aero-bokeh), transparent 70%),
-		radial-gradient(5% 5% at 48% 82%, var(--aero-green), transparent 70%),
-		/* water-like gloss along the bottom */
-		linear-gradient(to top, rgba(255, 255, 255, 0.5), transparent 22%);
-	will-change: transform;
-	animation: aero-drift var(--dur-drift) var(--ease-soft) infinite alternate;
 }
 
 html[data-theme='light'] .aero-sky {
 	display: block;
 }
 
-/* Clouds drift by transforming the whole layer a few percent — compositor
-   only, no repaint of the gradients. */
-@keyframes aero-drift {
+/* --- Sunlight bloom -------------------------------------------------------- */
+/* One warm radial, upper-left — the light source the orbs' speculars and the
+   cloud highlights agree with. Static: a breathing sun is motion nobody asked
+   for, and the scene already has drift from the clouds. */
+.aero-bloom {
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(46% 38% at 16% 6%, var(--aero-bloom), transparent 72%);
+}
+
+/* --- Volumetric cloud clusters --------------------------------------------- */
+/* Each cluster is nine overlapping soft-edged puffs: three shadow puffs
+   (cool tone, sitting lower — the cluster's underside), four white body puffs
+   and two brighter highlight puffs on top. Soft edges come from each puff's
+   radial-gradient falloff (never filter: blur on layers this large). The
+   cluster drifts as ONE composited transform; puff geometry is percentage-
+   based, so the inline `scale` per cluster resizes the whole formation. */
+.aero-clouds {
+	position: absolute;
+	inset: 0;
+}
+
+.aero-cloud {
+	position: absolute;
+	inline-size: clamp(280px, 34vw, 560px);
+	block-size: clamp(96px, 12vw, 200px);
+	will-change: transform;
+	animation: aero-cloud-drift linear infinite alternate;
+}
+
+/* Alternate geometry: nudge several puffs so clusters 2 and 3 do not read as
+   clones of cluster 1 (they also differ in scale, position and drift speed). */
+.aero-cloud--alt .aero-puff--4 {
+	left: 8%;
+	top: 32%;
+}
+.aero-cloud--alt .aero-puff--5 {
+	left: 34%;
+	top: 10%;
+}
+.aero-cloud--alt .aero-puff--7 {
+	left: 62%;
+	top: 30%;
+}
+.aero-cloud--alt .aero-puff--8 {
+	left: 44%;
+	top: 14%;
+}
+
+/* Clouds drift by transforming the cluster a few percent — compositor only,
+   never a repaint of the gradients. Slow, alternating, felt not seen. */
+@keyframes aero-cloud-drift {
 	from {
-		transform: translate3d(-1.5%, -0.8%, 0) scale(1.02);
+		transform: translate3d(-2.5%, 0, 0);
 	}
 	to {
-		transform: translate3d(1.5%, 0.8%, 0) scale(1.05);
+		transform: translate3d(2.5%, 1.5%, 0);
 	}
 }
 
-/* --- Soap bubbles ---------------------------------------------------------- */
-/* Individual bubbles are rendered by AeroSky.astro as spans with inline size/
-   position/duration. The look: transparent sphere with a hot specular dot at
-   the upper left, a thin bright rim and a refracted colour band at the bottom
-   — the canonical Aero bubble. */
-.aero-bubble {
+.aero-puff {
 	position: absolute;
 	border-radius: 50%;
-	background:
-		radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 26%),
-		radial-gradient(circle at 68% 76%, var(--aero-bokeh), rgba(255, 255, 255, 0) 42%),
-		radial-gradient(
-			circle at 50% 50%,
-			rgba(255, 255, 255, 0.06) 58%,
-			var(--aero-bubble) 78%,
-			var(--aero-bubble-rim) 96%,
-			rgba(255, 255, 255, 0.4) 100%
-		);
-	box-shadow:
-		inset 0 -6px 14px -8px rgba(0, 146, 200, 0.5),
-		inset 0 4px 10px -6px rgba(255, 255, 255, 0.9),
-		0 6px 18px -10px rgba(30, 130, 180, 0.35);
-	opacity: 0;
-	animation: aero-bubble-rise linear infinite;
-	will-change: transform, opacity;
 }
 
-@keyframes aero-bubble-rise {
-	0% {
-		transform: translate3d(0, 12vh, 0) scale(0.86);
-		opacity: 0;
+/* Shadow puffs: the cool underside, drawn first (DOM order) and sitting lower
+   in the cluster box so they peek out beneath the whites. */
+.aero-puff--1,
+.aero-puff--2,
+.aero-puff--3 {
+	background: radial-gradient(
+		ellipse at 50% 28%,
+		var(--aero-cloud-shadow) 0 42%,
+		transparent 74%
+	);
+}
+.aero-puff--1 {
+	left: 4%;
+	top: 44%;
+	inline-size: 46%;
+	block-size: 54%;
+}
+.aero-puff--2 {
+	left: 38%;
+	top: 48%;
+	inline-size: 52%;
+	block-size: 50%;
+}
+.aero-puff--3 {
+	left: 22%;
+	top: 52%;
+	inline-size: 60%;
+	block-size: 46%;
+}
+
+/* Body puffs: the white mass, three densities so overlaps read as depth. */
+.aero-puff--4,
+.aero-puff--7 {
+	background: radial-gradient(ellipse at 44% 34%, var(--aero-cloud-soft) 0 40%, transparent 72%);
+}
+.aero-puff--5,
+.aero-puff--6 {
+	background: radial-gradient(ellipse at 42% 32%, var(--aero-cloud-mid) 0 42%, transparent 74%);
+}
+.aero-puff--4 {
+	left: 2%;
+	top: 26%;
+	inline-size: 44%;
+	block-size: 56%;
+}
+.aero-puff--5 {
+	left: 28%;
+	top: 12%;
+	inline-size: 46%;
+	block-size: 66%;
+}
+.aero-puff--6 {
+	left: 52%;
+	top: 26%;
+	inline-size: 44%;
+	block-size: 56%;
+}
+.aero-puff--7 {
+	left: 70%;
+	top: 38%;
+	inline-size: 30%;
+	block-size: 44%;
+}
+
+/* Highlight puffs: the sunlit tops, brightest and smallest. */
+.aero-puff--8,
+.aero-puff--9 {
+	background: radial-gradient(ellipse at 46% 36%, var(--aero-cloud-bright) 0 38%, transparent 70%);
+}
+.aero-puff--8 {
+	left: 32%;
+	top: 6%;
+	inline-size: 30%;
+	block-size: 46%;
+}
+.aero-puff--9 {
+	left: 12%;
+	top: 18%;
+	inline-size: 24%;
+	block-size: 36%;
+}
+
+/* --- Bokeh ------------------------------------------------------------------ */
+/* Scattered soft white circles at varying radii and three opacity densities —
+   one element, one stack of radial gradients, nothing animated. */
+.aero-bokeh {
+	position: absolute;
+	inset: 0;
+	background:
+		radial-gradient(30px 30px at 12% 58%, var(--aero-bokeh-bright), transparent 70%),
+		radial-gradient(18px 18px at 22% 34%, var(--aero-bokeh-mid), transparent 70%),
+		radial-gradient(44px 44px at 34% 72%, var(--aero-bokeh-soft), transparent 72%),
+		radial-gradient(22px 22px at 47% 22%, var(--aero-bokeh-mid), transparent 70%),
+		radial-gradient(56px 56px at 58% 52%, var(--aero-bokeh-soft), transparent 72%),
+		radial-gradient(16px 16px at 66% 78%, var(--aero-bokeh-bright), transparent 70%),
+		radial-gradient(34px 34px at 76% 30%, var(--aero-bokeh-mid), transparent 72%),
+		radial-gradient(24px 24px at 86% 62%, var(--aero-bokeh-bright), transparent 70%),
+		radial-gradient(40px 40px at 92% 16%, var(--aero-bokeh-soft), transparent 72%);
+}
+
+/* --- Meadow band -------------------------------------------------------------- */
+/* The ground plane: a green band anchoring the bottom of the viewport with a
+   soft highlight line along its top edge (the horizon catching sky light).
+   Sits above the clouds in DOM order so cloud bottoms can tuck behind the
+   hill, and below the orbs so they float over the meadow. */
+.aero-meadow {
+	position: absolute;
+	inset-inline: 0;
+	inset-block-end: 0;
+	block-size: clamp(110px, 18vh, 200px);
+	background: linear-gradient(180deg, var(--aero-meadow-1), var(--aero-meadow-2));
+}
+
+.aero-meadow::before {
+	content: '';
+	position: absolute;
+	inset-inline: 0;
+	inset-block-start: 0;
+	block-size: 3px;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		var(--aero-meadow-edge) 14%,
+		var(--aero-meadow-edge) 86%,
+		transparent
+	);
+	/* A hair of softness so the line reads as light, not as a border. Small
+	   element, static, one-off raster — the cheap kind of blur. */
+	filter: blur(1.5px);
+}
+
+/* --- Floating glossy orbs ------------------------------------------------------ */
+/* Painted glass, three coats each:
+     1. base radial gradient (light from the upper-left: base → mid → edge)
+        for volume;
+     2. ::before — the specular highlight ELLIPSE, offset toward the upper-
+        left, slightly rotated so it follows the sphere's surface;
+     3. ::after — the thin bright RIM-LIGHT ARC along the lower-right edge
+        (an inset box-shadow offset away from the light source).
+   Highlight + rim are both mandatory: either one alone reads as a flat
+   circle. Orbs bob slowly on the compositor (transform only). */
+.aero-orb {
+	position: absolute;
+	border-radius: 50%;
+	will-change: transform;
+	animation: aero-orb-float var(--ease-soft) infinite alternate;
+}
+
+@keyframes aero-orb-float {
+	from {
+		transform: translate3d(0, 0, 0);
 	}
-	12% {
-		opacity: var(--bubble-opacity, 0.5);
+	to {
+		transform: translate3d(0.8vw, -2.4vh, 0);
 	}
-	86% {
-		opacity: var(--bubble-opacity, 0.5);
+}
+
+.aero-orb::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: 14%;
+	inset-block-start: 10%;
+	inline-size: 42%;
+	block-size: 28%;
+	border-radius: 50%;
+	background: radial-gradient(ellipse at 50% 42%, var(--aero-orb-specular), transparent 70%);
+	transform: rotate(-16deg);
+}
+
+.aero-orb::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: 50%;
+}
+
+.aero-orb--aqua {
+	inset-block-start: 16vh;
+	inset-inline-end: 9%;
+	inline-size: clamp(84px, 10vw, 128px);
+	aspect-ratio: 1;
+	background: radial-gradient(
+		circle at 34% 30%,
+		var(--aero-orb-1-base) 0 16%,
+		var(--aero-orb-1-mid) 52%,
+		var(--aero-orb-1-edge) 100%
+	);
+	box-shadow: 0 18px 40px -18px var(--aero-orb-1-shadow);
+}
+
+.aero-orb--aqua::after {
+	box-shadow: inset -8px -10px 16px -8px var(--aero-orb-rim);
+}
+
+.aero-orb--green {
+	inset-block-end: 26vh;
+	inset-inline-start: 7%;
+	inline-size: clamp(56px, 6.5vw, 84px);
+	aspect-ratio: 1;
+	background: radial-gradient(
+		circle at 34% 30%,
+		var(--aero-orb-2-base) 0 16%,
+		var(--aero-orb-2-mid) 52%,
+		var(--aero-orb-2-edge) 100%
+	);
+	box-shadow: 0 14px 30px -14px var(--aero-orb-2-shadow);
+}
+
+.aero-orb--green::after {
+	box-shadow: inset -5px -7px 11px -6px var(--aero-orb-rim);
+}
+
+@media (max-width: 720px) {
+	.aero-orb--aqua {
+		inset-inline-end: 6%;
 	}
-	100% {
-		transform: translate3d(var(--bubble-sway, 3vw), -108vh, 0) scale(1.06);
-		opacity: 0;
+	.aero-orb--green {
+		inset-block-end: 24vh;
+		inset-inline-start: 5%;
 	}
 }
 
 /* --- Dark nebula band ------------------------------------------------------ */
 /* The dark theme's aurora layer gains three extra radials (pink, violet,
    magenta) so the night sky reads richer. Tokens collapse them to
-   `transparent` in light mode, so one rule serves both themes. */
+   `transparent` in light mode, so one rule serves both themes. This is the
+   ONLY .aurora-layer background definition — global.css owns just the layer's
+   positioning. */
 .aurora-layer {
 	background:
 		radial-gradient(46% 38% at 18% 12%, var(--aurora-1), transparent 68%),
@@ -138,7 +373,7 @@ html[data-theme='light'] .aero-sky {
 }
 
 /* Light theme: softer vignette (the sky is bright; edges cool instead of
-   black), and the starfield canvas rests — the sky owns the light mode. */
+   black), and the starfield canvas rests — the painted sky owns light mode. */
 html[data-theme='light'] .vignette-layer {
 	background: radial-gradient(120% 90% at 50% 42%, transparent 46%, rgba(111, 180, 214, 0.28) 100%);
 }
@@ -149,14 +384,33 @@ html[data-theme='light'] .starfield {
 
 /* The dark theme hides the aero sky entirely (it is display:none by default). */
 
+/* --- Settings store gates (attributes set pre-paint by BaseHead) ------------ */
+
+/* Performance mode: the painted scene is the light theme's heaviest decorative
+   compositor (fixed layer + drifting cloud clusters + two animated orbs), so
+   it is the first thing dropped. The html/body gradient keeps the sky and the
+   tokens carry the palette either way. */
+html[data-performance-mode='on'] .aero-sky {
+	display: none;
+}
+
+/* Reduced visual effects: simplify to the sky gradient and the meadow band —
+   no clouds, orbs, bokeh or bloom. The scene reads as a calm flat Aero frame;
+   nothing animates and nothing extra composites. */
+html[data-reduced-effects='on'] .aero-bloom,
+html[data-reduced-effects='on'] .aero-clouds,
+html[data-reduced-effects='on'] .aero-bokeh,
+html[data-reduced-effects='on'] .aero-orb {
+	display: none;
+}
+
 /* --- Reduced motion -------------------------------------------------------- */
+/* OS-level preference follows the repo's freeze-not-hide convention (same
+   treatment the old bubble field got): the scene stays painted, every
+   animation stops. */
 @media (prefers-reduced-motion: reduce) {
-	.aero-sky {
+	.aero-cloud,
+	.aero-orb {
 		animation: none;
-	}
-	.aero-bubble {
-		animation: none;
-		opacity: var(--bubble-opacity, 0.4);
-		transform: none;
 	}
 }

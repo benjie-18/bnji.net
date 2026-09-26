@@ -1,51 +1,87 @@
 /**
- * BNJI.NET — tiny in-isolate rate limiter.
+ * BNJI.NET — shared rate limiter (KV with TTL).
  *
- * A sliding-window counter per client key (IP). Lives in module scope, so it
- * is per-Worker-isolate: good enough to stop casual abuse and runaway loops,
- * and honest about being so. For strict global limits, put a Cloudflare
- * rate-limiting rule in front of /api/* — that is an edge configuration, not
- * application code.
+ * Fixed-window counters stored in Cloudflare KV so limits are consistent
+ * ACROSS Worker isolates: two requests landing on different isolates still
+ * share the same counter, which per-instance memory could never guarantee.
  *
- * No secrets, no credentials: keys are hashed client addresses only, and the
- * map is capped and pruned so it cannot grow without bound.
+ * Design
+ * ------
+ *  - key:   `rl:<scope>:<clientKey>:<windowIndex>` where
+ *           windowIndex = floor(now / windowMs) — a new key per window;
+ *  - value: hit count for that window;
+ *  - TTL:   the remainder of the current window (+1s slack, floor 60s — KV's
+ *           minimum), so keys expire themselves and never accumulate;
+ *  - deny:  count >= maxHits → allowed:false with retryAfter = seconds until
+ *           the window rolls over.
+ *
+ * Chosen over Durable Objects on purpose: the board's abuse protection needs
+ * shared state, not serialization. KV adds no new binding (BOARD_KV already
+ * exists for the board's infra), no DO class to deploy, and costs nothing at
+ * rest. The known trade-off is accepted and bounded: two simultaneous hits in
+ * the same window can race the read-then-put and under-count by one, so the
+ * limit is "at most maxHits + concurrency", which is fine for throttling
+ * humans. If exact serialization ever matters, swap this module for a
+ * Durable Object — the call sites are two lines in each API route.
+ *
+ * Failure mode: if the KV binding is missing entirely (misconfiguration), we
+ * FAIL OPEN with a console warning — losing abuse throttling must not take
+ * the board down. This is a throttle, not authentication.
  */
-type Bucket = { stamps: number[] };
+export type KvRateLimitStore = {
+	get(key: string, type?: 'text'): Promise<string | null>;
+	put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+};
 
-const buckets = new Map<string, Bucket>();
-const MAX_KEYS = 2000;
+export type RateLimitResult = {
+	allowed: boolean;
+	/** Seconds until the current window rolls over (0 when allowed). */
+	retryAfter: number;
+};
 
-/**
- * @param key      client identity (e.g. Astro.clientAddress)
- * @param windowMs sliding window size
- * @param maxHits  allowed hits inside the window
- * @returns true when the hit is allowed (and recorded)
- */
-export function rateLimit(key: string, windowMs: number, maxHits: number): boolean {
-	const now = Date.now();
-	let bucket = buckets.get(key);
-	if (!bucket) {
-		if (buckets.size > MAX_KEYS) {
-			// Prune stale keys instead of unbounded growth.
-			for (const [k, b] of buckets) {
-				if (b.stamps.length === 0 || now - b.stamps[b.stamps.length - 1] > windowMs) {
-					buckets.delete(k);
-				}
-			}
+let warnedMissingKv = false;
+
+export async function rateLimit(
+	kv: KvRateLimitStore | undefined,
+	key: string,
+	windowMs: number,
+	maxHits: number,
+): Promise<RateLimitResult> {
+	if (!kv || typeof kv.get !== 'function') {
+		if (!warnedMissingKv) {
+			warnedMissingKv = true;
+			console.warn('[bnji] rate limiting disabled: BOARD_KV binding missing');
 		}
-		bucket = { stamps: [] };
-		buckets.set(key, bucket);
+		return { allowed: true, retryAfter: 0 };
 	}
-	bucket.stamps = bucket.stamps.filter((t) => now - t < windowMs);
-	if (bucket.stamps.length >= maxHits) return false;
-	bucket.stamps.push(now);
-	return true;
-}
 
-/** Seconds until the oldest stamp in the window expires (for Retry-After). */
-export function retryAfterSeconds(key: string, windowMs: number): number {
-	const bucket = buckets.get(key);
-	if (!bucket || bucket.stamps.length === 0) return 0;
-	const oldest = bucket.stamps[0];
-	return Math.max(1, Math.ceil((windowMs - (Date.now() - oldest)) / 1000));
+	const now = Date.now();
+	const windowIndex = Math.floor(now / windowMs);
+	const elapsedInWindow = now % windowMs;
+	// KV rejects expirationTtl below 60s. Overshooting the window is harmless:
+	// the key name embeds windowIndex, so a longer-lived key never leaks into
+	// a future window's count — it just gets garbage-collected a bit later.
+	const ttlSeconds = Math.max(60, Math.ceil((windowMs - elapsedInWindow) / 1000) + 1);
+	const retryAfter = Math.max(1, Math.ceil((windowMs - elapsedInWindow) / 1000));
+	const kvKey = `rl:${key}:${windowIndex}`;
+
+	let count = 0;
+	try {
+		const raw = await kv.get(kvKey, 'text');
+		count = raw ? Number.parseInt(raw, 10) || 0 : 0;
+	} catch (error) {
+		// KV read failure: fail open (throttle, not auth), but log it.
+		console.warn('[bnji] rate limit read failed, allowing:', error);
+		return { allowed: true, retryAfter: 0 };
+	}
+
+	if (count >= maxHits) return { allowed: false, retryAfter };
+
+	try {
+		await kv.put(kvKey, String(count + 1), { expirationTtl: ttlSeconds });
+	} catch (error) {
+		// A failed write must not block the request; the next hit re-reads.
+		console.warn('[bnji] rate limit write failed, allowing:', error);
+	}
+	return { allowed: true, retryAfter: 0 };
 }
