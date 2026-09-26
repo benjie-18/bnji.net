@@ -1,0 +1,59 @@
+{
+  "id": "73f6ca2b-4fbb-44da-a180-aa100203bbf9",
+  "title": "Read /workspace/package.json and tell me the proje",
+  "summary": null,
+  "created_at": 1789519082991,
+  "updated_at": 1789520168677,
+  "history": {
+    "currentId": "9fc271df-17c0-418f-8684-a6a481080476",
+    "messages": {
+      "2724489e-bb8e-4838-b0cd-821837b3f631": {
+        "id": "2724489e-bb8e-4838-b0cd-821837b3f631",
+        "parentId": null,
+        "childrenIds": [
+          "9fc271df-17c0-418f-8684-a6a481080476"
+        ],
+        "role": "user",
+        "content": "Read /workspace/package.json and tell me the project name and Astro version. Do not modify anything.",
+        "timestamp": 1789519091760,
+        "models": []
+      },
+      "9fc271df-17c0-418f-8684-a6a481080476": {
+        "id": "9fc271df-17c0-418f-8684-a6a481080476",
+        "parentId": "2724489e-bb8e-4838-b0cd-821837b3f631",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "\n\n> **Error:** QueuePool limit of size 5 overflow 10 reached, connection timed out, timeout 30.00 (Background on this error at: https://sqlalche.me/e/20/3o7r)\n\n> **Error:** QueuePool limit of size 5 overflow 10 reached, connection timed out, timeout 30.00 (Background on this error at: https://sqlalche.me/e/20/3o7r)",
+        "timestamp": 1789519096241,
+        "model": "cptr/workspace",
+        "done": true,
+        "output": [
+          {
+            "type": "message",
+            "id": "a5f19013-dc54-4d95-9653-2288b1b06bfc",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "\n\n> **Error:** QueuePool limit of size 5 overflow 10 reached, connection timed out, timeout 30.00 (Background on this error at: https://sqlalche.me/e/20/3o7r)"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "id": "7284ca2c-ab8d-4e6e-b039-a335fd6ec922",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "\n\n> **Error:** QueuePool limit of size 5 overflow 10 reached, connection timed out, timeout 30.00 (Background on this error at: https://sqlalche.me/e/20/3o7r)"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

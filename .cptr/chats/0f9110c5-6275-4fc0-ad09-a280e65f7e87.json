@@ -1,0 +1,71 @@
+{
+  "id": "0f9110c5-6275-4fc0-ad09-a280e65f7e87",
+  "title": "send back only hi",
+  "summary": null,
+  "created_at": 1789865226445,
+  "updated_at": 1789865226491,
+  "history": {
+    "currentId": "ae63d4c8-961b-4b0b-a030-daa37d479b8c",
+    "messages": {
+      "7d50d25b-985d-4ba4-a8c8-1427a6d90774": {
+        "id": "7d50d25b-985d-4ba4-a8c8-1427a6d90774",
+        "parentId": null,
+        "childrenIds": [
+          "f45be109-dcc3-40ba-8c9a-99a96d157d69"
+        ],
+        "role": "user",
+        "content": "send back only hi",
+        "timestamp": 1789865226457,
+        "models": []
+      },
+      "f45be109-dcc3-40ba-8c9a-99a96d157d69": {
+        "id": "f45be109-dcc3-40ba-8c9a-99a96d157d69",
+        "parentId": "7d50d25b-985d-4ba4-a8c8-1427a6d90774",
+        "childrenIds": [
+          "56c2d3af-0d96-4ca0-9a61-acd27ebfbc81"
+        ],
+        "role": "assistant",
+        "content": "hi",
+        "timestamp": 1789865226458,
+        "model": null,
+        "done": true,
+        "output": []
+      },
+      "56c2d3af-0d96-4ca0-9a61-acd27ebfbc81": {
+        "id": "56c2d3af-0d96-4ca0-9a61-acd27ebfbc81",
+        "parentId": "f45be109-dcc3-40ba-8c9a-99a96d157d69",
+        "childrenIds": [
+          "ae63d4c8-961b-4b0b-a030-daa37d479b8c"
+        ],
+        "role": "user",
+        "content": "send back only hi",
+        "timestamp": 1789865226462,
+        "models": []
+      },
+      "ae63d4c8-961b-4b0b-a030-daa37d479b8c": {
+        "id": "ae63d4c8-961b-4b0b-a030-daa37d479b8c",
+        "parentId": "56c2d3af-0d96-4ca0-9a61-acd27ebfbc81",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "\n\n> **Error:** Failed to decrypt API key. JWT secret may have changed",
+        "timestamp": 1789865226464,
+        "model": "openrouter/poolside/laguna-s-2.1:free",
+        "done": true,
+        "output": [
+          {
+            "type": "message",
+            "id": "cd8cd857-49f8-40c4-bf66-d984a1a9542f",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "\n\n> **Error:** Failed to decrypt API key. JWT secret may have changed"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

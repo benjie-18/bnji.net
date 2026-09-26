@@ -1,0 +1,47 @@
+{
+  "id": "67bf1f65-90d9-4f17-9030-6d94b1fe994e",
+  "title": "Read /workspace/package.json and tell me the proje",
+  "summary": null,
+  "created_at": 1789520025754,
+  "updated_at": 1789520128534,
+  "history": {
+    "currentId": "2201d1b7-916c-41ae-ba30-321d1363ae85",
+    "messages": {
+      "aeef79b4-502d-4204-99b7-3ff1b4b14b22": {
+        "id": "aeef79b4-502d-4204-99b7-3ff1b4b14b22",
+        "parentId": null,
+        "childrenIds": [
+          "2201d1b7-916c-41ae-ba30-321d1363ae85"
+        ],
+        "role": "user",
+        "content": "Read /workspace/package.json and tell me the project name and Astro version. Do not modify anything.",
+        "timestamp": 1789520044056,
+        "models": []
+      },
+      "2201d1b7-916c-41ae-ba30-321d1363ae85": {
+        "id": "2201d1b7-916c-41ae-ba30-321d1363ae85",
+        "parentId": "aeef79b4-502d-4204-99b7-3ff1b4b14b22",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "\n\n> **Error:** QueuePool limit of size 5 overflow 10 reached, connection timed out, timeout 30.00 (Background on this error at: https://sqlalche.me/e/20/3o7r)",
+        "timestamp": 1789520047669,
+        "model": "qwen3.6:27b",
+        "done": true,
+        "output": [
+          {
+            "type": "message",
+            "id": "9495446b-7722-4a80-9c68-fa31a9b65ced",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "\n\n> **Error:** QueuePool limit of size 5 overflow 10 reached, connection timed out, timeout 30.00 (Background on this error at: https://sqlalche.me/e/20/3o7r)"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

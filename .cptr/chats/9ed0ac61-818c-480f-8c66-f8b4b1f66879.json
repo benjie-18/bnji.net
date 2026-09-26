@@ -1,0 +1,47 @@
+{
+  "id": "9ed0ac61-818c-480f-8c66-f8b4b1f66879",
+  "title": "Read /workspace/package.json and tell me the proje",
+  "summary": null,
+  "created_at": 1789519103063,
+  "updated_at": 1789520147806,
+  "history": {
+    "currentId": "1d2127ad-107a-4396-bc2f-81071437f790",
+    "messages": {
+      "7a810999-0c9c-47bb-9227-100e08e2e41d": {
+        "id": "7a810999-0c9c-47bb-9227-100e08e2e41d",
+        "parentId": null,
+        "childrenIds": [
+          "1d2127ad-107a-4396-bc2f-81071437f790"
+        ],
+        "role": "user",
+        "content": "Read /workspace/package.json and tell me the project name and Astro version. Do not modify anything.",
+        "timestamp": 1789519110064,
+        "models": []
+      },
+      "1d2127ad-107a-4396-bc2f-81071437f790": {
+        "id": "1d2127ad-107a-4396-bc2f-81071437f790",
+        "parentId": "7a810999-0c9c-47bb-9227-100e08e2e41d",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "\n\n> **Error:** Server error '500 Internal Server Error' for url 'http://host.docker.internal:8000/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500",
+        "timestamp": 1789519110123,
+        "model": "cptr/workspace",
+        "done": true,
+        "output": [
+          {
+            "type": "message",
+            "id": "359dffaf-1569-4277-b7a7-93bc43e0e818",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "\n\n> **Error:** Server error '500 Internal Server Error' for url 'http://host.docker.internal:8000/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

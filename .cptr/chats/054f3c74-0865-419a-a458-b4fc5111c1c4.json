@@ -1,0 +1,222 @@
+{
+  "id": "054f3c74-0865-419a-a458-b4fc5111c1c4",
+  "title": "Reply with exactly: CONTEXT TEST",
+  "summary": null,
+  "created_at": 1789571737175,
+  "updated_at": 1789573033814,
+  "history": {
+    "currentId": "3442c5d3-bd86-40a3-9cba-32f99acad031",
+    "messages": {
+      "045e0552-4e8c-4fee-a2bc-3e11e708218f": {
+        "id": "045e0552-4e8c-4fee-a2bc-3e11e708218f",
+        "parentId": null,
+        "childrenIds": [
+          "6951d96e-488b-4161-961c-df40cfe24426"
+        ],
+        "role": "user",
+        "content": "Reply with exactly: CONTEXT TEST",
+        "timestamp": 1789571737186,
+        "models": []
+      },
+      "6951d96e-488b-4161-961c-df40cfe24426": {
+        "id": "6951d96e-488b-4161-961c-df40cfe24426",
+        "parentId": "045e0552-4e8c-4fee-a2bc-3e11e708218f",
+        "childrenIds": [
+          "9c35aa17-7b74-4ae0-8f7d-d50e0f9b9471"
+        ],
+        "role": "assistant",
+        "content": "CONTEXT TEST",
+        "timestamp": 1789571737189,
+        "model": "qwen3.6:27b",
+        "done": true,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_c1c01f19dea644aba5ccdbfe6b92ee06",
+            "status": "completed",
+            "content": [
+              {
+                "type": "text",
+                "text": "The user wants me to reply with exactly \"CONTEXT TEST\"."
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "id": "becd67a9-b0ce-4164-a248-41a07a1d3456",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "CONTEXT TEST"
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 3911,
+          "output_tokens": 18,
+          "total_tokens": 3929
+        }
+      },
+      "9c35aa17-7b74-4ae0-8f7d-d50e0f9b9471": {
+        "id": "9c35aa17-7b74-4ae0-8f7d-d50e0f9b9471",
+        "parentId": "6951d96e-488b-4161-961c-df40cfe24426",
+        "childrenIds": [
+          "910d9123-5eea-4424-b5e2-3dbfc5aa3085"
+        ],
+        "role": "user",
+        "content": "Reply with exactly: CONTEXT TEST",
+        "timestamp": 1789571796113,
+        "models": []
+      },
+      "910d9123-5eea-4424-b5e2-3dbfc5aa3085": {
+        "id": "910d9123-5eea-4424-b5e2-3dbfc5aa3085",
+        "parentId": "9c35aa17-7b74-4ae0-8f7d-d50e0f9b9471",
+        "childrenIds": [
+          "5e6ac9e6-62ff-407e-931a-f1d3b5b82514"
+        ],
+        "role": "assistant",
+        "content": "CONTEXT TEST",
+        "timestamp": 1789571796115,
+        "model": "qwen3.6-code:latest",
+        "done": true,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_67536a39e50a4d9aa5faa028f250adb9",
+            "status": "completed",
+            "content": [
+              {
+                "type": "text",
+                "text": "The user wants me to reply with exactly \"CONTEXT TEST\"."
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "id": "da27ccce-a5cc-4fda-a52f-652e25146bf3",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "CONTEXT TEST"
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 4197,
+          "output_tokens": 18,
+          "total_tokens": 4215
+        }
+      },
+      "5e6ac9e6-62ff-407e-931a-f1d3b5b82514": {
+        "id": "5e6ac9e6-62ff-407e-931a-f1d3b5b82514",
+        "parentId": "910d9123-5eea-4424-b5e2-3dbfc5aa3085",
+        "childrenIds": [
+          "3afab54d-625b-4afb-bd48-0d8e1fd8c456"
+        ],
+        "role": "user",
+        "content": "Reply with exactly: CONTEXT TEST",
+        "timestamp": 1789572878249,
+        "models": []
+      },
+      "3afab54d-625b-4afb-bd48-0d8e1fd8c456": {
+        "id": "3afab54d-625b-4afb-bd48-0d8e1fd8c456",
+        "parentId": "5e6ac9e6-62ff-407e-931a-f1d3b5b82514",
+        "childrenIds": [
+          "558ceab2-027e-4970-9dc8-d3c9110980b0"
+        ],
+        "role": "assistant",
+        "content": "CONTEXT TEST",
+        "timestamp": 1789572878252,
+        "model": "qwen3.6:27b",
+        "done": true,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_3d3e56aaad234104a6588fbaf7b84331",
+            "status": "completed",
+            "content": [
+              {
+                "type": "text",
+                "text": "The instructions are straightforward: just reply with that exact phrase."
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "id": "0b7dd0cb-b1c4-4e31-904f-d91cb5a91e4e",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "CONTEXT TEST"
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 2050,
+          "output_tokens": 18,
+          "total_tokens": 2068
+        }
+      },
+      "558ceab2-027e-4970-9dc8-d3c9110980b0": {
+        "id": "558ceab2-027e-4970-9dc8-d3c9110980b0",
+        "parentId": "3afab54d-625b-4afb-bd48-0d8e1fd8c456",
+        "childrenIds": [
+          "3442c5d3-bd86-40a3-9cba-32f99acad031"
+        ],
+        "role": "user",
+        "content": "Reply with exactly: CONTEXT TEST",
+        "timestamp": 1789573027756,
+        "models": []
+      },
+      "3442c5d3-bd86-40a3-9cba-32f99acad031": {
+        "id": "3442c5d3-bd86-40a3-9cba-32f99acad031",
+        "parentId": "558ceab2-027e-4970-9dc8-d3c9110980b0",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "CONTEXT TEST",
+        "timestamp": 1789573027759,
+        "model": "qwen3.6:27b",
+        "done": true,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_e010ad30471f445dae1702dcc0ba5156",
+            "status": "completed",
+            "content": [
+              {
+                "type": "text",
+                "text": "The user is asking me to reply with exactly \"CONTEXT TEST\". This is a simple instruction with no additional tools needed. I'll just respond with that exact text."
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "id": "6a353db6-f165-4d02-8b69-5af6e27cc63d",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "CONTEXT TEST"
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 2050,
+          "output_tokens": 39,
+          "total_tokens": 2089
+        }
+      }
+    }
+  }
+}
