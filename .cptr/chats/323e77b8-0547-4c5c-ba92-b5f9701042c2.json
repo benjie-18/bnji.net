@@ -1,0 +1,91 @@
+{
+  "id": "323e77b8-0547-4c5c-ba92-b5f9701042c2",
+  "title": "Reply with exactly CPTR_OLLAMA_OK",
+  "summary": null,
+  "created_at": 1789522513077,
+  "updated_at": 1789522550581,
+  "history": {
+    "currentId": "29ba6ff9-48a3-40ec-9cf8-8c3c0c862504",
+    "messages": {
+      "577d4ee7-7687-4acc-9e29-13d1d277c058": {
+        "id": "577d4ee7-7687-4acc-9e29-13d1d277c058",
+        "parentId": null,
+        "childrenIds": [
+          "29ba6ff9-48a3-40ec-9cf8-8c3c0c862504"
+        ],
+        "role": "user",
+        "content": "Reply with exactly CPTR_OLLAMA_OK",
+        "timestamp": 1789522513090,
+        "models": []
+      },
+      "29ba6ff9-48a3-40ec-9cf8-8c3c0c862504": {
+        "id": "29ba6ff9-48a3-40ec-9cf8-8c3c0c862504",
+        "parentId": "577d4ee7-7687-4acc-9e29-13d1d277c058",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "CPTR_OLLAMA_OK",
+        "timestamp": 1789522513094,
+        "model": "qwen3.6:27b",
+        "done": true,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_8e098a8edad74fbaab752d698d4570a8",
+            "status": "completed",
+            "content": [
+              {
+                "type": "text",
+                "text": "The user wants me to reply with exactly that text."
+              }
+            ]
+          },
+          {
+            "type": "function_call",
+            "id": "1833c348-57ab-4bed-90e0-20cf27ab4b95",
+            "call_id": "call_f2eco0v1",
+            "fc_id": "",
+            "name": "run_command",
+            "arguments": {
+              "command": "ollama list 2>&1 | head -5",
+              "wait": 10
+            },
+            "status": "completed"
+          },
+          {
+            "type": "function_call_output",
+            "call_id": "call_f2eco0v1",
+            "output": "Task 2950f7c6: exited (code 0)\nCommand: ollama list 2>&1 | head -5\nnext_offset: 31\n---\n/bin/sh: 1: ollama: not found\r\n"
+          },
+          {
+            "type": "reasoning",
+            "id": "rs_580dd6861ae0491f99de2a6fc8845f0d",
+            "status": "completed",
+            "content": [
+              {
+                "type": "text",
+                "text": "The user wants me to reply with exactly \"CPTR_OLLAMA_OK\". Let me just do that."
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "id": "d3e4ab57-187a-4342-b000-4122c73d4d73",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "CPTR_OLLAMA_OK"
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 4033,
+          "output_tokens": 32,
+          "total_tokens": 4065
+        }
+      }
+    }
+  }
+}

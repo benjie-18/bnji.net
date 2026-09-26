@@ -1,0 +1,84 @@
+{
+  "id": "bf8ceecf-1673-43d1-b4b0-e406a6f60bf9",
+  "title": "Read /workspace/package.json and tell me the proje",
+  "summary": null,
+  "created_at": 1789519121557,
+  "updated_at": 1789520282014,
+  "history": {
+    "currentId": "57668744-7cc6-4cd9-95ec-c98426e82321",
+    "messages": {
+      "7d10adaa-7ca6-4a8f-b7cd-d8c3adfbc9a5": {
+        "id": "7d10adaa-7ca6-4a8f-b7cd-d8c3adfbc9a5",
+        "parentId": null,
+        "childrenIds": [
+          "57668744-7cc6-4cd9-95ec-c98426e82321"
+        ],
+        "role": "user",
+        "content": "Read /workspace/package.json and tell me the project name and Astro version. Do not modify anything.",
+        "timestamp": 1789519129399,
+        "models": []
+      },
+      "57668744-7cc6-4cd9-95ec-c98426e82321": {
+        "id": "57668744-7cc6-4cd9-95ec-c98426e82321",
+        "parentId": "7d10adaa-7ca6-4a8f-b7cd-d8c3adfbc9a5",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "\n\n> **Error:** ",
+        "timestamp": 1789519129544,
+        "model": "qwen3.6:27b",
+        "done": true,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_ff2dc054f47d4a4a9d3adbd40cd0c0a9",
+            "status": "completed",
+            "content": [
+              {
+                "type": "text",
+                "text": "The user wants me to read the package.json file and extract the project name and Astro version. I'll use display_file to show it inline."
+              }
+            ]
+          },
+          {
+            "type": "function_call",
+            "id": "724e1be2-db42-4ec1-befb-ee13d45899ea",
+            "call_id": "call_g1y25pe0",
+            "fc_id": "",
+            "name": "display_file",
+            "arguments": {
+              "path": "package.json"
+            },
+            "status": "completed"
+          },
+          {
+            "type": "function_call_output",
+            "call_id": "call_g1y25pe0",
+            "output": "{\"type\": \"file\", \"path\": \"package.json\", \"full_path\": \"/workspace/package.json\", \"workspace\": \"/workspace\", \"name\": \"package.json\", \"size\": 1093, \"mime_type\": \"application/json\", \"kind\": \"json\"}"
+          },
+          {
+            "type": "file",
+            "path": "package.json",
+            "full_path": "/workspace/package.json",
+            "workspace": "/workspace",
+            "name": "package.json",
+            "size": 1093,
+            "mime_type": "application/json",
+            "kind": "json"
+          },
+          {
+            "type": "message",
+            "id": "df216923-77f2-4e8b-ad25-022f7dd22a1d",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "\n\n> **Error:** "
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

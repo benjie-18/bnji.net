@@ -1,0 +1,44 @@
+{"type": "start", "command": "npm run build 2>&1", "pid": 7028, "ts": 1789427238.1423652}
+{"type": "output", "data": "npm notice run build\n", "ts": 1789427239.2081559}
+{"type": "output", "data": "npm notice run astro build\n", "ts": 1789427239.2083886}
+{"type": "output", "data": "\u001b[2m19:07:23\u001b[22m \u001b[34m[@astrojs/cloudflare]\u001b[39m Enabling sessions with Cloudflare KV with the \"SESSION\" KV binding.\n", "ts": 1789427243.7687967}
+{"type": "output", "data": "\u001b[2m19:07:23\u001b[22m \u001b[34m[@astrojs/cloudflare]\u001b[39m If you see the error \"Invalid binding `SESSION`\" in your build output, you need to add the binding to your wrangler config file.\n", "ts": 1789427243.7691045}
+{"type": "output", "data": "\u001b[33m\u001b[1m19:07:23\u001b[22m [WARN] [adapter]\u001b[39m Cloudflare does not support sharp at runtime. However, you can configure `imageService: \"compile\"` to optimize images with sharp on prerendered pages during build time.\n", "ts": 1789427243.7836392}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[content]\u001b[39m Syncing content\n", "ts": 1789427244.575985}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[content]\u001b[39m Synced content\n", "ts": 1789427244.5926747}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[types]\u001b[39m Generated \u001b[2m771ms\u001b[22m\n", "ts": 1789427244.596379}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[build]\u001b[39m output: \u001b[34m\"static\"\u001b[39m\n", "ts": 1789427244.5966437}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[build]\u001b[39m mode: \u001b[34m\"server\"\u001b[39m\n\u001b[2m19:07:24\u001b[22m \u001b[34m[build]\u001b[39m directory: \u001b[34mD:\\Documents\\bnji net\\1\\dist\\\u001b[39m\n", "ts": 1789427244.5967307}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[build]\u001b[39m adapter: \u001b[32m@astrojs/cloudflare\u001b[39m\n", "ts": 1789427244.596793}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[build]\u001b[39m Collecting build info...\n", "ts": 1789427244.596882}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[build]\u001b[39m \u001b[32m\u2713 Completed in 831ms.\u001b[39m\n", "ts": 1789427244.5972493}
+{"type": "output", "data": "\u001b[2m19:07:24\u001b[22m \u001b[34m[build]\u001b[39m Building server entrypoints...\n", "ts": 1789427244.6300325}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[34m[vite]\u001b[39m \u001b[32m\u2713 built in 2.01s\u001b[39m\n", "ts": 1789427246.6668165}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[34m[build]\u001b[39m \u001b[32m\u2713 Completed in 2.04s.\u001b[39m\n", "ts": 1789427246.6669445}
+{"type": "output", "data": "\n\u001b[42m\u001b[30m prerendering static routes \u001b[39m\u001b[49m\n", "ts": 1789427246.7452154}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[32m\u25b6\u001b[39m src/pages/about.astro\n", "ts": 1789427246.7534184}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m   \u001b[34m\u2514\u2500\u001b[39m \u001b[2m/about/index.html\u001b[22m", "ts": 1789427246.7536776}
+{"type": "output", "data": " \u001b[2m(+21ms)\u001b[22m \n", "ts": 1789427246.7752068}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[32m\u25b6\u001b[39m src/pages/blog/[...slug].astro\n", "ts": 1789427246.7800171}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m   \u001b[34m\u251c\u2500\u001b[39m \u001b[2m/blog/first-post/index.html\u001b[22m", "ts": 1789427246.7860544}
+{"type": "output", "data": " \u001b[2m(+10ms)\u001b[22m \n", "ts": 1789427246.7959301}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m   \u001b[34m\u251c\u2500\u001b[39m \u001b[2m/blog/markdown-style-guide/index.html\u001b[22m", "ts": 1789427246.796069}
+{"type": "output", "data": " \u001b[2m(+7ms)\u001b[22m \n", "ts": 1789427246.8030863}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m   \u001b[34m\u251c\u2500\u001b[39m \u001b[2m/blog/second-post/index.html\u001b[22m", "ts": 1789427246.803221}
+{"type": "output", "data": " \u001b[2m(+6ms)\u001b[22m \n\u001b[2m19:07:26\u001b[22m   \u001b[34m\u251c\u2500\u001b[39m \u001b[2m/blog/using-mdx/index.html\u001b[22m", "ts": 1789427246.8089604}
+{"type": "output", "data": " \u001b[2m(+14ms)\u001b[22m \n\u001b[2m19:07:26\u001b[22m   \u001b[34m\u2514\u2500\u001b[39m \u001b[2m/blog/third-post/index.html\u001b[22m", "ts": 1789427246.8239243}
+{"type": "output", "data": " \u001b[2m(+6ms)\u001b[22m \n", "ts": 1789427246.8300548}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[32m\u25b6\u001b[39m src/pages/blog/index.astro\n", "ts": 1789427246.8330238}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m   \u001b[34m\u2514\u2500\u001b[39m \u001b[2m/blog/index.html\u001b[22m", "ts": 1789427246.8331044}
+{"type": "output", "data": " \u001b[2m(+7ms)\u001b[22m \n", "ts": 1789427246.8404503}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[32m\u25b6\u001b[39m src/pages/index.astro\n", "ts": 1789427246.8420327}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m   \u001b[34m\u2514\u2500\u001b[39m \u001b[2m/index.html\u001b[22m", "ts": 1789427246.8421073}
+{"type": "output", "data": " \u001b[2m(+6ms)\u001b[22m \n", "ts": 1789427246.8477142}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[35m\u03bb\u001b[39m src/pages/rss.xml.js\n", "ts": 1789427246.8572638}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m   \u001b[34m\u2514\u2500\u001b[39m \u001b[2m/rss.xml\u001b[22m", "ts": 1789427246.8573751}
+{"type": "output", "data": " \u001b[2m(+10ms)\u001b[22m \n", "ts": 1789427246.8676984}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[32m\u2713 Completed in 142ms.\n\u001b[39m\n", "ts": 1789427246.8678052}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[34m[build]\u001b[39m Rearranging server assets...\n", "ts": 1789427246.878847}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[34m[@astrojs/sitemap]\u001b[39m `sitemap-index.xml` created at `dist`\n", "ts": 1789427246.8970857}
+{"type": "output", "data": "\u001b[2m19:07:26\u001b[22m \u001b[34m[build]\u001b[39m Server built in \u001b[1m3.13s\u001b[22m\n\u001b[2m19:07:26\u001b[22m \u001b[34m[build]\u001b[39m \u001b[1mComplete!\u001b[22m\n", "ts": 1789427246.8972561}
+{"type": "end", "exit_code": 0, "ts": 1789427246.995672}

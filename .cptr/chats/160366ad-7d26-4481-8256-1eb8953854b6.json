@@ -1,0 +1,63 @@
+{
+  "id": "160366ad-7d26-4481-8256-1eb8953854b6",
+  "title": "Reply with exactly: OPENWEBUI_CPTR_OK",
+  "summary": null,
+  "created_at": 1789523003679,
+  "updated_at": 1789523047236,
+  "history": {
+    "currentId": "e14beb6a-532d-4b1a-8056-8499cedcc85a",
+    "messages": {
+      "bbc522ac-daa5-4b86-b103-afd906a66b50": {
+        "id": "bbc522ac-daa5-4b86-b103-afd906a66b50",
+        "parentId": null,
+        "childrenIds": [
+          "e14beb6a-532d-4b1a-8056-8499cedcc85a"
+        ],
+        "role": "user",
+        "content": "Reply with exactly: OPENWEBUI_CPTR_OK",
+        "timestamp": 1789523003690,
+        "models": []
+      },
+      "e14beb6a-532d-4b1a-8056-8499cedcc85a": {
+        "id": "e14beb6a-532d-4b1a-8056-8499cedcc85a",
+        "parentId": "bbc522ac-daa5-4b86-b103-afd906a66b50",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "OPENWEBUI_CPTR_OK",
+        "timestamp": 1789523003695,
+        "model": "qwen3.6:27b",
+        "done": true,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_0c125d8d304c432e87df2d6df1ede743",
+            "status": "completed",
+            "content": [
+              {
+                "type": "text",
+                "text": "The user wants me to reply with exactly the text \"OPENWEBUI_CPTR_OK\"."
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "id": "df82aa12-a0ec-4c1a-9604-3123e683dfb9",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "OPENWEBUI_CPTR_OK"
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 3915,
+          "output_tokens": 28,
+          "total_tokens": 3943
+        }
+      }
+    }
+  }
+}

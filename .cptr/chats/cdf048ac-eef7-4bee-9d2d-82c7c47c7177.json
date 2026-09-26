@@ -1,0 +1,47 @@
+{
+  "id": "cdf048ac-eef7-4bee-9d2d-82c7c47c7177",
+  "title": "Read /workspace/package.json and tell me the proje",
+  "summary": null,
+  "created_at": 1789519057048,
+  "updated_at": 1789520168783,
+  "history": {
+    "currentId": "b41d2e58-e959-4674-8a58-d5c50ac5cbe9",
+    "messages": {
+      "299f617e-a432-4b23-9c5a-0bf683bad219": {
+        "id": "299f617e-a432-4b23-9c5a-0bf683bad219",
+        "parentId": null,
+        "childrenIds": [
+          "b41d2e58-e959-4674-8a58-d5c50ac5cbe9"
+        ],
+        "role": "user",
+        "content": "Read /workspace/package.json and tell me the project name and Astro version. Do not modify anything.",
+        "timestamp": 1789519077652,
+        "models": []
+      },
+      "b41d2e58-e959-4674-8a58-d5c50ac5cbe9": {
+        "id": "b41d2e58-e959-4674-8a58-d5c50ac5cbe9",
+        "parentId": "299f617e-a432-4b23-9c5a-0bf683bad219",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "\n\n> **Error:** Upstream provider returned an empty completion with no text, output items, tool calls, or usage tokens.",
+        "timestamp": 1789519077721,
+        "model": "cptr/workspace",
+        "done": true,
+        "output": [
+          {
+            "type": "message",
+            "id": "04dfabf8-71ba-4da6-b243-d50bb34dc280",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "\n\n> **Error:** Upstream provider returned an empty completion with no text, output items, tool calls, or usage tokens."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

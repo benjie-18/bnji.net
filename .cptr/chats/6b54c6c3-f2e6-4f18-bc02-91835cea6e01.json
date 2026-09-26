@@ -1,0 +1,47 @@
+{
+  "id": "6b54c6c3-f2e6-4f18-bc02-91835cea6e01",
+  "title": "Read /workspace/package.json and tell me the proje",
+  "summary": null,
+  "created_at": 1789519039519,
+  "updated_at": 1789520208247,
+  "history": {
+    "currentId": "f0f55195-d3bb-470e-92d9-2c0fdfcd1682",
+    "messages": {
+      "ed810a4a-3fc4-48ce-b464-3508d1db789d": {
+        "id": "ed810a4a-3fc4-48ce-b464-3508d1db789d",
+        "parentId": null,
+        "childrenIds": [
+          "f0f55195-d3bb-470e-92d9-2c0fdfcd1682"
+        ],
+        "role": "user",
+        "content": "Read /workspace/package.json and tell me the project name and Astro version. Do not modify anything.",
+        "timestamp": 1789519054339,
+        "models": []
+      },
+      "f0f55195-d3bb-470e-92d9-2c0fdfcd1682": {
+        "id": "f0f55195-d3bb-470e-92d9-2c0fdfcd1682",
+        "parentId": "ed810a4a-3fc4-48ce-b464-3508d1db789d",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "\n\n> **Error:** ",
+        "timestamp": 1789519054457,
+        "model": "cptr/workspace",
+        "done": true,
+        "output": [
+          {
+            "type": "message",
+            "id": "b075460a-283a-4596-9a12-21153c797b97",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "\n\n> **Error:** "
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "b099f668-05f0-4a01-a928-8ffd3cd30e76",
+  "title": "Read /workspace/package.json and tell me the proje",
+  "summary": null,
+  "created_at": 1789520260451,
+  "updated_at": 1789520279309,
+  "history": {
+    "currentId": "e2b57af2-756a-48e4-b46b-fc517e464d24",
+    "messages": {
+      "62f71ab7-a9b1-4bb1-ac37-181d6b014010": {
+        "id": "62f71ab7-a9b1-4bb1-ac37-181d6b014010",
+        "parentId": null,
+        "childrenIds": [
+          "e2b57af2-756a-48e4-b46b-fc517e464d24"
+        ],
+        "role": "user",
+        "content": "Read /workspace/package.json and tell me the project name and Astro version. Do not modify anything.",
+        "timestamp": 1789520267568,
+        "models": []
+      },
+      "e2b57af2-756a-48e4-b46b-fc517e464d24": {
+        "id": "e2b57af2-756a-48e4-b46b-fc517e464d24",
+        "parentId": "62f71ab7-a9b1-4bb1-ac37-181d6b014010",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "",
+        "timestamp": 1789520275867,
+        "model": "qwen3.6:27b",
+        "done": false,
+        "output": []
+      }
+    }
+  }
+}
