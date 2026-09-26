@@ -1,3 +1,0 @@
-{"type": "start", "command": "Get-Content .\\src\\pages\\index.astro -Raw", "pid": 4436, "ts": 1789428112.5968475}
-{"type": "output", "data": "'Get-Content' is not recognized as an internal or external command,\r\noperable program or batch file.\r\n", "ts": 1789428112.9523556}
-{"type": "end", "exit_code": 1, "ts": 1789428112.9540834}
