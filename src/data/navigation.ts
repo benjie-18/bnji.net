@@ -22,14 +22,57 @@ export type NavItem = {
 	comingSoon?: boolean;
 };
 
-/** Floating pill nav. Kept to six items so it still fits a phone in the sheet. */
-export const PRIMARY_NAV: NavItem[] = [
+/**
+ * A dropdown in the header pill: one trigger label, several destinations.
+ * Groups exist so the top level stays short (Home · Projects · Board · Me)
+ * while every route remains one click — or two — away. Rendered by
+ * Header.astro; behaviour (keyboard, touch, edge-aware placement) lives in
+ * scripts/interactions.ts → initNavDropdowns.
+ */
+export type NavGroup = {
+	label: string;
+	/** Stable slug: becomes the panel's DOM id (aria-controls). */
+	slug: string;
+	items: NavItem[];
+};
+
+/** Anything that can sit at the top level of the pill. */
+export type NavEntry = NavItem | NavGroup;
+
+export function isNavGroup(entry: NavEntry): entry is NavGroup {
+	return Array.isArray((entry as NavGroup).items);
+}
+
+/** Every destination in the nav, groups flattened — for sitemaps, 404s, tests. */
+export function flatNavItems(entries: readonly NavEntry[]): NavItem[] {
+	return entries.flatMap((entry) => (isNavGroup(entry) ? entry.items : [entry]));
+}
+
+/**
+ * Floating pill nav: four top-level entries so it fits a phone in the sheet.
+ * Projects and Me are dropdowns (see NavGroup); their destinations appear
+ * ONLY inside the dropdown, never as standalone top-level links.
+ */
+export const PRIMARY_NAV: NavEntry[] = [
 	{ label: 'Home', href: '/', description: 'Back to the hub' },
-	{ label: 'About', href: '/about/', description: 'What this site is' },
-	{ label: 'Projects', href: '/projects/', description: 'Selected work and placeholders' },
-	{ label: 'Blog', href: '/blog/', description: 'Notes and placeholder writing' },
-	{ label: 'Lab', href: '/lab/', description: 'Interactive experiments' },
-	{ label: 'Contact', href: '/contact/', description: 'Leave a message' },
+	{
+		label: 'Projects',
+		slug: 'projects',
+		items: [
+			{ label: 'Projects', href: '/projects/', description: 'Selected work and placeholders' },
+			{ label: 'Lab', href: '/lab/', description: 'Interactive experiments' },
+		],
+	},
+	{ label: 'Board', href: '/board/', description: 'The public message board' },
+	{
+		label: 'Me',
+		slug: 'me',
+		items: [
+			{ label: 'About', href: '/about/', description: 'What this site is' },
+			{ label: 'Blog', href: '/blog/', description: 'Notes and placeholder writing' },
+			{ label: 'Contact', href: '/contact/', description: 'Leave a message' },
+		],
+	},
 ];
 
 /**
@@ -60,5 +103,6 @@ export const FOOTER_NAV: NavItem[] = [
 	{ label: 'Blog', href: '/blog/' },
 	{ label: 'Projects', href: '/projects/' },
 	{ label: 'Lab', href: '/lab/' },
+	{ label: 'Board', href: '/board/' },
 	{ label: 'Contact', href: '/contact/' },
 ];

@@ -20,6 +20,7 @@
  */
 
 import { clamp, createFrameScheduler, prefersReducedMotion } from './environment';
+import { getSettings, subscribeSettings } from './settings';
 
 let revealStarted = false;
 let parallaxStarted = false;
@@ -44,10 +45,20 @@ export function initReveal(): void {
 
 	const showAll = () => targets.forEach((element) => element.classList.add('is-visible'));
 
-	// Reduced motion or no IntersectionObserver: skip the animation entirely and
-	// make sure nothing is left hidden.
-	if (prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
+	// Reduced motion, the reduced-effects setting, or no IntersectionObserver:
+	// skip the animation entirely and make sure nothing is left hidden.
+	// (animations.css also force-shows [data-reveal] under
+	// html[data-reduced-effects='on'], pre-paint, so this is the JS half of
+	// the same gate — no observer work for a calm session.)
+	if (
+		prefersReducedMotion() ||
+		getSettings().reducedEffects ||
+		typeof IntersectionObserver === 'undefined'
+	) {
 		showAll();
+		subscribeSettings((settings) => {
+			if (settings.reducedEffects) showAll();
+		});
 		return;
 	}
 
@@ -70,6 +81,12 @@ export function initReveal(): void {
 	);
 
 	targets.forEach((element) => observer.observe(element));
+
+	// Toggling reduced-effects on mid-session: reveal everything now; the CSS
+	// gate (animations.css) cancels the transitions so nothing animates in.
+	subscribeSettings((settings) => {
+		if (settings.reducedEffects) showAll();
+	});
 }
 
 /* -------------------------------------------------------------------------- */
@@ -79,7 +96,10 @@ export function initReveal(): void {
 export function initParallax(): void {
 	if (parallaxStarted) return;
 	parallaxStarted = true;
-	if (prefersReducedMotion()) return;
+	// Reduced effects at boot = treated exactly like reduced motion: the
+	// listeners are never attached (enabling parallax live then applies on
+	// the next load; DISABLING it live works immediately, below).
+	if (prefersReducedMotion() || getSettings().reducedEffects) return;
 
 	const strengths = new Map<HTMLElement, number>();
 	document.querySelectorAll<HTMLElement>('[data-parallax]').forEach((element) => {
@@ -93,7 +113,12 @@ export function initParallax(): void {
 	// drifting headings costs the same as a short one.
 	const active = new Set<HTMLElement>();
 
+	// Live gate for the reduced-effects setting: updates stop and every
+	// element settles back to its true position the moment it flips on.
+	let parallaxOn = true;
+
 	const update = createFrameScheduler(() => {
+		if (!parallaxOn) return;
 		const viewportHeight = window.innerHeight || 1;
 		active.forEach((element) => {
 			const strength = strengths.get(element) ?? 0;
@@ -131,6 +156,14 @@ export function initParallax(): void {
 	window.addEventListener('scroll', update, { passive: true });
 	window.addEventListener('resize', update, { passive: true });
 	update();
+
+	subscribeSettings((settings) => {
+		const next = !settings.reducedEffects;
+		if (next === parallaxOn) return;
+		parallaxOn = next;
+		if (parallaxOn) update();
+		else strengths.forEach((_strength, element) => element.style.setProperty('--parallax-y', '0px'));
+	});
 }
 
 /* -------------------------------------------------------------------------- */

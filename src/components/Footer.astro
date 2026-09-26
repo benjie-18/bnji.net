@@ -121,6 +121,14 @@ const year = new Date().getFullYear();
 		background-clip: text;
 	}
 
+	/* Light theme: white-on-sky is invisible, so the wordmark fades in deep
+	   teal instead — same atmosphere, mirrored palette (tokens live in the
+	   aero block of tokens.css). Forced-colours mode overrides `color` to
+	   CanvasText and drops backgrounds, so this degrades correctly there. */
+	:global(html[data-theme='light']) .footer-word {
+		background: linear-gradient(180deg, var(--aero-wordmark-top), var(--aero-wordmark-bottom));
+	}
+
 	.footer-tagline {
 		display: flex;
 		align-items: center;

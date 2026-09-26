@@ -37,6 +37,7 @@ import {
 	isPageVisible,
 	prefersReducedMotion,
 } from './environment';
+import { getSettings, subscribeSettings } from './settings';
 
 const TAU = Math.PI * 2;
 /** Alpha is quantised to this many steps for the fillStyle lookup tables. */
@@ -534,7 +535,24 @@ const started = new WeakSet<HTMLCanvasElement>();
 
 /**
  * Site background entry point: finds <canvas data-starfield> and starts the
- * engine with the tuned site defaults. Called once from scripts/boot.ts.
+ * engine with the tuned site defaults, shaped by the settings store:
+ *
+ *   starDensity     scales the population linearly (1 = site default, 0 =
+ *                   empty sky — minCount scales with it so the clamp does
+ *                   not floor the field back into existence);
+ *   performanceMode uses the engine's existing cost knobs: 30fps cap, dpr 1,
+ *                   no meteors (SITE_DEFAULTS documents each as the cheaper
+ *                   alternative — this is the path the Lab tuner exercises);
+ *   reducedEffects  freezes the sky to one static frame, exactly like the
+ *                   prefers-reduced-motion path inside the engine;
+ *   cursorEffects   toggles the pointer response (radius/boost to 0 — the
+ *                   excitation system is shared, so the soft reactive-area
+ *                   lift quiets with it).
+ *
+ * All four re-apply live through subscribeSettings(); the engine already
+ * reads `options` per frame and exposes regenerate()/pause()/resume().
+ *
+ * Called once from scripts/boot.ts.
  */
 export function initStarfield(): void {
 	const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-starfield]');
@@ -545,18 +563,67 @@ export function initStarfield(): void {
 		.getPropertyValue('--star-color')
 		.trim();
 
-	const field = createStarfield(canvas, color ? { color } : undefined);
+	const settings = getSettings();
+
+	const densityOptions = (density: number) => ({
+		starsPerMegapixel: Math.max(0, Math.round(SITE_DEFAULTS.starsPerMegapixel * density)),
+		minCount: Math.max(0, Math.round(SITE_DEFAULTS.minCount * density)),
+	});
+	const perfOptions = (perf: boolean) => ({
+		targetFps: perf ? 30 : SITE_DEFAULTS.targetFps,
+		maxDpr: perf ? 1 : SITE_DEFAULTS.maxDpr,
+		shootingStars: perf ? false : SITE_DEFAULTS.shootingStars,
+	});
+	const pointerOptions = (on: boolean) => ({
+		pointerRadius: on ? SITE_DEFAULTS.pointerRadius : 0,
+		pointerBoost: on ? SITE_DEFAULTS.pointerBoost : 0,
+		reactiveBoost: on ? SITE_DEFAULTS.reactiveBoost : 0,
+	});
+
+	const field = createStarfield(canvas, {
+		...(color ? { color } : {}),
+		...densityOptions(settings.starDensity),
+		...perfOptions(settings.performanceMode),
+		...pointerOptions(settings.cursorEffects),
+	});
 
 	// The light (Frutiger Aero) theme owns the sky: the starfield rests instead
-	// of burning frames behind an invisible canvas. Reacts to live toggles.
+	// of burning frames behind an invisible canvas. The reduced-effects static
+	// sky rests the same way (pause + one rendered frame = frozen sky).
 	const root = document.documentElement;
+	let staticSky = settings.reducedEffects;
 	const syncTheme = () => {
-		if (root.dataset.theme === 'light') field.pause();
-		else field.resume();
+		if (root.dataset.theme === 'light' || staticSky) {
+			field.pause();
+			// A paused canvas keeps whatever was last drawn; make sure a sky
+			// exists when we freeze before the loop ever ran.
+			field.render();
+		} else {
+			field.resume();
+		}
 	};
 	new MutationObserver(syncTheme).observe(root, {
 		attributes: true,
 		attributeFilter: ['data-theme'],
 	});
 	syncTheme();
+
+	let prev = settings;
+	subscribeSettings((next) => {
+		if (next.starDensity !== prev.starDensity) {
+			Object.assign(field.options, densityOptions(next.starDensity));
+			field.regenerate();
+		}
+		if (next.performanceMode !== prev.performanceMode) {
+			Object.assign(field.options, perfOptions(next.performanceMode));
+		}
+		if (next.cursorEffects !== prev.cursorEffects) {
+			Object.assign(field.options, pointerOptions(next.cursorEffects));
+		}
+		if (next.reducedEffects !== prev.reducedEffects) {
+			staticSky = next.reducedEffects;
+			syncTheme();
+		}
+		prev = next;
+	});
 }

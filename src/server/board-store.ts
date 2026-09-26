@@ -1,33 +1,40 @@
 /**
- * BNJI.NET — message board storage providers.
+ * BNJI.NET — message board storage providers (D1 primary).
  *
  * The API route (src/pages/api/board.ts) talks only to this module; the UI
- * talks only to the API. That is the whole boundary: swapping persistence
- * never touches a component.
+ * talks only to the API. Swapping persistence never touches a component.
  *
  * Providers
  * ---------
- *  memory — module-scope array. Lives as long as the Worker isolate does, so
- *           messages are shared by visitors served by the same isolate and
- *           survive between requests, but not across isolates/deployments.
- *           Zero configuration; this is the default and the honest demo grade.
- *  kv     — Cloudflare KV, true persistence. Auto-detected: if the Worker
- *           environment exposes a BOARD_KV namespace binding, this provider is
- *           used automatically. Enable it with:
- *             npx wrangler kv namespace create board
- *           then add a binding named BOARD_KV in wrangler.json
- *           (see docs/CONFIGURATION.md). No code changes needed.
- *  rest   — external JSON API (GET/POST {messages}) for teams that already
- *           run a backend. Configured via BOARD_REST_URL / BOARD_REST_TOKEN
- *           environment variables (secret; never in this file).
+ *  d1   — Cloudflare D1, the production store. One table (see
+ *         migrations/0001_board_messages.sql) with a composite index that
+ *         serves the public feed query (status filter + newest-first keyset
+ *         cursor) directly. Writes are single atomic INSERTs — no read-
+ *         modify-write index, so concurrent posts from different isolates
+ *         can never lose each other.
+ *  rest — external JSON API for teams that already run a backend
+ *         (BOARD_REST_URL / BOARD_REST_TOKEN secrets).
  *
- * Data model (deliberately tiny and serialisable):
- *   { id, text, image?, hue, createdAt }
- * `image` is stored ONLY as a validated data: URL of an allowed MIME type and
- * size (validated again server-side on write). `hue` is a stable 0-359 tint
- * seed so each bubble/star gets its own colour without storing one.
+ * There is deliberately NO in-memory production fallback: if neither provider
+ * is configured the store factory returns null and the route answers 503
+ * storage_unconfigured, instead of silently pretending to persist.
+ *
+ * Moderation groundwork
+ * ---------------------
+ * Every message carries `status`: visible | hidden | reported | deleted.
+ * listPublic() only ever returns visible/reported rows — hidden and deleted
+ * messages never reach a public fetch, enforced in SQL, not in the route.
+ * setStatus() exists for the future moderation surface; no UI or route uses
+ * it yet.
+ *
+ * Data model (serialisable, tiny):
+ *   { id, text, image?, hue, status, createdAt }
+ * `image` is stored ONLY as a validated data: URL (re-validated on write by
+ * the route); `hue` is a stable 0-359 tint seed.
  */
 import { BOARD_CONFIG } from '../config/board.config';
+
+export type MessageStatus = 'visible' | 'hidden' | 'reported' | 'deleted';
 
 export type BoardMessage = {
 	id: string;
@@ -36,68 +43,149 @@ export type BoardMessage = {
 	image?: string;
 	/** Stable tint seed 0-359. */
 	hue: number;
+	status: MessageStatus;
 	/** Epoch ms. */
 	createdAt: number;
 };
 
+/** What public fetches return: the moderation status stays server-side. */
+export type PublicMessage = Omit<BoardMessage, 'status'>;
+
+export type MessagePage = {
+	messages: PublicMessage[];
+	/** Opaque keyset cursor for the next (older) page, or null when done. */
+	nextCursor: string | null;
+};
+
+export type ListOptions = {
+	limit: number;
+	/** Opaque cursor from a previous page; undefined = newest page. */
+	cursor?: string;
+};
+
 export interface BoardStore {
-	/** Newest first. `limit` caps the result; `all` bypasses the default cap. */
-	list(limit: number): Promise<BoardMessage[]>;
+	readonly kind: 'd1' | 'rest';
+	listPublic(options: ListOptions): Promise<MessagePage>;
 	add(message: BoardMessage): Promise<void>;
-	readonly kind: 'memory' | 'kv' | 'rest';
+	/** Moderation groundwork: flip a message's status. Returns false if unknown id. */
+	setStatus(id: string, status: MessageStatus): Promise<boolean>;
 }
 
-/* --- memory provider ------------------------------------------------------ */
+/* --- opaque keyset cursor --------------------------------------------------- */
+/* Cursor = base64("[createdAt, id]"): the exact seek position in the
+   (created_at DESC, id DESC) order. Opaque to clients, validated on read. */
 
-const memory: BoardMessage[] = [];
+export function encodeCursor(createdAt: number, id: string): string {
+	return btoa(JSON.stringify([createdAt, id]));
+}
 
-const memoryStore: BoardStore = {
-	kind: 'memory',
-	async list(limit) {
-		return memory
-			.slice()
-			.sort((a, b) => b.createdAt - a.createdAt)
-			.slice(0, limit);
-	},
-	async add(message) {
-		memory.push(message);
-		// Hard cap so a long-lived isolate cannot grow without bound.
-		if (memory.length > 500) memory.splice(0, memory.length - 500);
-	},
+export function decodeCursor(cursor: string): { createdAt: number; id: string } | null {
+	try {
+		const parsed = JSON.parse(atob(cursor)) as unknown;
+		if (!Array.isArray(parsed) || parsed.length !== 2) return null;
+		const [createdAt, id] = parsed as [unknown, unknown];
+		if (typeof createdAt !== 'number' || typeof id !== 'string') return null;
+		return { createdAt, id };
+	} catch {
+		return null;
+	}
+}
+
+const toPublic = (message: BoardMessage): PublicMessage => {
+	const { status: _status, ...pub } = message;
+	return pub;
 };
 
-/* --- kv provider ----------------------------------------------------------- */
+/* --- minimal D1 surface (structural, no workers-types dependency) ----------- */
 
-type KvNamespace = {
-	get(key: string): Promise<string | null>;
-	put(key: string, value: string): Promise<void>;
+type D1PreparedStatement = {
+	bind(...values: (string | number | null)[]): D1PreparedStatement;
+	all<T>(): Promise<{ results: T[] }>;
+	run(): Promise<{ meta?: { changes?: number } }>;
 };
 
-function createKvStore(kv: KvNamespace): BoardStore {
-	const INDEX = 'board:index';
+type D1Database = {
+	prepare(query: string): D1PreparedStatement;
+};
+
+type D1Row = {
+	id: string;
+	body: string;
+	image: string | null;
+	hue: number;
+	status: MessageStatus;
+	created_at: number;
+};
+
+const PUBLIC_STATUSES = `'visible', 'reported'`;
+
+function createD1Store(db: D1Database): BoardStore {
+	const rowToMessage = (row: D1Row): BoardMessage => ({
+		id: row.id,
+		text: row.body,
+		...(row.image ? { image: row.image } : {}),
+		hue: row.hue,
+		status: row.status,
+		createdAt: row.created_at,
+	});
+
 	return {
-		kind: 'kv',
-		async list(limit) {
-			const rawIndex = await kv.get(INDEX);
-			const ids: string[] = rawIndex ? (JSON.parse(rawIndex) as string[]) : [];
-			const messages: BoardMessage[] = [];
-			for (const id of ids.slice(0, limit)) {
-				const raw = await kv.get(`board:msg:${id}`);
-				if (raw) messages.push(JSON.parse(raw) as BoardMessage);
-			}
-			return messages;
+		kind: 'd1',
+		async listPublic({ limit, cursor }) {
+			const seek = cursor ? decodeCursor(cursor) : null;
+			// Keyset pagination: strictly older than the cursor position in
+			// (created_at DESC, id DESC) order. Hidden/deleted are filtered in
+			// SQL so they can never reach a public fetch.
+			const query = seek
+				? `SELECT id, body, image, hue, status, created_at FROM board_messages
+				   WHERE status IN (${PUBLIC_STATUSES})
+				     AND (created_at < ?1 OR (created_at = ?1 AND id < ?2))
+				   ORDER BY created_at DESC, id DESC
+				   LIMIT ?3`
+				: `SELECT id, body, image, hue, status, created_at FROM board_messages
+				   WHERE status IN (${PUBLIC_STATUSES})
+				   ORDER BY created_at DESC, id DESC
+				   LIMIT ?1`;
+			const stmt = seek
+				? db.prepare(query).bind(seek.createdAt, seek.id, limit + 1)
+				: db.prepare(query).bind(limit + 1);
+			const { results } = await stmt.all<D1Row>();
+			const rows = results.map(rowToMessage);
+			const overflow = rows.length > limit;
+			const page = overflow ? rows.slice(0, limit) : rows;
+			const last = page[page.length - 1];
+			return {
+				messages: page.map(toPublic),
+				nextCursor: overflow && last ? encodeCursor(last.createdAt, last.id) : null,
+			};
 		},
 		async add(message) {
-			await kv.put(`board:msg:${message.id}`, JSON.stringify(message));
-			const rawIndex = await kv.get(INDEX);
-			const ids: string[] = rawIndex ? (JSON.parse(rawIndex) as string[]) : [];
-			ids.unshift(message.id);
-			await kv.put(INDEX, JSON.stringify(ids.slice(0, 500)));
+			await db
+				.prepare(
+					`INSERT OR IGNORE INTO board_messages (id, body, image, hue, status, created_at)
+					 VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+				)
+				.bind(
+					message.id,
+					message.text,
+					message.image ?? null,
+					message.hue,
+					message.status,
+					message.createdAt,
+				)
+				.run();
+		},
+		async setStatus(id, status) {
+			const result = await db
+				.prepare(`UPDATE board_messages SET status = ?1 WHERE id = ?2`)
+				.bind(status, id)
+				.run();
+			return (result.meta?.changes ?? 0) > 0;
 		},
 	};
 }
 
-/* --- rest provider ---------------------------------------------------------- */
+/* --- rest provider ----------------------------------------------------------- */
 
 function createRestStore(url: string, token?: string): BoardStore {
 	const headers = (): Record<string, string> => ({
@@ -106,11 +194,22 @@ function createRestStore(url: string, token?: string): BoardStore {
 	});
 	return {
 		kind: 'rest',
-		async list(limit) {
-			const response = await fetch(`${url}?limit=${limit}`, { headers: headers() });
+		async listPublic({ limit, cursor }) {
+			const params = new URLSearchParams({ limit: String(limit) });
+			if (cursor) params.set('cursor', cursor);
+			const response = await fetch(`${url}?${params}`, { headers: headers() });
 			if (!response.ok) throw new Error(`board rest list failed: ${response.status}`);
-			const data = (await response.json()) as { messages: BoardMessage[] };
-			return data.messages;
+			const data = (await response.json()) as {
+				messages: (PublicMessage & { status?: MessageStatus })[];
+				nextCursor?: string | null;
+			};
+			return {
+				// Defensive: never trust a remote to respect the status contract.
+				messages: data.messages
+					.filter((m) => m.status === undefined || m.status === 'visible' || m.status === 'reported')
+					.map(({ status: _status, ...pub }) => pub),
+				nextCursor: data.nextCursor ?? null,
+			};
 		},
 		async add(message) {
 			const response = await fetch(url, {
@@ -120,26 +219,35 @@ function createRestStore(url: string, token?: string): BoardStore {
 			});
 			if (!response.ok) throw new Error(`board rest add failed: ${response.status}`);
 		},
+		async setStatus(id, status) {
+			const response = await fetch(`${url}/${encodeURIComponent(id)}/status`, {
+				method: 'PATCH',
+				headers: headers(),
+				body: JSON.stringify({ status }),
+			});
+			return response.ok;
+		},
 	};
 }
 
 /* --- selection -------------------------------------------------------------- */
 
 /**
- * Resolve the active store for one request. `env` is the Worker environment
- * (Astro.locals.runtime.env); bindings and secrets arrive there and nowhere
- * else. Falls back to memory when the configured provider is unavailable, so
- * the board UI always works.
+ * Resolve the store for one request. `env` is the Worker environment (bindings
+ * + secrets arrive via src/server/env.ts). Returns null when nothing is
+ * configured — the route turns that into an honest 503.
  */
-export function getBoardStore(env: Record<string, unknown> | undefined): BoardStore {
+export function getBoardStore(env: Record<string, unknown> | undefined): BoardStore | null {
 	const configured = BOARD_CONFIG.provider;
-	if (configured === 'kv' || configured === 'memory') {
-		const kv = env?.BOARD_KV as KvNamespace | undefined;
-		if (kv && typeof kv.get === 'function') return createKvStore(kv);
+	if (configured === 'd1') {
+		const db = env?.BOARD_DB as D1Database | undefined;
+		if (db && typeof db.prepare === 'function') return createD1Store(db);
+		return null;
 	}
 	if (configured === 'rest') {
 		const url = env?.BOARD_REST_URL as string | undefined;
 		if (url) return createRestStore(url, env?.BOARD_REST_TOKEN as string | undefined);
+		return null;
 	}
-	return memoryStore;
+	return null;
 }

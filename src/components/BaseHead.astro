@@ -89,29 +89,48 @@ const jsonLd = {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="generator" content={Astro.generator} />
 
-<!-- Progressive enhancement flag. Inline and un-bundled on purpose: it must run
-     before first paint so animations.css never hides content from a visitor
-     whose JavaScript is blocked, slow or disabled. -->
-<!-- Pre-paint: runs before first frame so there is never a flash of the wrong
-     theme, and so reduced-motion / returning visitors never enter the scroll
-     intro. Inline and un-bundled on purpose; it must not wait for the bundle. -->
+<!-- Progressive enhancement flag + settings pre-paint. Inline and un-bundled
+     on purpose: this must run synchronously BEFORE first paint, so the theme
+     and every effects-state flag are already correct on frame one — no flash
+     of the wrong theme, no intro that starts and then stops. It reads the
+     same localStorage key as scripts/settings.ts (the settings store) and
+     mirrors its applySettingsToRoot() contract; the store re-applies the
+     same values at boot, idempotently. The legacy standalone theme key
+     ('bnji-theme') is honoured as a migration fallback. -->
 <script is:inline>
 	(function () {
 		var root = document.documentElement;
 		root.classList.add('js');
-		var theme = 'dark';
+		var s = null;
 		try {
-			theme = localStorage.getItem('bnji-theme') === 'light' ? 'light' : 'dark';
+			var raw = localStorage.getItem('bnji-settings-v1');
+			if (raw) s = JSON.parse(raw);
 		} catch (e) {}
+		var flag = function (key, fallback) {
+			return s && typeof s[key] === 'boolean' ? s[key] : fallback;
+		};
+		var theme = s && (s.theme === 'light' || s.theme === 'dark') ? s.theme : null;
+		if (!theme) {
+			try {
+				theme = localStorage.getItem('bnji-theme') === 'light' ? 'light' : 'dark';
+			} catch (e) {
+				theme = 'dark';
+			}
+		}
 		root.dataset.theme = theme;
 		var meta = document.querySelector('meta[name="theme-color"]');
 		if (meta) meta.content = theme === 'light' ? '#bfe6f7' : '#020204';
 		var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-		var seen = false;
-		try {
-			seen = sessionStorage.getItem('bnji-intro-done') === '1';
-		} catch (e) {}
-		if (reduced || seen) root.dataset.intro = 'off';
+		if (!flag('introEnabled', true) || reduced) root.dataset.intro = 'off';
+		root.dataset.cursorEffects = flag('cursorEffects', true) ? 'on' : 'off';
+		root.dataset.reducedEffects = flag('reducedEffects', false) ? 'on' : 'off';
+		root.dataset.performanceMode = flag('performanceMode', false) ? 'on' : 'off';
+		root.dataset.advancedGlass = flag('advancedGlass', true) ? 'on' : 'off';
+		var uiScale =
+			s && typeof s.uiScale === 'number' && s.uiScale >= 80 && s.uiScale <= 130
+				? s.uiScale
+				: 100;
+		root.style.setProperty('--ui-scale', String(uiScale / 100));
 	})();
 </script>
 

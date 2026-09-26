@@ -1,0 +1,278 @@
+/* ==========================================================================
+   BNJI.NET — settings overlay
+   --------------------------------------------------------------------------
+   Imported only by components/SettingsOverlay.astro, so no page pays for it
+   unless the overlay ships there (every page does — it is mounted once in
+   Layout.astro — but the cascade stays component-scoped by convention).
+
+   The panel's glass comes from data-glass="raised" (styles/glass.css):
+   token-driven, correct in both themes, no hand-rolled backdrop-filter in
+   this file. The backdrop is a plain dim — deliberately NOT another blurred
+   surface, because it sits under a glass panel and double-blur costs fill
+   rate for no visible gain.
+
+   Mobile-safe by the same contract as the board panels: svh/dvh sizing and
+   env(safe-area-inset-*) padding, so the overlay fits the small viewport and
+   clears the home indicator.
+   ========================================================================== */
+
+/* Dim + click target behind the panel. */
+.settings-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: calc(var(--z-modal) - 1);
+	background: rgba(2, 4, 10, 0.58);
+}
+
+html[data-theme='light'] .settings-backdrop {
+	background: rgba(10, 40, 60, 0.35);
+}
+
+/* The panel itself. */
+.settings-overlay {
+	position: fixed;
+	inset: 10svh auto auto 50%;
+	transform: translateX(-50%);
+	z-index: var(--z-modal);
+	display: grid;
+	gap: 0.85rem;
+	width: min(620px, 94vw);
+	max-height: min(76svh, calc(100dvh - 14svh));
+	overflow: auto;
+	overscroll-behavior: contain;
+	padding: 1.1rem 1.2rem calc(1.1rem + env(safe-area-inset-bottom, 0px));
+	border-radius: var(--radius-xl);
+	animation: settings-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes settings-in {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(-50%) translateY(0);
+	}
+}
+
+.settings-overlay:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+/* Scroll lock while the modal is open (toggled by scripts/settings-overlay.ts). */
+html.settings-is-open,
+html.settings-is-open body {
+	overflow: hidden;
+}
+
+.settings-overlay__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.settings-overlay__title {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: var(--text-title, 1.4rem);
+	font-weight: 400;
+	letter-spacing: var(--tracking-snug);
+	color: var(--text-strong);
+}
+
+.settings-overlay__close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: 34px;
+	block-size: 34px;
+	flex: none;
+	border: 1px solid var(--glass-border);
+	border-radius: 50%;
+	background: var(--glass-bg-quiet);
+	color: var(--text-muted);
+	cursor: pointer;
+	transition:
+		color var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out);
+}
+
+.settings-overlay__close:hover {
+	color: var(--text-strong);
+	border-color: var(--glass-border-strong);
+	background: var(--glass-bg);
+}
+
+.settings-overlay__close:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.settings-overlay__close svg {
+	inline-size: 15px;
+	block-size: 15px;
+}
+
+.settings-overlay__note {
+	margin: 0;
+	font-size: var(--text-micro);
+	letter-spacing: 0.04em;
+	line-height: 1.6;
+	color: var(--text-dim);
+}
+
+/* --- Groups & rows --------------------------------------------------------- */
+
+.settings-group {
+	display: grid;
+	gap: 0.15rem;
+	margin: 0;
+	padding: 0.7rem 0.85rem 0.8rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-lg);
+	background: var(--glass-bg-quiet);
+	min-inline-size: 0;
+}
+
+.settings-group__title {
+	padding: 0 0.4em;
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+
+.settings-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem 1.25rem;
+	padding: 0.55rem 0.15rem;
+}
+
+.settings-row + .settings-row {
+	border-top: 1px solid rgba(128, 148, 176, 0.14);
+}
+
+.settings-row__label {
+	display: grid;
+	gap: 0.15rem;
+	color: var(--text);
+	font-size: 0.92rem;
+	cursor: pointer;
+	min-inline-size: 0;
+}
+
+.settings-row__hint {
+	color: var(--text-dim);
+	font-family: var(--font-mono);
+	font-size: 0.64rem;
+	letter-spacing: 0.03em;
+	line-height: 1.5;
+}
+
+.settings-row__control {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex: none;
+}
+
+.settings-row__control output {
+	min-inline-size: 4.5ch;
+	text-align: right;
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-muted);
+}
+
+/* --- Controls -------------------------------------------------------------- */
+/* Native inputs keep their semantics; styling stays light so both themes and
+   forced-colors modes behave. */
+
+.settings-switch {
+	inline-size: 1.15rem;
+	block-size: 1.15rem;
+	flex: none;
+	accent-color: var(--accent-strong);
+	cursor: pointer;
+}
+
+.settings-row input[type='range'] {
+	inline-size: clamp(110px, 26vw, 170px);
+	accent-color: var(--accent-strong);
+	cursor: pointer;
+}
+
+.settings-row input:focus-visible,
+.settings-segment input:focus-visible + span {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+/* Theme segment: two radios styled as one pill, echoing the nav's language. */
+.settings-segment {
+	display: inline-flex;
+	gap: 0.15rem;
+	padding: 0.18rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-quiet);
+	flex: none;
+}
+
+.settings-segment__option {
+	position: relative;
+	display: inline-flex;
+	cursor: pointer;
+}
+
+.settings-segment__option input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: pointer;
+	margin: 0;
+}
+
+.settings-segment__option span {
+	padding: 0.34rem 0.8rem;
+	border-radius: var(--radius-pill);
+	border: 1px solid transparent;
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-muted);
+	transition:
+		color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out);
+}
+
+.settings-segment__option input:checked + span {
+	color: var(--text-strong);
+	background: rgba(255, 255, 255, 0.085);
+	border-color: var(--glass-border);
+	box-shadow: inset 0 1px 0 var(--glass-highlight);
+}
+
+html[data-theme='light'] .settings-segment__option input:checked + span {
+	background: rgba(11, 61, 82, 0.1);
+}
+
+.settings-segment__option:hover span {
+	color: var(--text-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings-overlay {
+		animation: none;
+	}
+	.settings-overlay__close,
+	.settings-segment__option span {
+		transition: none;
+	}
+}

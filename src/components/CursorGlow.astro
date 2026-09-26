@@ -58,6 +58,14 @@
 		}
 	}
 
+	/* Settings-store gates (attributes are set pre-paint, so the halo never
+	   appears for a visitor who turned it off — scripts/interactions.ts
+	   mirrors this live). Reduced effects calms the cursor too. */
+	:global(html[data-cursor-effects='off']) .cursor-glow,
+	:global(html[data-reduced-effects='on']) .cursor-glow {
+		display: none;
+	}
+
 	@media (max-width: 720px) {
 		.cursor-glow {
 			inline-size: 220px;

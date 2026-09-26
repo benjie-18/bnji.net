@@ -15,9 +15,18 @@
  */
 
 import { initStarfield } from './starfield';
-import { initCursorGlow, initGlassTracking, initMagnetic, initNavToggle } from './interactions';
+import {
+	initCursorGlow,
+	initGlassTracking,
+	initMagnetic,
+	initNavDropdowns,
+	initNavToggle,
+} from './interactions';
+import { initMusicPlayer } from './music';
 import { initNavScrollState, initParallax, initReveal } from './scroll';
-import { initThemeToggle } from './theme';
+import { initSettings } from './settings';
+import { initSettingsOverlay } from './settings-overlay';
+import { initTheme } from './theme';
 
 function start(name: string, init: () => void): void {
 	try {
@@ -31,12 +40,19 @@ function start(name: string, init: () => void): void {
 
 export function boot(): void {
 	// Background first, then surfaces, then scroll choreography.
-	start('theme-toggle', initThemeToggle);
+	// Settings first: the store hydrates synchronously at import, and
+	// initSettings mirrors the persisted flags onto <html> (idempotent with
+	// the pre-paint script) before anything consults them.
+	start('settings', initSettings);
+	start('theme', initTheme);
+	start('settings-overlay', initSettingsOverlay);
+	start('music-player', initMusicPlayer);
 	start('starfield', initStarfield);
 	start('cursor-glow', initCursorGlow);
 	start('glass-tracking', initGlassTracking);
 	start('magnetic', initMagnetic);
 	start('nav-toggle', initNavToggle);
+	start('nav-dropdowns', initNavDropdowns);
 	start('nav-scroll-state', initNavScrollState);
 	start('reveal', initReveal);
 	start('parallax', initParallax);

@@ -9,7 +9,9 @@ bokeh) — both wrapped in a realistic liquid-glass surface system. Built with
 > AI agents: read [`AGENTS.md`](./AGENTS.md) first.
 > Owners/developers: every configurable value is documented in
 > [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) — music sources, Discord
-> notifications, board storage, access control, themes, secrets handling.
+> notifications, board storage, access control, themes, secrets handling — and
+> what the board actually stores (fields, retention, rate-limit data,
+> moderation states) in [`docs/DATA.md`](./docs/DATA.md).
 >
 > Content note: this project intentionally carries **no personal biography**;
 > identity copy is neutral placeholder text by design.
@@ -41,8 +43,14 @@ npm run deploy     # publish to Cloudflare Workers
 
 ## Features
 
-- **Dual themes** — dark space (primary) and Frutiger Aero light, switched by
-  the nav toggle, persisted, applied pre-paint (no flash), fully token-driven.
+- **Settings overlay** — one glass dialog (header gear icon) backed by a
+  central settings store: theme, intro on/off, audio mute/volume, UI scale,
+  performance mode, reduced effects, particle density, cursor effects and
+  advanced glass. Every setting persists to localStorage and is applied
+  pre-paint (no flash of the wrong theme or effects state).
+- **Dual themes** — dark space (primary) and Frutiger Aero light, switched in
+  the settings overlay, persisted, applied pre-paint (no flash), fully
+  token-driven.
 - **Living sky** — canvas starfield with smooth twinkle (no flicker), pointer
   excitation, shooting stars in dark mode; the light theme rests the starfield
   and shows clouds, bubbles and bokeh instead.
@@ -52,17 +60,26 @@ npm run deploy     # publish to Cloudflare Workers
 - **Theme-aware cursor** — stellar halo in dark, water-lens caustic in light;
   inert on touch and under reduced motion.
 - **Scroll intro** — the homepage opens with a scroll-scrubbed cinematic (white
-  field, blue star zooming/rotating until its energy fills the viewport), with
-  skip button, session memory and a reduced-motion bypass.
-- **Background music** — one player, four swappable sources (YouTube, Spotify,
-  direct file, or none) configured in `src/config/music.config.ts`; full
-  play/pause/volume/mute/loading/error states; never autoplays.
+  field, blue star zooming/rotating until its energy fills the viewport);
+  enable/disable comes from the settings store, reduced motion always
+  bypasses it.
+- **Background music** — a small status-dot pill (play/pause + mute) with the
+  volume living in the Settings overlay; four swappable sources (YouTube,
+  Spotify, direct file, or none) configured in `src/config/music.config.ts`,
+  each with its own honest control surface. Autoplay is attempted on load;
+  when the browser refuses, the pill shows a clear tap-to-play affordance
+  instead of working around the block.
 - **Profile card** — link-in-bio card (avatar orb, badges, bio, chips, link
   rows, copy-handle block) modelled on ayo.so profile cards, placeholder copy.
-- **Public message board** — floating bubbles (light) / star orbs (dark) with
-  buoyancy, collisions and drag; composer anchored bottom-centre; visible-count
-  slider; full-archive dialog; server-side validation, sanitization, rate
-  limits; pluggable persistence (memory → KV → REST) via `/api/board`.
+- **Public message board** (`/board/`, linked from the nav — no longer a
+  global overlay) — floating bubbles (light) / star orbs (dark) with buoyancy,
+  collisions and drag; mobile-safe composer (dvh/svh, safe-area insets,
+  visual-viewport keyboard tracking); visible-count slider that walks older
+  pages via the API's keyset cursor (initial load capped at 10); full-archive
+  dialog; polling that pauses while the tab is hidden and revalidates with
+  ETags; server-side validation, sanitization, rate limits; D1-backed
+  persistence with cursor pagination + moderation statuses (or external REST
+  store) via `/api/board`; KV-shared rate limiting.
 - **Private messages** — contact form delivered server-side through a Discord
   webhook or ntfy push; credentials live only in Worker secrets.
 - **The Lab** — runnable experiments and small games: starfield tuner, glass
@@ -74,6 +91,7 @@ npm run deploy     # publish to Cloudflare Workers
 
 ```
 docs/CONFIGURATION.md  every configurable value, public vs secret, how to swap
+docs/DATA.md           what the message board stores, retention, moderation data
 src/
   config/       music, dm integration, board policy, access rules, theme, intro
   components/   glass primitives, sections, lab experiments, board, player…
@@ -81,9 +99,10 @@ src/
   layouts/      Layout (shell) and BlogPost (article chrome)
   middleware.ts route-guard enforcement for ACCESS_RULES
   pages/        routes + /api/board + /api/dm (server boundaries)
-  scripts/      starfield, interactions, scroll, board physics, music, intro…
+  scripts/      settings store + overlay, theme, starfield, interactions,
+                scroll, board physics, music, intro…
   server/       board stores, rate limiter, access primitives, env access
-  styles/       tokens, glass, aero, animations, global, lab, board
+  styles/       tokens, glass, aero, animations, global, lab, board, settings
 public/         fonts, favicon, og-cover, manifest, post hero images
 ```
 

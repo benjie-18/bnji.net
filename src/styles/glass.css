@@ -100,6 +100,48 @@
 	}
 }
 
+/* --- Advanced glass OFF (settings store) ----------------------------------- */
+/* html[data-advanced-glass='off'] is set PRE-PAINT by BaseHead's inline
+   script, so a visitor who turned the expensive layers off never pays for a
+   single blurred frame. The surface degrades to exactly the same believable
+   flat panel as the @supports-not fallback above: opaque tint, lit rim, one
+   inset highlight — no backdrop-filter, no ::before optics, no ::after
+   specular/sweep (scripts/interactions.ts also stops writing --mouse-x/y).
+   Specificity (0,2,1) beats the base rule, the raised/quiet variants and the
+   interactive hover/focus shadows, so one block covers the whole system. */
+
+html[data-advanced-glass='off'] [data-glass],
+html[data-advanced-glass='off'] .glass {
+	background:
+		linear-gradient(
+			168deg,
+			var(--glass-bg-fallback),
+			var(--glass-bg-fallback) 60%,
+			var(--glass-bg-fallback)
+		)
+		padding-box,
+		linear-gradient(
+			135deg,
+			var(--glass-edge-a),
+			var(--glass-edge-b) 42%,
+			var(--glass-edge-c) 100%
+		)
+		border-box;
+	box-shadow: inset 0 1px 0 var(--glass-highlight);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	/* Neutralise the hover/focus glow token so interactive surfaces cannot
+	   re-light an effect the visitor turned off. */
+	--glass-glow: 0 0 0 0 transparent;
+}
+
+html[data-advanced-glass='off'] [data-glass]::before,
+html[data-advanced-glass='off'] [data-glass]::after,
+html[data-advanced-glass='off'] .glass::before,
+html[data-advanced-glass='off'] .glass::after {
+	content: none;
+}
+
 /* --- Internal optics ------------------------------------------------------ */
 /* Top specular sheet + bottom bounce refraction + environmental bleed from the
    lower-left corner. Pure gradients: zero runtime cost, theme-aware via

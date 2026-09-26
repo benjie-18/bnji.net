@@ -48,6 +48,10 @@
 }
 
 html {
+	/* UI scale setting (settings store, applied pre-paint as --ui-scale):
+	   the scale tokens (--text-*, --space-*) are rem-based, so multiplying
+	   the root font-size scales the whole layout. 100% = browser default. */
+	font-size: calc(100% * var(--ui-scale, 1));
 	/* Anchors and the skip link must clear the floating nav. */
 	scroll-padding-top: var(--scroll-pad);
 	scroll-behavior: smooth;
@@ -112,10 +116,10 @@ ol {
 	inset: -12vmax;
 	z-index: var(--z-aurora);
 	pointer-events: none;
-	background:
-		radial-gradient(46% 38% at 18% 12%, var(--aurora-1), transparent 68%),
-		radial-gradient(40% 34% at 84% 26%, var(--aurora-2), transparent 70%),
-		radial-gradient(52% 44% at 62% 92%, var(--aurora-3), transparent 72%);
+	/* The background (both themes, six token-driven radials) lives in
+	   aero.css — the single definition. A competing three-radial copy used to
+	   sit here and was dead weight: aero.css is imported after global.css and
+	   always won. */
 }
 
 /* Vignette: keeps the edges of the viewport darker than the centre so glass
@@ -548,6 +552,24 @@ b {
 		background-clip: text;
 		color: transparent;
 		text-shadow: 0 0 90px rgba(127, 212, 255, 0.14);
+	}
+}
+
+/* Light theme: the near-white gradient above is unreadable on the painted
+   Aero sky, so headings get a deep-teal gradient built from the light
+   theme's own text tokens (strong → body → accent-strong, ≈ 9.6:1 → 6.9:1
+   against the sky). :where() keeps specificity equal to the base rule —
+   later-in-file wins — so the forced-colours reset below still overrides
+   both, and non-supporting browsers keep the solid --text-strong fallback. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+	:where(html[data-theme='light']) .text-luminous {
+		background-image: linear-gradient(
+			178deg,
+			var(--text-strong) 8%,
+			var(--text) 48%,
+			var(--accent-strong) 98%
+		);
+		text-shadow: 0 0 90px var(--accent-soft);
 	}
 }
 

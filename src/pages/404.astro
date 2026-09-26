@@ -11,12 +11,13 @@
  */
 import GlassButton from '../components/GlassButton.astro';
 import GlassPanel from '../components/GlassPanel.astro';
-import { PRIMARY_NAV } from '../data/navigation';
+import { flatNavItems, PRIMARY_NAV } from '../data/navigation';
 import Layout from '../layouts/Layout.astro';
 
 /** Everything except the current (nonexistent) page: a way out in every
- *  direction instead of a single "go home" button. */
-const escapes = PRIMARY_NAV.filter((item) => item.href !== '/');
+ *  direction instead of a single "go home" button. Dropdown groups are
+ *  flattened — the 404 lists destinations, not triggers. */
+const escapes = flatNavItems(PRIMARY_NAV).filter((item) => item.href !== '/');
 ---
 
 <Layout

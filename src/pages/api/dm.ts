@@ -19,7 +19,7 @@
  *   502 upstream_error
  */
 import { DM_INTEGRATION } from '../../config/integrations.config';
-import { rateLimit, retryAfterSeconds } from '../../server/ratelimit';
+import { rateLimit, type KvRateLimitStore } from '../../server/ratelimit';
 import { serverEnvironment } from '../../server/env';
 import type { APIContext } from 'astro';
 
@@ -52,18 +52,24 @@ export async function POST(context: APIContext): Promise<Response> {
 		return json({ state: 'not_configured' }, 503);
 	}
 
+	const env = await serverEnvironment();
+	const secrets = env as Record<string, string | undefined>;
+	const kv = env.BOARD_KV as KvRateLimitStore | undefined;
 	const key = clientKey(context.request);
-	if (!rateLimit(`dm:post:${key}`, DM_INTEGRATION.cooldownSeconds * 1000, 1)) {
-		return json(
-			{
-				state: 'rate_limited',
-				retryAfter: retryAfterSeconds(`dm:post:${key}`, DM_INTEGRATION.cooldownSeconds * 1000),
-			},
-			429,
-		);
+
+	// KV-backed windows: consistent across Worker isolates.
+	const cooldown = await rateLimit(
+		kv,
+		`dm:post:${key}`,
+		DM_INTEGRATION.cooldownSeconds * 1000,
+		1,
+	);
+	if (!cooldown.allowed) {
+		return json({ state: 'rate_limited', retryAfter: cooldown.retryAfter }, 429);
 	}
-	if (!rateLimit(`dm:hour:${key}`, 3_600_000, 10)) {
-		return json({ state: 'rate_limited', retryAfter: 60 }, 429);
+	const hourly = await rateLimit(kv, `dm:hour:${key}`, 3_600_000, 10);
+	if (!hourly.allowed) {
+		return json({ state: 'rate_limited', retryAfter: hourly.retryAfter }, 429);
 	}
 
 	let payload: unknown;
@@ -80,11 +86,9 @@ export async function POST(context: APIContext): Promise<Response> {
 	}
 	const contact = typeof body.contact === 'string' ? body.contact.trim().slice(0, 320) : '';
 
-	const env = (await serverEnvironment()) as Record<string, string | undefined>;
-
 	try {
 		if (DM_INTEGRATION.provider === 'discord') {
-			const webhook = env.DISCORD_WEBHOOK_URL;
+			const webhook = secrets.DISCORD_WEBHOOK_URL;
 			if (!webhook) return json({ state: 'not_configured' }, 503);
 			const response = await fetch(webhook, {
 				method: 'POST',
@@ -106,7 +110,7 @@ export async function POST(context: APIContext): Promise<Response> {
 		}
 
 		if (DM_INTEGRATION.provider === 'ntfy') {
-			const topic = env.NTFY_URL;
+			const topic = secrets.NTFY_URL;
 			if (!topic) return json({ state: 'not_configured' }, 503);
 			const response = await fetch(topic, {
 				method: 'POST',

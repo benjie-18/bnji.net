@@ -1,41 +1,60 @@
 ---
 /**
- * AeroSky — the Frutiger Aero environment layer for the light theme.
+ * AeroSky — the Frutiger Aero painted environment for the light theme.
  *
- * One fixed gradient layer (sun bloom, cloud masses, bokeh, water gloss — see
- * styles/aero.css) plus a handful of floating soap bubbles. The bubble field
- * is deliberate CSS-only motion: each bubble is a span with inline size/
- * position/timing, animated with transform+opacity on the compositor.
+ * The scene (styles in aero.css, colours in tokens.css): a four-stop sky
+ * gradient on html/body, a warm sunlight bloom, three volumetric cloud
+ * clusters (nine overlapping soft-edged puffs each — shadow tone below,
+ * whites above), scattered bokeh, a meadow band with a highlight line at its
+ * top edge, and two glossy floating orbs (aqua primary, green secondary)
+ * painted with base gradient + upper-left specular ellipse + lower-right rim
+ * light. This replaces the former flat gradient wash + rising soap bubbles:
+ * the orbs are the scene's floating glass now.
  *
- * Cost model: zero JavaScript, zero repaints (gradients are static, motion is
- * transform-only), and the whole layer is display:none in the dark theme and
- * frozen under prefers-reduced-motion.
+ * Cost model: zero JavaScript, gradients + transform-only animation on the
+ * compositor. The whole layer is display:none in the dark theme; the settings
+ * store's reduced-effects flag simplifies it to sky + meadow; performance
+ * mode drops it entirely; prefers-reduced-motion freezes (not hides) it.
  */
 
-/** Deterministic bubble field: [left %, size px, duration s, delay s, opacity, sway vw]. */
-const BUBBLES: [number, number, number, number, number, number][] = [
-	[6, 84, 34, -4, 0.4, 4],
-	[16, 34, 26, -12, 0.5, -3],
-	[27, 56, 30, -20, 0.42, 5],
-	[38, 22, 21, -7, 0.55, -2],
-	[47, 96, 40, -26, 0.34, 3],
-	[58, 40, 27, -15, 0.48, -4],
-	[66, 64, 33, -2, 0.4, 4],
-	[76, 26, 22, -18, 0.52, -3],
-	[84, 74, 37, -9, 0.38, 5],
-	[92, 44, 28, -23, 0.46, -4],
-	[11, 18, 19, -16, 0.5, 2],
-	[71, 16, 18, -5, 0.5, -2],
-];
+/**
+ * Cloud clusters: position, per-cluster scale (the CSS `scale` property, so
+ * it never fights the drift animation's transform), drift timing, and whether
+ * the cluster uses the alternate puff geometry. Deterministic by design —
+ * nothing here is random at runtime, so the sky is identical per build.
+ */
+const CLOUDS = [
+	{ left: '4%', top: '10%', scale: 1, duration: 84, delay: -8, alt: false },
+	{ left: '56%', top: '5%', scale: 0.72, duration: 108, delay: -34, alt: true },
+	{ left: '28%', top: '30%', scale: 0.48, duration: 96, delay: -58, alt: false },
+] as const;
+
+/** Puff slots per cluster; geometry + tones live in aero.css (.aero-puff--n). */
+const PUFFS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 ---
 
 <div class="aero-sky" aria-hidden="true">
-	{
-		BUBBLES.map(([left, size, duration, delay, opacity, sway], i) => (
-			<span
-				class="aero-bubble"
-				style={`left:${left}%;bottom:-12vh;width:${size}px;height:${size}px;animation-duration:${duration}s;animation-delay:${delay}s;--bubble-opacity:${opacity};--bubble-sway:${sway}vw;--i:${i}`}
-			/>
-		))
-	}
+	<span class="aero-bloom"></span>
+
+	<div class="aero-clouds">
+		{
+			CLOUDS.map((cloud) => (
+				<div
+					class:list={['aero-cloud', cloud.alt && 'aero-cloud--alt']}
+					style={`left:${cloud.left};top:${cloud.top};scale:${cloud.scale};animation-duration:${cloud.duration}s;animation-delay:${cloud.delay}s;`}
+				>
+					{PUFFS.map((n) => (
+						<span class={`aero-puff aero-puff--${n}`} />
+					))}
+				</div>
+			))
+		}
+	</div>
+
+	<span class="aero-bokeh"></span>
+
+	<div class="aero-meadow"></div>
+
+	<span class="aero-orb aero-orb--aqua" style="animation-duration:15s"></span>
+	<span class="aero-orb aero-orb--green" style="animation-duration:19s;animation-delay:-7s"></span>
 </div>

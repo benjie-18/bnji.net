@@ -19,14 +19,20 @@
  *   ACCESS_SECRET       signing key for the session cookie (HMAC)
  *
  * ── Theme ───────────────────────────────────────────────────────────────
- * THEME_CONFIG picks the default theme for first paint. The visitor's choice
- * is stored in localStorage ('bnji-theme') and applied by an inline pre-paint
- * script in BaseHead.astro, so there is no flash of the wrong theme.
+ * THEME_CONFIG.defaultTheme SEEDS the central settings store
+ * (scripts/settings.ts) — the visitor's actual choice lives in the store's
+ * localStorage key ('bnji-settings-v1'), is controlled from the Settings
+ * overlay, and is applied pre-paint by the inline script in BaseHead.astro,
+ * so there is no flash of the wrong theme. `storageKey` ('bnji-theme') is
+ * the LEGACY standalone key, kept only as a one-time migration source.
  *
  * ── Intro ───────────────────────────────────────────────────────────────
- * INTRO_CONFIG controls the scroll-driven opening sequence on the homepage.
- * It is always skipped for prefers-reduced-motion visitors and can be skipped
- * by anyone via the on-screen button or the session flag.
+ * INTRO_CONFIG.enabled SEEDS the settings store's introEnabled field — the
+ * per-visitor switch lives in the store (Settings overlay), and the intro
+ * reads it from there. `enabled: false` here remains the site-wide kill
+ * switch: it removes the intro markup at build time. The sequence is always
+ * skipped for prefers-reduced-motion visitors. The former on-screen Skip
+ * button and per-session flag were removed with the settings-store move.
  */
 export type RouteAccessRule = {
 	/** Prefix match on pathname, e.g. '/admin' matches '/admin' and below. */
@@ -46,16 +52,15 @@ export const ACCESS_RULES: RouteAccessRule[] = [
 export const THEME_CONFIG = {
 	/** Theme applied when the visitor has no stored preference. */
 	defaultTheme: 'dark' as 'dark' | 'light',
-	/** localStorage key. */
+	/** LEGACY localStorage key — migration source for the settings store. */
 	storageKey: 'bnji-theme',
 };
 
 export const INTRO_CONFIG = {
-	/** Show the scroll intro on the homepage. */
+	/** Site-wide kill switch AND the settings-store default for introEnabled.
+	 *  false removes the intro markup at build time; per-visitor control lives
+	 *  in the settings store (scripts/settings.ts). */
 	enabled: true,
 	/** Scroll distance of the sequence, in viewport heights. */
 	scrollHeights: 3.2,
-	/** sessionStorage flag: visitors who skipped/completed it once per session
-	 *  are not forced through it again. */
-	sessionKey: 'bnji-intro-done',
 };

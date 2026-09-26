@@ -14,29 +14,36 @@
  *   - scrolling back up scrubs the sequence in reverse — it is a lens on the
  *     scroll position, never a trap.
  *
- * Escape hatches (all verified):
- *   - prefers-reduced-motion or a completed/skipped session: the pre-paint
- *     script sets html[data-intro="off"]; CSS removes the spacer and layer, so
- *     there is nothing to scroll through and nothing to get stuck in;
- *   - a persistent "Skip intro" button jumps straight to the homepage start;
+ * Enable/disable (no local toggles of its own):
+ *   - the intro reads its enabled state from the CENTRAL SETTINGS STORE
+ *     (scripts/settings.ts → introEnabled), which the Settings overlay
+ *     controls and localStorage persists. The store hydrates synchronously at
+ *     import, and the pre-paint script in BaseHead.astro applies the same
+ *     flag to html[data-intro] before first paint — so a disabled intro
+ *     never renders its spacer, never starts, and never flashes;
+ *   - prefers-reduced-motion always wins: html[data-intro="off"] removes the
+ *     spacer and layer via CSS, and initIntro bails;
  *   - without JavaScript the spacer is display:none (html:not(.js)), so no
  *     dead scroll region exists.
+ *   Disabling mid-session removes the spacer (CSS) but the scrub loop, once
+ *   started, simply goes inert — a reload gives the clean disabled state.
  *
  * Cost model: one scroll listener writing two transforms + one opacity inside
  * a rAF coalescer; the layer is hidden entirely outside 0 < p < 1.
  */
-import { INTRO_CONFIG } from '../config/access.config';
 import { createFrameScheduler, prefersReducedMotion } from './environment';
+import { getSettings } from './settings';
 
 export function initIntro(): void {
 	const root = document.documentElement;
-	if (!INTRO_CONFIG.enabled || root.dataset.intro === 'off' || prefersReducedMotion()) return;
+	// The store is the only enable switch; the dataset/motion checks are the
+	// pre-paint and reduced-motion guarantees.
+	if (!getSettings().introEnabled || root.dataset.intro === 'off' || prefersReducedMotion()) return;
 
 	const layer = document.querySelector<HTMLElement>('[data-intro-layer]');
 	const spacer = document.querySelector<HTMLElement>('[data-intro-spacer]');
 	const star = document.querySelector<HTMLElement>('[data-intro-star]');
 	const energy = document.querySelector<HTMLElement>('[data-intro-energy]');
-	const skip = document.querySelector<HTMLButtonElement>('[data-intro-skip]');
 	if (!layer || !spacer || !star || !energy) return;
 
 	const smoothstep = (edge0: number, edge1: number, x: number) => {
@@ -80,16 +87,4 @@ export function initIntro(): void {
 	window.addEventListener('scroll', schedule, { passive: true });
 	window.addEventListener('resize', schedule, { passive: true });
 	update();
-
-	if (skip) {
-		skip.addEventListener('click', () => {
-			try {
-				sessionStorage.setItem(INTRO_CONFIG.sessionKey, '1');
-			} catch {
-				/* storage blocked: skip still works for this click */
-			}
-			const target = spacer.offsetTop + spacer.offsetHeight - window.innerHeight + 2;
-			window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
-		});
-	}
 }
