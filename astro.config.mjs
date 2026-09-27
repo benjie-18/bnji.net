@@ -27,7 +27,16 @@ export default defineConfig({
 			ACCESS_SECRET: envField.string({ context: "server", access: "secret", optional: true }),
 		},
 	},
-	integrations: [sitemap()],
+	integrations: [
+		sitemap({
+			// /admin is gated by ACCESS_RULES, but a URL in a sitemap is a URL
+			// published to every search engine and scraper on the internet.
+			// Being unreachable is not the same as being unlisted, and the
+			// dashboard has no business in a public index. The page also sets
+			// noindex; this is the second, load-bearing half of that.
+			filter: (page) => !page.includes('/admin'),
+		}),
+	],
 	adapter: cloudflare({
 		// @astrojs/cloudflare v14 replaced the `platformProxy` option with the
 		// Cloudflare Vite plugin, so `platformProxy` is no longer a valid key (it

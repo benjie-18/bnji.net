@@ -12,7 +12,7 @@
  *
  * Fields collected:
  *   SERVER-SIDE: ip, user-agent, country, city, ASN, geo coordinates,
- *     referrer, fingerprint, session key, endpoint, timestamp.
+ *     referrer, fingerprint, session key, surface, target id, timestamp.
  *   CLIENT-SIDE (enriched via POST beacon): screen dimensions, pixel ratio,
  *     CPU cores, device memory, platform, timezone, language, WebGL renderer,
  *     touch support, device fingerprint hash.
@@ -22,12 +22,11 @@
  *
  * Privacy (Quebec Law 25 / PIPEDA): IP addresses, user-agent strings,
  * referrer URLs, precise geolocation, and device identifiers are personal
- * information. They are accessible only through the admin endpoint (which
- * requires a bearer token). All data in this table is server-only and must
- * never reach any public surface.
+ * information. They are accessible only through the admin surface (which
+ * requires a bearer token or an admin session). All data in this table is
+ * server-only and must never reach any public surface.
  *
- * Admin access: see src/pages/api/admin/security.ts — gated behind the
- * ACCESS_TOKEN environment variable. This is a stopgap, not real auth.
+ * Admin access: see src/pages/api/admin/ and the /admin dashboard.
  */
 
 /* --- structural D1 types (same pattern as board-store, profile-store) ---- */
@@ -50,9 +49,19 @@ type D1Database = {
 
 /* --- public types --------------------------------------------------------- */
 
+/** Which part of the site an event came from. */
+export type SecuritySurface = 'profile' | 'board' | 'dm';
+
+export const SECURITY_SURFACES: readonly SecuritySurface[] = ['profile', 'board', 'dm'];
+
 export type SecurityEvent = {
-	profileSlug: string;
+	/** Which surface acted. Defaults to 'profile' for pre-surface events. */
+	surface?: SecuritySurface;
+	/** Undefined for board/dm events — those surfaces have no profile. */
+	profileSlug?: string;
 	endpoint: string;
+	/** The row this event acted on (board message id, link id), when there is one. */
+	targetId?: string;
 	ipAddress: string;
 	userAgent?: string;
 	cfCountry?: string;
@@ -82,9 +91,12 @@ export type SecurityEvent = {
 
 export type SecurityEventRow = SecurityEvent & { id: number };
 
+/** Client-reported device data folded into an existing event row. */
 export type SecurityEnrichment = {
 	sessionKey: string;
-	profileSlug: string;
+	surface: SecuritySurface;
+	/** Undefined for board/dm events. */
+	profileSlug?: string;
 	endpoint: string;
 	screenWidth?: number;
 	screenHeight?: number;
@@ -99,6 +111,39 @@ export type SecurityEnrichment = {
 	deviceFingerprint?: string;
 };
 
+/** Filters for the admin security list. All optional and combinable. */
+export type SecurityQuery = {
+	limit: number;
+	/** Omit to search every surface. */
+	surface?: SecuritySurface;
+	/** Restrict to one profile slug. */
+	profileSlug?: string;
+	/** Only events that carry a client fingerprint (i.e. were enriched). */
+	enrichedOnly?: boolean;
+	/** Only events from this IP (exact match). */
+	ipAddress?: string;
+	/** Only events sharing this device fingerprint — "everything from this device". */
+	deviceFingerprint?: string;
+	/** Only events at or after this epoch ms. */
+	since?: number;
+};
+
+/** Aggregate counts for the admin overview. */
+export type SecuritySummary = {
+	total: number;
+	retentionDays: number;
+	bySurface: { surface: SecuritySurface; count: number }[];
+	byEndpoint: { surface: SecuritySurface; endpoint: string; count: number }[];
+	/** Events carrying a client-derived device fingerprint. */
+	enriched: number;
+	/** Distinct IP addresses seen. */
+	uniqueIps: number;
+	/** Distinct client-derived device fingerprints seen. */
+	uniqueDevices: number;
+	/** Events in the last 24 hours. */
+	last24h: number;
+};
+
 export interface SecurityStore {
 	readonly kind: 'd1';
 
@@ -107,43 +152,44 @@ export interface SecurityStore {
 
 	/**
 	 * Enrich the most recent matching security event with client-side data.
-	 * Matches by (session_key, profile_slug, endpoint) within a 10-second
-	 * window. Returns true if an event was enriched.
+	 * Matches by (session_key, surface, endpoint) and, for profile events,
+	 * profile_slug — within the caller's time window. Returns true if an
+	 * event was enriched.
 	 */
 	enrichEvent(
-		sessionKey: string,
-		profileSlug: string,
-		endpoint: string,
-		since: number,
-		enrichment: Omit<SecurityEnrichment, 'sessionKey' | 'profileSlug' | 'endpoint'>,
+		match: { sessionKey: string; surface: SecuritySurface; profileSlug?: string; endpoint: string; since: number },
+		enrichment: Omit<SecurityEnrichment, 'sessionKey' | 'surface' | 'profileSlug' | 'endpoint'>,
 	): Promise<boolean>;
 
 	/**
-	 * List recent events (newest first). Triggers lazy retention cleanup
-	 * before returning results. Only callable from the admin endpoint.
+	 * List recent events (newest first) with optional filters. Triggers lazy
+	 * retention cleanup before returning results. Admin-only.
 	 */
-	listRecent(limit: number): Promise<SecurityEventRow[]>;
+	listRecent(query: SecurityQuery): Promise<SecurityEventRow[]>;
 
-	/** Count total events (for admin overview). */
-	countEvents(): Promise<number>;
+	/** Count events matching the same filters (no limit). Admin-only. */
+	countMatching(query: Pick<SecurityQuery, 'surface' | 'profileSlug' | 'enrichedOnly' | 'ipAddress' | 'deviceFingerprint' | 'since'>): Promise<number>;
+
+	/** Aggregate counts for the admin overview. Admin-only. */
+	summarize(): Promise<SecuritySummary>;
 }
 
 /* --- retention config ----------------------------------------------------- */
 
-/** Days to keep security events. */
-const RETENTION_DAYS = 60;
-/** Trigger cleanup when table exceeds this many rows. */
-const CLEANUP_THRESHOLD = 5000;
+/** Days to keep security events. Exported so the admin config can report it. */
+export const RETENTION_DAYS = 60;
+/** Trigger cleanup when table exceeds this many rows. Exported for the admin config. */
+export const CLEANUP_THRESHOLD = 5000;
 
 /* --- SQL column lists (kept in sync with the schema) ---------------------- */
 
 const INSERT_COLUMNS = `
-	profile_slug, endpoint, ip_address, user_agent,
+	surface, profile_slug, endpoint, target_id, ip_address, user_agent,
 	cf_country, cf_city, cf_asn, fingerprint, session_key, created_at,
 	geo_latitude, geo_longitude, referrer`;
 
 const ALL_COLUMNS = `
-	id, profile_slug, endpoint, ip_address, user_agent,
+	id, surface, profile_slug, endpoint, target_id, ip_address, user_agent,
 	cf_country, cf_city, cf_asn, fingerprint, session_key, created_at,
 	geo_latitude, geo_longitude, referrer,
 	screen_width, screen_height, screen_pixel_ratio,
@@ -152,8 +198,10 @@ const ALL_COLUMNS = `
 
 type SecurityEventDbRow = {
 	id: number;
-	profile_slug: string;
+	surface: SecuritySurface;
+	profile_slug: string | null;
 	endpoint: string;
+	target_id: string | null;
 	ip_address: string;
 	user_agent: string | null;
 	cf_country: string | null;
@@ -181,8 +229,10 @@ type SecurityEventDbRow = {
 function rowToEvent(row: SecurityEventDbRow): SecurityEventRow {
 	return {
 		id: row.id,
-		profileSlug: row.profile_slug,
+		surface: row.surface,
+		profileSlug: row.profile_slug ?? undefined,
 		endpoint: row.endpoint,
+		targetId: row.target_id ?? undefined,
 		ipAddress: row.ip_address,
 		userAgent: row.user_agent ?? undefined,
 		cfCountry: row.cf_country ?? undefined,
@@ -210,6 +260,46 @@ function rowToEvent(row: SecurityEventDbRow): SecurityEventRow {
 
 /* --- implementation ------------------------------------------------------- */
 
+/**
+ * Build the shared WHERE clause for the admin list/count queries.
+ * Values are positional (?1, ?2, ...) in a fixed order so the list and count
+ * paths can never drift apart.
+ */
+type WhereClause = { sql: string; values: (string | number)[] };
+
+function buildWhere(
+	filters: Pick<SecurityQuery, 'surface' | 'profileSlug' | 'enrichedOnly' | 'ipAddress' | 'deviceFingerprint' | 'since'>,
+): WhereClause {
+	const clauses: string[] = [];
+	const values: (string | number)[] = [];
+
+	if (filters.surface) {
+		values.push(filters.surface);
+		clauses.push(`surface = ?${values.length}`);
+	}
+	if (filters.profileSlug) {
+		values.push(filters.profileSlug);
+		clauses.push(`profile_slug = ?${values.length}`);
+	}
+	if (filters.ipAddress) {
+		values.push(filters.ipAddress);
+		clauses.push(`ip_address = ?${values.length}`);
+	}
+	if (filters.deviceFingerprint) {
+		values.push(filters.deviceFingerprint);
+		clauses.push(`device_fingerprint = ?${values.length}`);
+	}
+	if (filters.enrichedOnly) {
+		clauses.push('device_fingerprint IS NOT NULL');
+	}
+	if (typeof filters.since === 'number' && Number.isFinite(filters.since)) {
+		values.push(filters.since);
+		clauses.push(`created_at >= ?${values.length}`);
+	}
+
+	return { sql: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', values };
+}
+
 function createD1SecurityStore(db: D1Database): SecurityStore {
 	return {
 		kind: 'd1',
@@ -220,11 +310,13 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 					.prepare(
 						`INSERT INTO security_events
 						 (${INSERT_COLUMNS})
-						 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+						 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`,
 					)
 					.bind(
-						event.profileSlug,
+						event.surface ?? 'profile',
+						event.profileSlug ?? null,
 						event.endpoint,
+						event.targetId ?? null,
 						event.ipAddress,
 						event.userAgent ?? null,
 						event.cfCountry ?? null,
@@ -244,19 +336,32 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 			}
 		},
 
-		async enrichEvent(sessionKey, profileSlug, endpoint, since, enrichment) {
+		async enrichEvent({ sessionKey, surface, profileSlug, endpoint, since }, enrichment) {
 			try {
 				// Find the most recent matching event within the time window.
 				// D1's first(<col>) resolves to that column's scalar value, so
 				// `eventId` IS the id — reading `.id` off it would be undefined.
+				//
+				// profile_slug is matched only for profile events. For board/dm
+				// events it is NULL, and `profile_slug = NULL` is never true in
+				// SQL, so those would never match — hence the explicit branch.
 				const eventId = await db
 					.prepare(
-						`SELECT id FROM security_events
-						 WHERE session_key = ?1 AND profile_slug = ?2 AND endpoint = ?3
-						   AND created_at >= ?4
-						 ORDER BY created_at DESC LIMIT 1`,
+						surface === 'profile'
+							? `SELECT id FROM security_events
+							 WHERE session_key = ?1 AND surface = ?2 AND profile_slug = ?3
+							   AND endpoint = ?4 AND created_at >= ?5
+							 ORDER BY created_at DESC LIMIT 1`
+							: `SELECT id FROM security_events
+							 WHERE session_key = ?1 AND surface = ?2
+							   AND endpoint = ?3 AND created_at >= ?4
+							 ORDER BY created_at DESC LIMIT 1`,
 					)
-					.bind(sessionKey, profileSlug, endpoint, since)
+					.bind(
+						...(surface === 'profile'
+							? [sessionKey, surface, profileSlug ?? null, endpoint, since]
+							: [sessionKey, surface, endpoint, since]),
+					)
 					.first<number>('id');
 
 				if (eventId === null) return false;
@@ -300,8 +405,9 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 			}
 		},
 
-		async listRecent(limit) {
-			// Lazy retention cleanup.
+		async listRecent(query) {
+			// Lazy retention cleanup. Runs on admin reads only — the public
+			// surfaces never touch this table.
 			try {
 				const countRow = await db
 					.prepare('SELECT COUNT(*) as cnt FROM security_events')
@@ -318,23 +424,77 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 				console.warn('[bnji] security event cleanup failed:', error);
 			}
 
-			const safeLimit = Math.min(Math.max(1, limit), 500);
+			const safeLimit = Math.min(Math.max(1, Math.floor(query.limit) || 1), 500);
+			const where = buildWhere(query);
 			const { results } = await db
 				.prepare(
 					`SELECT ${ALL_COLUMNS.trim()}
-					 FROM security_events ORDER BY created_at DESC LIMIT ?1`,
+					 FROM security_events ${where.sql} ORDER BY created_at DESC, id DESC LIMIT ?${where.values.length + 1}`,
 				)
-				.bind(safeLimit)
+				.bind(...where.values, safeLimit)
 				.all<SecurityEventDbRow>();
 
 			return results.map(rowToEvent);
 		},
 
-		async countEvents() {
+		async countMatching(filters) {
+			const where = buildWhere(filters);
 			const total = await db
-				.prepare('SELECT COUNT(*) as cnt FROM security_events')
+				.prepare(`SELECT COUNT(*) as cnt FROM security_events ${where.sql}`)
+				.bind(...where.values)
 				.first<number>('cnt');
 			return Number(total ?? 0);
+		},
+
+		async summarize() {
+			const dayAgo = Date.now() - 86_400_000;
+			const [
+				totalRow,
+				enrichedRow,
+				uniqueIpsRow,
+				uniqueDevicesRow,
+				last24hRow,
+				bySurfaceResults,
+				byEndpointResults,
+			] = await Promise.all([
+				db.prepare('SELECT COUNT(*) as cnt FROM security_events').first<number>('cnt'),
+				db
+					.prepare('SELECT COUNT(*) as cnt FROM security_events WHERE device_fingerprint IS NOT NULL')
+					.first<number>('cnt'),
+				db
+					.prepare('SELECT COUNT(DISTINCT ip_address) as cnt FROM security_events')
+					.first<number>('cnt'),
+				db
+					.prepare('SELECT COUNT(DISTINCT device_fingerprint) as cnt FROM security_events WHERE device_fingerprint IS NOT NULL')
+					.first<number>('cnt'),
+				db
+					.prepare('SELECT COUNT(*) as cnt FROM security_events WHERE created_at >= ?1')
+					.bind(dayAgo)
+					.first<number>('cnt'),
+				db
+					.prepare('SELECT surface, COUNT(*) as cnt FROM security_events GROUP BY surface')
+					.all<{ surface: SecuritySurface; cnt: number }>(),
+				db
+					.prepare(
+						'SELECT surface, endpoint, COUNT(*) as cnt FROM security_events GROUP BY surface, endpoint ORDER BY cnt DESC',
+					)
+					.all<{ surface: SecuritySurface; endpoint: string; cnt: number }>(),
+			]);
+
+			return {
+				total: Number(totalRow ?? 0),
+				retentionDays: RETENTION_DAYS,
+				bySurface: bySurfaceResults.results.map((r) => ({ surface: r.surface, count: Number(r.cnt) })),
+				byEndpoint: byEndpointResults.results.map((r) => ({
+					surface: r.surface,
+					endpoint: r.endpoint,
+					count: Number(r.cnt),
+				})),
+				enriched: Number(enrichedRow ?? 0),
+				uniqueIps: Number(uniqueIpsRow ?? 0),
+				uniqueDevices: Number(uniqueDevicesRow ?? 0),
+				last24h: Number(last24hRow ?? 0),
+			};
 		},
 	};
 }

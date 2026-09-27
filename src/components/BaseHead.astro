@@ -42,6 +42,15 @@ const fullTitle = pageTitle(title);
 const canonical = absoluteUrl(Astro.url.pathname.replace(/index\.html$/, ''));
 const ogImage = absoluteUrl(image);
 
+/*
+ * The two theme colours, handed to the pre-paint script below through
+ * define:vars so this file keeps a single source of truth. The object must be
+ * FLAT: Astro emits one `const` per top-level key, so nesting these under a
+ * single key would leave the script referencing identifiers that were never
+ * declared. See the comment on that script for why they cannot simply be
+ * interpolated into the markup.
+ */
+
 function toIso(value?: Date | string): string | undefined {
 	if (!value) return undefined;
 	const date = value instanceof Date ? value : new Date(value);
@@ -97,7 +106,23 @@ const jsonLd = {
      mirrors its applySettingsToRoot() contract; the store re-applies the
      same values at boot, idempotently. The legacy standalone theme key
      ('bnji-theme') is honoured as a migration fallback. -->
-<script is:inline>
+<!--
+  theme-color and color-scheme are emitted BEFORE the pre-paint script below,
+  because that script queries them. The parser has not reached them at that
+  point, so the assignment was silently doing nothing and the browser chrome
+  kept the dark value until boot() ran. Declaring the tags first is what makes
+  the pre-paint swap observable in the same frame as the theme itself.
+-->
+<meta name="theme-color" content={SITE.themeColor} />
+<meta name="color-scheme" content="dark light" />
+
+<script
+	is:inline
+	define:vars={{
+		THEME_COLOR_DARK: SITE.themeColor,
+		THEME_COLOR_LIGHT: SITE.themeColorLight,
+	}}
+>
 	(function () {
 		var root = document.documentElement;
 		root.classList.add('js');
@@ -118,8 +143,14 @@ const jsonLd = {
 			}
 		}
 		root.dataset.theme = theme;
+		// THEME_COLOR_LIGHT / THEME_COLOR_DARK are injected by define:vars
+		// from SITE.themeColor / SITE.themeColorLight. They have to arrive
+		// this way: an `is:inline` script is emitted verbatim, so it cannot
+		// import from src/data/site.ts, and a bare frontmatter const is NOT
+		// in scope inside it — define:vars is the supported way to hand
+		// values across that boundary.
 		var meta = document.querySelector('meta[name="theme-color"]');
-		if (meta) meta.content = theme === 'light' ? '#bfe6f7' : '#020204';
+		if (meta) meta.content = theme === 'light' ? THEME_COLOR_LIGHT : THEME_COLOR_DARK;
 		var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		if (!flag('introEnabled', true) || reduced) root.dataset.intro = 'off';
 		root.dataset.cursorEffects = flag('cursorEffects', true) ? 'on' : 'off';
@@ -138,8 +169,8 @@ const jsonLd = {
 <title>{fullTitle}</title>
 <meta name="description" content={description} />
 <link rel="canonical" href={canonical} />
-<meta name="theme-color" content={SITE.themeColor} />
-<meta name="color-scheme" content="dark" />
+<!-- theme-color and color-scheme are emitted ABOVE the pre-paint script, which
+     rewrites the former before first paint. Not repeated here. -->
 <meta name="author" content={SITE.author.name} />
 {noindex && <meta name="robots" content="noindex, nofollow" />}
 

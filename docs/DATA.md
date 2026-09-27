@@ -29,7 +29,20 @@ D1 columns (`board_messages`) ↔ API/JSON names:
 | --- | --- | --- | --- |
 | `id` | `id` | `TEXT` PRIMARY KEY | Server-generated at accept time: `<epoch-ms in base36>-<6 random base36 chars>`. Stable identity for the pagination cursor's tie-breaker, for `setStatus()`, and for client-side dedupe. Never supplied by clients. |
 | `body` | `text` | `TEXT NOT NULL` | The message. Trimmed, control characters stripped, hard-capped at `BOARD_CONFIG.maxTextLength` (**250**) in the route — over-long posts are rejected with `422 text_too_long`, never truncated. |
-| `image` | `image` | `TEXT` nullable | Optional attachment, stored **inline** as a `data:` URL. The route re-validates on every write: strict `data:image/(png\|jpeg\|webp\|gif);base64,…` regex, MIME allowlist, and ≤ `BOARD_CONFIG.maxImageBytes` (**400 KB decoded**, computed from base64 length). No remote URLs are ever stored. |
+| `image` | `image` | `TEXT` nullable | Optional attachment, stored **inline** as a `data:` URL. The route re-validates on every write: strict `data:image/(png\|jpeg\|webp\|gif);base64,…` regex, MIME allowlist, and ≤ `BOARD_CONFIG.maxImageBytes` (**1.4 MB decoded**, computed from base64 length, never by decoding). No remote URLs are ever stored. |
+
+> **Why 1.4 MB and not 25 MB.** This column is where the ceiling comes from — not
+> the request path. Workers would accept a 25 MB upload (request bodies go to
+> 100 MB; base64 inside JSON expands 25 MB to ~33 MB, which still fits), but D1
+> caps **a string, BLOB or table row at 2,000,000 bytes**
+> ([D1 limits](https://developers.cloudflare.com/d1/platform/limits/)). An inline
+> `data:` URL must live in one column, so the largest image that can be stored
+> is `2,000,000 × 3/4 ≈ 1.49 MB`; 1.4 MB leaves room for the rest of the row
+> (id, body, status, timestamps) with ~133 KB of margin. A 25 MB image is ~16×
+> that ceiling and would fail at the INSERT with `SQLITE_TOOBIG` — an opaque
+> 500, not a clean rejection. Genuinely supporting 25 MB means moving the file
+> out of the row (R2 object storage + a reference in D1), which is an
+> architecture change rather than a constant.
 | `hue` | `hue` | `INTEGER NOT NULL DEFAULT 0` | A 0–359 tint seed chosen once server-side (`Math.random`) so every visitor sees the same colour for a given bubble/star, without storing a full colour. |
 | `status` | *(never exposed)* | `TEXT NOT NULL DEFAULT 'visible'`, `CHECK (status IN ('visible','hidden','reported','deleted'))` | Moderation state, a closed set enforced at the storage layer, not just in code. Stripped from every public payload (`PublicMessage = Omit<BoardMessage,'status'>`). See §5. |
 | `created_at` | `createdAt` | `INTEGER NOT NULL` | Epoch **milliseconds** from the server clock at accept time. Sort key (newest first), cursor anchor, and display timestamp. |
@@ -125,24 +138,77 @@ Attachments exist end-to-end today, with validation split across two tasks:
    it has not landed in these files.)
 2. **Server (`/api/board` POST):** re-validates independently — strict
    data-URL regex, MIME allowlist, byte cap derived from the base64 length.
-   Invalid images are silently dropped from the post (the text still posts).
+   A rejected image fails the **whole post** with a named error
+   (`image_too_large` / `image_unsupported`, both `422`, the first carrying
+   `maxBytes`) rather than being dropped from an otherwise-accepted message —
+   a visitor whose upload vanished silently would reasonably conclude it had
+   worked.
 3. **Storage:** inline in `board_messages.image` (`TEXT`). No object storage,
    no thumbnails, no deduplication, no expiry — an image lives exactly as long
    as its message row (§3).
-4. **Delivery:** inline again in every list/archive response that includes the
-   message. Be aware of the arithmetic: one at-cap image is ≈ 533 KB of
-   base64, so a 10-message page of image-heavy posts is ≈ 5 MB of JSON, and
-   the archive walk multiplies that. If the board grows image traffic, moving
-   attachments to object storage (e.g. R2) with a reference/thumbnail in the
-   row is the first refactor to reach for.
+4. **Delivery:** inline again in every list/full-list response that includes the
+   message. Be aware of the arithmetic: one at-cap image is ≈ 1.87 MB of
+   base64, so a page of image-heavy posts is multi-megabyte JSON, and the
+   full-list cursor walk multiplies that. If the board grows image traffic,
+   moving attachments to object storage (e.g. R2) with a reference/thumbnail
+   in the row is the first refactor to reach for — and it is also what would
+   lift the 1.4 MB ceiling (see the note on the `image` column).
 
-## 7. Privacy summary
+## 7. Site-wide statistics (admin only)
+
+`GET /api/admin/stats` (`src/pages/api/admin/stats.ts`) serves the dashboard's
+numbers. It is a **read-only aggregate over tables that already exist** — it
+adds no storage of its own — and it deliberately calls the same store methods
+the public features call, so a dashboard figure cannot drift from the number a
+visitor sees.
+
+| Group | Source | What "total" means |
+| --- | --- | --- |
+| Traffic | `profile_views` via `getViewStats()` | `COUNT(*)` over **distinct `(session_key, day_key)`** — one view per session per day. This is the same total rendered in the public profile pill and the `/gizlyy/` stat block. |
+| Engagement | `profile_reactions`, `profile_link_clicks` | Row counts per reaction and per link. Labels come from the profile data, so the panel says "Reddit", not `reddit`. |
+| Message board | `boardStore.summarize()` | `total`, `byStatus`, `postedLast24h`, `reportedLast24h`. No "recent posts" total is shown, because the store does not aggregate one. |
+| Security | `security_store.summarize()` | `total`, `last24h`, `uniqueIps`, `uniqueDevices`, `enriched`, `bySurface`, `byEndpoint`, `retentionDays`. |
+| Credential | `admin_credentials.updated_at` | `0` = the seeded token is still in use. |
+
+Rules the endpoint holds itself to:
+
+- **No invented metrics.** Every field maps to a real column. A group whose
+  store is unavailable returns `null` and the panel prints an explanation, not a
+  convincing `0`.
+- **Security telemetry stays separate.** It lives in `security_events` under its
+  own 60-day retention and never contributes to any public or traffic figure.
+- **Deduplicated by the source.** The per-session-per-day rule is the store's,
+  not the dashboard's, so a refresh cannot inflate a total.
+
+## 8. The admin credential row
+
+`migrations/0005_admin_credentials.sql` adds one table, `admin_credentials`,
+with a single row enforced by `CHECK (id = 1)`:
+
+| Column | Type | Contents |
+| --- | --- | --- |
+| `id` | INTEGER PK | Always `1`. The constraint is what makes a second admin impossible at the storage layer. |
+| `token_hash` | TEXT NOT NULL | `hex(sha256(token))`. The access token itself is never stored, and its plaintext appears nowhere in the repository. |
+| `updated_at` | INTEGER NOT NULL | Epoch ms of the last rotation; `0` for the seeded row. |
+
+See [`CONFIGURATION.md`](./CONFIGURATION.md) §6a for the setup, rotation and
+recovery procedure.
+
+## 9. Privacy summary
 
 - Messages are **public by design**; posting requires no account and stores no
   identity.
 - The only personal datum touched is the connecting IP, held transiently in KV
   rate-limit key names (§4) and never written to D1 or logs beyond Worker
   console warnings.
-- No secrets, tokens or credentials are stored in the database; connection
-  identifiers live in `wrangler.json` bindings and secrets in the Worker
-  environment (`wrangler secret put`), per [`CONFIGURATION.md`](./CONFIGURATION.md).
+- **Credential material is stored as a hash, never as a secret.**
+  `admin_credentials.token_hash` is a SHA-256 digest — there is no code path
+  that reads the access token back, by design. The HMAC key that signs admin
+  sessions (`ACCESS_SECRET`) is a Worker secret, never in the database.
+  Connection identifiers live in `wrangler.json` bindings and all other secrets
+  in the Worker environment (`wrangler secret put`).
+- Profile analytics (`profile_views`, `profile_reactions`,
+  `profile_link_clicks`) are keyed by an **ephemeral random session cookie**
+  (`bnji_ps`, `src/config/session.config.ts`), not by an identity. The
+  `session_key` is discarded with the cookie and is not correlatable across
+  sessions.

@@ -56,6 +56,17 @@ function timingSafeEqual(a: string, b: string): boolean {
 	return diff === 0;
 }
 
+/**
+ * The pattern a rule's session cookie is signed for.
+ *
+ * Defaults to the rule's own `pattern`. Rules that belong to one logical
+ * surface (a page and the API that backs it) set `sessionPattern` so a single
+ * cookie opens both — see RouteAccessRule.sessionPattern.
+ */
+export function sessionPatternOf(rule: RouteAccessRule): string {
+	return rule.sessionPattern ?? rule.pattern;
+}
+
 /** True when the request carries a valid session signature for THIS rule. */
 async function hasValidSession(
 	ctx: AccessContext,
@@ -64,20 +75,7 @@ async function hasValidSession(
 ): Promise<boolean> {
 	const cookie = ctx.cookies.get(SESSION_COOKIE)?.value;
 	if (!cookie) return false;
-	const [payload, signature] = cookie.split('.');
-	if (!payload || !signature) return false;
-	const expected = await hmacHex(secret, payload);
-	if (!timingSafeEqual(expected, signature)) return false;
-	// payload = "<rulePattern>:<expiryEpochSeconds>"
-	const [pattern, expiry] = payload.split(':');
-	const expires = Number(expiry);
-	if (!Number.isFinite(expires) || expires < Date.now() / 1000) return false;
-	// The session must have been issued for the rule being enforced: one
-	// rule's session never authorizes another rule's routes. (issueSession
-	// bakes rule.pattern into the signed payload; without this comparison a
-	// valid signature for ANY pattern passed EVERY rule.)
-	if (pattern === undefined) return false;
-	return timingSafeEqual(pattern, rule.pattern);
+	return verifySessionCookieValue(cookie, secret, sessionPatternOf(rule));
 }
 
 /**
@@ -99,16 +97,71 @@ export async function verifyCredential(
 	return timingSafeEqual(presented, expectedSha);
 }
 
-/** Issue a signed session cookie value for a rule (8h expiry). */
+/**
+ * Issue a signed session cookie value for a rule (8h expiry).
+ *
+ * `credential` binds the session to a specific credential: the payload
+ * carries its fingerprint, so changing the credential silently invalidates
+ * every session minted under the old one. See verifySessionCookieValue.
+ */
 export async function issueSession(
 	rule: RouteAccessRule,
 	env: Record<string, string | undefined>,
+	credential = '',
 ): Promise<string | null> {
 	const secret = env.ACCESS_SECRET;
 	if (!secret) return null;
-	const payload = `${rule.pattern}:${Math.floor(Date.now() / 1000) + 8 * 3600}`;
+	const parts = [sessionPatternOf(rule), String(Math.floor(Date.now() / 1000) + 8 * 3600)];
+	if (credential) parts.push(credential);
+	const payload = parts.join(':');
 	const signature = await hmacHex(secret, payload);
 	return `${payload}.${signature}`;
+}
+
+/**
+ * Verify a session cookie VALUE for a specific rule pattern.
+ *
+ * Split out of hasValidSession so callers that already hold the raw cookie
+ * string — the admin data routes, which see a bare Request rather than an
+ * Astro cookies object — validate with the exact same scheme that signed it.
+ *
+ * It MUST re-derive the HMAC over the PRESENTED payload and compare
+ * signatures. Re-issuing a fresh session and comparing payloads does not work
+ * here: the payload embeds an absolute expiry timestamp, so a newly issued
+ * one carries a different expiry and could never equal the old value.
+ *
+ * PAYLOAD = "<rulePattern>:<expiryEpochSeconds>[:<credentialFingerprint>]"
+ *
+ * The optional third field binds a session to the credential that minted it.
+ * When the caller supplies `credentialFingerprint`, a cookie without that
+ * field — or with a different one — is rejected. That is what makes "change
+ * the access token" take effect immediately instead of at the next 8-hour
+ * expiry: every session signed under the old token stops verifying the
+ * moment the hash behind it changes. Callers that pass no fingerprint keep
+ * the previous, unbound behaviour.
+ */
+export async function verifySessionCookieValue(
+	cookieValue: string,
+	secret: string | undefined,
+	pattern: string,
+	credentialFingerprint?: string,
+): Promise<boolean> {
+	if (!secret) return false;
+	const [payload, signature, ...rest] = cookieValue.split('.');
+	if (!payload || !signature || rest.length > 0) return false;
+	const expected = await hmacHex(secret, payload);
+	if (!timingSafeEqual(expected, signature)) return false;
+	const [payloadPattern, expiry, payloadFingerprint] = payload.split(':');
+	const expires = Number(expiry);
+	if (!Number.isFinite(expires) || expires < Date.now() / 1000) return false;
+	// A session issued for one rule must never authorize another.
+	if (payloadPattern === undefined) return false;
+	if (!timingSafeEqual(payloadPattern, pattern)) return false;
+	if (credentialFingerprint !== undefined) {
+		if (payloadFingerprint === undefined) return false;
+		return timingSafeEqual(payloadFingerprint, credentialFingerprint);
+	}
+	return true;
 }
 
 export const SESSION_COOKIE_NAME = SESSION_COOKIE;

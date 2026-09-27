@@ -32,6 +32,26 @@
  *     appear in any public response; the moderation status itself is stripped
  *     from public payloads;
  *   - no credentials ever flow to the client.
+ *
+ * Security logging
+ * -----------------
+ * Two of this route's actions are logged to security_events, the same table
+ * the profile surfaces use, tagged surface='board':
+ *
+ *   board-view   the FIRST page load of a visit — not every poll. The poller
+ *                re-fetches every 20s while the tab is visible, so logging
+ *                GETs wholesale would write ~180 rows per visitor-hour and
+ *                bury the POST events that actually matter under read noise.
+ *                The client opts in with `?track=1` on its initial load only.
+ *   board-post   every accepted post, carrying target_id = the message id, so
+ *                an admin can jump from a spam message straight to who sent it.
+ *
+ * board-report is logged by its own route (POST /api/board/report).
+ *
+ * Every logged action also establishes the shared session cookie, which is
+ * what lets the client report device details a second or two later (see
+ * /api/admin/../profile/security/enrich — one enrichment endpoint, both
+ * surfaces).
  */
 import { BOARD_CONFIG } from '../../config/board.config';
 import {
@@ -39,6 +59,9 @@ import {
 	getBoardStore,
 	type BoardMessage,
 } from '../../server/board-store';
+import { getSecurityStore } from '../../server/security-store';
+import { buildSecurityEvent, clientIp } from '../../server/security-helpers';
+import { generateSessionKey, readSessionKey, sessionCookieHeader } from '../../config/session.config';
 import { rateLimit, type KvRateLimitStore } from '../../server/ratelimit';
 import { serverEnvironment } from '../../server/env';
 import type { APIContext } from 'astro';
@@ -47,12 +70,7 @@ export const prerender = false;
 
 const CONTROL_CHARS = /[\u0000-\u0008\u000b-\u001f\u007f]/g;
 
-function clientKey(request: Request): string {
-	const cf = (request as Request & { cf?: { connectingIp?: string } }).cf;
-	return cf?.connectingIp ?? request.headers.get('cf-connecting-ip') ?? 'unknown';
-}
-
-function json(data: unknown, status = 200): Response {
+function json(data: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
 	return new Response(JSON.stringify(data), {
 		status,
 		headers: {
@@ -60,6 +78,7 @@ function json(data: unknown, status = 200): Response {
 			// Board data is never cached by the edge: visitors must see fresh
 			// messages, and POST responses must not be replayed.
 			'cache-control': 'no-store',
+			...extraHeaders,
 		},
 	});
 }
@@ -89,15 +108,49 @@ function etagMatches(header: string | null, etag: string): boolean {
 }
 
 /** Re-validate an attached image data URL. Returns the URL or undefined. */
-function sanitizeImage(value: unknown): string | undefined {
-	if (typeof value !== 'string' || value.length === 0) return undefined;
+/**
+ * Validate an attached image and explain any refusal.
+ *
+ * Returns the data URL to store, or a `reason` the route can hand back to
+ * the client. The size cap is checked BEFORE the MIME allow-list is
+ * consulted for the stored value, but the cap is only reached for a
+ * well-formed PNG/JPEG/WebP/GIF — an oversized file of some other type is
+ * still reported as a bad type, which is the more useful message.
+ *
+ * The byte count is derived from the base64 LENGTH (3/4 of it), not from a
+ * decode, so validating a large attachment costs nothing: the string is
+ * never turned back into bytes, let alone decoded as an image.
+ */
+function inspectImage(value: unknown): {
+	value?: string;
+	reason?: 'image_too_large' | 'image_unsupported';
+} {
+	if (typeof value !== 'string' || value.length === 0) return {};
+
+	// Cap the regex work: a legitimate attachment is already near the base64
+	// expansion of BOARD_CONFIG.maxImageBytes, plus the data-URL prefix.
+	const maxEncoded = Math.ceil((BOARD_CONFIG.maxImageBytes * 4) / 3) + 64;
+	if (value.length > maxEncoded) {
+		return { reason: 'image_too_large' };
+	}
+
 	const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(value);
-	if (!match) return undefined;
-	if (!BOARD_CONFIG.allowedImageTypes.includes(match[1])) return undefined;
+	if (!match) return { reason: 'image_unsupported' };
+	if (!BOARD_CONFIG.allowedImageTypes.includes(match[1])) return { reason: 'image_unsupported' };
+
 	// base64 length -> bytes (3/4 ratio), must fit the configured cap.
-	const bytes = Math.floor((match[2].length * 3) / 4);
-	if (bytes > BOARD_CONFIG.maxImageBytes) return undefined;
-	return value;
+	//
+	// The padding has to come off, or the count runs 1-2 bytes high. A file of
+	// exactly maxImageBytes encodes to a length whose naive 3/4 product is
+	// maxImageBytes + 1, so the file the client's own check accepts (file.size
+	// <= max) would be rejected here as too large — the two halves disagreeing
+	// at exactly the limit the copy promises.
+	const encoded = match[2];
+	const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
+	const bytes = (encoded.length * 3) / 4 - padding;
+	if (bytes > BOARD_CONFIG.maxImageBytes) return { reason: 'image_too_large' };
+
+	return { value };
 }
 
 export async function GET(context: APIContext): Promise<Response> {
@@ -125,16 +178,40 @@ export async function GET(context: APIContext): Promise<Response> {
 		const page = await store.listPublic({ limit, cursor });
 		const body = JSON.stringify({ ...page, provider: store.kind, limit });
 		const etag = await etagFor(body);
-		if (etagMatches(context.request.headers.get('if-none-match'), etag)) {
-			return new Response(null, {
-				status: 304,
-				headers: { etag, 'cache-control': 'no-store' },
-			});
+
+		// Opt-in security logging, on the FIRST page load of a visit only.
+		// The client sends ?track=1 for that request and never for its polls,
+		// so a long-lived tab does not turn into hundreds of read events.
+		//
+		// It also establishes the session cookie, which is what lets the
+		// client report device details a beat later. Fire-and-forget: never
+		// block the list response on telemetry.
+		const track = context.url.searchParams.get('track') === '1';
+		const headers: Record<string, string> = {
+			'content-type': 'application/json',
+			'cache-control': 'no-store',
+			etag,
+		};
+		if (track) {
+			const secStore = getSecurityStore(env);
+			if (secStore) {
+				const existing = readSessionKey(context.request);
+				const sessionKey = existing ?? generateSessionKey();
+				if (!existing) headers['set-cookie'] = sessionCookieHeader(sessionKey);
+				void buildSecurityEvent(context.request, {
+					surface: 'board',
+					endpoint: 'board-view',
+					sessionKey,
+				})
+					.then((event) => secStore.recordEvent(event))
+					.catch(() => {});
+			}
 		}
-		return new Response(body, {
-			status: 200,
-			headers: { 'content-type': 'application/json', 'cache-control': 'no-store', etag },
-		});
+
+		if (etagMatches(context.request.headers.get('if-none-match'), etag)) {
+			return new Response(null, { status: 304, headers });
+		}
+		return new Response(body, { status: 200, headers });
 	} catch (error) {
 		console.error('[bnji] board list failed:', error);
 		return json({ error: 'storage_unavailable', messages: [], nextCursor: null }, 503);
@@ -147,7 +224,7 @@ export async function POST(context: APIContext): Promise<Response> {
 	if (!store) return json({ error: 'storage_unconfigured' }, 503);
 
 	const kv = env.BOARD_KV as KvRateLimitStore | undefined;
-	const key = clientKey(context.request);
+	const key = clientIp(context.request);
 
 	// Abuse protection: KV-backed windows, shared across isolates.
 	const cooldown = await rateLimit(
@@ -185,7 +262,22 @@ export async function POST(context: APIContext): Promise<Response> {
 			422,
 		);
 	}
-	const image = sanitizeImage(body.image);
+	// Image validation. sanitizeImage() drops anything it will not accept
+	// (wrong shape, wrong MIME, or over the byte cap) and says nothing, so
+	// the caller learns only that the post was accepted WITHOUT the image —
+	// which reads as "my upload worked". A rejected attachment is a mistake
+	// the visitor can fix, so the failure is named and sized for them.
+	const imageCheck = inspectImage(body.image);
+	if (imageCheck.reason) {
+		return json(
+			{
+				error: imageCheck.reason,
+				maxBytes: BOARD_CONFIG.maxImageBytes,
+			},
+			422,
+		);
+	}
+	const image = imageCheck.value;
 
 	const message: BoardMessage = {
 		id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -201,7 +293,29 @@ export async function POST(context: APIContext): Promise<Response> {
 	try {
 		await store.add(message);
 		const { status: _status, ...publicMessage } = message;
-		return json({ message: publicMessage, provider: store.kind }, 201);
+
+		// Security logging: every accepted post, tagged with the message id so
+		// an admin can go from a spam message to its author in one step.
+		// Establishes the session cookie if this is the visitor's first action
+		// on the board, which is what the client's device-detail beacon
+		// correlates against.
+		const secStore = getSecurityStore(env);
+		const headers: Record<string, string> = {};
+		if (secStore) {
+			const existing = readSessionKey(context.request);
+			const sessionKey = existing ?? generateSessionKey();
+			if (!existing) headers['set-cookie'] = sessionCookieHeader(sessionKey);
+			void buildSecurityEvent(context.request, {
+				surface: 'board',
+				endpoint: 'board-post',
+				targetId: message.id,
+				sessionKey,
+			})
+				.then((event) => secStore.recordEvent(event))
+				.catch(() => {});
+		}
+
+		return json({ message: publicMessage, provider: store.kind }, 201, headers);
 	} catch (error) {
 		console.error('[bnji] board add failed:', error);
 		return json({ error: 'storage_unavailable' }, 503);

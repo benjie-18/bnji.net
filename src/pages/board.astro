@@ -3,13 +3,34 @@
  * /board/ — the public message board's dedicated home.
  *
  * Streamlined header, clean structure, and spacious staging area before the footer.
+ *
+ * SERVER-RENDERED, and that is load-bearing rather than incidental. The
+ * board's moderation controls must never reach a visitor: a control that is
+ * rendered to everyone and merely refused still advertises that deleting
+ * messages is a thing this site has. So the page asks isAdminRequest() while
+ * rendering and emits the controls only for an authenticated admin — meaning
+ * a non-admin's HTML and JS contain no trace of them at all.
+ *
+ * The alternative (a static page plus a client-side "am I an admin?" probe)
+ * was rejected because it moves the answer to runtime, and the honest
+ * version of that still ships a code path every visitor can read. The cost
+ * here is one Worker invocation per board view, which for a page of this
+ * size is a few milliseconds.
  */
 import MessageBoard from '../components/MessageBoard.astro';
 import PageHeader from '../components/PageHeader.astro';
 import Layout from '../layouts/Layout.astro';
+import { isAdminRequest } from '../server/admin';
+
+export const prerender = false;
 
 const description =
 	'The public message board: leave a note and watch it float in the sky.';
+
+// Same gate the admin API uses, so the page and the endpoint can never
+// disagree about who is an admin. It reads the HttpOnly session cookie set
+// by POST /api/admin/session; when it is absent the answer is simply false.
+const isAdmin = await isAdminRequest(Astro);
 ---
 
 <Layout title="Board" description={description}>
@@ -25,7 +46,7 @@ const description =
 		<div class="board-spacer" aria-hidden="true"></div>
 	</div>
 
-	<MessageBoard />
+		<MessageBoard isAdmin={isAdmin} />
 </Layout>
 
 <style>

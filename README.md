@@ -6,12 +6,19 @@ glossy **Frutiger Aero light theme** (sky gradients, clouds, soap bubbles,
 bokeh) — both wrapped in a realistic liquid-glass surface system. Built with
 [Astro](https://astro.build), deployed to Cloudflare Workers as static assets.
 
-> AI agents: read [`AGENTS.md`](./AGENTS.md) first.
-> Owners/developers: every configurable value is documented in
-> [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) — music sources, Discord
-> notifications, board storage, access control, themes, secrets handling — and
-> what the board actually stores (fields, retention, rate-limit data,
-> moderation states) in [`docs/DATA.md`](./docs/DATA.md).
+> **AI agents:** read [`AGENTS.md`](./AGENTS.md) first.
+>
+> **Owners/developers — the docs index:**
+>
+> | Document | Covers |
+> | --- | --- |
+> | [`AGENTS.md`](./AGENTS.md) | Hard rules, architecture map, how to verify a change |
+> | [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) | Every configurable value, public vs secret: music sources, Discord notifications, board storage, access control, themes, secrets handling |
+> | [`docs/DATA.md`](./docs/DATA.md) | What the board stores — fields, retention, rate-limit data, moderation states |
+> | [`docs/ADMIN.md`](./docs/ADMIN.md) | The admin system — the token, sessions, the stats dashboard, and how to rotate the credential |
+> | [`docs/PROFILES.md`](./docs/PROFILES.md) | The profile link page: its counter, click tracking and privacy posture |
+> | [`docs/AGENT-RECAP.md`](./docs/AGENT-RECAP.md) | Architecture recap: boot order, data flow, and the invariants to preserve |
+> | [`docs/DEPLOY.md`](./docs/DEPLOY.md) | Owner runbook: pull, apply migrations, add secrets, deploy, rotate the admin token |
 >
 > Content note: this project intentionally carries **no personal biography**;
 > identity copy is neutral placeholder text by design.
@@ -24,7 +31,7 @@ bokeh) — both wrapped in a realistic liquid-glass surface system. Built with
 | Content   | Content collections (Markdown) in `src/content/blog/`                   |
 | Styling   | Hand-written CSS: tokens, dual themes, liquid glass, aero environment   |
 | Client JS | Small TypeScript modules (`src/scripts/`), one deferred bundle          |
-| Server    | Two API boundaries (`/api/board`, `/api/dm`) + route-guard middleware   |
+| Server    | API routes under `/api/*` + route-guard middleware (see below)             |
 | Adapter   | `@astrojs/cloudflare` — public pages prerendered; APIs run in the Worker |
 | Feeds     | `@astrojs/rss` (`/rss.xml`) and `@astrojs/sitemap`                      |
 
@@ -82,28 +89,52 @@ npm run deploy     # publish to Cloudflare Workers
   store) via `/api/board`; KV-shared rate limiting.
 - **Private messages** — contact form delivered server-side through a Discord
   webhook or ntfy push; credentials live only in Worker secrets.
-- **The Lab** — runnable experiments and small games: starfield tuner, glass
-  bench, orbit field, Bubble Pop, Memory Pairs, Reaction Timer.
-- **Access-control groundwork** — `ACCESS_RULES` + middleware + signed-session
-  primitives for future private routes; honest about static-route limits.
+- **The Lab** — 16 runnable experiments and small games across 13 components
+  (starfield tuner, liquid-glass lab, glass minesweeper, orbit field, 3D piano,
+  isometric stack, voxel map, CPS counter, Bubble Pop, Memory Pairs, Reaction
+  Timer and more). Each owns its DOM subtree. The ones running a continuous
+  `requestAnimationFrame` loop pause via `IntersectionObserver` when scrolled
+  away and on `visibilitychange` when the tab is hidden; the rest are driven by
+  user events and have no loop to pause.
+- **Admin panel** (`/admin`, gated) — one shared access token stored as a
+  SHA-256 hash in D1 and rotated from the panel itself; a site-wide statistics
+  dashboard built only from data the app already records; board moderation;
+  a security-event log; and the runtime configuration dump. Sessions are
+  HttpOnly/Secure/SameSite and are invalidated the moment the token rotates.
+  Full write-up in [`docs/ADMIN.md`](./docs/ADMIN.md).
+- **Access control** — `ACCESS_RULES` declares protected prefixes; `src/middleware.ts`
+  enforces them for SSR routes, and a build-time check (`scripts/verify-access.mjs`)
+  fails the build if a protected page is ever prerendered, since a prerendered page
+  is served without running any Worker code. The admin surface uses the DB-backed
+  guard described above; the generic HMAC primitives remain available for other
+  rules.
 
 ## Project layout
 
 ```
 docs/CONFIGURATION.md  every configurable value, public vs secret, how to swap
 docs/DATA.md           what the message board stores, retention, moderation data
+docs/ADMIN.md          the admin system: credential, sessions, stats, rotation
+docs/PROFILES.md       the profile page: counters, click tracking, privacy posture
+docs/AGENT-RECAP.md    architecture recap and the invariants to preserve
+docs/DEPLOY.md         owner runbook: migrations, secrets, deploy, verification
+migrations/            D1 schema, applied in order (board, profiles, telemetry,
+                       moderation, admin credential)
 src/
   config/       music, dm integration, board policy, access rules, theme, intro
   components/   glass primitives, sections, lab experiments, board, player…
   data/         typed site content (site, navigation, projects, lab, blog…)
   layouts/      Layout (shell) and BlogPost (article chrome)
   middleware.ts route-guard enforcement for ACCESS_RULES
-  pages/        routes + /api/board + /api/dm (server boundaries)
+  pages/        routes + API boundaries (board, dm, profile analytics, security
+                enrichment, admin/*)
   scripts/      settings store + overlay, theme, starfield, interactions,
-                scroll, board physics, music, intro…
-  server/       board stores, rate limiter, access primitives, env access
+                scroll, board physics, music, intro, profile, admin…
+  server/       board/profile/security stores, rate limiter, access primitives,
+                the admin guard, env access
   styles/       tokens, glass, aero, animations, global, lab, board, settings
 public/         fonts, favicon, og-cover, manifest, post hero images
+scripts/        verify-access.mjs — build-time protected-route check
 ```
 
 ## Writing a blog post

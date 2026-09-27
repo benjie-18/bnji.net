@@ -37,7 +37,6 @@
 	--nebula-violet: rgba(148, 88, 255, 0.06);
 	--nebula-magenta: rgba(255, 64, 214, 0.04);
 	--star-color: 226, 238, 255; /* rgb triplet, consumed by scripts/starfield.ts */
-	--shooting-star-color: 200, 226, 255;
 	/* Cursor halo (dark): stellar blue with a violet rim. */
 	--cursor-core: rgba(140, 200, 255, 0.09);
 	--cursor-mid: rgba(168, 120, 255, 0.05);
@@ -52,7 +51,6 @@
 	--text-muted: rgba(226, 233, 244, 0.72); /* ~9:1 */
 	--text-dim: rgba(226, 233, 244, 0.5); /* ~4.9:1 — large text only */
 	--text-faint: rgba(226, 233, 244, 0.34); /* hairlines / decorative only */
-	--text-inverse: #05070c;
 
 	/* --- Accent ---------------------------------------------------------- */
 	/* One cool accent, used sparingly: focus rings, active nav, links inside
@@ -61,10 +59,15 @@
 	--accent-strong: #c3ecff; /* 12.4:1 on --bg — used for focus rings */
 	--accent-soft: rgba(127, 212, 255, 0.14);
 	--accent-line: rgba(127, 212, 255, 0.34);
-	--accent-2: #ff8ad4; /* pink companion, dark theme only, decorative */
 	--signal-live: #79e6b0;
 	--signal-soon: #ffd68a;
 	--signal-idle: rgba(226, 233, 244, 0.4);
+	/* Destructive / error state. Lives beside the signal scale because it is
+	   the same kind of thing: a status colour, not a brand accent. The -soft
+	   and -line variants carry the alpha so callers never write an rgba(). */
+	--danger: #ff9a8b;
+	--danger-soft: rgba(255, 154, 139, 0.08);
+	--danger-line: rgba(255, 154, 139, 0.35);
 
 	/* --- Liquid Glass 2027 Optical System (Dark) --------------------------- */
 	/* Adaptive luminance: glass_L = 0.58 * backdrop_L + 34
@@ -74,23 +77,20 @@
 	--glass-bg-quiet: rgba(255, 255, 255, 0.025);
 	--glass-bg-clear: rgba(255, 255, 255, 0.02);
 	--glass-bg-fallback: rgba(10, 12, 20, 0.88); /* no-backdrop-filter browsers */
+	/* Opaque surface for prefers-reduced-transparency, where the blur is off
+	   and a translucent tint has nothing behind it to tint. */
+	--bg-surface: #121a29;
 
-	/* Fresnel directional rim: bright top grazing reflection, darker lateral edges */
+	/* Fresnel rim: the bright top grazing reflection. */
 	--glass-fresnel-top: rgba(255, 255, 255, 0.42);
-	--glass-fresnel-bottom: rgba(127, 212, 255, 0.2);
 	--glass-edge-dark: rgba(0, 0, 0, 0.45); /* 2027 dark edge structure */
 	--glass-border: rgba(255, 255, 255, 0.1);
 	--glass-border-strong: rgba(255, 255, 255, 0.22);
 	--glass-highlight: rgba(255, 255, 255, 0.08); /* faint internal top edge */
 
-	/* Optical sheen, bounce & environmental collection */
+	/* Optical sheen and refraction */
 	--glass-sheen-top: rgba(255, 255, 255, 0.08);
-	--glass-sheen-bottom: rgba(127, 212, 255, 0.035);
-	--glass-edge-a: rgba(255, 255, 255, 0.38);
-	--glass-edge-b: rgba(255, 255, 255, 0.04);
-	--glass-edge-c: rgba(127, 212, 255, 0.18);
 	--glass-refraction: rgba(127, 212, 255, 0.07);
-	--glass-env-bleed: rgba(148, 88, 255, 0.045);
 	--glass-specular: rgba(255, 255, 255, 0.16);
 
 	/* Optical filter values */
@@ -106,7 +106,6 @@
 		0 28px 70px -24px rgba(0, 0, 0, 0.95), 0 4px 16px rgba(0, 0, 0, 0.5);
 	--glass-shadow-large:
 		0 36px 90px -28px rgba(0, 0, 0, 0.98), 0 8px 24px rgba(0, 0, 0, 0.55);
-	--glass-glow: 0 0 44px -18px rgba(127, 212, 255, 0.55);
 
 	/* Radius of the pointer-tracked highlight; set per surface where useful. */
 	--glass-spot: 180px;
@@ -125,34 +124,84 @@
 	--aero-sky-2: #6fc3e8;
 	--aero-sky-3: #cdf1ff;
 	--aero-sky-4: #eafcff;
-	/* Meadow band anchoring the bottom of the viewport, plus the soft
-	   highlight line along its top edge (sky light reflecting off the grass). */
-	--aero-meadow-1: #8fe0b0;
-	--aero-meadow-2: #4fae78;
-	--aero-meadow-edge: rgba(234, 252, 255, 0.7); /* --aero-sky-4, softened */
+	/* Meadow band anchoring the bottom of the viewport. Two overlapping
+	   rolling hills, each a 3-stop vertical gradient, drawn in AeroSky.astro
+	   as inline SVG — the stops reference these tokens through the `style`
+	   attribute, because presentation attributes (stop-color="...") are
+	   parsed as attributes and do NOT resolve var(). */
+	--aero-meadow-1: #6ee09e; /* front hill, crest   */
+	--aero-meadow-2: #46c37f; /* front hill, mid     */
+	--aero-meadow-3: #288751; /* front hill, base    */
+	--aero-meadow-back-1: #9de9b9; /* back hill, crest */
+	--aero-meadow-back-2: #72d698; /* back hill, mid   */
+	--aero-meadow-back-3: #3da067; /* back hill, base  */
+	/* Highlight line swept along each hill's top edge — sky light catching
+	   the grass. Cool at the trailing end, where it picks up --aero-sky-4. */
+	--aero-meadow-edge: rgba(234, 252, 255, 0.75);
+	--aero-meadow-edge-end: rgba(255, 255, 255, 0.35);
+	--aero-meadow-edge-front-end: rgba(234, 252, 255, 0.45);
+	--aero-meadow-edge-start: rgba(255, 255, 255, 0.4);
+	--aero-meadow-edge-back-peak: rgba(255, 255, 255, 0.85);
+	--aero-meadow-edge-front-start: rgba(255, 255, 255, 0.5);
+	--aero-meadow-edge-front-peak: rgba(255, 255, 255, 0.95);
+	--aero-meadow-edge-front-hold: rgba(255, 255, 255, 0.9);
+	/* Sunlit wash over the front hill, upper-left to match the orbs. */
+	--aero-meadow-sunlit: rgba(255, 255, 255, 0.4);
+	--aero-meadow-sunlit-fade: rgba(255, 255, 255, 0.08);
 	/* Sunlight bloom: warm white radial. Sits upper-LEFT so the lighting
 	   agrees with the orbs' specular highlights (also upper-left). */
 	--aero-bloom: rgba(255, 254, 242, 0.35);
-	/* Floating glossy orbs — primary (aqua) and secondary (green). Each paints
-	   base → mid → edge in one radial gradient for volume. */
-	--aero-orb-1-base: #eafeff;
-	--aero-orb-1-mid: #8fdcef;
-	--aero-orb-1-edge: #3fa9c9;
-	--aero-orb-2-base: #f4fff0;
-	--aero-orb-2-mid: #a8e6b0;
-	--aero-orb-2-edge: #4fae78;
-	/* Orb optics: the specular highlight ellipse (upper-left) and the thin
-	   rim-light arc (lower-right) — the pair that reads as painted glass. */
-	--aero-orb-specular: rgba(255, 255, 255, 0.95);
-	--aero-orb-rim: rgba(255, 255, 255, 0.85);
-	/* Orb cast shadows, derived from each orb's edge colour at 40%. */
-	--aero-orb-1-shadow: rgba(63, 169, 201, 0.4);
-	--aero-orb-2-shadow: rgba(79, 174, 120, 0.4);
+	/* Floating glossy orbs. Each bubble is a 3-layer radial stack — specular
+	   highlight, an off-centre prism hue, then the body running core → mid →
+	   edge — over a drop shadow and an inset glow. Tokens carry colour AND
+	   alpha; the rules in aero.css carry only geometry, so a palette change
+	   is a token edit and nothing else. The optics every orb shares: the
+	   specular highlight and rim of the stack, the ::before ellipse, the ::after
+	   rim-light insets, and the 1px border. They are shared because the optics
+	   are identical even though each orb's body colour differs. */
+	--aero-orb-specular: rgba(255, 255, 255, 0.55);
+	--aero-orb-specular-fade: rgba(255, 255, 255, 0.1);
+	--aero-orb-rim: rgba(255, 255, 255, 0.7);
+	--aero-orb-border: rgba(255, 255, 255, 0.62);
+	--aero-orb-ellipse: rgba(255, 255, 255, 0.95);
+	--aero-orb-ellipse-fade: rgba(255, 255, 255, 0.5);
+	--aero-orb-rim-light: rgba(255, 255, 255, 0.75);
+	--aero-orb-inner-glow: rgba(255, 255, 255, 0.35);
+	/* Orb 1 — large aqua soap bubble. */
+	--aero-orb-1-prism: rgba(220, 150, 255, 0.22);
+	--aero-orb-1-base: rgba(160, 240, 255, 0.12);
+	--aero-orb-1-mid: rgba(56, 189, 248, 0.22);
+	--aero-orb-1-edge: rgba(14, 165, 233, 0.45);
+	--aero-orb-1-shadow: rgba(14, 165, 233, 0.28);
+	--aero-orb-1-glow: rgba(125, 211, 252, 0.35);
+	/* Orb 2 — prismatic rose-aqua soap bubble. */
+	--aero-orb-2-prism: rgba(74, 222, 128, 0.25);
+	--aero-orb-2-base: rgba(255, 200, 240, 0.12);
+	--aero-orb-2-mid: rgba(216, 180, 254, 0.25);
+	--aero-orb-2-edge: rgba(56, 189, 248, 0.4);
+	--aero-orb-2-shadow: rgba(168, 85, 247, 0.22);
+	--aero-orb-2-glow: rgba(244, 114, 182, 0.3);
+	/* Orb 3 — fresh meadow-lime soap bubble. */
+	--aero-orb-3-prism: rgba(56, 189, 248, 0.22);
+	--aero-orb-3-base: rgba(187, 247, 208, 0.12);
+	--aero-orb-3-mid: rgba(74, 222, 128, 0.22);
+	--aero-orb-3-edge: rgba(22, 163, 74, 0.38);
+	--aero-orb-3-shadow: rgba(34, 197, 94, 0.2);
+	--aero-orb-3-glow: rgba(134, 239, 172, 0.3);
+	/* Orb 4 — warm coral-sunset prismatic soap bubble. */
+	--aero-orb-4-prism: rgba(244, 114, 182, 0.26);
+	--aero-orb-4-base: rgba(254, 240, 138, 0.15);
+	--aero-orb-4-mid: rgba(251, 146, 60, 0.22);
+	--aero-orb-4-edge: rgba(236, 72, 153, 0.36);
+	--aero-orb-4-shadow: rgba(244, 63, 94, 0.22);
+	--aero-orb-4-glow: rgba(251, 146, 60, 0.3);
 	/* Cloud tones: white at three densities for the lit puffs, plus a cool
 	   shadow tone that sits underneath them to give clusters volume. */
 	--aero-cloud-bright: rgba(255, 255, 255, 0.8);
 	--aero-cloud-mid: rgba(255, 255, 255, 0.65);
 	--aero-cloud-soft: rgba(255, 255, 255, 0.55);
+	/* Cool edge tone for the light-theme vignette. */
+	--aero-vignette: rgba(111, 180, 214, 0.28);
 	--aero-cloud-shadow: #c9e9f5;
 	/* Bokeh: white at low opacity, three densities, varying radii. */
 	--aero-bokeh-soft: rgba(255, 255, 255, 0.25);
@@ -160,8 +209,6 @@
 	--aero-bokeh-bright: rgba(255, 255, 255, 0.55);
 	/* Footer wordmark atmosphere in the light theme: --text-strong (#062b3a)
 	   faded, mirroring the dark theme's white fade in Footer.astro. */
-	--aero-wordmark-top: rgba(6, 43, 58, 0.46);
-	--aero-wordmark-bottom: rgba(6, 43, 58, 0.1);
 
 	/* --- Nav surfaces ------------------------------------------------------ */
 	/* Hover/active washes for nav links + triggers, and the near-solid
@@ -237,6 +284,9 @@
 	--hover-lift: -3px;
 
 	/* --- Spacing scale ---------------------------------------------------- */
+	/* Spacing scale. Deliberately a complete run: a scale with holes in it is
+	   worse than one with unused steps, because the next component needs the
+	   right step to already exist. */
 	--space-1: 0.25rem;
 	--space-2: 0.5rem;
 	--space-3: 0.75rem;
@@ -282,7 +332,6 @@
 	--nebula-violet: transparent;
 	--nebula-magenta: transparent;
 	--star-color: 255, 255, 255;
-	--shooting-star-color: 255, 255, 255;
 	/* Cursor halo (light): a bright aqua lens with a green caustic rim. */
 	--cursor-core: rgba(0, 190, 235, 0.14);
 	--cursor-mid: rgba(120, 230, 255, 0.1);
@@ -293,16 +342,17 @@
 	--text-muted: #174356; /* 7.5:1 on --bg, 9.5:1 on white glass */
 	--text-dim: #2b576b; /* 5.4:1 on --bg, 6.8:1 on white glass — WCAG AA compliant */
 	--text-faint: #447287; /* 3.9:1 on --bg, 4.9:1 on white glass */
-	--text-inverse: #f2fbff;
 
 	--accent: #0092c8; /* 4.6:1 on --bg */
 	--accent-strong: #004d6b; /* 8.5:1 — focus rings & strong accents */
 	--accent-soft: rgba(0, 146, 200, 0.14);
 	--accent-line: rgba(0, 146, 200, 0.42);
-	--accent-2: #00a878; /* green companion, decorative */
 	--signal-live: #0f9960;
 	--signal-soon: #a05a00;
 	--signal-idle: rgba(9, 55, 74, 0.45);
+	--danger: #b3261e; /* 6.4:1 on the light --bg */
+	--danger-soft: rgba(179, 38, 30, 0.07);
+	--danger-line: rgba(179, 38, 30, 0.34);
 
 	/* --- Liquid Glass 2027 Optical System (Light) -------------------------- */
 	/* Adaptive luminance: glass_L = 0.58 * backdrop_L + 34
@@ -313,10 +363,10 @@
 	--glass-bg-clear: rgba(255, 255, 255, 0.28);
 	--glass-clear-dimming: rgba(10, 40, 75, 0.08); /* 35% dimming layer on bright fields */
 	--glass-bg-fallback: rgba(244, 252, 255, 0.94);
+	--bg-surface: #ffffff;
 
-	/* Fresnel directional rim: bright top grazing reflection, darker lateral edges */
+	/* Fresnel rim: the bright top grazing reflection. */
 	--glass-fresnel-top: rgba(255, 255, 255, 0.95);
-	--glass-fresnel-bottom: rgba(0, 190, 235, 0.38);
 	--glass-edge-dark: rgba(20, 60, 100, 0.22); /* 2027 dark edge structure */
 	--glass-border: rgba(255, 255, 255, 0.72);
 	--glass-border-strong: rgba(255, 255, 255, 0.95);
@@ -324,12 +374,7 @@
 
 	/* Optical sheen and bounce */
 	--glass-sheen-top: rgba(255, 255, 255, 0.65);
-	--glass-sheen-bottom: rgba(0, 190, 235, 0.08);
-	--glass-edge-a: rgba(255, 255, 255, 0.95);
-	--glass-edge-b: rgba(255, 255, 255, 0.25);
-	--glass-edge-c: rgba(0, 190, 235, 0.45);
 	--glass-refraction: rgba(0, 190, 235, 0.12);
-	--glass-env-bleed: rgba(96, 226, 160, 0.12);
 	--glass-specular: rgba(255, 255, 255, 0.28);
 	--glass-blur: 22px;
 	--glass-saturate: 185%;
@@ -343,7 +388,6 @@
 		0 24px 60px -22px rgba(18, 90, 140, 0.35), 0 4px 14px rgba(25, 110, 160, 0.16);
 	--glass-shadow-large:
 		0 32px 80px -26px rgba(18, 90, 140, 0.42), 0 6px 20px rgba(25, 110, 160, 0.2);
-	--glass-glow: 0 0 40px -14px rgba(0, 190, 235, 0.55);
 
 	/* Nav surfaces on the painted sky: --accent (#0092c8) washes for
 	   hover/active, and a near-solid sky-tinted sheet (--aero-sky-4 at the

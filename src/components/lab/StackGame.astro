@@ -658,17 +658,30 @@
 		});
 
 		// Intersection observer
+		//
+		// Two gates, not one: onscreen (this observer) and unhidden (the tab).
+		// A page scrolled past the experiment otherwise keeps the loop running
+		// while its own tab is backgrounded or another tab is in front, which is
+		// exactly the case AGENTS.md §5 rules out. syncLoop owns both the start
+		// and the stop so the gates cannot disagree.
+		let onscreen = false;
+
+		const syncLoop = () => {
+			cancelAnimationFrame(animId);
+			if (!onscreen || document.hidden) return;
+			lastTime = performance.now();
+			animId = requestAnimationFrame(render);
+		};
+
 		const obs = new IntersectionObserver((entries) => {
 			for (const entry of entries) {
-				if (entry.isIntersecting) {
-					lastTime = performance.now();
-					animId = requestAnimationFrame(render);
-				} else {
-					cancelAnimationFrame(animId);
-				}
+				onscreen = entry.isIntersecting;
+				syncLoop();
 			}
 		});
 		obs.observe(root);
+
+		document.addEventListener('visibilitychange', syncLoop);
 		initGame();
 	}
 </script>

@@ -19,21 +19,10 @@ import { getSecurityStore } from '../../../server/security-store';
 import { buildSecurityEvent } from '../../../server/security-helpers';
 import { serverEnvironment } from '../../../server/env';
 import { PROFILE_CONFIG } from '../../../config/profile.config';
+import { generateSessionKey, readSessionKey, sessionCookieHeader } from '../../../config/session.config';
 import type { APIContext } from 'astro';
 
 export const prerender = false;
-
-function generateSessionKey(): string {
-	const bytes = new Uint8Array(16);
-	crypto.getRandomValues(bytes);
-	return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function getSessionKey(request: Request): string | null {
-	const cookie = request.headers.get('cookie') ?? '';
-	const match = cookie.match(new RegExp(`${PROFILE_CONFIG.sessionCookie}=([^;]+)`));
-	return match ? match[1] : null;
-}
 
 function todayKey(): string {
 	return new Date().toISOString().slice(0, 10);
@@ -69,7 +58,7 @@ export async function POST(context: APIContext): Promise<Response> {
 		return json({ recorded: false, reason: 'storage_unavailable' });
 	}
 
-	let sessionKey = getSessionKey(context.request);
+	let sessionKey = readSessionKey(context.request);
 	const needsCookie = !sessionKey;
 	if (!sessionKey) {
 		sessionKey = generateSessionKey();
@@ -79,13 +68,18 @@ export async function POST(context: APIContext): Promise<Response> {
 		const recorded = await store.recordView(slug, sessionKey, todayKey(), Date.now());
 		const headers: Record<string, string> = {};
 		if (needsCookie) {
-			headers['set-cookie'] = `${PROFILE_CONFIG.sessionCookie}=${sessionKey}; Path=/; Max-Age=${PROFILE_CONFIG.sessionCookieMaxAge}; SameSite=${PROFILE_CONFIG.sessionCookieSameSite}; HttpOnly`;
+			headers['set-cookie'] = sessionCookieHeader(sessionKey);
 		}
 
 		// Security logging (non-blocking, fire-and-forget).
 		const secStore = getSecurityStore(env);
 		if (secStore) {
-			const event = await buildSecurityEvent(context.request, slug, 'view', sessionKey);
+			const event = await buildSecurityEvent(context.request, {
+				surface: 'profile',
+				endpoint: 'view',
+				profileSlug: slug,
+				sessionKey,
+			});
 			secStore.recordEvent(event).catch(() => {});
 		}
 

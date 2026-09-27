@@ -4,23 +4,31 @@
    The site's atmosphere, per theme:
 
    LIGHT (Frutiger Aero): a PAINTED SCENE, not a flat wash — a four-stop sky
-   gradient (html/body), a warm sunlight bloom upper-left, three volumetric
+   gradient (html/body), a warm sunlight bloom upper-left, FIVE volumetric
    cloud clusters built from overlapping soft-edged puffs (cool shadow tone
    below, whites above), scattered bokeh circles, a meadow band anchoring the
-   bottom of the viewport with a soft highlight line at its top edge, and two
-   glossy floating orbs (aqua primary, green secondary). Each orb paints a
-   base radial gradient for volume, a specular highlight ellipse offset
-   upper-left and a thin rim-light arc along the lower-right edge — the
-   highlight + rim pair is what makes them read as painted glass rather than
-   flat circles. Markup: src/components/AeroSky.astro; every colour is a
-   --aero-* token from tokens.css.
+   bottom of the viewport — two overlapping rolling hills with a swept
+   highlight line along each crest and a sunlit wash over the front one — and
+   FOUR glossy floating orbs (aqua, prismatic rose-aqua, meadow lime, coral
+   sunset). Each orb is a 3-layer radial stack: a specular highlight offset
+   upper-left, a second hue off-centre lower-right, and the body running core
+   to edge under a white rim; a ::before ellipse and ::after rim-light insets
+   add the optics. The highlight + rim pair is what makes them read as painted
+   glass rather than flat circles. Markup: src/components/AeroSky.astro; every
+   colour — including the SVG gradient stops, which reference tokens through
+   the style attribute — is an --aero-* token from tokens.css.
 
    DARK (space, expanded): the existing aurora plus a pink/violet/magenta
    nebula band (token-driven from tokens.css) so the night sky gained colour
    without losing its restraint.
 
-   Cost model: gradients + transform-only animation on the compositor; no
-   filters on large layers, no layout work, zero JavaScript.
+   Cost model: gradients + transform-only animation on the compositor, no
+   layout work, zero JavaScript. One exception, stated plainly: each cloud
+   body is fused by a small SVG goo filter (blur + alpha contrast + screen
+   blend) and softened with a 6px blur. That is a per-frame rasterisation of
+   the cloud, not of the viewport, and the filter's cost is proportional to
+   the cloud's own box. It is what removes the seams between overlapping
+   puffs, so it stays; performance mode already drops the whole layer.
 
    Gating (see the bottom of this file): the whole layer is display:none in
    the dark theme; performance mode drops it entirely; the settings store's
@@ -81,10 +89,22 @@ html[data-theme='light'] .aero-sky {
 	transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Defs-only carrier for the SVG filters the clouds reference. It must not
+   paint, take up space, or catch pointer events. */
+.aero-defs {
+	position: absolute;
+	inline-size: 0;
+	block-size: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
 /* --- Volumetric drifting clouds --------------------------------------------- */
 /* Clouds are composed of multiple volumetric puffs that fuse and morph
    organically via SVG filter and animated morphing keyframes. Each cloud cluster
-   drifts across wide horizontal horizons with varied randomized composition. */
+   drifts across wide horizontal horizons. Cluster geometry — position, scale,
+   drift duration, phase and which of the nine puffs make up the silhouette —
+   is hand-tuned per cluster in AeroSky.astro, not generated at runtime. */
 .aero-clouds {
 	position: absolute;
 	inset: 0;
@@ -98,15 +118,20 @@ html[data-theme='light'] .aero-sky {
 	inline-size: clamp(320px, 38vw, 620px);
 	block-size: clamp(110px, 14vw, 220px);
 	scale: var(--cloud-scale, 1);
-	will-change: transform;
 }
 
 .aero-cloud-body {
 	position: relative;
 	inline-size: 100%;
 	block-size: 100%;
+	/* The goo-morph, then a soft blur on the fused silhouette.
+	   There is deliberately no -webkit-filter companion here. Blink and WebKit
+	   treat -webkit-filter as an ALIAS of `filter`, so the trailing
+	   `-webkit-filter: blur(6px)` used to override this declaration wholesale
+	   and drop the url() — the morph silently did nothing in Chrome and Safari.
+	   Unprefixed `filter` has been supported everywhere since Safari 9.1, so the
+	   prefixed copy bought nothing and cost the effect. */
 	filter: url(#aero-cloud-morph) blur(6px);
-	-webkit-filter: blur(6px);
 }
 
 .aero-cloud--1 {
@@ -173,7 +198,6 @@ html[data-theme='light'] .aero-sky {
 .aero-puff {
 	position: absolute;
 	border-radius: 50%;
-	will-change: transform, border-radius;
 	animation: aero-puff-morph 14s ease-in-out infinite alternate;
 }
 
@@ -185,31 +209,25 @@ html[data-theme='light'] .aero-sky {
 
 @keyframes aero-puff-morph {
 	0% {
-		border-radius: 50% 50% 48% 52% / 52% 48% 50% 50%;
 		transform: scale(1) translate3d(0, 0, 0);
 	}
 	50% {
-		border-radius: 46% 54% 52% 48% / 50% 52% 48% 50%;
-		transform: scale(1.06, 0.94) translate3d(2%, -1.2%, 0);
+			transform: scale(1.06, 0.94) translate3d(2%, -1.2%, 0);
 	}
 	100% {
-		border-radius: 52% 48% 46% 54% / 48% 50% 52% 48%;
-		transform: scale(0.95, 1.05) translate3d(-2%, 1.2%, 0);
+			transform: scale(0.95, 1.05) translate3d(-2%, 1.2%, 0);
 	}
 }
 
 @keyframes aero-puff-morph-alt {
 	0% {
-		border-radius: 48% 52% 50% 50% / 50% 48% 52% 50%;
 		transform: scale(0.96, 1.04) translate3d(0, 0, 0);
 	}
 	50% {
-		border-radius: 54% 46% 48% 52% / 48% 52% 50% 50%;
-		transform: scale(1.05, 0.95) translate3d(-1.5%, 1.8%, 0);
+			transform: scale(1.05, 0.95) translate3d(-1.5%, 1.8%, 0);
 	}
 	100% {
-		border-radius: 50% 50% 54% 46% / 52% 48% 48% 52%;
-		transform: scale(1.02, 0.98) translate3d(1.5%, -1.8%, 0);
+			transform: scale(1.02, 0.98) translate3d(1.5%, -1.8%, 0);
 	}
 }
 
@@ -346,7 +364,6 @@ html[data-theme='light'] .aero-sky {
 .aero-orb {
 	position: absolute;
 	border-radius: 50%;
-	will-change: transform;
 	pointer-events: none;
 	backdrop-filter: blur(1.5px);
 	-webkit-backdrop-filter: blur(1.5px);
@@ -356,11 +373,11 @@ html[data-theme='light'] .aero-sky {
 	content: '';
 	position: absolute;
 	inset-inline-start: 14%;
+	border-radius: 50%;
 	inset-block-start: 12%;
 	inline-size: 38%;
 	block-size: 24%;
-	border-radius: 50%;
-	background: radial-gradient(ellipse at 46% 38%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.5) 45%, transparent 80%);
+	background: radial-gradient(ellipse at 46% 38%, var(--aero-orb-ellipse) 0%, var(--aero-orb-ellipse-fade) 45%, transparent 80%);
 	transform: rotate(-22deg);
 	filter: blur(0.5px);
 }
@@ -371,8 +388,8 @@ html[data-theme='light'] .aero-sky {
 	inset: 0;
 	border-radius: 50%;
 	box-shadow:
-		inset -6px -8px 14px -4px rgba(255, 255, 255, 0.75),
-		inset 0 0 12px 2px rgba(255, 255, 255, 0.35);
+		inset -6px -8px 14px -4px var(--aero-orb-rim-light),
+		inset 0 0 12px 2px var(--aero-orb-inner-glow);
 }
 
 /* Bubble 1: Large aqua soap bubble (upper-right) */
@@ -382,13 +399,13 @@ html[data-theme='light'] .aero-sky {
 	inline-size: clamp(96px, 11vw, 142px);
 	aspect-ratio: 1;
 	background:
-		radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.08) 25%, transparent 45%),
-		radial-gradient(circle at 70% 75%, rgba(220, 150, 255, 0.22) 0%, transparent 48%),
-		radial-gradient(circle, rgba(160, 240, 255, 0.12) 0%, rgba(56, 189, 248, 0.22) 65%, rgba(14, 165, 233, 0.45) 88%, rgba(255, 255, 255, 0.7) 100%);
-	border: 1px solid rgba(255, 255, 255, 0.65);
+		radial-gradient(circle at 35% 30%, var(--aero-orb-specular) 0%, var(--aero-orb-specular-fade) 25%, transparent 45%),
+		radial-gradient(circle at 70% 75%, var(--aero-orb-1-prism) 0%, transparent 48%),
+		radial-gradient(circle, var(--aero-orb-1-base) 0%, var(--aero-orb-1-mid) 65%, var(--aero-orb-1-edge) 88%, var(--aero-orb-rim) 100%);
+	border: 1px solid var(--aero-orb-border);
 	box-shadow:
-		0 16px 36px -12px rgba(14, 165, 233, 0.28),
-		inset 0 0 16px rgba(125, 211, 252, 0.35);
+		0 16px 36px -12px var(--aero-orb-1-shadow),
+		inset 0 0 16px var(--aero-orb-1-glow);
 	animation: aero-bubble-bounce-1 16s ease-in-out infinite alternate;
 }
 
@@ -399,13 +416,13 @@ html[data-theme='light'] .aero-sky {
 	inline-size: clamp(68px, 7.5vw, 98px);
 	aspect-ratio: 1;
 	background:
-		radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 22%, transparent 42%),
-		radial-gradient(circle at 65% 70%, rgba(74, 222, 128, 0.25) 0%, transparent 50%),
-		radial-gradient(circle, rgba(255, 200, 240, 0.12) 0%, rgba(216, 180, 254, 0.25) 60%, rgba(56, 189, 248, 0.4) 86%, rgba(255, 255, 255, 0.7) 100%);
-	border: 1px solid rgba(255, 255, 255, 0.6);
+		radial-gradient(circle at 35% 30%, var(--aero-orb-specular) 0%, var(--aero-orb-specular-fade) 22%, transparent 42%),
+		radial-gradient(circle at 65% 70%, var(--aero-orb-2-prism) 0%, transparent 50%),
+		radial-gradient(circle, var(--aero-orb-2-base) 0%, var(--aero-orb-2-mid) 60%, var(--aero-orb-2-edge) 86%, var(--aero-orb-rim) 100%);
+	border: 1px solid var(--aero-orb-border);
 	box-shadow:
-		0 14px 28px -10px rgba(168, 85, 247, 0.22),
-		inset 0 0 12px rgba(244, 114, 182, 0.3);
+		0 14px 28px -10px var(--aero-orb-2-shadow),
+		inset 0 0 12px var(--aero-orb-2-glow);
 	animation: aero-bubble-bounce-2 21s ease-in-out infinite alternate;
 }
 
@@ -416,13 +433,13 @@ html[data-theme='light'] .aero-sky {
 	inline-size: clamp(52px, 5.5vw, 76px);
 	aspect-ratio: 1;
 	background:
-		radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 24%, transparent 45%),
-		radial-gradient(circle at 65% 70%, rgba(56, 189, 248, 0.22) 0%, transparent 46%),
-		radial-gradient(circle, rgba(187, 247, 208, 0.12) 0%, rgba(74, 222, 128, 0.22) 62%, rgba(22, 163, 74, 0.38) 88%, rgba(255, 255, 255, 0.65) 100%);
-	border: 1px solid rgba(255, 255, 255, 0.58);
+		radial-gradient(circle at 35% 30%, var(--aero-orb-specular) 0%, var(--aero-orb-specular-fade) 24%, transparent 45%),
+		radial-gradient(circle at 65% 70%, var(--aero-orb-3-prism) 0%, transparent 46%),
+		radial-gradient(circle, var(--aero-orb-3-base) 0%, var(--aero-orb-3-mid) 62%, var(--aero-orb-3-edge) 88%, var(--aero-orb-rim) 100%);
+	border: 1px solid var(--aero-orb-border);
 	box-shadow:
-		0 10px 24px -8px rgba(34, 197, 94, 0.2),
-		inset 0 0 10px rgba(134, 239, 172, 0.3);
+		0 10px 24px -8px var(--aero-orb-3-shadow),
+		inset 0 0 10px var(--aero-orb-3-glow);
 	animation: aero-bubble-bounce-3 18s ease-in-out infinite alternate;
 }
 
@@ -433,13 +450,13 @@ html[data-theme='light'] .aero-sky {
 	inline-size: clamp(58px, 6.2vw, 84px);
 	aspect-ratio: 1;
 	background:
-		radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.12) 22%, transparent 44%),
-		radial-gradient(circle at 65% 72%, rgba(244, 114, 182, 0.26) 0%, transparent 48%),
-		radial-gradient(circle, rgba(254, 240, 138, 0.15) 0%, rgba(251, 146, 60, 0.22) 58%, rgba(236, 72, 153, 0.36) 86%, rgba(255, 255, 255, 0.72) 100%);
-	border: 1px solid rgba(255, 255, 255, 0.62);
+		radial-gradient(circle at 35% 30%, var(--aero-orb-specular) 0%, var(--aero-orb-specular-fade) 22%, transparent 44%),
+		radial-gradient(circle at 65% 72%, var(--aero-orb-4-prism) 0%, transparent 48%),
+		radial-gradient(circle, var(--aero-orb-4-base) 0%, var(--aero-orb-4-mid) 58%, var(--aero-orb-4-edge) 86%, var(--aero-orb-rim) 100%);
+	border: 1px solid var(--aero-orb-border);
 	box-shadow:
-		0 12px 28px -10px rgba(244, 63, 94, 0.22),
-		inset 0 0 12px rgba(251, 146, 60, 0.3);
+		0 12px 28px -10px var(--aero-orb-4-shadow),
+		inset 0 0 12px var(--aero-orb-4-glow);
 	animation: aero-bubble-bounce-4 23s ease-in-out infinite alternate;
 }
 
@@ -550,7 +567,7 @@ html[data-theme='light'] .aero-sky {
 /* Light theme: softer vignette (the sky is bright; edges cool instead of
    black), and the starfield canvas rests — the painted sky owns light mode. */
 html[data-theme='light'] .vignette-layer {
-	background: radial-gradient(120% 90% at 50% 42%, transparent 46%, rgba(111, 180, 214, 0.28) 100%);
+	background: radial-gradient(120% 90% at 50% 42%, transparent 46%, var(--aero-vignette) 100%);
 }
 
 html[data-theme='light'] .starfield {
@@ -584,7 +601,12 @@ html[data-reduced-effects='on'] .aero-orb {
    treatment the old bubble field got): the scene stays painted, every
    animation stops. */
 @media (prefers-reduced-motion: reduce) {
+	/* .aero-puff is listed explicitly because it animates INDEPENDENTLY of
+	   its parent cloud: the cloud drifting and the puffs morphing are
+	   separate animations, so freezing only .aero-cloud left all 34 puffs
+	   still running for visitors who asked the OS for stillness. */
 	.aero-cloud,
+	.aero-puff,
 	.aero-orb {
 		animation: none;
 	}

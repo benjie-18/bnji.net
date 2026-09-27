@@ -24,10 +24,14 @@ remain readable with JS blocked (`html.js` guards in `animations.css`).
 | `/` | prerendered | Home: Hero + preview sections + ProfileCard |
 | `/about`, `/projects`, `/contact`, `/lab` | prerendered | Lab hosts runnable experiments |
 | `/blog`, `/blog/[...slug]` | prerendered | Uses `BlogPost.astro` layout for posts |
-| `/board/` | prerendered | Message board UI; note trailing slash in links |
+| `/board/` | **SSR** (`prerender = false`) | Message board UI; note trailing slash in links. SSR because it reads the store for the first paint |
+| `/gizlyy/` | **SSR** (`prerender = false`) | Profile page; view stats and reactions come from D1. A failed read renders an em dash, never a zero |
+| `/admin` | **SSR** | Admin panel; redirects to `/admin/login` without a session |
+| `/admin/login` | **SSR** | Token sign-in; login attempts are throttled per IP |
 | `/404` | prerendered | |
 | `/api/board` | **SSR** (`prerender = false`) | GET list (cursor pagination, weak ETag -> 304), POST create |
 | `/api/dm` | **SSR** | POST -> Discord webhook / ntfy per config |
+| `/api/admin/*` | **SSR** | All behind the shared admin guard; see docs/ADMIN.md |
 | `/rss.xml` | endpoint | typed RSS |
 
 Only SSR routes run `src/middleware.ts`. Static pages bypass it - anything needing access
@@ -40,9 +44,13 @@ astro.config.mjs        adapter cloudflare({prerenderEnvironment:"node"}); env s
 wrangler.json           worker bnjibot; ASSETS->dist; D1 BOARD_DB (bnji-board, migrations/);
                         KV BOARD_KV. Repo carries NIL placeholder IDs; real IDs live in the
                         owner's commit on main. compat_date 2026-09-14, nodejs_compat.
-migrations/0001_board_messages.sql   board_messages table + idx_board_public
+migrations/             0001 board_messages + idx_board_public, 0002 profiles,
+                         0003 security_events, 0004 board_moderation,
+                         0005 admin_credentials - applied in order
 docs/CONFIGURATION.md   every owner-facing config knob incl. one-time infra setup
 docs/DATA.md            board data model, moderation states, rate-limit privacy rules
+docs/ADMIN.md           admin credential, sessions, stats, rotation
+docs/PROFILES.md        profile counters, click tracking, privacy posture
 AGENTS.md               hard rules for agents (read first)
 src/config/             public config values (music, dm integrations, board policy,
                         ACCESS_RULES, THEME_CONFIG, INTRO_CONFIG); index.ts re-exports
@@ -56,7 +64,9 @@ src/components/         Astro components; primitives (GlassPanel, GlassButton, I
                         DirectMessage, ProfileCard), lab/ experiments
 src/layouts/            Layout.astro (shell + single boot script), BlogPost.astro
 src/scripts/            client runtime (see section 5)
-src/server/             server-only: env.ts, access.ts, board-store.ts, ratelimit.ts
+src/server/             server-only: env.ts, access.ts, ratelimit.ts, admin.ts,
+                          board-store.ts, profile-store.ts, security-store.ts,
+                          security-helpers.ts
 src/styles/             tokens.css (every design value), global, glass, aero, animations,
                         board, lab, settings
 src/middleware.ts       ACCESS_RULES enforcement on SSR routes
@@ -96,15 +106,22 @@ src/middleware.ts       ACCESS_RULES enforcement on SSR routes
 
 `Layout.astro` bottom has ONE `<script>` calling `boot()` (`src/scripts/boot.ts`).
 Order (each `init()` idempotent, individually try/caught via `start()`):
-**settings -> theme -> settings-overlay -> music-player -> starfield -> cursor-glow ->
-interactions (glass tracking, magnetic buttons, nav dropdowns/toggle) -> scroll (reveal,
-parallax, nav scroll state) -> intro.**
+**settings -> theme -> liquid-glass -> settings-overlay -> music-player -> starfield ->
+cursor-glow -> background-parallax -> glass-tracking -> magnetic -> nav-toggle ->
+nav-dropdowns -> nav-scroll-state -> reveal -> parallax.**
 Lab experiments import engines directly and never go through `boot()`.
+The opening sequence is the exception to "everything goes through `boot()`":
+`IntroSequence.astro` calls `initIntro()` itself, so it only ever initialises on
+the page that has one.
 
-Modules: `starfield.ts` (canvas engine), `interactions.ts` (cursor glow, glass tracking,
-magnetic buttons, nav), `scroll.ts` (reveals/parallax), `intro.ts` (homepage scroll intro),
-`music.ts` (player logic), `board.ts` (board client: fetch, ETag revalidation, optimistic
-UI), `board-physics.ts`, `theme.ts`, `settings.ts`, `settings-overlay.ts`, `environment.ts`.
+Modules: `starfield.ts` (canvas engine), `interactions.ts` (cursor glow, background
+parallax, glass tracking, magnetic buttons, nav), `scroll.ts` (reveals/parallax),
+`intro.ts` (homepage scroll intro, component-scoped), `music.ts` (player logic),
+`board.ts` (board client: fetch, ETag revalidation, optimistic UI), `board-physics.ts`,
+`profile.ts` (view beacon, reactions, click tracking), `device-fingerprint.ts`,
+`theme.ts`, `settings.ts`, `settings-overlay.ts`, `liquid-glass.ts`, `environment.ts`.
+Admin-only: `admin.ts`, `admin-dashboard.ts`, `board-moderate.ts` — imported by the
+admin pages, never by the shared shell.
 
 Music player: pill UI (`MusicPlayer.astro`), providers `'none'|'youtube'|'spotify'|'file'`
 from `MUSIC_SOURCE` (`src/config/music.config.ts`, shipped as `none`). Autoplay is handled
@@ -211,7 +228,8 @@ npm run dev       astro dev only - does NOT run middleware/API/Worker runtime
   `settings-overlay.ts`, consume via `subscribeSettings()`/`bnji:settingschange` or the
   root data-attribute in CSS.
 - **New lab experiment:** `src/components/lab/X.astro` + entry in `EXPERIMENTS`
-  (`src/data/lab.ts`); own its DOM + rAF loop, pause via IntersectionObserver, expose
+  (`src/data/lab.ts`); own its DOM + rAF loop, pause via IntersectionObserver AND
+`visibilitychange` (AGENTS.md §5 — offscreen and hidden-tab are separate gates), expose
   `destroy()`.
 - **Board feature:** touch `api/board.ts` (validation/limits) + `board-store.ts` (both D1
   and REST backends!) + `scripts/board.ts` (client) + `board.css`; obey docs/DATA.md
@@ -224,4 +242,6 @@ npm run dev       astro dev only - does NOT run middleware/API/Worker runtime
 GitHub `main` = full final session state (50-file delta over the post-revert base `157ac94`)
 + owner commit replacing nil D1/KV IDs with real ones. Worker `bnjibot` deploys via
 Cloudflare Workers Builds. Remote D1 migration `0001_board_messages.sql` applied.
-All checks green on exactly this tree: `npm run build`, `npx tsc --noEmit`, `npm run check`.
+All checks green on exactly this tree: `npm run build`, `npm exec -- tsc --noEmit`,
+`npm run check`. (Use `npm exec --`, not `npx tsc` - the bare `tsc` name resolves to an
+unrelated registry package, as AGENTS.md section 7 records.)

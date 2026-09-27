@@ -26,9 +26,24 @@ interface Props {
 	revealDelay?: number;
 	/** Bento span out of 12, forwarded to GlassPanel. */
 	span?: number;
+	/**
+	 * Heading level for the card title. h3 under the home page's section heading;
+	 * h2 on /projects/, where the cards are the page's top-level content and an
+	 * h3 would skip a level.
+	 */
+	headingLevel?: 'h2' | 'h3';
 }
 
-const { project, index = 0, feature = false, revealDelay = 0, span } = Astro.props;
+const {
+	project,
+	index = 0,
+	feature = false,
+	revealDelay = 0,
+	span,
+	headingLevel = 'h3',
+} = Astro.props;
+
+const TitleTag = headingLevel;
 
 const isExternal = /^https?:\/\//.test(project.href ?? '');
 const statusTone =
@@ -64,7 +79,7 @@ const statusTone =
 		)
 	}
 
-	<h3 class="project-card__title">
+	<TitleTag class="project-card__title">
 		{
 			project.href ? (
 				<a
@@ -78,7 +93,7 @@ const statusTone =
 				project.title
 			)
 		}
-	</h3>
+	</TitleTag>
 
 	<p class="project-card__description">{project.description}</p>
 

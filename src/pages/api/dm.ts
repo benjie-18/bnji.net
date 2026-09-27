@@ -20,17 +20,16 @@
  */
 import { DM_INTEGRATION } from '../../config/integrations.config';
 import { rateLimit, type KvRateLimitStore } from '../../server/ratelimit';
+import { getSecurityStore } from '../../server/security-store';
+import { buildSecurityEvent } from '../../server/security-helpers';
+import { readSessionKey } from '../../config/session.config';
 import { serverEnvironment } from '../../server/env';
+import { clientIp } from '../../server/security-helpers';
 import type { APIContext } from 'astro';
 
 export const prerender = false;
 
 const CONTROL_CHARS = /[\u0000-\u0008\u000b-\u001f\u007f]/g;
-
-function clientKey(request: Request): string {
-	const cf = (request as Request & { cf?: { connectingIp?: string } }).cf;
-	return cf?.connectingIp ?? request.headers.get('cf-connecting-ip') ?? 'unknown';
-}
 
 function json(data: unknown, status = 200): Response {
 	return new Response(JSON.stringify(data), {
@@ -55,7 +54,7 @@ export async function POST(context: APIContext): Promise<Response> {
 	const env = await serverEnvironment();
 	const secrets = env as Record<string, string | undefined>;
 	const kv = env.BOARD_KV as KvRateLimitStore | undefined;
-	const key = clientKey(context.request);
+	const key = clientIp(context.request);
 
 	// KV-backed windows: consistent across Worker isolates.
 	const cooldown = await rateLimit(
@@ -86,6 +85,35 @@ export async function POST(context: APIContext): Promise<Response> {
 	}
 	const contact = typeof body.contact === 'string' ? body.contact.trim().slice(0, 320) : '';
 
+	/* Security logging, surface='dm'.
+	   Fires once when the message is ACCEPTED for delivery, not once per
+	   upstream attempt: the abuse-relevant fact is "this client submitted a
+	   private message", and the provider branch below may fail in ways that
+	   would otherwise multiply one submission into several events.
+
+	   Deliberately does NOT store the message text or the contact string.
+	   A private message is the most sensitive thing anyone sends this site,
+	   and abuse response needs to know who sent it and from where — not what
+	   it said. The content lives only in the operator's chosen provider
+	   (Discord/ntfy), which is where the operator asked for it to go. */
+	const logAccepted = (): void => {
+		const secStore = getSecurityStore(env);
+		if (!secStore) return;
+		/* Uses an EXISTING session key when the visitor already has one, so a
+		   DM can be tied to the same person as their board/profile activity
+		   earlier in the visit. It deliberately does not mint a new one or set
+		   a cookie: the DM form has no page load or follow-up beacon to
+		   enrich, so a cookie issued here would earn nothing and set a
+		   tracking cookie on a page whose whole purpose is to be private. */
+		void buildSecurityEvent(context.request, {
+			surface: 'dm',
+			endpoint: 'dm-post',
+			sessionKey: readSessionKey(context.request) ?? undefined,
+		})
+			.then((event) => secStore.recordEvent(event))
+			.catch(() => {});
+	};
+
 	try {
 		if (DM_INTEGRATION.provider === 'discord') {
 			const webhook = secrets.DISCORD_WEBHOOK_URL;
@@ -106,6 +134,7 @@ export async function POST(context: APIContext): Promise<Response> {
 				}),
 			});
 			if (!response.ok) return json({ state: 'upstream_error' }, 502);
+			logAccepted();
 			return json({ state: 'sent' });
 		}
 
@@ -121,6 +150,7 @@ export async function POST(context: APIContext): Promise<Response> {
 				body: contact ? `${message}\n\n— reply to: ${contact}` : message,
 			});
 			if (!response.ok) return json({ state: 'upstream_error' }, 502);
+			logAccepted();
 			return json({ state: 'sent' });
 		}
 	} catch (error) {

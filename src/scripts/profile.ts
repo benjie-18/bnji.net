@@ -14,145 +14,18 @@
  * of these never affects page display or link functionality.
  *
  * Called from the profile page route via a <script> block.
+ *
+ * The device collection itself lives in src/scripts/device-fingerprint.ts
+ * because the message board reports exactly the same data through the same
+ * endpoint — duplicating it would let the two surfaces drift.
  */
-
-function sendBeacon(url: string, data: unknown): void {
-	try {
-		if (navigator.sendBeacon) {
-			const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-			navigator.sendBeacon(url, blob);
-		} else {
-			fetch(url, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(data),
-				keepalive: true,
-			}).catch(() => {});
-		}
-	} catch {
-		// Silently ignore beacon failures.
-	}
-}
+import { postBeacon, sendSecurityEnrichment } from './device-fingerprint';
 
 /**
  * Track a profile view. Called once on page load.
  */
 export function initProfileViewTracking(slug: string): void {
-	sendBeacon('/api/profile/view', { slug });
-}
-
-/**
- * Collect the device details only a browser can see. Everything here is
- * read defensively: an older browser that lacks a given API simply omits
- * that field rather than throwing.
- */
-function collectDeviceData(): Record<string, unknown> {
-	const data: Record<string, unknown> = {};
-
-	try {
-		if (typeof screen !== 'undefined') {
-			data.screenWidth = screen.width;
-			data.screenHeight = screen.height;
-		}
-	} catch {
-		// Screen unavailable.
-	}
-
-	try {
-		if (typeof window !== 'undefined' && typeof window.devicePixelRatio === 'number') {
-			data.screenPixelRatio = window.devicePixelRatio;
-		}
-	} catch {
-		// Pixel ratio unavailable.
-	}
-
-	try {
-		const nav = typeof navigator !== 'undefined' ? navigator : undefined;
-		if (!nav) return data;
-
-		if (typeof nav.hardwareConcurrency === 'number') {
-			data.hardwareConcurrency = nav.hardwareConcurrency;
-		}
-		// deviceMemory is Chromium-only and deliberately coarse (buckets of
-		// 0.25/0.5/1/2/4/8 GB) to blunt fingerprinting.
-		const memory = (nav as Navigator & { deviceMemory?: number }).deviceMemory;
-		if (typeof memory === 'number') data.deviceMemory = memory;
-
-		if (typeof nav.platform === 'string') data.platform = nav.platform;
-		if (typeof nav.language === 'string') data.language = nav.language;
-		if (typeof nav.maxTouchPoints === 'number') data.touchSupport = nav.maxTouchPoints > 0;
-	} catch {
-		// Navigator partially unavailable.
-	}
-
-	try {
-		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-		if (typeof timezone === 'string' && timezone) data.timezone = timezone;
-	} catch {
-		// Timezone unavailable.
-	}
-
-	const renderer = detectWebglRenderer();
-	if (renderer) data.webglRenderer = renderer;
-
-	return data;
-}
-
-/**
- * Read the GPU renderer string from a throwaway WebGL context. The debug
- * renderer info extension is what exposes the unmasked (real) renderer;
- * without it we fall back to the generic vendor string, or nothing.
- * The context is explicitly lost so the probe does not hold GPU memory.
- */
-function detectWebglRenderer(): string | null {
-	let canvas: HTMLCanvasElement | null = null;
-	let gl: WebGLRenderingContext | null = null;
-	try {
-		canvas = document.createElement('canvas');
-		gl = (canvas.getContext('webgl') ??
-			canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
-		if (!gl) return null;
-
-		const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-		const value = debugInfo
-			? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
-			: gl.getParameter(gl.RENDERER);
-
-		return typeof value === 'string' && value.trim() ? value.trim().slice(0, 256) : null;
-	} catch {
-		return null;
-	} finally {
-		try {
-			gl?.getExtension('WEBGL_lose_context')?.loseContext();
-		} catch {
-			// Losing the context is best-effort.
-		}
-	}
-}
-
-/**
- * Report device details to the server for abuse detection, once per page
- * load, attached to the 'view' event logged moments ago.
- *
- * The delay is deliberate: on a first visit the session cookie is still
- * being set by the /api/profile/view response. Sending the enrichment
- * beacon immediately would race that Set-Cookie and the enrichment would
- * find no session to match. A short delay is imperceptible and makes the
- * first-visit case work; later visits already have the cookie, so the
- * delay costs nothing there.
- */
-function initSecurityEnrichment(slug: string): void {
-	setTimeout(() => {
-		try {
-			sendBeacon('/api/profile/security/enrich', {
-				slug,
-				endpoint: 'view',
-				...collectDeviceData(),
-			});
-		} catch (error) {
-			console.warn('[bnji] security enrichment beacon failed:', error);
-		}
-	}, 1500);
+	postBeacon('/api/profile/view', { slug });
 }
 
 /**
@@ -230,7 +103,7 @@ export function initProfileLinkTracking(slug: string): void {
 		link.addEventListener('click', () => {
 			const linkId = link.dataset.linkId;
 			if (linkId) {
-				sendBeacon('/api/profile/link/click', { slug, linkId });
+				postBeacon('/api/profile/link/click', { slug, linkId });
 			}
 		});
 	}
@@ -272,7 +145,7 @@ export function initProfile(slug: string): void {
 	}
 
 	try {
-		initSecurityEnrichment(slug);
+		sendSecurityEnrichment({ surface: 'profile', endpoint: 'view', slug });
 	} catch (error) {
 		console.warn('[bnji] security enrichment failed:', error);
 	}

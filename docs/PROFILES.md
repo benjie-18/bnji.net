@@ -32,7 +32,7 @@ src/pages/api/profile/view.ts    POST — view tracking (daily session dedup)
 src/pages/api/profile/react.ts   POST/GET — reactions with cooldown
 src/pages/api/profile/link/[id]  GET — link redirect + click tracking
 src/pages/api/profile/link/click POST — link click beacon (client sendBeacon)
-src/pages/api/profile/security/enrich  POST — client device data → security_events
+src/pages/api/security/enrich.ts  POST — client device data → security_events
 src/pages/api/admin/security.ts  GET — admin security events (token-gated)
 src/scripts/profile.ts           Client runtime (beacons, reactions, copy)
 src/server/profile-store.ts      D1 data access for analytics tables
@@ -133,7 +133,7 @@ into public responses.
 Collection happens in two phases. **Server-side** fields are captured from
 Cloudflare headers on every request to a profile endpoint. **Client-side**
 fields are reported afterwards by the browser and folded into the same row
-by `POST /api/profile/security/enrich`.
+by `POST /api/security/enrich`.
 
 #### Server-side fields (captured on every request)
 
@@ -224,7 +224,7 @@ A client value can therefore never overwrite a server-observed value.
 GET  /gizlyy
   └─ POST /api/profile/view           → INSERT security_events (server fields)
   └─ (1500 ms later, after Set-Cookie lands)
-     POST /api/profile/security/enrich → UPDATE ... SET screen_width = COALESCE(?, screen_width), ...
+     POST /api/security/enrich → UPDATE ... SET screen_width = COALESCE(?, screen_width), ...
 ```
 
 The client beacon is delayed 1500 ms on purpose: on a **first** visit the
@@ -317,7 +317,7 @@ Server-side, on every request to a profile endpoint:
 | Session key | `bnji_ps` cookie | Raw text |
 
 Client-side, reported once per page load via
-`POST /api/profile/security/enrich`:
+`POST /api/security/enrich`:
 
 | Field | Source | Stored as |
 |---|---|---|
@@ -370,17 +370,18 @@ the pre-purge count on the read that triggered cleanup.
 
 Security events are accessible ONLY through `GET /api/admin/security`.
 
-**Gate:** Bearer token matching the `ACCESS_TOKEN` environment variable.
-Constant-time comparison. If `ACCESS_TOKEN` is not configured, the endpoint
-returns 503.
+**Gate:** the shared admin guard in `src/server/admin.ts` — a valid admin
+session cookie, or `Authorization: Bearer <access token>`. The token is
+compared against the SHA-256 hash in D1, not against an environment
+variable. If the credential is not configured, the endpoint returns 503
+rather than failing open.
 
-**⚠️ Stopgap auth:** This is NOT a real admin system. It relies on a single
-shared secret and does not implement session management, CSRF protection,
-rate limiting, or role-based access. The existing `ACCESS_RULES` +
-`src/server/access.ts` infrastructure provides the primitives for a proper
-admin system (HMAC-signed session cookies, password auth, bearer tokens)
-but wiring a full admin surface is a larger infrastructure decision that
-should be made deliberately.
+> This section used to describe an `ACCESS_TOKEN` env-var comparison and
+> warn that "this is NOT a real admin system". Both were true of an
+> earlier draft and stopped being true when `/admin` shipped. The gate is
+> now DB-backed, with server-side sessions, login throttling, `SameSite=Strict`
+> session cookies, and immediate invalidation when the token rotates. See
+> [`ADMIN.md`](./ADMIN.md) for the full description.
 
 ### 4.6 What is NEVER exposed
 
@@ -548,7 +549,7 @@ Steps (no component/API/database changes needed):
 | `/api/profile/react` | POST | Add reaction |
 | `/api/profile/react?slug=X` | GET | Get reaction counts |
 | `/api/profile/link/click` | POST | Link click beacon |
-| `/api/profile/security/enrich` | POST | Client device data → security_events (rate limited) |
+| `/api/security/enrich` | POST | Client device data → security_events (rate limited) |
 | `/api/profile/link/<id>?slug=X` | GET | Link click + redirect |
 | `/api/admin/security` | GET | Admin security events (token-gated) |
 

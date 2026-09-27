@@ -11,7 +11,7 @@
              soft glow, sitting inside the space environment.
 
    The composer is anchored bottom-centre at ALL times (the brief's anchor),
-   and the archive is a modal dialog above everything.
+   and the full list is a modal layer above everything.
 
    Mounting: the board lives on its own route (/board/) — this file is
    imported only by components/MessageBoard.astro, so no other page pays
@@ -26,8 +26,7 @@
    composer usable.
    ========================================================================== */
 
-.board__archive[hidden],
-.board__listview[hidden],
+.board__list[hidden],
 .board__preview[hidden] {
 	display: none !important;
 }
@@ -176,7 +175,7 @@ html[data-theme='dark'] .board-msg {
 	filter: drop-shadow(0 0 6px hsla(var(--hue), 80%, 75%, 0.3));
 }
 html[data-theme='dark'] .board-msg__grab {
-	color: #ffffff;
+	color: var(--text-strong);
 	font-weight: 500;
 	border-radius: var(--radius-pill);
 	background:
@@ -269,7 +268,7 @@ html[data-theme='dark'] .board-msg::before {
 	align-items: center;
 	gap: 0.5rem;
 }
-/* The control strip (visible-count slider, list-view toggle, archive button)
+/* The control strip (visible-count slider + full-list toggle)
    is docked ABOVE the fixed composer as its own glass pill — out of the
    composer's flow, so the two can never overlap, at any viewport size, with
    any safe-area inset, keyboard open or closed (it rides the composer's
@@ -377,7 +376,7 @@ html[data-theme='dark'] .board-msg::before {
 	cursor: not-allowed;
 }
 
-/* Same mono-chip language as the archive button. */
+/* Same mono-chip language as the view toggle. */
 .board__view-toggle {
 	padding: 0.3rem 0.7rem;
 	border: 1px solid var(--glass-border);
@@ -398,7 +397,9 @@ html[data-theme='dark'] .board-msg::before {
 	outline: 2px solid var(--accent-strong);
 	outline-offset: 2px;
 }
-.board__view-toggle[aria-pressed='true'] {
+/* aria-expanded, not aria-pressed: this toggles the visibility of a region,
+   not the state of a mode. scripts/board.ts keeps them in step. */
+.board__view-toggle[aria-expanded='true'] {
 	color: var(--text-strong);
 	border-color: var(--glass-border-strong);
 	box-shadow: inset 0 1px 0 var(--glass-highlight);
@@ -456,7 +457,7 @@ html[data-theme='dark'] .board-msg::before {
 	outline-offset: 2px;
 }
 
-.board__archive-open {
+.board__view-toggle {
 	padding: 0.3rem 0.7rem;
 	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-pill);
@@ -467,11 +468,11 @@ html[data-theme='dark'] .board-msg::before {
 	text-transform: uppercase;
 	cursor: pointer;
 }
-.board__archive-open:hover {
+.board__view-toggle:hover {
 	color: var(--text-strong);
 	background: var(--glass-bg);
 }
-.board__archive-open:focus-visible {
+.board__view-toggle:focus-visible {
 	outline: 2px solid var(--accent-strong);
 	outline-offset: 2px;
 }
@@ -483,172 +484,6 @@ html[data-theme='dark'] .board-msg::before {
 	letter-spacing: var(--tracking-mono);
 	color: var(--text-dim);
 	text-align: center;
-}
-
-/* --- List view (plain, accessible, non-physics) ------------------------------ */
-/* A static, scrollable <ol> of the same messages the sky shows, for reading
-   without drag or motion. Compound selector again outranks [data-glass]'s
-   position: relative. Sized in svh/dvh like the archive dialog and lifted by
-   --kb-inset so the keyboard never swallows it. */
-.board .board__listview {
-	position: fixed;
-	inset: 14svh auto auto 50%;
-	transform: translateX(-50%);
-	z-index: calc(var(--z-board) + 2);
-	pointer-events: auto;
-	display: grid;
-	gap: 0.6rem;
-	width: min(560px, 94vw);
-	max-height: min(66svh, calc(100dvh - 20svh - var(--kb-inset, 0px)));
-	overflow: auto;
-	overscroll-behavior: contain;
-	padding: 0.9rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
-	border-radius: var(--radius-xl);
-}
-
-.board__listview:focus-visible {
-	outline: 2px solid var(--accent-strong);
-	outline-offset: 2px;
-}
-
-.board__listview-note {
-	margin: 0;
-	font-size: var(--text-micro);
-	letter-spacing: var(--tracking-mono);
-	color: var(--text-dim);
-	text-align: center;
-}
-
-.board__listview-items {
-	display: grid;
-	gap: 0.5rem;
-	list-style: none;
-	margin: 0;
-	padding: 0;
-}
-
-.board-listview__item {
-	display: grid;
-	gap: 0.3rem;
-	padding: 0.6rem 0.8rem;
-	border: 1px solid var(--glass-border);
-	border-radius: var(--radius-md);
-	background: var(--glass-bg-quiet);
-}
-
-.board-listview__item time {
-	font-family: var(--font-mono);
-	font-size: var(--text-micro);
-	letter-spacing: var(--tracking-mono);
-	color: var(--text-dim);
-}
-
-.board-listview__item p {
-	margin: 0;
-	color: var(--text);
-	font-size: 0.92rem;
-	line-height: 1.5;
-	white-space: pre-wrap;
-	word-break: break-word;
-}
-
-.board-listview__img {
-	inline-size: 96px;
-	aspect-ratio: 1;
-	object-fit: cover;
-	border-radius: var(--radius-sm);
-	border: 1px solid var(--glass-border);
-}
-
-/* --- Archive dialog ---------------------------------------------------------- */
-
-.board__archive {
-	position: fixed;
-	/* svh: sized against the SMALL viewport so the dialog fits even with
-	   browser chrome (or a keyboard) at its largest. */
-	inset: 8svh auto auto 50%;
-	transform: translateX(-50%);
-	z-index: var(--z-modal);
-	pointer-events: auto;
-	display: grid;
-	grid-template-rows: auto 1fr;
-	gap: 0.7rem;
-	width: min(680px, 94vw);
-	max-height: min(84svh, calc(100dvh - 10svh - var(--kb-inset, 0px)));
-	padding: 1rem 1.1rem calc(1rem + env(safe-area-inset-bottom, 0px));
-	border-radius: var(--radius-xl);
-}
-
-.board__archive-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-.board__archive-title {
-	margin: 0;
-	font-family: var(--font-display);
-	font-size: var(--text-title);
-	color: var(--text-strong);
-}
-.board__archive-close {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	inline-size: 34px;
-	block-size: 34px;
-	border: 1px solid var(--glass-border);
-	border-radius: 50%;
-	background: var(--glass-bg-quiet);
-	color: var(--text-muted);
-	cursor: pointer;
-}
-.board__archive-close:hover {
-	color: var(--text-strong);
-}
-.board__archive-close:focus-visible {
-	outline: 2px solid var(--accent-strong);
-	outline-offset: 2px;
-}
-.board__archive-close svg {
-	inline-size: 15px;
-	block-size: 15px;
-}
-
-.board__archive-list {
-	margin: 0;
-	padding: 0.2rem 0.3rem 0.2rem 0;
-	list-style: none;
-	overflow-y: auto;
-	display: grid;
-	gap: 0.5rem;
-}
-.board-archive__row {
-	display: grid;
-	gap: 0.25rem;
-	padding: 0.6rem 0.8rem;
-	border: 1px solid var(--glass-border);
-	border-radius: var(--radius-md);
-	background: var(--glass-bg-quiet);
-}
-.board-archive__row time {
-	font-family: var(--font-mono);
-	font-size: var(--text-micro);
-	letter-spacing: var(--tracking-mono);
-	color: var(--text-dim);
-}
-.board-archive__row p {
-	margin: 0;
-	font-size: var(--text-small);
-	color: var(--text);
-	white-space: pre-wrap;
-	word-break: break-word;
-}
-.board-archive__img {
-	inline-size: 72px;
-	aspect-ratio: 1;
-	object-fit: cover;
-	border-radius: var(--radius-sm);
-	border: 1px solid var(--glass-border);
 }
 
 /* Narrow screens: composer owns the bottom; the music pill moves to the top
@@ -672,5 +507,312 @@ html[data-theme='dark'] .board-msg::before {
 		flex-wrap: wrap;
 		justify-content: center;
 		border-radius: var(--radius-lg);
+	}
+}
+
+/* ==========================================================================
+   The full list — the board's single non-physics view
+   --------------------------------------------------------------------------
+   CONTAINMENT, and the bug that used to be here.
+
+   This used to be a bare `position: fixed` box: no scrim, no focus trap, no
+   backdrop, floating straight over the bubbles. The sky showed through
+   around and behind it, so the panel read as a layer floating in the scene
+   rather than a view ON it — and because its top was pinned at 8svh while
+   its max-height was 84svh, it could run down into the composer at short
+   viewport heights. The overlap was not a z-index mistake; it was the
+   layout having no way to own the space.
+
+   The fix is structural rather than cosmetic. The outer element is a fixed,
+   viewport-filling LAYER at --z-modal, so it sits above the field, the
+   composer and the nav. Inside it, a scrim takes the whole layer, and the
+   sheet is a flex column whose height is the leftover space between the safe
+   top inset and the composer's own top edge. Header and message column
+   divide that height; only the message column scrolls. There is no
+   configuration of viewport in which the sheet reaches the composer, because
+   the composer is subtracted from its height rather than overlapped by it.
+
+   The compound `.board .board__list` selector is load-bearing: it outranks
+   the [data-glass] `position: relative` that the sheet also wears.
+   ========================================================================== */
+
+/* The full list is a MODAL LAYER, and it has to outrank the site chrome.
+   `.board` is itself a stacking context at --z-board (25), so a z-index on
+   anything inside it — the layer included — is resolved WITHIN that context
+   and can never beat a sibling of `.board` at global level. The nav dock sits
+   at --z-nav (35), so without this the navigation would float over the open
+   modal: still visible, still clickable, and the first tap would land on a
+   link instead of the scrim.
+
+   Raising the board's own z-index for as long as the modal is open lifts the
+   whole subtree above the nav, which is what a modal means. The bubbles and
+   composer travel with it, but they sit behind an opaque scrim, so nothing
+   about the board is exposed. */
+.board.board--modal {
+	z-index: var(--z-modal, 70);
+}
+
+.board .board__list {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-modal, 70);
+	pointer-events: auto;
+	display: grid;
+	place-items: center;
+	/* Containment, in one rule. The bottom padding is the space the board's
+	   own chrome occupies, MEASURED by scripts/board.ts and published as
+	   --board-chrome — composer, plus the control strip that floats above it,
+	   plus the keyboard inset. Measuring rather than hardcoding is what makes
+	   "never overlaps" true: the composer grows as the visitor types, the
+	   strip wraps to two rows under 720px, and a fixed clearance would be
+	   right for exactly one of those states.
+
+	   9rem is the no-JS fallback (a plausible composer + strip stack), so the
+	   panel still clears the chrome when the script never runs. */
+	padding:
+		max(1rem, env(safe-area-inset-top, 0px))
+		max(1rem, env(safe-area-inset-right, 0px))
+		calc(var(--board-chrome, 9rem) + 1rem)
+		max(1rem, env(safe-area-inset-left, 0px));
+}
+
+/* The scrim is what makes this read as a view rather than a floating card.
+   It is an element, not a ::before, so it can be a real click target: tapping
+   the dimmed sky dismisses, which is the gesture a modal layer implies. */
+.board__list-scrim {
+	position: absolute;
+	inset: 0;
+	background: var(--glass-bg-fallback);
+	backdrop-filter: blur(14px) saturate(0.85);
+	-webkit-backdrop-filter: blur(14px) saturate(0.85);
+	border: 0;
+	animation: board-fade var(--dur-fast) var(--ease-out);
+}
+
+@keyframes board-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes board-rise {
+	from {
+		opacity: 0;
+		transform: translateY(10px) scale(0.985);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.board__list-sheet {
+	position: relative; /* above the scrim, inside the same stacking context */
+	display: flex;
+	flex-direction: column;
+	inline-size: min(720px, 100%);
+	/* The containment rule: the layer above is the fixed viewport box and has
+	   already reserved the composer's height in its bottom padding, so "100%"
+	   here means "everything that is left" — never more, at any viewport size
+	   or in either theme. */
+	max-block-size: 100%;
+	border-radius: var(--radius-xl);
+	overflow: hidden;
+	animation: board-rise var(--dur-fast) var(--ease-out);
+}
+
+.board__list-sheet:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: -2px;
+}
+
+/* --- header --------------------------------------------------------------- */
+
+.board__list-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.75rem;
+	flex: 0 0 auto;
+	padding: 1rem 1.1rem 0.75rem;
+	border-block-end: 1px solid var(--glass-border);
+}
+
+.board__list-heading {
+	display: grid;
+	gap: 0.15rem;
+	min-inline-size: 0;
+}
+
+.board__list-title {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: var(--text-title);
+	line-height: 1.15;
+	color: var(--text-strong);
+}
+
+.board__list-sub {
+	margin: 0;
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-dim);
+}
+
+.board__list-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	inline-size: 34px;
+	block-size: 34px;
+	border: 1px solid var(--glass-border);
+	border-radius: 50%;
+	background: var(--glass-bg-quiet);
+	color: var(--text-muted);
+	cursor: pointer;
+	transition:
+		color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out);
+}
+
+.board__list-close:hover {
+	color: var(--text-strong);
+	background: var(--glass-bg);
+}
+
+.board__list-close:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.board__list-close svg {
+	inline-size: 15px;
+	block-size: 15px;
+}
+
+/* --- scrolling message column -------------------------------------------- */
+
+.board__list-scroll {
+	flex: 1 1 auto;
+	min-block-size: 0; /* the flex rule that actually allows this to scroll */
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+	padding: 0.7rem 1.1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+.board__list-items {
+	display: grid;
+	gap: 0.55rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.board__list__empty {
+	color: var(--text-dim);
+	font-size: var(--text-small);
+	text-align: center;
+	padding-block: 1.5rem;
+}
+
+/* --- a message row -------------------------------------------------------- */
+
+.board-list__row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 0.35rem 0.75rem;
+	padding: 0.7rem 0.85rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	background: var(--glass-bg-quiet);
+	transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.board-list__row:hover {
+	border-color: var(--glass-border-strong);
+}
+
+.board-list__body {
+	display: grid;
+	gap: 0.3rem;
+	min-inline-size: 0;
+}
+
+.board-list__text {
+	margin: 0;
+	font-size: 0.92rem;
+	line-height: 1.5;
+	color: var(--text);
+	/* Visitor text is arbitrary: long words, long URLs, emoji. Never let one
+	   unbroken token push the Delete button off the row. */
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.board-list__time {
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-dim);
+}
+
+.board-list__img {
+	/* Images are data: URLs, potentially megabytes; cap the rendered box so
+	   one attachment cannot take over the scrolling column. */
+	inline-size: 104px;
+	max-inline-size: 100%;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--glass-border);
+}
+
+/* --- admin-only delete ---------------------------------------------------- */
+/* The control's styles are NOT here: they are injected by
+   scripts/board-moderate.ts, the same code-split chunk that builds the
+   button. board.css is fetched by every visitor, so a rule naming the delete
+   button would put that name in every visitor's payload. See that module for
+   the full reasoning. */
+
+/* --- narrow screens ------------------------------------------------------- */
+
+@media (max-width: 560px) {
+	.board .board__list {
+		padding:
+			max(0.5rem, env(safe-area-inset-top, 0px))
+			max(0.5rem, env(safe-area-inset-right, 0px))
+			calc(var(--board-chrome, 9rem) + 0.5rem)
+			max(0.5rem, env(safe-area-inset-left, 0px));
+	}
+	.board__list-sheet {
+		border-radius: var(--radius-lg);
+	}
+	.board__list-head {
+		padding: 0.85rem 0.9rem 0.65rem;
+	}
+	.board__list-scroll {
+		padding: 0.6rem 0.9rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+	}
+	/* Stack the row so a long line of visitor text never squeezes a
+	   control. (The delete button's own narrow-screen rule rides along in
+	   the admin chunk's injected styles.) */
+	.board-list__row {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.board__list-scrim,
+	.board__list-sheet {
+		animation: none;
+	}
+	.board-list__row,
+	.board__list-close {
+		transition: none;
 	}
 }

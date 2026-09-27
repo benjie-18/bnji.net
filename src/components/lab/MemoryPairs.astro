@@ -380,7 +380,10 @@ const initialDeck = [...INITIAL_GLYPHS, ...INITIAL_GLYPHS]
 				grid.classList.toggle('is-kaomoji', currentTheme === 'kaomoji');
 
 				// Clear existing cards
-				grid.innerHTML = '';
+				// replaceChildren() rather than innerHTML: it clears the same nodes without
+			// handing the string to the HTML parser, and the card faces below are
+			// rebuilt as elements rather than parsed from markup.
+			grid.replaceChildren();
 
 				deck.forEach((glyph, index) => {
 					const card = document.createElement('button');

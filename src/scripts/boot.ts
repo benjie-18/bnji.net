@@ -16,6 +16,7 @@
 
 import { initStarfield } from './starfield';
 import {
+	initBackgroundParallax,
 	initCursorGlow,
 	initGlassTracking,
 	initMagnetic,
@@ -51,6 +52,7 @@ export function boot(): void {
 	start('music-player', initMusicPlayer);
 	start('starfield', initStarfield);
 	start('cursor-glow', initCursorGlow);
+	start('background-parallax', initBackgroundParallax);
 	start('glass-tracking', initGlassTracking);
 	start('magnetic', initMagnetic);
 	start('nav-toggle', initNavToggle);

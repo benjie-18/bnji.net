@@ -17,7 +17,7 @@
  * Privacy: the extraction itself stores nothing — it only produces a
  * SecurityEvent object that the caller passes to the security store.
  */
-import type { SecurityEvent } from './security-store';
+import type { SecurityEvent, SecuritySurface } from './security-store';
 
 /**
  * Extract Cloudflare metadata from a request.
@@ -28,6 +28,36 @@ import type { SecurityEvent } from './security-store';
  * when the feature is enabled on the account. These are the visitor's
  * approximate coordinates based on their IP address.
  */
+/**
+ * The caller's IP address, from ONE place.
+ *
+ * Header first, then the Request.cf object. Cloudflare sets
+ * `cf-connecting-ip` itself and overwrites any client-supplied value, so
+ * reading the header is not trusting the client; `cf.connectingIp` is the
+ * same value and is kept as a fallback for the rare path where the header
+ * is absent.
+ *
+ * Why the header is first rather than cf: the local dev server
+ * (`wrangler dev`) synthesises a placeholder `cf` object whose connectingIp
+ * is not the caller's. A cf-first reader therefore sees a different "client"
+ * on every local request, which silently breaks every IP-keyed control —
+ * rate limits stop limiting and per-IP de-duplication stops de-duplicating,
+ * so local testing passes while production behaves differently. Header-first
+ * is what makes the local environment exercise the real code path.
+ *
+ * Five routes used to carry their own copy of this. They did not all agree
+ * on the order, so the IP written to security_events could differ from the
+ * IP a rate limit or a de-duplication key was derived from — the same
+ * request producing two different identities. One function, one answer.
+ */
+export function clientIp(request: Request): string {
+	return (
+		request.headers.get('cf-connecting-ip') ??
+		(request as Request & { cf?: { connectingIp?: string } }).cf?.connectingIp ??
+		'unknown'
+	);
+}
+
 export function extractSecurityMetadata(request: Request): {
 	ip: string;
 	ua: string | undefined;
@@ -38,10 +68,7 @@ export function extractSecurityMetadata(request: Request): {
 	longitude: number | undefined;
 	referrer: string | undefined;
 } {
-	const ip =
-		request.headers.get('cf-connecting-ip') ??
-		(request as Request & { cf?: { connectingIp?: string } }).cf?.connectingIp ??
-		'unknown';
+	const ip = clientIp(request);
 	const ua = request.headers.get('user-agent') ?? undefined;
 	const country = request.headers.get('cf-ipcountry') ?? undefined;
 	const city =
@@ -92,28 +119,46 @@ export async function computeFingerprint(
 }
 
 /**
- * Build a SecurityEvent from a request. The caller provides the profile
- * slug, endpoint name, and session key. All other fields are extracted
+ * Build a SecurityEvent from a request.
+ *
+ * The caller supplies the surface, the endpoint name, and optionally a
+ * profile slug (profile events only), a target id (the row the request acted
+ * on — a board message, a link), and the session key. Everything else comes
  * from Cloudflare headers.
+ *
+ * For board and dm events, profileSlug is intentionally left undefined: the
+ * security_events column is NULL for those surfaces, because "which profile?"
+ * has no honest answer for the message board.
  */
 export async function buildSecurityEvent(
 	request: Request,
-	profileSlug: string,
-	endpoint: string,
-	sessionKey?: string,
+	options: {
+		surface?: SecuritySurface;
+		endpoint: string;
+		profileSlug?: string;
+		targetId?: string;
+		sessionKey?: string;
+	},
 ): Promise<SecurityEvent> {
 	const { ip, ua, country, city, asn, latitude, longitude, referrer } = extractSecurityMetadata(request);
 	const fingerprint = await computeFingerprint(ua, asn, country);
+	const surface = options.surface ?? 'profile';
 	return {
-		profileSlug,
-		endpoint,
+		surface,
+		// Only profile events carry a slug. Stripping it elsewhere keeps a
+		// careless caller from labelling a board event with a profile.
+		...(surface === 'profile' && options.profileSlug
+			? { profileSlug: options.profileSlug }
+			: {}),
+		endpoint: options.endpoint,
+		...(options.targetId ? { targetId: options.targetId } : {}),
 		ipAddress: ip,
 		userAgent: ua,
 		cfCountry: country,
 		cfCity: city,
 		cfAsn: asn,
 		fingerprint,
-		sessionKey,
+		sessionKey: options.sessionKey,
 		createdAt: Date.now(),
 		geoLatitude: latitude,
 		geoLongitude: longitude,

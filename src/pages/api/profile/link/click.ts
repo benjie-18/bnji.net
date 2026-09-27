@@ -18,15 +18,10 @@ import { buildSecurityEvent } from '../../../../server/security-helpers';
 import { serverEnvironment } from '../../../../server/env';
 import { getProfileBySlug } from '../../../../data/profiles';
 import { PROFILE_CONFIG } from '../../../../config/profile.config';
+import { generateSessionKey, readSessionKey, sessionCookieHeader } from '../../../../config/session.config';
 import type { APIContext } from 'astro';
 
 export const prerender = false;
-
-function getSessionKey(request: Request): string | null {
-	const cookie = request.headers.get('cookie') ?? '';
-	const match = cookie.match(new RegExp(`${PROFILE_CONFIG.sessionCookie}=([^;]+)`));
-	return match ? match[1] : null;
-}
 
 export async function POST(context: APIContext): Promise<Response> {
 	let body: unknown;
@@ -54,7 +49,7 @@ export async function POST(context: APIContext): Promise<Response> {
 
 	const env = await serverEnvironment();
 	const store = getProfileStore(env);
-	const sessionKey = getSessionKey(context.request) ?? '';
+	const sessionKey = readSessionKey(context.request) ?? '';
 
 	if (store && sessionKey) {
 		try {
@@ -67,7 +62,13 @@ export async function POST(context: APIContext): Promise<Response> {
 	// Security logging (non-blocking, fire-and-forget).
 	const secStore = getSecurityStore(env);
 	if (secStore) {
-		const event = await buildSecurityEvent(context.request, slug, 'link-click', sessionKey || undefined);
+		const event = await buildSecurityEvent(context.request, {
+			surface: 'profile',
+			endpoint: 'link-click',
+			profileSlug: slug,
+			targetId: linkId,
+			sessionKey: sessionKey || undefined,
+		});
 		secStore.recordEvent(event).catch(() => {});
 	}
 

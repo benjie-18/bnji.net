@@ -10,8 +10,15 @@
  */
 
 /**
- * Cloud clusters: varied positions, randomized scale factors, drift timings,
- * and randomized puff composition so each cloud has its own distinct silhouette.
+ * The five cloud clusters, hand-placed. Each entry fixes the cluster's
+ * position, scale, drift duration, animation phase (the negative delays start
+ * it part-way through its loop, so the sky is never in lockstep), and which of
+ * the nine puffs make up its silhouette.
+ *
+ * Nothing here is randomized at build time or at runtime — these are literal
+ * values, and the component is fully static with no client-side script. What
+ * varies is only the chosen combination, which is what keeps five clouds from
+ * looking like five copies of one.
  */
 const CLOUDS = [
 	{ id: 1, left: '-6%', top: '7%', scale: 1.15, duration: 84, delay: -14, puffs: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
@@ -23,6 +30,30 @@ const CLOUDS = [
 ---
 
 <div class="aero-sky" aria-hidden="true">
+	<!--
+	  Filter definitions live in their own defs-only SVG, not inside the meadow
+	  SVG below. The cloud bodies that consume #aero-cloud-morph are siblings of
+	  the meadow, not descendants of it, so keeping the definition inside the
+	  meadow made the clouds depend on the meadow's markup existing. A
+	  zero-size, overflow-hidden SVG holds defs without painting anything.
+	-->
+	<svg class="aero-defs" aria-hidden="true" focusable="false">
+		<defs>
+			<!-- Cloud puff organic fusion filter: merges distinct round puffs
+			     into one continuous cloud, removing the seams where two
+			     translucent circles overlap. -->
+			<filter id="aero-cloud-morph" color-interpolation-filters="sRGB" x="-30%" y="-30%" width="160%" height="160%">
+				<feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur" />
+				<feColorMatrix
+					in="blur"
+					mode="matrix"
+					values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -4.5"
+					result="goo"
+				/>
+				<feBlend in="SourceGraphic" in2="goo" mode="screen" />
+			</filter>
+		</defs>
+	</svg>
 	<span class="aero-bloom"></span>
 
 	<div class="aero-clouds">
@@ -47,44 +78,38 @@ const CLOUDS = [
 	<div class="aero-meadow">
 		<svg class="aero-meadow__svg" viewBox="0 0 1440 320" preserveAspectRatio="none" fill="none" aria-hidden="true">
 			<defs>
-				<!-- Cloud puff organic fusion filter: merges distinct round puffs into one continuous cloud -->
-				<filter id="aero-cloud-morph" color-interpolation-filters="sRGB" x="-30%" y="-30%" width="160%" height="160%">
-					<feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur" />
-					<feColorMatrix
-						in="blur"
-						mode="matrix"
-						values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -4.5"
-						result="goo"
-					/>
-					<feBlend in="SourceGraphic" in2="goo" mode="screen" />
-				</filter>
-
+				<!--
+				  Every stop below is styled through the `style` attribute rather
+				  stop-color="...", because presentation attributes are parsed as
+				  attribute values and do not resolve var(). Inline SVG does inherit
+				  custom properties from the document, so this resolves fine.
+				-->
 				<linearGradient id="aero-hill-back" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0%" stop-color="#9de9b9" />
-					<stop offset="35%" stop-color="#72d698" />
-					<stop offset="100%" stop-color="#3da067" />
+					<stop offset="0%" style="stop-color:var(--aero-meadow-back-1)" />
+					<stop offset="35%" style="stop-color:var(--aero-meadow-back-2)" />
+					<stop offset="100%" style="stop-color:var(--aero-meadow-back-3)" />
 				</linearGradient>
 				<linearGradient id="aero-hill-front" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0%" stop-color="#6ee09e" />
-					<stop offset="30%" stop-color="#46c37f" />
-					<stop offset="100%" stop-color="#288751" />
+					<stop offset="0%" style="stop-color:var(--aero-meadow-1)" />
+					<stop offset="30%" style="stop-color:var(--aero-meadow-2)" />
+					<stop offset="100%" style="stop-color:var(--aero-meadow-3)" />
 				</linearGradient>
 				<linearGradient id="aero-hill-edge-back" x1="0" y1="0" x2="1" y2="0">
-					<stop offset="0%" stop-color="rgba(255, 255, 255, 0.4)" />
-					<stop offset="30%" stop-color="rgba(255, 255, 255, 0.85)" />
-					<stop offset="70%" stop-color="rgba(234, 252, 255, 0.75)" />
-					<stop offset="100%" stop-color="rgba(255, 255, 255, 0.35)" />
+					<stop offset="0%" style="stop-color:var(--aero-meadow-edge-start)" />
+					<stop offset="30%" style="stop-color:var(--aero-meadow-edge-back-peak)" />
+					<stop offset="70%" style="stop-color:var(--aero-meadow-edge)" />
+					<stop offset="100%" style="stop-color:var(--aero-meadow-edge-end)" />
 				</linearGradient>
 				<linearGradient id="aero-hill-edge-front" x1="0" y1="0" x2="1" y2="0">
-					<stop offset="0%" stop-color="rgba(255, 255, 255, 0.5)" />
-					<stop offset="25%" stop-color="rgba(255, 255, 255, 0.95)" />
-					<stop offset="65%" stop-color="rgba(255, 255, 255, 0.9)" />
-					<stop offset="100%" stop-color="rgba(234, 252, 255, 0.45)" />
+					<stop offset="0%" style="stop-color:var(--aero-meadow-edge-front-start)" />
+					<stop offset="25%" style="stop-color:var(--aero-meadow-edge-front-peak)" />
+					<stop offset="65%" style="stop-color:var(--aero-meadow-edge-front-hold)" />
+					<stop offset="100%" style="stop-color:var(--aero-meadow-edge-front-end)" />
 				</linearGradient>
 				<radialGradient id="aero-hill-sunlit" cx="45%" cy="15%" r="60%">
-					<stop offset="0%" stop-color="rgba(255, 255, 255, 0.4)" />
-					<stop offset="50%" stop-color="rgba(255, 255, 255, 0.08)" />
-					<stop offset="100%" stop-color="transparent" />
+					<stop offset="0%" style="stop-color:var(--aero-meadow-sunlit)" />
+					<stop offset="50%" style="stop-color:var(--aero-meadow-sunlit-fade)" />
+					<stop offset="100%" style="stop-color:transparent" />
 				</radialGradient>
 			</defs>
 			<!-- Background rolling hill: crests gently across the mid-right -->

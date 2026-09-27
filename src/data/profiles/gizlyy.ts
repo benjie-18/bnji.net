@@ -5,8 +5,8 @@
  * This file is the single source of truth for the gizlyy profile page.
  * To modify the page, edit the values here — no component changes needed.
  *
- * The fire counter (🔥 1937) is preserved as historical Ayo data and is
- * displayed separately from BNJI's own view counter.
+ * The view pill on this page is live — see the `viewCount` note further down
+ * for why the old Ayo counter value is no longer stored here.
  */
 import type { ProfileData } from './types';
 
@@ -30,11 +30,14 @@ export const gizlyyProfile: ProfileData = {
 		'Slime Rancher',
 	],
 
-	counter: {
-		emoji: '🔥',
-		value: 1950,
-		note: 'from Ayo',
-	},
+	// The old `counter: { emoji: '🔥', value: 1950, note: 'from Ayo' }` block
+	// was a hand-maintained copy of a number carried over from Ayo. It could
+	// not update, and the figure it showed was never this site's count. The
+	// pill in ProfilePage.astro now renders the live view total from the
+	// profile store, so there is nothing left here to keep in sync.
+	//
+	// A profile without a `counter` field simply renders no pill, so adding
+	// one back is a data edit and needs no component change.
 
 	extras: [
 		'I LOVE MUSICCC',

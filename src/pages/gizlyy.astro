@@ -10,6 +10,8 @@
  * profile data from src/data/profiles/gizlyy.ts. To add another profile,
  * create a new page file (e.g. src/pages/benji.astro) that follows the
  * same pattern with different profile data.
+ *
+ * A failed read renders an em dash, never a zero — see `viewsAvailable` below.
  */
 import Layout from '../layouts/Layout.astro';
 import ProfilePage from '../components/ProfilePage.astro';
@@ -27,20 +29,42 @@ const slug = profile.slug;
 let viewStats = { total: 0, today: 0, week: 0, month: 0 };
 let reactionCounts: Record<string, number> = {};
 
+// "0 views" and "could not read the store" are different facts, and the page
+// must not show the first when it means the second — a confident zero reads as
+// a measurement, which is the one thing a counter must never be. Each source
+// carries its own flag, so a views failure still lets real reaction counts
+// through and vice versa; both are set only after a settled read.
+// ProfilePage needs no flag of its own: an undefined viewCount already
+// suppresses the pill rather than inventing a number.
+let viewsAvailable = false;
+let reactionsAvailable = false;
+
 try {
 	const env = await serverEnvironment();
 	const store = getProfileStore(env);
 	if (store) {
-		const [views, reactions] = await Promise.all([
-			store.getViewStats(slug).catch(() => viewStats),
-			store.getReactionCounts(slug).catch(() => reactionCounts),
+		const [views, reactions] = await Promise.allSettled([
+			store.getViewStats(slug),
+			store.getReactionCounts(slug),
 		]);
-		viewStats = views;
-		reactionCounts = reactions;
+		if (views.status === 'fulfilled') {
+			viewStats = views.value;
+			viewsAvailable = true;
+		} else {
+			console.warn('[bnji] profile view stats unavailable:', views.reason);
+		}
+		if (reactions.status === 'fulfilled') {
+			reactionCounts = reactions.value;
+			reactionsAvailable = true;
+		} else {
+			console.warn('[bnji] profile reaction counts unavailable:', reactions.reason);
+		}
 	}
 } catch (error) {
 	console.warn('[bnji] profile page data load failed:', error);
 }
+
+const unavailable = '—';
 
 const totalReactions = Object.values(reactionCounts).reduce((sum, n) => sum + n, 0);
 const allReactions = PROFILE_CONFIG.allowedReactions;
@@ -49,7 +73,7 @@ const allReactions = PROFILE_CONFIG.allowedReactions;
 <Layout title={profile.pageTitle} description={profile.pageDescription} noindex={false}>
 	<div class="profile-container">
 		<div class="profile-card-wrap" data-reveal>
-			<ProfilePage profile={profile} />
+			<ProfilePage profile={profile} viewCount={viewsAvailable ? viewStats.total : undefined} />
 		</div>
 
 		{/* Reactions */}
@@ -64,7 +88,7 @@ const allReactions = PROFILE_CONFIG.allowedReactions;
 					>
 						<span class="profile-reactions__emoji" aria-hidden="true">{emoji}</span>
 						<span class="profile-reactions__count" data-reaction-count>
-							{reactionCounts[emoji] ?? 0}
+							{reactionsAvailable ? (reactionCounts[emoji] ?? 0) : unavailable}
 						</span>
 					</button>
 				))}
@@ -75,20 +99,24 @@ const allReactions = PROFILE_CONFIG.allowedReactions;
 		<div class="profile-stats" data-reveal style="--reveal-delay: 200ms">
 			<div class="profile-stats__row">
 				<div class="profile-stats__item">
-					<span class="profile-stats__value">{viewStats.total}</span>
+					<span class="profile-stats__value">{viewsAvailable ? viewStats.total : unavailable}</span>
 					<span class="profile-stats__label mono">views</span>
 				</div>
 				<div class="profile-stats__item">
-					<span class="profile-stats__value">{viewStats.today}</span>
+					<span class="profile-stats__value">{viewsAvailable ? viewStats.today : unavailable}</span>
 					<span class="profile-stats__label mono">today</span>
 				</div>
 				<div class="profile-stats__item">
-					<span class="profile-stats__value">{totalReactions}</span>
+					<span class="profile-stats__value">{reactionsAvailable ? totalReactions : unavailable}</span>
 					<span class="profile-stats__label mono">reactions</span>
 				</div>
 			</div>
 			<p class="profile-stats__note mono">
-				{profile.counter ? `${profile.counter.emoji} ${profile.counter.value} is the original Ayo counter · ` : ''}BNJI views start from zero
+				{
+					viewsAvailable
+						? 'Views are counted per session per day, since the site launched.'
+						: 'Counts are unavailable right now — the store could not be read.'
+				}
 			</p>
 		</div>
 	</div>

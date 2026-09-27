@@ -19,10 +19,29 @@ import type { IconName } from './Icon.astro';
 
 interface Props {
 	profile: ProfileData;
+	/**
+	 * Live total views for this profile, from the profile analytics store.
+	 *
+	 * When supplied it replaces the historical `counter` pill. The old pill
+	 * showed a hand-entered number carried over from another site, which
+	 * could never move; this one is the same `getViewStats()` total the stats
+	 * panel and the page's own stat block report, so there is one number on
+	 * the site rather than two that can drift.
+	 *
+	 * Optional: with no store (or no prop) the component falls back to the
+	 * static `counter` block, and with neither it renders no pill at all.
+	 */
+	viewCount?: number;
 }
 
-const { profile } = Astro.props;
+const { profile, viewCount } = Astro.props;
 const linkRel = 'noopener noreferrer';
+
+// Exactly one pill, from exactly one source: the live count when the page
+// could read the store, otherwise the historical figure as a fallback.
+const counterValue = viewCount ?? profile.counter?.value;
+const counterEmoji = viewCount !== undefined ? '👁' : profile.counter?.emoji;
+const counterNote = viewCount !== undefined ? 'views' : profile.counter?.note;
 ---
 
 <article class="profile-page" aria-label={`${profile.displayName}'s profile`}>
@@ -56,12 +75,12 @@ const linkRel = 'noopener noreferrer';
 		</ul>
 	)}
 
-	{/* Historical counter (e.g. Ayo fire counter) */}
-	{profile.counter && (
-		<div class="profile-page__counter" data-glass="quiet" aria-label="Historical counter">
-			<span class="profile-page__counter-emoji" aria-hidden="true">{profile.counter.emoji}</span>
-			<span class="profile-page__counter-value">{profile.counter.value}</span>
-			{profile.counter.note && <span class="profile-page__counter-note mono">{profile.counter.note}</span>}
+	{/* View count pill — live from the profile store, see `viewCount` above. */}
+	{counterValue !== undefined && (
+		<div class="profile-page__counter" data-glass="quiet" aria-label="Total views">
+			<span class="profile-page__counter-emoji" aria-hidden="true">{counterEmoji}</span>
+			<span class="profile-page__counter-value">{counterValue}</span>
+			{counterNote && <span class="profile-page__counter-note mono">{counterNote}</span>}
 		</div>
 	)}
 
