@@ -143,8 +143,8 @@ BNJI views start from zero"* are **gone**. The pill now shows the live total.
   is exactly one pill from exactly one source.
 - `/gizlyy/` passes `viewStats.total` — the same `getViewStats()` value the
   page's own stat block and the dashboard show.
-- The note line now reads *"Views are counted per session per day, since the
-  site launched."*
+- The explanatory note line under the stats was removed; a note only appears
+  when the counts are unavailable.
 
 **Location note:** this content was on **`/gizlyy/`**, not `/about/`.
 `/about/` never contained it.
@@ -215,3 +215,17 @@ wrangler secret put ACCESS_SECRET
 Without the migration or without `ACCESS_SECRET` the guard **fails closed** with
 `503 admin_not_configured` rather than serving. Then sign in at `/admin` and
 **change the seeded token immediately**.
+
+---
+
+## 7. Panel UI
+
+- Styles live in `src/styles/admin.css` (global, `admin__`-prefixed) because
+  most panel markup is built at runtime by `admin-dashboard.ts`, which scoped
+  Astro styles cannot reach.
+- Every clickable control is a site `.glass-button` capsule; sections, filters
+  and tables sit on `data-glass` surfaces; hints are glass text plates.
+- Tab switching uses a "sling" indicator: its leading edge moves on
+  `--dur-base`, its trailing edge on `--dur-slow` with `--ease-spring`. It
+  follows the Settings store: performance mode drops the spring, reduced
+  effects / OS reduced motion remove the travel.

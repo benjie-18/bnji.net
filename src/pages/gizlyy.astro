@@ -111,18 +111,18 @@ const allReactions = PROFILE_CONFIG.allowedReactions;
 					<span class="profile-stats__label mono">reactions</span>
 				</div>
 			</div>
-			<p class="profile-stats__note mono">
-				{
-					viewsAvailable
-						? 'Views are counted per session per day, since the site launched.'
-						: 'Counts are unavailable right now — the store could not be read.'
-				}
-			</p>
+			{
+				!viewsAvailable && (
+					<p class="profile-stats__note mono">
+						Counts are unavailable right now — the store could not be read.
+					</p>
+				)
+			}
 		</div>
 	</div>
 
 	<div class="profile-footer" data-load style="--load-delay: 800ms">
-		<a class="profile-footer__back" href="/">← Back to hub</a>
+		<a class="profile-footer__back" href="/">← Back to home</a>
 	</div>
 </Layout>
 

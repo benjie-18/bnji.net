@@ -55,8 +55,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 	<nav class="nav-pill" data-glass="raised" aria-label="Primary">
 		<a class="brand" href="/">
 			<BrandMark size={20} />
-			<span class="brand-word">{SITE.name}</span>
-			<span class="sr-only"> — {SITE.author.name}, home</span>
+			<span class="sr-only">{SITE.name} — home</span>
 		</a>
 
 		<ul class="nav-list" id="primary-navigation" data-nav-panel role="list">
@@ -196,19 +195,14 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 		border-radius: var(--radius-pill);
 	}
 
-	.brand-word {
-		font-family: var(--font-display);
-		font-size: 1rem;
-		font-weight: 600;
-		letter-spacing: 0.18em;
-		/* Optical compensation so the wordmark looks centred in the pill. */
-		margin-inline-end: -0.18em;
-		transition: color var(--dur-fast) var(--ease-out);
+	/* Wordmark removed: the star alone is the home affordance. */
+	.brand :global(.brand-mark) {
+		transition: transform var(--dur-base) var(--ease-spring);
 	}
 
 	@media (hover: hover) and (pointer: fine) {
-		.brand:hover .brand-word {
-			color: var(--accent-strong);
+		.brand:hover :global(.brand-mark) {
+			transform: rotate(45deg) scale(1.08);
 		}
 	}
 

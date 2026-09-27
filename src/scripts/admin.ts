@@ -201,8 +201,12 @@ export function renderFacts(container: HTMLElement, facts: [string, unknown][]):
 		dt.textContent = key;
 		const dd = document.createElement('dd');
 		dd.textContent = cell(value);
-		dl.appendChild(dt);
-		dl.appendChild(dd);
+		// dt+dd share one wrapper (valid in <dl>) so each figure is one plate.
+		const fact = document.createElement('div');
+		fact.className = 'admin__fact';
+		fact.appendChild(dt);
+		fact.appendChild(dd);
+		dl.appendChild(fact);
 	}
 	container.appendChild(dl);
 }

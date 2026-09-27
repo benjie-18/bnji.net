@@ -98,9 +98,6 @@ const statusTone =
 	<p class="project-card__description">{project.description}</p>
 
 	<div class="project-card__foot">
-		<ul class="project-card__tags" role="list">
-			{project.tags.map((tag) => <li><Chip>{tag}</Chip></li>)}
-		</ul>
 
 		{
 			project.href && (

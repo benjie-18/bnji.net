@@ -12,7 +12,6 @@
  */
 import type { BlogPost } from '../data/blog';
 import { getReadingTime, postUrl } from '../data/blog';
-import Chip from './Chip.astro';
 import FormattedDate from './FormattedDate.astro';
 import GlassPanel from './GlassPanel.astro';
 import Icon from './Icon.astro';
@@ -84,17 +83,6 @@ const minutes = getReadingTime(post);
 
 		<p class="post__description">{post.data.description}</p>
 
-		{
-			post.data.tags && post.data.tags.length > 0 && (
-				<ul class="post__tags" role="list">
-					{post.data.tags.map((tag: string) => (
-						<li>
-							<Chip>{tag}</Chip>
-						</li>
-					))}
-				</ul>
-			)
-		}
 	</div>
 
 	<span class="post__cta" aria-hidden="true">

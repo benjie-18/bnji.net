@@ -91,7 +91,17 @@ const providerLabel =
 		gap: 0.45rem;
 		padding: 0.3rem 0.35rem 0.3rem 0.55rem;
 		border-radius: var(--radius-pill);
-		transition: all var(--dur-base) var(--ease-spring);
+		/* Explicit property list, never `all`: border-radius must NOT animate.
+		   Interpolating 999px ↔ 50% through --ease-spring overshoots past 1,
+		   which drives the computed radius negative → clamped to 0, so the
+		   circle flashed square for a frame on every click. Both states now
+		   share --radius-pill (on a 38px square that is already a circle). */
+		transition:
+			padding var(--dur-base) var(--ease-spring),
+			gap var(--dur-base) var(--ease-spring),
+			inline-size var(--dur-base) var(--ease-spring),
+			block-size var(--dur-base) var(--ease-spring),
+			opacity var(--dur-fast) var(--ease-out);
 		user-select: none;
 	}
 
@@ -108,7 +118,7 @@ const providerLabel =
 		gap: 0;
 		inline-size: 38px;
 		block-size: 38px;
-		border-radius: 50%;
+		border-radius: var(--radius-pill);
 		justify-content: center;
 		cursor: pointer;
 	}

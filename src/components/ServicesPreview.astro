@@ -8,7 +8,6 @@
  * inert instead of pretending to be links.
  */
 import { INTERESTS } from '../data/interests';
-import Chip from './Chip.astro';
 import GlassPanel from './GlassPanel.astro';
 import Icon from './Icon.astro';
 import SectionHeading from './SectionHeading.astro';
@@ -54,13 +53,6 @@ import SectionHeading from './SectionHeading.astro';
 						<p class="interest__description">{interest.description}</p>
 
 						<div class="interest__foot">
-							<ul class="interest__tags" role="list">
-								{interest.tags.map((tag) => (
-									<li>
-										<Chip>{tag}</Chip>
-									</li>
-								))}
-							</ul>
 							{interest.href && (
 								<span class="interest__cta" aria-hidden="true">
 									<Icon name="arrow-up-right" size={14} />

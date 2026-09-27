@@ -1,0 +1,525 @@
+/* ==========================================================================
+   admin.css — /admin operator console. Imported only by src/pages/admin/.
+
+   Global rather than scoped because most of this markup is created at
+   runtime by scripts/admin-dashboard.ts (tables, fact lists, config cards,
+   moderation buttons) and Astro's scoped styles never reach those nodes.
+   Every selector is prefixed `admin__` so nothing leaks into the site.
+
+   Surfaces and buttons reuse the site's own primitives — `data-glass`
+   panels and `.glass-button` capsules from glass.css — so the console reads
+   as part of BNJI.NET instead of a bolted-on tool. All values are tokens.
+   ========================================================================== */
+
+.admin {
+	min-block-size: 100dvh;
+	/* .site-main (Layout) already clears the fixed nav. */
+	padding: clamp(2rem, 6vh, 4rem) var(--gutter) clamp(3rem, 8vh, 5rem);
+	max-inline-size: 90rem;
+	margin-inline: auto;
+	display: grid;
+	gap: 1.25rem;
+	align-content: start;
+}
+
+/* --- Header ------------------------------------------------------------- */
+.admin__header {
+	--parent-radius: var(--radius-lg);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem;
+	align-items: center;
+	justify-content: space-between;
+	padding: clamp(1rem, 2.4vw, 1.5rem) clamp(1.1rem, 2.6vw, 1.75rem);
+}
+
+.admin__title {
+	margin: 0.35rem 0 0;
+	font-family: var(--font-display);
+	font-size: var(--text-title);
+	font-weight: 300;
+	letter-spacing: var(--tracking-tight);
+	line-height: 1.1;
+	/* background-clip text: keep descenders inside the painted box. */
+	padding-block-end: 0.1em;
+}
+
+.admin__header-actions {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.admin__status {
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	color: var(--text-muted);
+	padding: 0.3rem 0.7rem;
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-quiet);
+	border: 1px solid var(--glass-border);
+}
+
+.admin__status:empty {
+	display: none;
+}
+
+/* --- Tabs + sling indicator --------------------------------------------- */
+.admin__tabs {
+	--parent-radius: var(--radius-pill);
+	position: relative;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	padding: 0.35rem;
+	justify-self: start;
+	max-inline-size: 100%;
+}
+
+/* Wrapped rows on narrow screens cannot stay a pill. */
+@media (max-width: 720px) {
+	.admin__tabs {
+		--parent-radius: var(--radius-md);
+		justify-self: stretch;
+	}
+}
+
+.admin__tab {
+	position: relative;
+	z-index: 1;
+	padding: 0.5rem 1rem;
+	border: 0;
+	border-radius: var(--radius-pill);
+	background: transparent;
+	color: var(--text-muted);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	cursor: pointer;
+	transition: color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.admin__tab:hover {
+		color: var(--text-strong);
+	}
+}
+
+.admin__tab[aria-selected='true'] {
+	color: var(--text-strong);
+}
+
+.admin__tab:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+/* The travelling capsule. Its edges are driven by --tab-l/r/t/b (set by
+   admin-dashboard.ts). The leading edge moves on the fast leg, the
+   trailing edge on the slow spring leg: the capsule stretches toward the
+   clicked label, then its tail slings in behind it. Durations are motion
+   tokens, so OS reduced-motion collapses them to 0 automatically. */
+.admin__tab-indicator {
+	--sling-lead: var(--dur-base);
+	--sling-trail: var(--dur-slow);
+	--sling-ease: var(--ease-spring);
+	position: absolute;
+	z-index: 0;
+	inset: var(--tab-t, 0.35rem) var(--tab-r, 100%) var(--tab-b, 0.35rem) var(--tab-l, 0.35rem);
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-raised);
+	border: 1px solid var(--accent-line);
+	box-shadow:
+		0 0 18px -6px var(--accent-soft),
+		inset 0 1px 1px var(--glass-fresnel-top);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.admin__tab-indicator[data-ready] {
+	opacity: 1;
+}
+
+.admin__tab-indicator[data-direction='forward'] {
+	transition:
+		right var(--sling-lead) var(--ease-out),
+		left var(--sling-trail) var(--sling-ease),
+		top var(--sling-lead) var(--ease-out),
+		bottom var(--sling-lead) var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+
+.admin__tab-indicator[data-direction='back'] {
+	transition:
+		left var(--sling-lead) var(--ease-out),
+		right var(--sling-trail) var(--sling-ease),
+		top var(--sling-lead) var(--ease-out),
+		bottom var(--sling-lead) var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+
+.admin__tab-indicator[data-instant] {
+	transition: none;
+}
+
+/* Settings store: performance mode keeps the glide but drops the spring
+   overshoot; reduced effects removes the travel entirely. */
+html[data-performance-mode='on'] .admin__tab-indicator {
+	--sling-trail: var(--dur-base);
+	--sling-ease: var(--ease-out);
+}
+
+html[data-reduced-effects='on'] .admin__tab-indicator {
+	transition: none;
+}
+
+@media (forced-colors: active) {
+	.admin__tab-indicator {
+		border-color: Highlight;
+	}
+}
+
+/* --- Panels ------------------------------------------------------------- */
+.admin__panel {
+	display: grid;
+	gap: 1rem;
+	min-inline-size: 0;
+}
+
+html.js .admin__panel:not([hidden]) {
+	animation: admin-panel-in var(--dur-base) var(--ease-out) both;
+}
+
+html[data-reduced-effects='on'] .admin__panel:not([hidden]) {
+	animation: none;
+}
+
+@keyframes admin-panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.admin__cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+	gap: 1rem;
+	align-items: start;
+}
+
+.admin__card,
+.admin__table-wrap,
+.admin__filters {
+	--parent-radius: var(--radius-lg);
+	--parent-pad: 1.25rem;
+	padding: clamp(1rem, 2vw, 1.25rem);
+	min-inline-size: 0;
+}
+
+.admin__card {
+	display: grid;
+	gap: 0.85rem;
+	align-content: start;
+}
+
+.admin__card--narrow {
+	max-inline-size: 34rem;
+}
+
+.admin__stack {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.admin__stack:empty {
+	display: none;
+}
+
+.admin__h2 {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: 1.1rem;
+	font-weight: 500;
+	color: var(--text-strong);
+}
+
+/* Readable text boxes: explanatory copy sits on a quiet glass plate like
+   the site's notes, never directly on the starfield. */
+.admin__hint {
+	margin: 0;
+	padding: 0.65rem 0.85rem;
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-quiet);
+	border: 1px solid var(--glass-border);
+	font-size: var(--text-small);
+	color: var(--text-muted);
+	line-height: 1.55;
+}
+
+.admin__hint code,
+.admin__form code {
+	font-family: var(--font-mono);
+	font-size: 0.92em;
+	color: var(--text-strong);
+}
+
+.admin__error {
+	margin: 0;
+	padding: 0.7rem 0.9rem;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--danger-line);
+	background: var(--danger-soft);
+	color: var(--danger);
+	font-size: var(--text-small);
+}
+
+.admin__empty {
+	margin: 0;
+	padding: 0.8rem;
+	font-size: var(--text-small);
+	color: var(--text-muted);
+}
+
+/* --- Forms -------------------------------------------------------------- */
+.admin__filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.85rem;
+	align-items: end;
+}
+
+.admin__filters label,
+.admin__field {
+	display: grid;
+	gap: 0.3rem;
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+
+.admin__filters input:not([type='checkbox']),
+.admin__filters select,
+.admin__field input,
+.admin__note {
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+	padding: 0.5rem 0.7rem;
+	color: var(--text-strong);
+	background: var(--glass-bg-quiet);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.admin__filters input:not([type='checkbox']),
+.admin__filters select {
+	min-inline-size: 10rem;
+}
+
+.admin__filters select option {
+	background: var(--bg, Canvas);
+	color: var(--text-strong);
+}
+
+.admin__filters input:focus-visible,
+.admin__filters select:focus-visible,
+.admin__field input:focus-visible,
+.admin__note:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 1px;
+	border-color: var(--accent-line);
+}
+
+.admin__filters label.admin__check {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 0.45rem;
+	padding: 0.5rem 0.75rem;
+	border-radius: var(--radius-pill);
+	border: 1px solid var(--glass-border);
+	background: var(--glass-bg-quiet);
+	cursor: pointer;
+	text-transform: none;
+	letter-spacing: 0;
+	font-family: var(--font-body, inherit);
+	font-size: var(--text-small);
+}
+
+.admin__check input {
+	accent-color: var(--accent);
+}
+
+.admin__form {
+	display: grid;
+	gap: 0.9rem;
+	justify-items: start;
+}
+
+.admin__field {
+	inline-size: 100%;
+}
+
+.admin__field input {
+	inline-size: 100%;
+}
+
+.glass-button[disabled],
+.admin__field input[disabled] {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+/* --- Tables ------------------------------------------------------------- */
+.admin__table-wrap {
+	overflow-x: auto;
+}
+
+.admin__table {
+	inline-size: 100%;
+	border-collapse: collapse;
+	font-size: var(--text-small);
+}
+
+.admin__table th {
+	text-align: start;
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	font-weight: 500;
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-muted);
+	padding: 0.55rem 0.7rem;
+	border-block-end: 1px solid var(--glass-border-strong);
+	white-space: nowrap;
+}
+
+.admin__table td {
+	padding: 0.6rem 0.7rem;
+	border-block-end: 1px solid var(--glass-border);
+	color: var(--text);
+	vertical-align: top;
+}
+
+.admin__table tr:last-child td {
+	border-block-end: 0;
+}
+
+.admin__table td.is-mono {
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	white-space: nowrap;
+	color: var(--text-muted);
+}
+
+.admin__table tbody tr {
+	transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.admin__table tbody tr:hover {
+	background: var(--glass-bg-quiet);
+}
+
+/* --- Facts / config cards ---------------------------------------------- */
+.admin__facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+	gap: 0.6rem;
+	margin: 0;
+}
+
+/* Each figure is its own small plate so numbers never float on the sky. */
+.admin__fact {
+	display: grid;
+	gap: 0.2rem;
+	padding: 0.65rem 0.8rem;
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-quiet);
+	border: 1px solid var(--glass-border);
+	min-inline-size: 0;
+}
+
+.admin__facts dt {
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+
+.admin__facts dd {
+	margin: 0;
+	font-size: 1.15rem;
+	font-family: var(--font-display);
+	color: var(--text-strong);
+	overflow-wrap: anywhere;
+}
+
+.admin__config-group {
+	display: grid;
+	gap: 0.5rem;
+	padding: 1rem 1.1rem;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--glass-border);
+	background: var(--glass-bg);
+	box-shadow: inset 0 1px 1px var(--glass-fresnel-top);
+}
+
+.admin__config-group h3 {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: 1rem;
+	font-weight: 500;
+	color: var(--text-strong);
+}
+
+.admin__config-source {
+	margin: 0;
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	color: var(--text-muted);
+	overflow-wrap: anywhere;
+}
+
+.admin__config-summary {
+	margin: 0;
+	font-size: var(--text-small);
+	color: var(--text-muted);
+}
+
+/* --- Moderation --------------------------------------------------------- */
+.admin__actions {
+	display: flex;
+	gap: 0.35rem;
+	flex-wrap: wrap;
+}
+
+.admin__action {
+	text-transform: capitalize;
+}
+
+/* The current status is shown as a pressed, accented capsule, not a
+   greyed-out mystery — it is the answer to "what is this row now?". */
+.admin__action[aria-current='true'] {
+	opacity: 1;
+	cursor: default;
+	border-color: var(--accent-line);
+	background: var(--accent-soft);
+	color: var(--text-strong);
+}
+
+.admin__note {
+	inline-size: 9rem;
+	font-size: var(--text-micro);
+	padding: 0.4rem 0.55rem;
+}
