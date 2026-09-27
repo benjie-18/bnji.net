@@ -139,6 +139,12 @@
 	pointer-events: none;
 }
 
+html[data-theme='light'] .admin__tab-indicator {
+	background: var(--accent);
+	border-color: var(--accent-strong);
+	box-shadow: 0 2px 8px var(--glass-shadow-contact);
+}
+
 .admin__tab-indicator[data-ready] {
 	opacity: 1;
 }
@@ -515,6 +521,13 @@ html[data-reduced-effects='on'] .admin__panel:not([hidden]) {
 	cursor: default;
 	border-color: var(--accent-line);
 	background: var(--accent-soft);
+	color: var(--text-strong);
+}
+
+html[data-theme='light'] .admin .admin__action[aria-current='true'] {
+	border-color: var(--accent-strong);
+	background: var(--accent);
+	box-shadow: 0 2px 8px var(--glass-shadow-contact);
 	color: var(--text-strong);
 }
 

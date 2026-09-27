@@ -19,6 +19,14 @@ import { adminFetch, coalesce, formatTime, renderFacts, renderTable } from './ad
 
 type TabName = 'stats' | 'overview' | 'board' | 'security' | 'settings' | 'config';
 
+type PaintActivity = {
+	id: number;
+	createdAt: number;
+	revision: number;
+	visitorId: string;
+	actions: Record<string, number>;
+};
+
 type SecurityEvent = {
 	id: number;
 	surface?: string;
@@ -257,12 +265,29 @@ export function startAdminDashboard(): void {
 		if (enriched) params.set('enrichedOnly', '1');
 		if (limit) params.set('limit', limit);
 
-		const data = await guard(() =>
-			adminFetch<{ events: SecurityEvent[]; total: number }>(`/api/admin/security?${params}`),
-		);
+		const [data, paintActivity] = await Promise.all([
+			guard(() => adminFetch<{ events: SecurityEvent[]; total: number }>(`/api/admin/security?${params}`)),
+			guard(() => adminFetch<{ events: PaintActivity[]; total: number; retentionDays: number }>('/api/admin/paint-activity?limit=50')),
+		]);
 		if (!data || active !== 'security') return;
 
-		say(`${data.events.length} shown · ${data.total} match`);
+		say(`${data.events.length} shown · ${data.total} security events match`);
+		if (paintActivity) {
+			renderTable(
+				root.querySelector<HTMLElement>('[data-paint-activity]')!,
+				[
+					{ label: 'When', get: (r) => formatTime(Number(r.createdAt)), mono: true },
+					{ label: 'Revision', get: (r) => r.revision, mono: true },
+					{ label: 'Visitor/session (ephemeral)', get: (r) => r.visitorId, mono: true },
+					{
+						label: 'Published action counts',
+						get: (r) => Object.entries(r.actions ?? {}).map(([type, count]) => `${type.replace(/-/g, ' ')} ×${count}`).join(', ') || '—',
+					},
+				],
+				paintActivity.events as unknown as Record<string, unknown>[],
+				'No accepted Paint publishes have been logged.',
+			);
+		}
 
 		renderTable(
 			root.querySelector<HTMLElement>('[data-security-table]')!,

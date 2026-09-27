@@ -399,6 +399,12 @@ rather than failing open.
   only *reads* device properties and POSTs them — no collected value is
   ever rendered into the HTML or returned by a public endpoint.
 
+The separate Paint activity trail (`board_paint_activity`) is not a security
+fingerprint log: it records accepted-publish summaries and a server-issued
+opaque browser-session ID only. It stores no IP, device metadata, pointer path
+or artwork, does not identify an account/person, is admin-only, and follows the
+same 60-day / 5,000-row bounds. See [`DATA.md`](./DATA.md) §10.
+
 ### 4.7 Abuse resistance of the collection path itself
 
 The enrichment endpoint is unauthenticated, so it is defended as a write

@@ -14,7 +14,7 @@ what is missing.
 
 | Area | Change | You must act? |
 | --- | --- | --- |
-| D1 schema | Paint adds `0006_board_paint.sql` to the existing `bnji-board` schema | **Yes** — run `migrations apply` |
+| D1 schema | Paint adds `0007_paint_stickers_activity.sql` to the existing `bnji-board` schema | **Yes** — run `migrations apply` |
 | KV namespace | Unchanged | No |
 | D1 binding | Unchanged | No |
 | Admin credential | New `admin_credentials` table, seeded by migration 0005 | **Yes** — rotate the token |
@@ -40,21 +40,22 @@ migrations have run in its own `d1_migrations` table, so this command applies
 **only what is missing** and leaves existing rows alone. It is safe to re-run.
 
 ```bash
-npx wrangler d1 migrations apply BOARD_DB --remote
+npx wrangler d1 migrations apply bnji-board --remote
 ```
 
-Expected output — any unapplied migrations, including `0006_board_paint.sql`; on a database already current before Paint, the only new entry is `0006_board_paint.sql`:
+Expected output — any unapplied migrations, including `0007_paint_stickers_activity.sql`; on a database already current with shared Paint, the only new entry is `0007_paint_stickers_activity.sql`:
 
 ```
-┌──────────────────────────────┐
-│ Name                         │
-├──────────────────────────────┤
-│ 0002_profiles.sql            │
-│ 0003_security_events.sql     │
-│ 0004_board_moderation.sql    │
-│ 0005_admin_credentials.sql   │
-│ 0006_board_paint.sql         │
-└──────────────────────────────┘
+┌──────────────────────────────────────┐
+│ Name                                 │
+├──────────────────────────────────────┤
+│ 0002_profiles.sql                    │
+│ 0003_security_events.sql              │
+│ 0004_board_moderation.sql             │
+│ 0005_admin_credentials.sql            │
+│ 0006_board_paint.sql                  │
+│ 0007_paint_stickers_activity.sql      │
+└──────────────────────────────────────┘
 ```
 
 If you see `0001_board_messages.sql` in that list, your database was never
@@ -64,7 +65,7 @@ existing data.
 **To check before applying** (read-only, safe):
 
 ```bash
-npx wrangler d1 migrations list BOARD_DB --remote
+npx wrangler d1 migrations list bnji-board --remote
 ```
 
 Anything under "Migrations to be applied" is what the next command will run.
@@ -79,12 +80,14 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `security_events` | Abuse detection | IP, user agent, referrer, coarse geo, device data. **Admin-only, 60-day retention, never in any public response** |
 | `board_reports` | Board report flow | `(message_id, reporter_key)` primary key, so one visitor cannot inflate a report count |
 | `admin_credentials` | `/admin` sign-in | Exactly one row, `id = 1`. Stores only `hex(sha256(token))` |
-| `board_paint_state` | `/board/` shared Paint canvas | One bounded PNG snapshot and revision |
+| `board_paint_state` | `/board/` shared Paint canvas | One bounded drawing PNG, revision and editable sticker list |
 | `board_paint_commits` | Paint publish retries | At most 128 recent request IDs for idempotency |
+| `board_paint_activity` | Admin security/activity surface | Accepted publish summaries only; admin-only, 60-day retention, capped at 5,000 rows |
 
 Migration `0004` added four columns to the existing `board_messages`:
 `report_count`, `reported_at`, `status_note`, `moderated_at`. Migration `0006`
-adds the two Paint tables above; it does not modify messages.
+creates the bounded Paint snapshot and retry tables; migration `0007` adds the
+sticker JSON column and private activity table. Neither modifies messages.
 
 No existing board messages are modified. Existing rows get `report_count = 0`
 and NULLs for the other three, which is correct — they have never been
@@ -177,7 +180,7 @@ Then, in a browser:
 
 ```bash
 npm ci
-npx wrangler d1 migrations apply BOARD_DB --local
+npx wrangler d1 migrations apply bnji-board --local
 npx wrangler dev --local --port 8788
 ```
 
@@ -197,7 +200,7 @@ permanent fix and touches no application code.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `/gizlyy/` shows `—` and "counts are unavailable" | `profile_views` missing | `npx wrangler d1 migrations apply BOARD_DB --remote` |
+| `/gizlyy/` shows `—` and "counts are unavailable" | `profile_views` missing | `npx wrangler d1 migrations apply bnji-board --remote` |
 | `/admin` is `503` | `ACCESS_SECRET` not set | `npx wrangler secret put ACCESS_SECRET` |
 | `/admin` is `401` with the right token | Token rotated, or row out of sync | `/api/admin/board` etc. need a session; sign in again. If the token is lost, reseed — see `docs/ADMIN.md` |
 | Board page loads but posts fail `503 storage_unavailable` | `BOARD_DB` binding or DB missing | Check the binding id in `wrangler.json`, then re-apply migrations |

@@ -165,6 +165,13 @@ export const prerender = false;
 				Filter by device fingerprint to see everything one device did, across every surface.
 			</p>
 			<div class="admin__table-wrap" data-glass data-security-table />
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">Published Paint activity</h2>
+				<p class="admin__hint">
+					Only accepted Sync &amp; refresh publishes appear here. Local edits are not logged; entries contain action summaries, not pointer paths or sticker images. The opaque visitor/session ID is temporary and does not identify an account or person. Retained for up to 60 days, capped at 5,000 entries.
+				</p>
+				<div class="admin__table-wrap" data-paint-activity />
+			</div>
 		</section>
 
 		<!-- Board moderation -->

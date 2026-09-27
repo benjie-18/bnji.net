@@ -10,13 +10,18 @@
 import { PAINT_CONFIG } from '../config/paint.config';
 
 type Point = { x: number; y: number };
-type PaintOperation =
-	| { kind: 'stroke'; tool: 'pen' | 'eraser'; points: Point[]; color: string; size: number }
+type PaintSticker = { id: string; image: string; x: number; y: number; width: number; height: number };
+type DrawingOperation =
+	| { kind: 'stroke'; tool: 'pen' | 'eraser' | 'spray' | 'glow'; points: Point[]; color: string; size: number; seed?: number }
 	| { kind: 'shape'; shape: 'line' | 'rectangle' | 'ellipse'; start: Point; end: Point; color: string; size: number }
 	| { kind: 'text'; point: Point; text: string; color: string; size: number };
+type PaintOperation = DrawingOperation
+	| { kind: 'sticker-add'; sticker: PaintSticker }
+	| { kind: 'sticker-move'; id: string; beforeX: number; beforeY: number; x: number; y: number }
+	| { kind: 'sticker-remove'; id: string; beforeX: number; beforeY: number };
 
-type SharedState = { revision: number; image: string | null; updatedAt: number };
-type PendingRequest = { revision: number; requestId: string; image: string };
+type SharedState = { revision: number; image: string | null; stickers?: PaintSticker[]; updatedAt: number };
+type PendingRequest = { revision: number; requestId: string; image: string; stickers: PaintSticker[]; actions: Record<string, number> };
 type ActiveDrawing = {
 	pointerId: number;
 	tool: string;
@@ -25,7 +30,9 @@ type ActiveDrawing = {
 	points: Point[];
 	color: string;
 	size: number;
+	seed: number;
 };
+type ActiveStickerDrag = { pointerId: number; id: string; offsetX: number; offsetY: number; beforeX: number; beforeY: number; x: number; y: number };
 
 const MAX_STROKE_POINTS = 2400;
 const MAX_REBASE_ATTEMPTS = 4;
@@ -40,8 +47,8 @@ export function initBoardPaint(): void {
 
 	const baseCanvas = root.querySelector<HTMLCanvasElement>('[data-paint-base]');
 	const localCanvas = root.querySelector<HTMLCanvasElement>('[data-paint-local]');
+	const stickerCanvas = root.querySelector<HTMLCanvasElement>('[data-paint-stickers]');
 	const inputCanvas = root.querySelector<HTMLCanvasElement>('[data-paint-input]');
-	const surface = root.querySelector<HTMLElement>('[data-paint-surface]');
 	const status = root.querySelector<HTMLElement>('[data-paint-status]');
 	const syncButton = root.querySelector<HTMLButtonElement>('[data-paint-sync]');
 	const undoButton = root.querySelector<HTMLButtonElement>('[data-paint-undo]');
@@ -51,18 +58,23 @@ export function initBoardPaint(): void {
 	const sizeOutput = root.querySelector<HTMLOutputElement>('[data-paint-size-output]');
 	const textInput = root.querySelector<HTMLInputElement>('[data-paint-text]');
 	const textWrap = root.querySelector<HTMLElement>('[data-paint-text-wrap]');
+	const stickerFile = root.querySelector<HTMLInputElement>('[data-paint-sticker-file]');
+	const stickerUploadButton = root.querySelector<HTMLButtonElement>('[data-paint-sticker-upload]');
+	const toolIndicator = root.querySelector<HTMLElement>('[data-paint-tool-indicator]');
 
 	if (
-		!baseCanvas || !localCanvas || !inputCanvas || !surface || !status || !syncButton ||
-		!undoButton || !exportButton || !fullscreenButton || !sizeInput || !sizeOutput || !textInput || !textWrap
+		!baseCanvas || !localCanvas || !stickerCanvas || !inputCanvas || !status || !syncButton ||
+		!undoButton || !exportButton || !fullscreenButton || !sizeInput || !sizeOutput || !textInput || !textWrap ||
+		!stickerFile || !stickerUploadButton
 	) {
 		return;
 	}
 
 	const baseContext = baseCanvas.getContext('2d');
 	const localContext = localCanvas.getContext('2d');
+	const stickerContext = stickerCanvas.getContext('2d');
 	const previewContext = inputCanvas.getContext('2d');
-	if (!baseContext || !localContext || !previewContext) {
+	if (!baseContext || !localContext || !stickerContext || !previewContext) {
 		status.textContent = 'This browser could not start the paint canvas.';
 		return;
 	}
@@ -74,7 +86,12 @@ export function initBoardPaint(): void {
 	const width = PAINT_CONFIG.width;
 	const height = PAINT_CONFIG.height;
 	const pendingOperations: PaintOperation[] = [];
+	const stickerImages = new Map<string, HTMLImageElement>();
 
+	let sharedStickers: PaintSticker[] = [];
+	let activeStickerDrag: ActiveStickerDrag | null = null;
+	let selectedStickerId: string | null = null;
+	let erasingPointerId: number | null = null;
 	let revision = 0;
 	let etag = '';
 	let activeTool = 'pen';
@@ -83,6 +100,7 @@ export function initBoardPaint(): void {
 	let activeDrawing: ActiveDrawing | null = null;
 	let pendingRequest: PendingRequest | null = null;
 	let syncing = false;
+	let stickerProcessing = false;
 	let paintInView = false;
 	let pollTimer: number | null = null;
 
@@ -90,17 +108,198 @@ export function initBoardPaint(): void {
 		status.textContent = message;
 	};
 
+	const toolGroup = root.querySelector<HTMLElement>('[data-paint-tools]');
+	let indicatorLeft = -1;
+	const placeToolIndicator = (instant = false): void => {
+		if (!toolGroup || !toolIndicator) return;
+		const activeButton = toolButtons.find((button) => button.dataset.paintTool === activeTool);
+		if (!activeButton) return;
+		const groupBox = toolGroup.getBoundingClientRect();
+		const buttonBox = activeButton.getBoundingClientRect();
+		const left = buttonBox.left - groupBox.left;
+		toolIndicator.dataset.direction = indicatorLeft < 0 || left >= indicatorLeft ? 'forward' : 'back';
+		if (instant || indicatorLeft < 0) toolIndicator.dataset.instant = '';
+		else delete toolIndicator.dataset.instant;
+		toolIndicator.style.setProperty('--tool-l', `${left}px`);
+		toolIndicator.style.setProperty('--tool-r', `${groupBox.width - (left + buttonBox.width)}px`);
+		toolIndicator.style.setProperty('--tool-t', `${buttonBox.top - groupBox.top}px`);
+		toolIndicator.style.setProperty('--tool-b', `${groupBox.height - (buttonBox.bottom - groupBox.top)}px`);
+		toolIndicator.dataset.ready = '';
+		indicatorLeft = left;
+		if (toolIndicator.dataset.instant !== undefined) {
+			requestAnimationFrame(() => requestAnimationFrame(() => {
+				if (toolIndicator) delete toolIndicator.dataset.instant;
+			}));
+		}
+	};
+
+	const setActiveTool = (tool: string): void => {
+		activeTool = tool;
+		root.dataset.activePaintTool = tool;
+		for (const button of toolButtons) button.setAttribute('aria-pressed', String(button.dataset.paintTool === tool));
+		textWrap.hidden = tool !== 'text';
+		placeToolIndicator();
+	};
+
+	if (toolGroup && typeof ResizeObserver !== 'undefined') {
+		new ResizeObserver(() => placeToolIndicator(true)).observe(toolGroup);
+	}
+	window.addEventListener('resize', () => placeToolIndicator(true), { passive: true });
+	window.addEventListener('bnji:settingschange', () => placeToolIndicator(true));
+
 	const updateUndo = (): void => {
 		undoButton.disabled = pendingOperations.length === 0 || syncing;
 	};
 
+	const summarizeActions = (): Record<string, number> => {
+		const actions: Record<string, number> = {};
+		for (const operation of pendingOperations) {
+			const action = operation.kind === 'stroke'
+				? operation.tool
+				: operation.kind === 'shape'
+					? operation.shape
+					: operation.kind === 'text'
+						? 'text'
+						: operation.kind;
+			actions[action] = (actions[action] ?? 0) + 1;
+		}
+		return actions;
+	};
+
 	const clearPreview = (): void => previewContext.clearRect(0, 0, width, height);
+	const isStickerOperation = (operation: PaintOperation): operation is Exclude<PaintOperation, DrawingOperation> => operation.kind.startsWith('sticker-');
+
+	const effectiveStickers = (): PaintSticker[] => {
+		const stickers = sharedStickers.map((sticker) => ({ ...sticker }));
+		for (const operation of pendingOperations) {
+			if (!isStickerOperation(operation)) continue;
+			if (operation.kind === 'sticker-add') {
+				if (!stickers.some((sticker) => sticker.id === operation.sticker.id)) stickers.push({ ...operation.sticker });
+			} else {
+				const index = stickers.findIndex((sticker) => sticker.id === operation.id);
+				if (index < 0) continue;
+				const sticker = stickers[index];
+				if (sticker.x !== operation.beforeX || sticker.y !== operation.beforeY) continue;
+				if (operation.kind === 'sticker-move') {
+					stickers[index] = { ...sticker, x: operation.x, y: operation.y };
+				} else {
+					stickers.splice(index, 1);
+				}
+			}
+		}
+		return stickers;
+	};
+
+	const stickerAt = (point: Point): PaintSticker | undefined =>
+		effectiveStickers().slice().reverse().find((sticker) =>
+			point.x >= sticker.x && point.x <= sticker.x + sticker.width &&
+			point.y >= sticker.y && point.y <= sticker.y + sticker.height,
+		);
+
+	const renderStickerLayer = (): void => {
+		stickerContext.clearRect(0, 0, width, height);
+		for (const original of effectiveStickers()) {
+			const sticker = activeStickerDrag?.id === original.id
+				? { ...original, x: activeStickerDrag.x, y: activeStickerDrag.y }
+				: original;
+			let bitmap = stickerImages.get(sticker.id);
+			if (!bitmap || bitmap.src !== sticker.image) {
+				bitmap = new Image();
+				stickerImages.set(sticker.id, bitmap);
+				bitmap.onload = renderStickerLayer;
+				bitmap.src = sticker.image;
+			}
+			if (bitmap.complete && bitmap.naturalWidth > 0) {
+				stickerContext.drawImage(bitmap, sticker.x, sticker.y, sticker.width, sticker.height);
+			}
+		}
+	};
+
+	const compressSticker = async (file: File): Promise<PaintSticker> => {
+		if (!file.type.startsWith('image/')) throw new Error('Choose an image file for the sticker.');
+		if (file.size > PAINT_CONFIG.maxStickerSourceBytes) throw new Error('That image is too large to process as a sticker.');
+		const bitmap = await createImageBitmap(file);
+		try {
+			if (bitmap.width * bitmap.height > PAINT_CONFIG.maxStickerSourcePixels) {
+				throw new Error('That image has too many pixels to process safely.');
+			}
+			const scale = Math.min(1, PAINT_CONFIG.maxStickerWidth / bitmap.width, PAINT_CONFIG.maxStickerHeight / bitmap.height);
+			const stickerWidth = Math.max(1, Math.round(bitmap.width * scale));
+			const stickerHeight = Math.max(1, Math.round(bitmap.height * scale));
+			const resized = document.createElement('canvas');
+			resized.width = stickerWidth;
+			resized.height = stickerHeight;
+			const context = resized.getContext('2d');
+			if (!context) throw new Error('Could not resize that sticker image.');
+			context.drawImage(bitmap, 0, 0, stickerWidth, stickerHeight);
+			const image = resized.toDataURL('image/png');
+			if (image.length > PAINT_CONFIG.maxStickerImageChars) throw new Error('That sticker is too detailed after resizing.');
+			return {
+				id: crypto.randomUUID(),
+				image,
+				x: Math.round((width - stickerWidth) / 2),
+				y: Math.round((height - stickerHeight) / 2),
+				width: stickerWidth,
+				height: stickerHeight,
+			};
+		} finally {
+			bitmap.close();
+		}
+	};
+
+	const rebaseStickerOperations = (): boolean => {
+		const working = sharedStickers.map((sticker) => ({ ...sticker }));
+		const kept: PaintOperation[] = [];
+		let conflicts = 0;
+		for (const operation of pendingOperations) {
+			if (!isStickerOperation(operation)) {
+				kept.push(operation);
+				continue;
+			}
+			if (operation.kind === 'sticker-add') {
+				const existing = working.find((sticker) => sticker.id === operation.sticker.id);
+				if (existing) {
+					if (existing.image !== operation.sticker.image) conflicts++;
+					continue;
+				}
+				working.push({ ...operation.sticker });
+				kept.push(operation);
+				continue;
+			}
+			const index = working.findIndex((sticker) => sticker.id === operation.id);
+			if (operation.kind === 'sticker-remove' && index < 0) continue;
+			if (index < 0) {
+				conflicts++;
+				continue;
+			}
+			const sticker = working[index];
+			if (sticker.x !== operation.beforeX || sticker.y !== operation.beforeY) {
+				if (!(operation.kind === 'sticker-move' && sticker.x === operation.x && sticker.y === operation.y)) conflicts++;
+				continue;
+			}
+			if (operation.kind === 'sticker-move') {
+				working[index] = { ...sticker, x: operation.x, y: operation.y };
+				kept.push(operation);
+			} else {
+				working.splice(index, 1);
+				kept.push(operation);
+			}
+		}
+		pendingOperations.splice(0, pendingOperations.length, ...kept);
+		if (conflicts > 0) {
+			updateUndo();
+			announce(`${conflicts} local sticker change${conflicts === 1 ? '' : 's'} conflicted with a newer shared edit and were skipped; the other visitor's version was kept.`);
+		}
+		return conflicts > 0;
+	};
 
 	const drawPath = (
 		context: CanvasRenderingContext2D,
 		points: Point[],
 		color: string,
 		size: number,
+		tool: 'pen' | 'eraser' | 'spray' | 'glow' = 'pen',
+		seed = 1,
 	): void => {
 		if (points.length === 0) return;
 		context.save();
@@ -109,22 +308,45 @@ export function initBoardPaint(): void {
 		context.lineWidth = size;
 		context.lineCap = 'round';
 		context.lineJoin = 'round';
-		if (points.length === 1) {
-			context.beginPath();
-			context.arc(points[0].x, points[0].y, size / 2, 0, Math.PI * 2);
-			context.fill();
+		if (tool === 'spray') {
+			let randomState = seed || 1;
+			const random = (): number => {
+				randomState = (randomState * 1664525 + 1013904223) >>> 0;
+				return randomState / 0x100000000;
+			};
+			context.globalAlpha = 0.72;
+			for (const point of points) {
+				for (let particle = 0; particle < 5; particle++) {
+					const angle = random() * Math.PI * 2;
+					const distance = random() * size * 1.6;
+					context.beginPath();
+					context.arc(point.x + Math.cos(angle) * distance, point.y + Math.sin(angle) * distance, Math.max(0.7, size * 0.08), 0, Math.PI * 2);
+					context.fill();
+				}
+			}
 		} else {
-			context.beginPath();
-			context.moveTo(points[0].x, points[0].y);
-			for (let i = 1; i < points.length; i++) context.lineTo(points[i].x, points[i].y);
-			context.stroke();
+			if (tool === 'glow') {
+				context.shadowColor = color;
+				context.shadowBlur = size * 1.5;
+			}
+			if (points.length === 1) {
+				context.beginPath();
+				context.arc(points[0].x, points[0].y, size / 2, 0, Math.PI * 2);
+				context.fill();
+			} else {
+				context.beginPath();
+				context.moveTo(points[0].x, points[0].y);
+				for (let i = 1; i < points.length; i++) context.lineTo(points[i].x, points[i].y);
+				context.stroke();
+			}
 		}
 		context.restore();
 	};
 
 	const drawOperation = (context: CanvasRenderingContext2D, operation: PaintOperation): void => {
+		if (isStickerOperation(operation)) return;
 		if (operation.kind === 'stroke') {
-			drawPath(context, operation.points, operation.tool === 'eraser' ? paper : operation.color, operation.size);
+			drawPath(context, operation.points, operation.tool === 'eraser' ? paper : operation.color, operation.size, operation.tool, operation.seed);
 			return;
 		}
 
@@ -172,6 +394,7 @@ export function initBoardPaint(): void {
 	const repaintLocal = (): void => {
 		localContext.clearRect(0, 0, width, height);
 		for (const operation of pendingOperations) drawOperation(localContext, operation);
+		renderStickerLayer();
 		clearPreview();
 		updateUndo();
 	};
@@ -188,8 +411,8 @@ export function initBoardPaint(): void {
 		clearPreview();
 		if (!activeDrawing) return;
 		const { tool, start, current, points, color, size } = activeDrawing;
-		if (tool === 'pen' || tool === 'eraser') {
-			drawPath(previewContext, points, tool === 'eraser' ? paper : color, size);
+		if (tool === 'pen' || tool === 'eraser' || tool === 'spray' || tool === 'glow') {
+			drawPath(previewContext, points, tool === 'eraser' ? paper : color, size, tool, activeDrawing.seed);
 		} else {
 			drawOperation(previewContext, {
 				kind: 'shape',
@@ -224,10 +447,14 @@ export function initBoardPaint(): void {
 			bitmap.src = image;
 		});
 
-	const applySharedState = async (state: SharedState, nextEtag?: string | null): Promise<void> => {
+	const applySharedState = async (state: SharedState, nextEtag?: string | null): Promise<boolean> => {
 		await loadBaseImage(state.image);
+		sharedStickers = Array.isArray(state.stickers) ? state.stickers : [];
 		revision = state.revision;
 		etag = nextEtag ?? `W/"paint-${state.revision}"`;
+		const hadConflicts = rebaseStickerOperations();
+		renderStickerLayer();
+		return hadConflicts;
 	};
 
 	const refreshSharedState = async (force = false): Promise<boolean> => {
@@ -291,13 +518,20 @@ export function initBoardPaint(): void {
 
 	const setSyncing = (value: boolean): void => {
 		syncing = value;
-		syncButton.disabled = value;
+		syncButton.disabled = value || stickerProcessing;
+		stickerUploadButton.disabled = value || stickerProcessing;
+		inputCanvas.setAttribute('aria-disabled', String(value));
+		root.dataset.paintSyncing = String(value);
 		syncButton.setAttribute('aria-busy', String(value));
 		updateUndo();
 	};
 
 	const syncAndRefresh = async (): Promise<void> => {
 		if (syncing) return;
+		if (activeDrawing || activeStickerDrag || erasingPointerId !== null || stickerProcessing) {
+			announce('Finish the current drawing or sticker edit before publishing.');
+			return;
+		}
 		setSyncing(true);
 
 		try {
@@ -314,7 +548,13 @@ export function initBoardPaint(): void {
 						announce(`This drawing is too detailed to sync. Keep the PNG under ${Math.round(PAINT_CONFIG.maxImageChars / 1000)} KB.`);
 						return;
 					}
-					pendingRequest = { revision, requestId: crypto.randomUUID(), image };
+					pendingRequest = {
+						revision,
+						requestId: crypto.randomUUID(),
+						image,
+						stickers: effectiveStickers(),
+						actions: summarizeActions(),
+					};
 				}
 
 				let response: Response;
@@ -349,8 +589,14 @@ export function initBoardPaint(): void {
 				}
 
 				if (response.status === 409) {
-					await applySharedState(result, response.headers.get('etag'));
+					const hadStickerConflicts = await applySharedState(result, response.headers.get('etag'));
 					pendingRequest = null;
+					if (pendingOperations.length === 0) {
+						announce(hadStickerConflicts
+							? 'The newer shared sticker version was kept; no local changes remain to publish.'
+							: 'The shared canvas changed, and there are no local edits left to publish.');
+						return;
+					}
 					continue;
 				}
 
@@ -371,6 +617,7 @@ export function initBoardPaint(): void {
 				revision = result.revision;
 				etag = response.headers.get('etag') ?? `W/"paint-${revision}"`;
 				await loadBaseImage(pendingRequest.image);
+				sharedStickers = Array.isArray(result.stickers) ? result.stickers : pendingRequest.stickers;
 				pendingOperations.length = 0;
 				pendingRequest = null;
 				repaintLocal();
@@ -386,66 +633,40 @@ export function initBoardPaint(): void {
 		}
 	};
 
-	inputCanvas.addEventListener('pointerdown', (event) => {
-		if (event.pointerType === 'mouse' && event.button !== 0) return;
-		event.preventDefault();
-		const point = getPoint(event);
-
-		if (activeTool === 'text') {
-			const text = textInput.value.trim();
-			if (!text) {
-				announce('Enter some text before placing it.');
-				return;
-			}
-			const operation: PaintOperation = {
-				kind: 'text',
-				point,
-				text,
-				color: activeColor,
-				size: brushSize,
-			};
-			pendingOperations.push(operation);
-			drawOperation(localContext, operation);
-			updateUndo();
-			announce('Text added locally. Sync & refresh to share it.');
-			return;
-		}
-
-		activeDrawing = {
-			pointerId: event.pointerId,
-			tool: activeTool,
-			start: point,
-			current: point,
-			points: [point],
-			color: activeColor,
-			size: brushSize,
-		};
-		inputCanvas.setPointerCapture(event.pointerId);
-		drawActivePreview();
-	});
-
-	inputCanvas.addEventListener('pointermove', (event) => {
-		if (!activeDrawing || activeDrawing.pointerId !== event.pointerId) return;
-		const point = getPoint(event);
-		activeDrawing.current = point;
-		if (activeDrawing.tool === 'pen' || activeDrawing.tool === 'eraser') {
-			const previous = activeDrawing.points[activeDrawing.points.length - 1];
-			if (activeDrawing.points.length < MAX_STROKE_POINTS && Math.hypot(point.x - previous.x, point.y - previous.y) >= 2) {
-				activeDrawing.points.push(point);
-			}
-		}
-		drawActivePreview();
-	});
+	const removeStickerAt = (point: Point): boolean => {
+		const sticker = stickerAt(point);
+		if (!sticker) return false;
+		pendingOperations.push({ kind: 'sticker-remove', id: sticker.id, beforeX: sticker.x, beforeY: sticker.y });
+		renderStickerLayer();
+		updateUndo();
+		announce('Sticker erased locally. Sync & refresh to share the change.');
+		return true;
+	};
 
 	const finishDrawing = (event: PointerEvent): void => {
+		if (activeStickerDrag?.pointerId === event.pointerId) {
+			const drag = activeStickerDrag;
+			activeStickerDrag = null;
+			if (drag.x !== drag.beforeX || drag.y !== drag.beforeY) {
+				pendingOperations.push({ kind: 'sticker-move', id: drag.id, beforeX: drag.beforeX, beforeY: drag.beforeY, x: drag.x, y: drag.y });
+				updateUndo();
+				announce('Sticker moved locally. Sync & refresh to share the change.');
+			}
+			renderStickerLayer();
+			return;
+		}
+		if (erasingPointerId === event.pointerId) {
+			erasingPointerId = null;
+			return;
+		}
 		if (!activeDrawing || activeDrawing.pointerId !== event.pointerId) return;
 		const drawing = activeDrawing;
 		const end = getPoint(event);
 		activeDrawing = null;
 		clearPreview();
 
-		let operation: PaintOperation;
-		if (drawing.tool === 'pen' || drawing.tool === 'eraser') {
+		let operation: DrawingOperation;
+		if (drawing.tool === 'pen' || drawing.tool === 'eraser' || drawing.tool === 'spray' || drawing.tool === 'glow') {
 			const last = drawing.points[drawing.points.length - 1];
 			if (Math.hypot(end.x - last.x, end.y - last.y) > 0.5) drawing.points.push(end);
 			operation = {
@@ -454,6 +675,7 @@ export function initBoardPaint(): void {
 				points: drawing.points,
 				color: drawing.color,
 				size: drawing.size,
+				...(drawing.tool === 'spray' ? { seed: drawing.seed } : {}),
 			};
 		} else {
 			operation = {
@@ -469,11 +691,105 @@ export function initBoardPaint(): void {
 		pendingOperations.push(operation);
 		drawOperation(localContext, operation);
 		updateUndo();
-		announce(`${pendingOperations.length} unsynced ${pendingOperations.length === 1 ? 'mark' : 'marks'}. Sync & refresh to share.`);
+		announce(`${pendingOperations.length} unsynced local mark${pendingOperations.length === 1 ? '' : 's'}. Sync & refresh to publish.`);
 	};
+
+	inputCanvas.addEventListener('pointerdown', (event) => {
+		if (syncing || (event.pointerType === 'mouse' && event.button !== 0)) return;
+		event.preventDefault();
+		const point = getPoint(event);
+
+		if (activeTool === 'sticker') {
+			const sticker = stickerAt(point);
+			if (!sticker) {
+				announce('Choose a sticker image, then drag it into place.');
+				return;
+			}
+			selectedStickerId = sticker.id;
+			activeStickerDrag = {
+				pointerId: event.pointerId,
+				id: sticker.id,
+				offsetX: point.x - sticker.x,
+				offsetY: point.y - sticker.y,
+				beforeX: sticker.x,
+				beforeY: sticker.y,
+				x: sticker.x,
+				y: sticker.y,
+			};
+			inputCanvas.setPointerCapture(event.pointerId);
+			renderStickerLayer();
+			return;
+		}
+
+		if (activeTool === 'eraser' && stickerAt(point)) {
+			erasingPointerId = event.pointerId;
+			inputCanvas.setPointerCapture(event.pointerId);
+			removeStickerAt(point);
+			return;
+		}
+
+		if (activeTool === 'text') {
+			const text = textInput.value.trim();
+			if (!text) {
+				announce('Enter some text before placing it.');
+				return;
+			}
+			const operation: DrawingOperation = { kind: 'text', point, text, color: activeColor, size: brushSize };
+			pendingOperations.push(operation);
+			drawOperation(localContext, operation);
+			updateUndo();
+			announce('Text added locally. Sync & refresh to publish.');
+			return;
+		}
+
+		activeDrawing = {
+			pointerId: event.pointerId,
+			tool: activeTool,
+			start: point,
+			current: point,
+			points: [point],
+			color: activeColor,
+			size: brushSize,
+			seed: Math.floor(Math.random() * 0x100000000),
+		};
+		inputCanvas.setPointerCapture(event.pointerId);
+		drawActivePreview();
+	});
+
+	inputCanvas.addEventListener('pointermove', (event) => {
+		const point = getPoint(event);
+		if (activeStickerDrag?.pointerId === event.pointerId) {
+			const sticker = effectiveStickers().find((item) => item.id === activeStickerDrag?.id);
+			if (sticker && activeStickerDrag) {
+				activeStickerDrag.x = Math.max(0, Math.min(width - sticker.width, point.x - activeStickerDrag.offsetX));
+				activeStickerDrag.y = Math.max(0, Math.min(height - sticker.height, point.y - activeStickerDrag.offsetY));
+				renderStickerLayer();
+			}
+			return;
+		}
+		if (erasingPointerId === event.pointerId) {
+			removeStickerAt(point);
+			return;
+		}
+		if (!activeDrawing || activeDrawing.pointerId !== event.pointerId) return;
+		if (activeDrawing.tool === 'eraser') removeStickerAt(point);
+		activeDrawing.current = point;
+		if (['pen', 'eraser', 'spray', 'glow'].includes(activeDrawing.tool)) {
+			const previous = activeDrawing.points[activeDrawing.points.length - 1];
+			if (activeDrawing.points.length < MAX_STROKE_POINTS && Math.hypot(point.x - previous.x, point.y - previous.y) >= 2) {
+				activeDrawing.points.push(point);
+			}
+		}
+		drawActivePreview();
+	});
 
 	inputCanvas.addEventListener('pointerup', finishDrawing);
 	inputCanvas.addEventListener('pointercancel', (event) => {
+		if (activeStickerDrag?.pointerId === event.pointerId) {
+			activeStickerDrag = null;
+			renderStickerLayer();
+		}
+		if (erasingPointerId === event.pointerId) erasingPointerId = null;
 		if (!activeDrawing || activeDrawing.pointerId !== event.pointerId) return;
 		activeDrawing = null;
 		clearPreview();
@@ -481,13 +797,75 @@ export function initBoardPaint(): void {
 
 	for (const button of toolButtons) {
 		button.addEventListener('click', () => {
-			activeTool = button.dataset.paintTool ?? 'pen';
-			for (const option of toolButtons) {
-				option.setAttribute('aria-pressed', String(option === button));
-			}
-			textWrap.hidden = activeTool !== 'text';
+			setActiveTool(button.dataset.paintTool ?? 'pen');
 		});
 	}
+	setActiveTool('pen');
+
+	stickerUploadButton.addEventListener('click', () => {
+		setActiveTool('sticker');
+		stickerFile.click();
+	});
+	stickerFile.addEventListener('change', () => {
+		const file = stickerFile.files?.[0];
+		stickerFile.value = '';
+		if (!file) return;
+		stickerProcessing = true;
+		syncButton.disabled = true;
+		stickerUploadButton.disabled = true;
+		void compressSticker(file).then((sticker) => {
+			const stickers = effectiveStickers();
+			if (stickers.length >= PAINT_CONFIG.maxStickerCount) {
+				announce(`This shared canvas supports up to ${PAINT_CONFIG.maxStickerCount} stickers.`);
+				return;
+			}
+			if (JSON.stringify([...stickers, sticker]).length > PAINT_CONFIG.maxStickerPayloadChars) {
+				announce('The sticker set is at its shared storage limit. Remove a sticker before adding another.');
+				return;
+			}
+			pendingOperations.push({ kind: 'sticker-add', sticker });
+			selectedStickerId = sticker.id;
+			renderStickerLayer();
+			updateUndo();
+			announce('Sticker added locally. Drag it into place; Sync & refresh to publish it.');
+		}).catch((error: unknown) => {
+			announce(error instanceof Error ? error.message : 'Could not process that sticker image.');
+		}).finally(() => {
+			stickerProcessing = false;
+			syncButton.disabled = syncing;
+			stickerUploadButton.disabled = syncing;
+		});
+	});
+
+	inputCanvas.addEventListener('keydown', (event) => {
+		if (syncing || (activeTool !== 'sticker' && activeTool !== 'eraser')) return;
+		const stickers = effectiveStickers();
+		const selected = stickers.find((sticker) => sticker.id === selectedStickerId) ?? stickers[0];
+		if (!selected) return;
+		selectedStickerId = selected.id;
+		if (activeTool === 'eraser' && (event.key === 'Delete' || event.key === 'Backspace')) {
+			event.preventDefault();
+			removeStickerAt({ x: selected.x + selected.width / 2, y: selected.y + selected.height / 2 });
+			return;
+		}
+		const directions: Record<string, Point> = {
+			ArrowLeft: { x: -1, y: 0 },
+			ArrowRight: { x: 1, y: 0 },
+			ArrowUp: { x: 0, y: -1 },
+			ArrowDown: { x: 0, y: 1 },
+		};
+		const direction = directions[event.key];
+		if (!direction || activeTool !== 'sticker') return;
+		event.preventDefault();
+		const step = event.shiftKey ? 10 : 1;
+		const x = Math.max(0, Math.min(width - selected.width, selected.x + direction.x * step));
+		const y = Math.max(0, Math.min(height - selected.height, selected.y + direction.y * step));
+		if (x === selected.x && y === selected.y) return;
+		pendingOperations.push({ kind: 'sticker-move', id: selected.id, beforeX: selected.x, beforeY: selected.y, x, y });
+		renderStickerLayer();
+		updateUndo();
+		announce('Sticker moved locally. Sync & refresh to publish the change.');
+	});
 
 	for (const button of colorButtons) {
 		button.addEventListener('click', () => {
@@ -523,6 +901,7 @@ export function initBoardPaint(): void {
 			context.fillRect(0, 0, width, height);
 			context.drawImage(baseCanvas, 0, 0);
 			context.drawImage(localCanvas, 0, 0);
+			context.drawImage(stickerCanvas, 0, 0);
 			composite.toBlob((blob) => {
 				if (!blob) {
 					announce('Could not export the canvas image.');
@@ -541,17 +920,22 @@ export function initBoardPaint(): void {
 		}
 	});
 
+	let wasFullscreen = false;
 	const updateFullscreenButton = (): void => {
-		const fullscreen = document.fullscreenElement === surface;
+		const fullscreen = document.fullscreenElement === root;
 		fullscreenButton.setAttribute('aria-pressed', String(fullscreen));
 		fullscreenButton.textContent = fullscreen ? 'Exit fullscreen' : 'Fullscreen';
+		if (wasFullscreen && !fullscreen) {
+			window.requestAnimationFrame(() => fullscreenButton.focus());
+		}
+		wasFullscreen = fullscreen;
 	};
 
 	fullscreenButton.addEventListener('click', () => {
-		if (document.fullscreenElement === surface) {
+		if (document.fullscreenElement === root) {
 			void document.exitFullscreen();
-		} else if (surface.requestFullscreen) {
-			void surface.requestFullscreen().catch(() => announce('Fullscreen is not available in this browser.'));
+		} else if (root.requestFullscreen) {
+			void root.requestFullscreen().catch(() => announce('Fullscreen is not available in this browser.'));
 		} else {
 			announce('Fullscreen is not available in this browser.');
 		}
