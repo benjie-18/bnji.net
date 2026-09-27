@@ -34,6 +34,7 @@ interface Props {
 }
 
 const { title, description, image, type, publishedTime, modifiedTime, noindex } = Astro.props;
+const isBoard = Astro.url.pathname.startsWith('/board');
 ---
 
 <!doctype html>
@@ -68,7 +69,7 @@ const { title, description, image, type, publishedTime, modifiedTime, noindex } 
 
 		<Footer />
 
-		<MusicPlayer />
+		<MusicPlayer isBoard={isBoard} />
 		<SettingsOverlay />
 
 		<script>

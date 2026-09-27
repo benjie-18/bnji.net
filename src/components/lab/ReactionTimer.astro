@@ -147,6 +147,23 @@
 	.reaction__pad[data-state='result'] {
 		background: var(--glass-bg);
 	}
+	:global(html[data-theme='light']) .reaction__pad {
+		background: rgba(255, 255, 255, 0.85);
+		border-color: rgba(20, 80, 160, 0.2);
+		box-shadow: 0 4px 16px rgba(0, 50, 120, 0.08);
+	}
+	:global(html[data-theme='light']) .reaction__pad[data-state='waiting'] {
+		background: rgba(0, 102, 204, 0.08);
+		color: var(--text-muted);
+	}
+	:global(html[data-theme='light']) .reaction__pad[data-state='go'] {
+		background: rgba(46, 204, 113, 0.22);
+		border-color: #1b8a4e;
+		color: #0c4d29;
+	}
+	:global(html[data-theme='light']) .reaction__pad[data-state='result'] {
+		background: rgba(255, 255, 255, 0.95);
+	}
 	.reaction__pad-label {
 		font-family: var(--font-display);
 		font-size: var(--text-title);

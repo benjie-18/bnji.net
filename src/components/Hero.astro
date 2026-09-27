@@ -27,7 +27,7 @@ const year = new Date().getFullYear();
 
 /** Mono facts under the calls to action. Kept here (not in data/) because they
  *  are hero copy, not a reusable data model. */
-const HERO_FACTS = ['Astro 7', 'Cloudflare Workers', 'Dual themes · liquid glass', 'Prerendered'] as const;
+const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · liquid glass'] as const;
 ---
 
 <section class="hero" id="top" aria-labelledby="hero-title">
@@ -36,7 +36,7 @@ const HERO_FACTS = ['Astro 7', 'Cloudflare Workers', 'Dual themes · liquid glas
 			<p class="hero-status" data-load style="--load-delay: 340ms">
 				<span class="dot dot--live" aria-hidden="true"></span>
 				<span class="hero-status__text">
-					{SITE.author.location} &middot; dolor sit amet &middot; {year}
+					{SITE.author.location} &middot; {SITE.author.role} &middot; {year}
 				</span>
 			</p>
 
@@ -67,15 +67,21 @@ const HERO_FACTS = ['Astro 7', 'Cloudflare Workers', 'Dual themes · liquid glas
 				</GlassButton>
 			</div>
 
+			{/* Optional technical facts strip — commented out to keep the hero punchy and uncluttered.
+			    Uncomment to re-enable:
 			<ul class="hero-facts" data-load style="--load-delay: 1050ms" role="list">
 				{HERO_FACTS.map((fact) => <li>{fact}</li>)}
 			</ul>
+			*/}
 		</div>
 
-		<a class="hero-scroll" href="#identity" data-load style="--load-delay: 1250ms">
+		{/* Optional scroll indicator — commented out to reduce filler elements.
+		    Uncomment to re-enable:
+		<a class="hero-scroll" href="#projects" data-load style="--load-delay: 1250ms">
 			<span class="hero-scroll__label">Scroll</span>
 			<span class="hero-scroll__track" aria-hidden="true"><span></span></span>
 		</a>
+		*/}
 	</div>
 </section>
 

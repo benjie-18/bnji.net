@@ -2,34 +2,47 @@
 /**
  * Homepage — composition only.
  *
- * This file is intentionally short: it declares the order of the sections and
- * nothing else. Each section is its own component in src/components/, so a
- * change to (say) the projects grid is a change to ProjectsPreview.astro and the
- * resulting diff says exactly that.
+ * Progression: hero -> projects -> writing -> lab -> contact.
  *
- * Progression: hero -> identity -> projects -> interests -> system -> writing ->
- * lab -> contact. The footer comes from the layout.
+ * Sections with placeholder content (AboutPreview, ServicesPreview, StatusPreview)
+ * are cleanly commented out below to eliminate bloat and keep the homepage lean and focused.
+ * They remain fully intact and can be re-enabled simply by uncommenting their tags.
  */
-import AboutPreview from '../components/AboutPreview.astro';
+// Placeholder sections (can be re-enabled whenever needed):
+// import AboutPreview from '../components/AboutPreview.astro';
+// import ServicesPreview from '../components/ServicesPreview.astro';
+// import StatusPreview from '../components/StatusPreview.astro';
+
 import BlogPreview from '../components/BlogPreview.astro';
 import ContactSection from '../components/ContactSection.astro';
 import Hero from '../components/Hero.astro';
 import IntroSequence from '../components/IntroSequence.astro';
 import LabPreview from '../components/LabPreview.astro';
 import ProjectsPreview from '../components/ProjectsPreview.astro';
-import ServicesPreview from '../components/ServicesPreview.astro';
-import StatusPreview from '../components/StatusPreview.astro';
 import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout>
 	<IntroSequence slot="intro" />
 	<Hero />
-	<AboutPreview />
+
+	{/* Real showcase: featured projects */}
 	<ProjectsPreview />
-	<ServicesPreview />
-	<StatusPreview />
+
+	{/* Real content: recent articles and writing */}
 	<BlogPreview />
+
+	{/* Interactive real-time physics & optical laboratory */}
 	<LabPreview />
+
+	{/* Direct communication / message drawer */}
 	<ContactSection />
+
+	{/* 
+		Optional placeholder sections (can easily be re-enabled by uncommenting):
+		<AboutPreview />
+		<ServicesPreview />
+		<StatusPreview />
+	*/}
 </Layout>
+

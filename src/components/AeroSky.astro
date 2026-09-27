@@ -3,34 +3,23 @@
  * AeroSky — the Frutiger Aero painted environment for the light theme.
  *
  * The scene (styles in aero.css, colours in tokens.css): a four-stop sky
- * gradient on html/body, a warm sunlight bloom, three volumetric cloud
- * clusters (nine overlapping soft-edged puffs each — shadow tone below,
- * whites above), scattered bokeh, a meadow band with a highlight line at its
- * top edge, and two glossy floating orbs (aqua primary, green secondary)
- * painted with base gradient + upper-left specular ellipse + lower-right rim
- * light. This replaces the former flat gradient wash + rising soap bubbles:
- * the orbs are the scene's floating glass now.
- *
- * Cost model: zero JavaScript, gradients + transform-only animation on the
- * compositor. The whole layer is display:none in the dark theme; the settings
- * store's reduced-effects flag simplifies it to sky + meadow; performance
- * mode drops it entirely; prefers-reduced-motion freezes (not hides) it.
+ * gradient on html/body, a warm sunlight bloom, volumetric drifting clouds
+ * whose constituent puffs morph organically into unified cloud bodies via
+ * an SVG morph filter, rolling meadow hills, and four glossy floating soap
+ * bubbles with realistic thin-film optics drifting on buoyant paths.
  */
 
 /**
- * Cloud clusters: position, per-cluster scale (the CSS `scale` property, so
- * it never fights the drift animation's transform), drift timing, and whether
- * the cluster uses the alternate puff geometry. Deterministic by design —
- * nothing here is random at runtime, so the sky is identical per build.
+ * Cloud clusters: varied positions, randomized scale factors, drift timings,
+ * and randomized puff composition so each cloud has its own distinct silhouette.
  */
 const CLOUDS = [
-	{ left: '4%', top: '10%', scale: 1, duration: 84, delay: -8, alt: false },
-	{ left: '56%', top: '5%', scale: 0.72, duration: 108, delay: -34, alt: true },
-	{ left: '28%', top: '30%', scale: 0.48, duration: 96, delay: -58, alt: false },
+	{ id: 1, left: '-6%', top: '7%', scale: 1.15, duration: 84, delay: -14, puffs: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+	{ id: 2, left: '48%', top: '4%', scale: 0.76, duration: 112, delay: -42, puffs: [2, 3, 4, 5, 6, 8, 9] },
+	{ id: 3, left: '18%', top: '25%', scale: 0.54, duration: 102, delay: -65, puffs: [1, 3, 4, 5, 7, 8] },
+	{ id: 4, left: '76%', top: '14%', scale: 0.9, duration: 126, delay: -28, puffs: [1, 2, 4, 5, 6, 7, 8] },
+	{ id: 5, left: '34%', top: '32%', scale: 0.44, duration: 96, delay: -78, puffs: [2, 3, 5, 6, 8] },
 ] as const;
-
-/** Puff slots per cluster; geometry + tones live in aero.css (.aero-puff--n). */
-const PUFFS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 ---
 
 <div class="aero-sky" aria-hidden="true">
@@ -40,12 +29,14 @@ const PUFFS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 		{
 			CLOUDS.map((cloud) => (
 				<div
-					class:list={['aero-cloud', cloud.alt && 'aero-cloud--alt']}
-					style={`left:${cloud.left};top:${cloud.top};scale:${cloud.scale};animation-duration:${cloud.duration}s;animation-delay:${cloud.delay}s;`}
+					class={`aero-cloud aero-cloud--${cloud.id}`}
+					style={`left:${cloud.left};top:${cloud.top};--cloud-scale:${cloud.scale};animation-duration:${cloud.duration}s;animation-delay:${cloud.delay}s;`}
 				>
-					{PUFFS.map((n) => (
-						<span class={`aero-puff aero-puff--${n}`} />
-					))}
+					<div class="aero-cloud-body">
+						{cloud.puffs.map((n) => (
+							<span class={`aero-puff aero-puff--${n}`} />
+						))}
+					</div>
 				</div>
 			))
 		}
@@ -56,6 +47,18 @@ const PUFFS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 	<div class="aero-meadow">
 		<svg class="aero-meadow__svg" viewBox="0 0 1440 320" preserveAspectRatio="none" fill="none" aria-hidden="true">
 			<defs>
+				<!-- Cloud puff organic fusion filter: merges distinct round puffs into one continuous cloud -->
+				<filter id="aero-cloud-morph" color-interpolation-filters="sRGB" x="-30%" y="-30%" width="160%" height="160%">
+					<feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur" />
+					<feColorMatrix
+						in="blur"
+						mode="matrix"
+						values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -4.5"
+						result="goo"
+					/>
+					<feBlend in="SourceGraphic" in2="goo" mode="screen" />
+				</filter>
+
 				<linearGradient id="aero-hill-back" x1="0" y1="0" x2="0" y2="1">
 					<stop offset="0%" stop-color="#9de9b9" />
 					<stop offset="35%" stop-color="#72d698" />
@@ -113,6 +116,9 @@ const PUFFS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 		</svg>
 	</div>
 
-	<span class="aero-orb aero-orb--aqua" style="animation-duration:15s"></span>
-	<span class="aero-orb aero-orb--green" style="animation-duration:19s;animation-delay:-7s"></span>
+	<!-- Floating soap bubbles with thin-film rainbow caustics -->
+	<span class="aero-orb aero-orb--1" aria-hidden="true"></span>
+	<span class="aero-orb aero-orb--2" aria-hidden="true"></span>
+	<span class="aero-orb aero-orb--3" aria-hidden="true"></span>
+	<span class="aero-orb aero-orb--4" aria-hidden="true"></span>
 </div>

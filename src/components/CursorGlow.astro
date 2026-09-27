@@ -6,12 +6,13 @@
  * JS bails out) on touch devices and when the visitor prefers reduced motion,
  * because a simulated cursor on a phone is both distracting and wasteful.
  *
- * The two themes get two different materials, not two colours of the same
- * blob:
- *   - dark:  a stellar nebula halo — blue core, violet mid, pink rim — with a
- *     faint diffraction ring, like light bending around a small gravity well.
- *   - light: a Frutiger Aero water lens — bright aqua core, green caustic rim
- *     and a hot specular dot, as if a droplet were travelling with the cursor.
+ * Sized neatly to englobe the mouse pointer itself (~38px) rather than spreading
+ * as a massive screen-wide halo.
+ *
+ * The two themes get two different materials:
+ *   - dark:  a stellar aura — blue core, violet mid, pink rim — with luminous glow.
+ *   - light: a Frutiger Aero water lens — bright aqua core, caustic green rim
+ *     and a hot specular dot.
  *
  * It sits above content but never intercepts pointer events.
  */
@@ -25,30 +26,30 @@
 		inset-block-start: 0;
 		inset-inline-start: 0;
 		z-index: var(--z-cursor);
-		inline-size: 340px;
-		block-size: 340px;
+		inline-size: 38px;
+		block-size: 38px;
 		/* Offset by half so translate3d(x, y) places the centre on the pointer. */
-		margin-block-start: -170px;
-		margin-inline-start: -170px;
+		margin-block-start: -19px;
+		margin-inline-start: -19px;
 		pointer-events: none;
 		opacity: 0;
 		border-radius: 50%;
-		/* Dark: stellar halo with a diffraction ring. */
+		/* Dark: neat pointer aura with luminous core and soft diffraction ring */
 		background:
-			radial-gradient(circle at 38% 34%, rgba(255, 255, 255, 0.1), transparent 18%),
-			radial-gradient(circle, var(--cursor-core) 0%, var(--cursor-mid) 34%, var(--cursor-rim) 52%, transparent 70%),
-			radial-gradient(circle, transparent 44%, rgba(168, 120, 255, 0.05) 47%, transparent 52%);
+			radial-gradient(circle at 40% 36%, rgba(255, 255, 255, 0.4), transparent 28%),
+			radial-gradient(circle, var(--cursor-core) 0%, var(--cursor-mid) 40%, var(--cursor-rim) 72%, transparent 100%);
+		box-shadow: 0 0 16px var(--cursor-mid, rgba(127, 212, 255, 0.35));
 		transition: opacity var(--dur-base) var(--ease-out);
 		will-change: transform, opacity;
 	}
 
-	/* Light: water lens — aqua core, caustic green rim, specular dot. */
+	/* Light: subtle water lens aura englobing the pointer */
 	:global(html[data-theme='light']) .cursor-glow {
 		background:
-			radial-gradient(circle at 36% 32%, rgba(255, 255, 255, 0.55), transparent 22%),
-			radial-gradient(circle, var(--cursor-core) 0%, var(--cursor-mid) 30%, var(--cursor-rim) 50%, transparent 68%),
-			radial-gradient(circle, transparent 42%, rgba(0, 190, 235, 0.16) 46%, rgba(255, 255, 255, 0.28) 48%, transparent 54%);
-		mix-blend-mode: multiply;
+			radial-gradient(circle at 38% 34%, rgba(255, 255, 255, 0.75), transparent 32%),
+			radial-gradient(circle, var(--cursor-core) 0%, var(--cursor-mid) 42%, var(--cursor-rim) 75%, transparent 100%);
+		box-shadow: 0 0 14px rgba(0, 180, 240, 0.32);
+		mix-blend-mode: normal;
 	}
 
 	/* No halo without a hovering pointer, and none at all for reduced motion. */
@@ -68,10 +69,10 @@
 
 	@media (max-width: 720px) {
 		.cursor-glow {
-			inline-size: 220px;
-			block-size: 220px;
-			margin-block-start: -110px;
-			margin-inline-start: -110px;
+			inline-size: 32px;
+			block-size: 32px;
+			margin-block-start: -16px;
+			margin-inline-start: -16px;
 		}
 	}
 </style>

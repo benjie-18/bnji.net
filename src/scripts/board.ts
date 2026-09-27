@@ -272,17 +272,25 @@ probeGrab.appendChild(probeSpan);
 			body.kinematic = true;
 			grab.setPointerCapture(event.pointerId);
 			grab.classList.add('board-msg__grab--held');
+
+			// Track pointer history over the last ~100ms so release velocity is preserved accurately
+			type PointerSample = { x: number; y: number; time: number };
+			const history: PointerSample[] = [{ x: event.clientX, y: event.clientY, time: performance.now() }];
+
 			const move = (e: PointerEvent) => {
 				if (dragging !== body) return;
-				const prevX = body.x;
-				const prevY = body.y;
+				const now = performance.now();
 				body.x = e.clientX;
 				body.y = e.clientY;
-				// Impart some velocity so releases feel physical.
-				body.vx = (body.x - prevX) * 12;
-				body.vy = (body.y - prevY) * 12;
+
+				history.push({ x: e.clientX, y: e.clientY, time: now });
+				while (history.length > 2 && now - history[0].time > 120) {
+					history.shift();
+				}
+
 				if (reduced) paint(body);
 			};
+
 			const up = () => {
 				grab.removeEventListener('pointermove', move);
 				grab.removeEventListener('pointerup', up);
@@ -290,7 +298,23 @@ probeGrab.appendChild(probeSpan);
 				grab.classList.remove('board-msg__grab--held');
 				body.kinematic = reduced;
 				dragging = null;
+
+				// Calculate true release velocity from the sample window
+				const now = performance.now();
+				const recent = history.filter((s) => now - s.time <= 100);
+				if (recent.length >= 2) {
+					const first = recent[0];
+					const last = recent[recent.length - 1];
+					const dt = Math.max(0.015, (last.time - first.time) / 1000);
+					const vx = (last.x - first.x) / dt;
+					const vy = (last.y - first.y) / dt;
+					// Clamp to prevent runaway speeds while preserving momentum
+					const MAX_VEL = 1500;
+					body.vx = Math.max(-MAX_VEL, Math.min(MAX_VEL, vx));
+					body.vy = Math.max(-MAX_VEL, Math.min(MAX_VEL, vy));
+				}
 			};
+
 			grab.addEventListener('pointermove', move);
 			grab.addEventListener('pointerup', up);
 			grab.addEventListener('pointercancel', up);

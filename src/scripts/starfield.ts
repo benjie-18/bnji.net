@@ -169,6 +169,10 @@ export function createStarfield(
 	let pointerActive = false;
 	let reactiveRects: Rect[] = [];
 	let scrollY = typeof window === 'undefined' ? 0 : window.scrollY;
+	let parallaxX = 0;
+	let parallaxY = 0;
+	let targetParallaxX = 0;
+	let targetParallaxY = 0;
 	let frame = 0;
 	let lastFrameTime = 0;
 	let lastDrawTime = 0;
@@ -292,15 +296,25 @@ export function createStarfield(
 	function render() {
 		context.clearRect(0, 0, width, height);
 
+		if (pointerEffects) {
+			const ease = Math.min(1, delta * 3.5);
+			parallaxX += (targetParallaxX - parallaxX) * ease;
+			parallaxY += (targetParallaxY - parallaxY) * ease;
+		}
+
 		for (const star of stars) {
 			// Continuous, wrapping motion: ambient drift + scroll parallax.
 			const travel = reducedMotion
 				? 0
 				: elapsed * star.depth * options.drift + scrollY * star.depth * options.scrollParallax;
-			const y = travel === 0 ? star.y : (((star.y + travel) % height) + height) % height;
+			const rawY = travel === 0 ? star.y : (((star.y + travel) % height) + height) % height;
+			const sx = star.x + (pointerEffects ? parallaxX * star.depth : 0);
+			const sy = rawY + (pointerEffects ? parallaxY * star.depth : 0);
+			const x = ((sx % width) + width) % width;
+			const y = ((sy % height) + height) % height;
 
 			if (pointerEffects || reactiveRects.length > 0) {
-				const target = excitationTarget(star, star.x, y);
+				const target = excitationTarget(star, x, y);
 				// Fast attack, slower release: the star "catches" the cursor and
 				// then settles back instead of snapping. Frame-rate independent.
 				const rate = target > star.excite ? 7 : 2.4;
@@ -320,7 +334,7 @@ export function createStarfield(
 			const step = Math.round(alpha * ALPHA_STEPS);
 			context.fillStyle = coreLut[step];
 			context.beginPath();
-			context.arc(star.x, y, radius, 0, TAU);
+			context.arc(x, y, radius, 0, TAU);
 			context.fill();
 
 			// Soft halo, weighted continuously instead of switching on past a
@@ -332,7 +346,7 @@ export function createStarfield(
 				context.globalAlpha = clamp(haloWeight, 0, 1);
 				context.fillStyle = glowLut[step];
 				context.beginPath();
-				context.arc(star.x, y, radius * 3.6, 0, TAU);
+				context.arc(x, y, radius * 3.6, 0, TAU);
 				context.fill();
 				context.globalAlpha = 1;
 			}
@@ -421,10 +435,17 @@ export function createStarfield(
 		pointerX = event.clientX;
 		pointerY = event.clientY;
 		pointerActive = true;
+		if (width > 0 && height > 0) {
+			// Tame mouse parallax: shift stars subtly by up to ±12px based on depth
+			targetParallaxX = ((event.clientX / width) - 0.5) * 16;
+			targetParallaxY = ((event.clientY / height) - 0.5) * 16;
+		}
 	};
 
 	const onPointerLeave = () => {
 		pointerActive = false;
+		targetParallaxX = 0;
+		targetParallaxY = 0;
 	};
 
 	const schedulePointerCache = createFrameScheduler(cacheReactiveRects);

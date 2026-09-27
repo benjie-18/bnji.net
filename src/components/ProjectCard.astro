@@ -82,21 +82,6 @@ const statusTone =
 
 	<p class="project-card__description">{project.description}</p>
 
-	{feature && project.detail && <p class="project-card__detail">{project.detail}</p>}
-
-	{
-		project.meta && (
-			<dl class="project-card__meta">
-				{project.meta.map((row) => (
-					<div class="project-card__meta-row">
-						<dt>{row.label}</dt>
-						<dd>{row.value}</dd>
-					</div>
-				))}
-			</dl>
-		)
-	}
-
 	<div class="project-card__foot">
 		<ul class="project-card__tags" role="list">
 			{project.tags.map((tag) => <li><Chip>{tag}</Chip></li>)}
@@ -173,48 +158,6 @@ const statusTone =
 
 	.project-card--feature .project-card__description {
 		font-size: var(--text-lead);
-	}
-
-	.project-card__detail {
-		color: var(--text-dim);
-		font-size: 0.92rem;
-		line-height: 1.65;
-		max-width: 62ch;
-	}
-
-	/* Technical summary: mono key/value rows inside a quiet inset. */
-	.project-card__meta {
-		display: grid;
-		gap: 0.35rem;
-		margin: 0;
-		padding: 0.85rem 1rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--glass-border);
-		background: var(--glass-bg-quiet);
-	}
-
-	.project-card__meta-row {
-		display: grid;
-		grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr);
-		gap: 0.75rem;
-		align-items: baseline;
-	}
-
-	.project-card__meta dt {
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		color: var(--text-faint);
-	}
-
-	.project-card__meta dd {
-		margin: 0;
-		font-family: var(--font-mono);
-		font-size: 0.78rem;
-		line-height: 1.5;
-		color: var(--text-muted);
-		overflow-wrap: anywhere;
 	}
 
 	.project-card__foot {

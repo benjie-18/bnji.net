@@ -77,61 +77,140 @@ html[data-theme='light'] .aero-sky {
 	position: absolute;
 	inset: 0;
 	background: radial-gradient(46% 38% at 16% 6%, var(--aero-bloom), transparent 72%);
+	transform: translate3d(calc(var(--bg-parallax-x, 0px) * 0.4), calc(var(--bg-parallax-y, 0px) * 0.4), 0);
+	transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* --- Volumetric cloud clusters --------------------------------------------- */
-/* Each cluster is nine overlapping soft-edged puffs: three shadow puffs
-   (cool tone, sitting lower — the cluster's underside), four white body puffs
-   and two brighter highlight puffs on top. Soft edges come from each puff's
-   radial-gradient falloff (never filter: blur on layers this large). The
-   cluster drifts as ONE composited transform; puff geometry is percentage-
-   based, so the inline `scale` per cluster resizes the whole formation. */
+/* --- Volumetric drifting clouds --------------------------------------------- */
+/* Clouds are composed of multiple volumetric puffs that fuse and morph
+   organically via SVG filter and animated morphing keyframes. Each cloud cluster
+   drifts across wide horizontal horizons with varied randomized composition. */
 .aero-clouds {
 	position: absolute;
 	inset: 0;
+	overflow: hidden;
+	transform: translate3d(var(--bg-parallax-x, 0px), var(--bg-parallax-y, 0px), 0);
+	transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .aero-cloud {
 	position: absolute;
-	inline-size: clamp(280px, 34vw, 560px);
-	block-size: clamp(96px, 12vw, 200px);
+	inline-size: clamp(320px, 38vw, 620px);
+	block-size: clamp(110px, 14vw, 220px);
+	scale: var(--cloud-scale, 1);
 	will-change: transform;
-	animation: aero-cloud-drift linear infinite alternate;
 }
 
-/* Alternate geometry: nudge several puffs so clusters 2 and 3 do not read as
-   clones of cluster 1 (they also differ in scale, position and drift speed). */
-.aero-cloud--alt .aero-puff--4 {
-	left: 8%;
-	top: 32%;
-}
-.aero-cloud--alt .aero-puff--5 {
-	left: 34%;
-	top: 10%;
-}
-.aero-cloud--alt .aero-puff--7 {
-	left: 62%;
-	top: 30%;
-}
-.aero-cloud--alt .aero-puff--8 {
-	left: 44%;
-	top: 14%;
+.aero-cloud-body {
+	position: relative;
+	inline-size: 100%;
+	block-size: 100%;
+	filter: url(#aero-cloud-morph) blur(6px);
+	-webkit-filter: blur(6px);
 }
 
-/* Clouds drift by transforming the cluster a few percent — compositor only,
-   never a repaint of the gradients. Slow, alternating, felt not seen. */
-@keyframes aero-cloud-drift {
+.aero-cloud--1 {
+	animation: aero-cloud-drift-1 linear infinite alternate;
+}
+.aero-cloud--2 {
+	animation: aero-cloud-drift-2 linear infinite alternate;
+}
+.aero-cloud--3 {
+	animation: aero-cloud-drift-3 linear infinite alternate;
+}
+.aero-cloud--4 {
+	animation: aero-cloud-drift-4 linear infinite alternate;
+}
+.aero-cloud--5 {
+	animation: aero-cloud-drift-5 linear infinite alternate;
+}
+
+@keyframes aero-cloud-drift-1 {
 	from {
-		transform: translate3d(-2.5%, 0, 0);
+		transform: translate3d(-10vw, 0, 0);
 	}
 	to {
-		transform: translate3d(2.5%, 1.5%, 0);
+		transform: translate3d(24vw, 2.5vh, 0);
+	}
+}
+
+@keyframes aero-cloud-drift-2 {
+	from {
+		transform: translate3d(16vw, 0, 0);
+	}
+	to {
+		transform: translate3d(-18vw, 1.8vh, 0);
+	}
+}
+
+@keyframes aero-cloud-drift-3 {
+	from {
+		transform: translate3d(-15vw, 0, 0);
+	}
+	to {
+		transform: translate3d(18vw, -2vh, 0);
+	}
+}
+
+@keyframes aero-cloud-drift-4 {
+	from {
+		transform: translate3d(12vw, 0, 0);
+	}
+	to {
+		transform: translate3d(-22vw, 2.2vh, 0);
+	}
+}
+
+@keyframes aero-cloud-drift-5 {
+	from {
+		transform: translate3d(-12vw, 0, 0);
+	}
+	to {
+		transform: translate3d(20vw, -1.5vh, 0);
 	}
 }
 
 .aero-puff {
 	position: absolute;
 	border-radius: 50%;
+	will-change: transform, border-radius;
+	animation: aero-puff-morph 14s ease-in-out infinite alternate;
+}
+
+.aero-puff:nth-child(even) {
+	animation-name: aero-puff-morph-alt;
+	animation-duration: 18s;
+	animation-delay: -5s;
+}
+
+@keyframes aero-puff-morph {
+	0% {
+		border-radius: 50% 50% 48% 52% / 52% 48% 50% 50%;
+		transform: scale(1) translate3d(0, 0, 0);
+	}
+	50% {
+		border-radius: 46% 54% 52% 48% / 50% 52% 48% 50%;
+		transform: scale(1.06, 0.94) translate3d(2%, -1.2%, 0);
+	}
+	100% {
+		border-radius: 52% 48% 46% 54% / 48% 50% 52% 48%;
+		transform: scale(0.95, 1.05) translate3d(-2%, 1.2%, 0);
+	}
+}
+
+@keyframes aero-puff-morph-alt {
+	0% {
+		border-radius: 48% 52% 50% 50% / 50% 48% 52% 50%;
+		transform: scale(0.96, 1.04) translate3d(0, 0, 0);
+	}
+	50% {
+		border-radius: 54% 46% 48% 52% / 48% 52% 50% 50%;
+		transform: scale(1.05, 0.95) translate3d(-1.5%, 1.8%, 0);
+	}
+	100% {
+		border-radius: 50% 50% 54% 46% / 52% 48% 48% 52%;
+		transform: scale(1.02, 0.98) translate3d(1.5%, -1.8%, 0);
+	}
 }
 
 /* Shadow puffs: the cool underside, drawn first (DOM order) and sitting lower
@@ -256,42 +335,34 @@ html[data-theme='light'] .aero-sky {
 	display: block;
 }
 
-/* --- Floating glossy orbs ------------------------------------------------------ */
-/* Painted glass, three coats each:
-     1. base radial gradient (light from the upper-left: base → mid → edge)
-        for volume;
-     2. ::before — the specular highlight ELLIPSE, offset toward the upper-
-        left, slightly rotated so it follows the sphere's surface;
-     3. ::after — the thin bright RIM-LIGHT ARC along the lower-right edge
-        (an inset box-shadow offset away from the light source).
-   Highlight + rim are both mandatory: either one alone reads as a flat
-   circle. Orbs bob slowly on the compositor (transform only). */
+/* --- Floating soap bubbles ------------------------------------------------ */
+/* Iridescent translucent soap bubbles with realistic thin-film optics:
+     1. Translucent iridescent core allowing sky and clouds to shine through,
+        with cyan, rose-violet, and lime interference tints at the perimeter;
+     2. Outer glowing ring and luminous rim;
+     3. ::before — bright curved specular highlight ellipse (upper-left light source);
+     4. ::after — lower-right caustic bounce reflection and inner rim glow.
+   Bubbles bounce independently on the compositor with multi-stage buoyant paths. */
 .aero-orb {
 	position: absolute;
 	border-radius: 50%;
 	will-change: transform;
-	animation: aero-orb-float var(--ease-soft) infinite alternate;
-}
-
-@keyframes aero-orb-float {
-	from {
-		transform: translate3d(0, 0, 0);
-	}
-	to {
-		transform: translate3d(0.8vw, -2.4vh, 0);
-	}
+	pointer-events: none;
+	backdrop-filter: blur(1.5px);
+	-webkit-backdrop-filter: blur(1.5px);
 }
 
 .aero-orb::before {
 	content: '';
 	position: absolute;
 	inset-inline-start: 14%;
-	inset-block-start: 10%;
-	inline-size: 42%;
-	block-size: 28%;
+	inset-block-start: 12%;
+	inline-size: 38%;
+	block-size: 24%;
 	border-radius: 50%;
-	background: radial-gradient(ellipse at 50% 42%, var(--aero-orb-specular), transparent 70%);
-	transform: rotate(-16deg);
+	background: radial-gradient(ellipse at 46% 38%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.5) 45%, transparent 80%);
+	transform: rotate(-22deg);
+	filter: blur(0.5px);
 }
 
 .aero-orb::after {
@@ -299,51 +370,164 @@ html[data-theme='light'] .aero-sky {
 	position: absolute;
 	inset: 0;
 	border-radius: 50%;
+	box-shadow:
+		inset -6px -8px 14px -4px rgba(255, 255, 255, 0.75),
+		inset 0 0 12px 2px rgba(255, 255, 255, 0.35);
 }
 
-.aero-orb--aqua {
-	inset-block-start: 16vh;
-	inset-inline-end: 9%;
-	inline-size: clamp(84px, 10vw, 128px);
+/* Bubble 1: Large aqua soap bubble (upper-right) */
+.aero-orb--1 {
+	inset-block-start: 14vh;
+	inset-inline-end: 8%;
+	inline-size: clamp(96px, 11vw, 142px);
 	aspect-ratio: 1;
-	background: radial-gradient(
-		circle at 34% 30%,
-		var(--aero-orb-1-base) 0 16%,
-		var(--aero-orb-1-mid) 52%,
-		var(--aero-orb-1-edge) 100%
-	);
-	box-shadow: 0 18px 40px -18px var(--aero-orb-1-shadow);
+	background:
+		radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.08) 25%, transparent 45%),
+		radial-gradient(circle at 70% 75%, rgba(220, 150, 255, 0.22) 0%, transparent 48%),
+		radial-gradient(circle, rgba(160, 240, 255, 0.12) 0%, rgba(56, 189, 248, 0.22) 65%, rgba(14, 165, 233, 0.45) 88%, rgba(255, 255, 255, 0.7) 100%);
+	border: 1px solid rgba(255, 255, 255, 0.65);
+	box-shadow:
+		0 16px 36px -12px rgba(14, 165, 233, 0.28),
+		inset 0 0 16px rgba(125, 211, 252, 0.35);
+	animation: aero-bubble-bounce-1 16s ease-in-out infinite alternate;
 }
 
-.aero-orb--aqua::after {
-	box-shadow: inset -8px -10px 16px -8px var(--aero-orb-rim);
-}
-
-.aero-orb--green {
-	inset-block-end: 26vh;
-	inset-inline-start: 7%;
-	inline-size: clamp(56px, 6.5vw, 84px);
+/* Bubble 2: Prismatic rose-aqua soap bubble (mid-left) */
+.aero-orb--2 {
+	inset-block-start: 44vh;
+	inset-inline-start: 6%;
+	inline-size: clamp(68px, 7.5vw, 98px);
 	aspect-ratio: 1;
-	background: radial-gradient(
-		circle at 34% 30%,
-		var(--aero-orb-2-base) 0 16%,
-		var(--aero-orb-2-mid) 52%,
-		var(--aero-orb-2-edge) 100%
-	);
-	box-shadow: 0 14px 30px -14px var(--aero-orb-2-shadow);
+	background:
+		radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 22%, transparent 42%),
+		radial-gradient(circle at 65% 70%, rgba(74, 222, 128, 0.25) 0%, transparent 50%),
+		radial-gradient(circle, rgba(255, 200, 240, 0.12) 0%, rgba(216, 180, 254, 0.25) 60%, rgba(56, 189, 248, 0.4) 86%, rgba(255, 255, 255, 0.7) 100%);
+	border: 1px solid rgba(255, 255, 255, 0.6);
+	box-shadow:
+		0 14px 28px -10px rgba(168, 85, 247, 0.22),
+		inset 0 0 12px rgba(244, 114, 182, 0.3);
+	animation: aero-bubble-bounce-2 21s ease-in-out infinite alternate;
 }
 
-.aero-orb--green::after {
-	box-shadow: inset -5px -7px 11px -6px var(--aero-orb-rim);
+/* Bubble 3: Fresh meadow-lime soap bubble (lower-right) */
+.aero-orb--3 {
+	inset-block-end: 22vh;
+	inset-inline-end: 14%;
+	inline-size: clamp(52px, 5.5vw, 76px);
+	aspect-ratio: 1;
+	background:
+		radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 24%, transparent 45%),
+		radial-gradient(circle at 65% 70%, rgba(56, 189, 248, 0.22) 0%, transparent 46%),
+		radial-gradient(circle, rgba(187, 247, 208, 0.12) 0%, rgba(74, 222, 128, 0.22) 62%, rgba(22, 163, 74, 0.38) 88%, rgba(255, 255, 255, 0.65) 100%);
+	border: 1px solid rgba(255, 255, 255, 0.58);
+	box-shadow:
+		0 10px 24px -8px rgba(34, 197, 94, 0.2),
+		inset 0 0 10px rgba(134, 239, 172, 0.3);
+	animation: aero-bubble-bounce-3 18s ease-in-out infinite alternate;
+}
+
+/* Bubble 4: Warm coral-sunset prismatic soap bubble (lower-left / mid) */
+.aero-orb--4 {
+	inset-block-start: 62vh;
+	inset-inline-start: 20%;
+	inline-size: clamp(58px, 6.2vw, 84px);
+	aspect-ratio: 1;
+	background:
+		radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.12) 22%, transparent 44%),
+		radial-gradient(circle at 65% 72%, rgba(244, 114, 182, 0.26) 0%, transparent 48%),
+		radial-gradient(circle, rgba(254, 240, 138, 0.15) 0%, rgba(251, 146, 60, 0.22) 58%, rgba(236, 72, 153, 0.36) 86%, rgba(255, 255, 255, 0.72) 100%);
+	border: 1px solid rgba(255, 255, 255, 0.62);
+	box-shadow:
+		0 12px 28px -10px rgba(244, 63, 94, 0.22),
+		inset 0 0 12px rgba(251, 146, 60, 0.3);
+	animation: aero-bubble-bounce-4 23s ease-in-out infinite alternate;
+}
+
+/* Independent buoyancy & broad floating keyframes */
+@keyframes aero-bubble-bounce-1 {
+	0% {
+		transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+	}
+	25% {
+		transform: translate3d(6vw, -8vh, 0) scale(1.04, 0.96) rotate(4deg);
+	}
+	50% {
+		transform: translate3d(-4vw, -16vh, 0) scale(0.97, 1.03) rotate(-3deg);
+	}
+	75% {
+		transform: translate3d(9vw, -10vh, 0) scale(1.03, 0.97) rotate(2deg);
+	}
+	100% {
+		transform: translate3d(2vw, -22vh, 0) scale(1) rotate(-1deg);
+	}
+}
+
+@keyframes aero-bubble-bounce-2 {
+	0% {
+		transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+	}
+	20% {
+		transform: translate3d(-7vw, -11vh, 0) scale(0.96, 1.04) rotate(-5deg);
+	}
+	45% {
+		transform: translate3d(8vw, -19vh, 0) scale(1.04, 0.96) rotate(3deg);
+	}
+	70% {
+		transform: translate3d(-3vw, -9vh, 0) scale(0.98, 1.02) rotate(-2deg);
+	}
+	100% {
+		transform: translate3d(11vw, -24vh, 0) scale(1) rotate(4deg);
+	}
+}
+
+@keyframes aero-bubble-bounce-3 {
+	0% {
+		transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+	}
+	30% {
+		transform: translate3d(7vw, -14vh, 0) scale(1.03, 0.97) rotate(4deg);
+	}
+	60% {
+		transform: translate3d(-6vw, -6vh, 0) scale(0.97, 1.03) rotate(-3deg);
+	}
+	85% {
+		transform: translate3d(4vw, -18vh, 0) scale(1.04, 0.96) rotate(2deg);
+	}
+	100% {
+		transform: translate3d(-8vw, -15vh, 0) scale(1) rotate(-4deg);
+	}
+}
+
+@keyframes aero-bubble-bounce-4 {
+	0% {
+		transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+	}
+	25% {
+		transform: translate3d(9vw, -12vh, 0) scale(0.97, 1.03) rotate(3deg);
+	}
+	55% {
+		transform: translate3d(-5vw, -21vh, 0) scale(1.03, 0.97) rotate(-4deg);
+	}
+	80% {
+		transform: translate3d(7vw, -8vh, 0) scale(0.98, 1.02) rotate(2deg);
+	}
+	100% {
+		transform: translate3d(-3vw, -25vh, 0) scale(1) rotate(-2deg);
+	}
 }
 
 @media (max-width: 720px) {
-	.aero-orb--aqua {
-		inset-inline-end: 6%;
+	.aero-orb--1 {
+		inset-inline-end: 4%;
+		inset-block-start: 12vh;
 	}
-	.aero-orb--green {
-		inset-block-end: 24vh;
-		inset-inline-start: 5%;
+	.aero-orb--2 {
+		inset-inline-start: 3%;
+		inset-block-start: 40vh;
+	}
+	.aero-orb--3 {
+		inset-inline-end: 6%;
+		inset-block-end: 18vh;
 	}
 }
 

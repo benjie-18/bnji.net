@@ -3,36 +3,38 @@
  * /lab/ — the interactive experimentation area.
  *
  * Registry: src/data/lab.ts. Implementations: src/components/lab/*.astro.
- * Shared primitives (stage, controls, readouts): src/styles/lab.css, which is
- * imported here only, so no other page pays for it.
- *
- * Astro cannot import a component from a runtime string, so the registry's
- * `component` keys resolve through the static map below. Adding an experiment is
- * three steps: new component in src/components/lab/, new entry in data/lab.ts,
- * one line in COMPONENTS.
- *
- * Isolation contract (also documented in data/lab.ts and AGENTS.md): each
- * experiment owns its DOM subtree and its own animation loops, pauses when
- * offscreen, and never writes to :root — so a broken or expensive prototype can
- * degrade itself without taking the page with it.
+ * Shared primitives (stage, controls, readouts): src/styles/lab.css.
  */
 import GlassPanel from '../components/GlassPanel.astro';
-import Icon from '../components/Icon.astro';
 import PageHeader from '../components/PageHeader.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import Chip from '../components/Chip.astro';
-import GlassBench from '../components/lab/GlassBench.astro';
-import OrbitField from '../components/lab/OrbitField.astro';
 import BubblePop from '../components/lab/BubblePop.astro';
+import CpsCounter from '../components/lab/CpsCounter.astro';
+import CursorTrails from '../components/lab/CursorTrails.astro';
+import GlassBench from '../components/lab/GlassBench.astro';
+import GlassMinesweeper from '../components/lab/GlassMinesweeper.astro';
+import IsoProgress from '../components/lab/IsoProgress.astro';
 import MemoryPairs from '../components/lab/MemoryPairs.astro';
+import OrbitField from '../components/lab/OrbitField.astro';
+import PianoBars from '../components/lab/PianoBars.astro';
 import ReactionTimer from '../components/lab/ReactionTimer.astro';
+import StackGame from '../components/lab/StackGame.astro';
 import StarfieldTuner from '../components/lab/StarfieldTuner.astro';
+import VoxelMap from '../components/lab/VoxelMap.astro';
 import { EXPERIMENTS, LAB_STATUS_LABEL, type Experiment, type LabComponentKey } from '../data/lab';
 import { SITE } from '../data/site';
 import Layout from '../layouts/Layout.astro';
 import '../styles/lab.css';
 
 const COMPONENTS = {
+	PianoBars,
+	StackGame,
+	IsoProgress,
+	CursorTrails,
+	VoxelMap,
+	GlassMinesweeper,
+	CpsCounter,
 	StarfieldTuner,
 	GlassBench,
 	OrbitField,
@@ -49,6 +51,8 @@ const runnable = EXPERIMENTS.filter(
 );
 const backlog = EXPERIMENTS.filter((experiment) => experiment.status !== 'live');
 
+const allTags = Array.from(new Set(runnable.flatMap((e) => e.tags))).sort();
+
 const description = `Interactive experiments by ${SITE.author.name} — canvas starfields, a live bench for the glass design tokens, particle physics and the ideas still waiting for a weekend.`;
 ---
 
@@ -62,58 +66,94 @@ const description = `Interactive experiments by ${SITE.author.name} — canvas s
 		meta={[`${runnable.length} runnable`, `${backlog.length} in the backlog`, 'Isolated by contract']}
 	/>
 
-	<div class="container lab-body">
-		{
-			runnable.map((experiment, index) => {
-				const ExperimentComponent = COMPONENTS[experiment.component];
-				return (
-					<section
-						class="lab-experiment"
-						id={experiment.slug}
-						data-lab-experiment={experiment.slug}
-						aria-labelledby={`${experiment.slug}-title`}
-					>
-						<GlassPanel pad="lg" reveal>
-							<header class="lab-experiment__head">
-								<div class="lab-experiment__heading">
-									<p class="eyebrow">
-										<span>{String(index + 1).padStart(2, '0')}</span>
-										<span class="lab-experiment__slash" aria-hidden="true">/</span>
-										<span>EXPERIMENT</span>
-									</p>
-									<h2 class="lab-experiment__title" id={`${experiment.slug}-title`}>
-										{experiment.title}
-									</h2>
-								</div>
-								<Chip tone="live" dot>
-									{LAB_STATUS_LABEL[experiment.status]}
-								</Chip>
-							</header>
+	<div class="container lab-body" data-lab-root>
+		<!-- Tag Filter & Sort Toolbar -->
+		<nav class="lab-filter-toolbar" data-glass="quiet" aria-label="Filter and sort experiments">
+			<div class="lab-filter-group" role="radiogroup" aria-label="Filter by tag">
+				<span class="mono text-muted lab-toolbar-label">TAGS:</span>
+				<button class="lab-filter-btn is-active mono" type="button" data-lab-filter="all">
+					All <span class="lab-filter-badge">{runnable.length}</span>
+				</button>
+				{
+					allTags.map((tag) => {
+						const count = runnable.filter((e) => e.tags.includes(tag)).length;
+						return (
+							<button class="lab-filter-btn mono" type="button" data-lab-filter={tag}>
+								{tag} <span class="lab-filter-badge">{count}</span>
+							</button>
+						);
+					})
+				}
+			</div>
 
-							<p class="lab-experiment__description">{experiment.description}</p>
+			<div class="lab-sort-group">
+				<label class="lab-toolbar-label mono text-muted" for="lab-sort-select">SORT:</label>
+				<select id="lab-sort-select" class="lab-sort-select mono" data-lab-sort aria-label="Sort experiments">
+					<option value="default">Default Order</option>
+					<option value="title-asc">Title (A → Z)</option>
+					<option value="title-desc">Title (Z → A)</option>
+				</select>
+			</div>
+		</nav>
 
-							{experiment.question && (
-								<p class="lab-experiment__question">
-									<span class="mono">Question</span>
-									{experiment.question}
-								</p>
-							)}
+		<!-- Experiment Cards Container -->
+		<div class="lab-experiments-container" data-lab-container>
+			{
+				runnable.map((experiment, index) => {
+					const ExperimentComponent = COMPONENTS[experiment.component];
+					return (
+						<section
+							class="lab-experiment"
+							id={experiment.slug}
+							data-lab-experiment={experiment.slug}
+							data-tags={experiment.tags.join(',')}
+							data-title={experiment.title}
+							data-index={index}
+							aria-labelledby={`${experiment.slug}-title`}
+						>
+							<GlassPanel pad="lg" reveal>
+								<header class="lab-experiment__head">
+									<div class="lab-experiment__heading">
+										<p class="eyebrow">
+											<span>{String(index + 1).padStart(2, '0')}</span>
+											<span class="lab-experiment__slash" aria-hidden="true">/</span>
+											<span>EXPERIMENT</span>
+										</p>
+										<h2 class="lab-experiment__title" id={`${experiment.slug}-title`}>
+											{experiment.title}
+										</h2>
+									</div>
+									<Chip tone="live" dot>
+										{LAB_STATUS_LABEL[experiment.status]}
+									</Chip>
+								</header>
 
-							<ul class="lab-experiment__tags" role="list">
-								{experiment.tags.map((tag) => (
-									<li>
-										<Chip>{tag}</Chip>
-									</li>
-								))}
-							</ul>
+								<p class="lab-experiment__description">{experiment.description}</p>
 
-							<ExperimentComponent />
-						</GlassPanel>
-					</section>
-				);
-			})
-		}
+								<ul class="lab-experiment__tags" role="list">
+									{experiment.tags.map((tag) => (
+										<li>
+											<Chip>{tag}</Chip>
+										</li>
+									))}
+								</ul>
 
+								<ExperimentComponent />
+							</GlassPanel>
+						</section>
+					);
+				})
+			}
+
+			<!-- Empty State when filter matches nothing -->
+			<div class="lab-empty-state" data-lab-empty hidden>
+				<GlassPanel pad="md" class="empty-card">
+					<p class="mono text-muted">No experiments found with the selected tag.</p>
+				</GlassPanel>
+			</div>
+		</div>
+
+		<!-- Backlog Section (Questions removed as directed) -->
 		<section class="lab-backlog" aria-labelledby="backlog-title">
 			<SectionHeading
 				label="BACKLOG"
@@ -140,12 +180,6 @@ const description = `Interactive experiments by ${SITE.author.name} — canvas s
 								</Chip>
 							</div>
 							<p class="backlog-item__description">{experiment.description}</p>
-							{experiment.question && (
-								<p class="backlog-item__question">
-									<Icon name="compass" size={13} />
-									{experiment.question}
-								</p>
-							)}
 						</GlassPanel>
 					))
 				}
@@ -154,11 +188,176 @@ const description = `Interactive experiments by ${SITE.author.name} — canvas s
 	</div>
 </Layout>
 
+<script>
+	const root = document.querySelector<HTMLElement>('[data-lab-root]');
+	if (root) {
+		const container = root.querySelector<HTMLElement>('[data-lab-container]');
+		const filterBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-lab-filter]'));
+		const sortSelect = root.querySelector<HTMLSelectElement>('[data-lab-sort]');
+		const emptyState = root.querySelector<HTMLElement>('[data-lab-empty]');
+
+		if (container) {
+			const experiments = Array.from(container.querySelectorAll<HTMLElement>('[data-lab-experiment]'));
+			let activeFilter = 'all';
+
+			const updateFilter = (filter: string) => {
+				activeFilter = filter;
+				let visibleCount = 0;
+
+				experiments.forEach((exp) => {
+					const tags = (exp.dataset.tags || '').split(',');
+					const matches = filter === 'all' || tags.includes(filter);
+					if (matches) {
+						exp.removeAttribute('hidden');
+						visibleCount++;
+					} else {
+						exp.setAttribute('hidden', '');
+					}
+				});
+
+				if (emptyState) {
+					emptyState.hidden = visibleCount > 0;
+				}
+			};
+
+			filterBtns.forEach((btn) => {
+				btn.addEventListener('click', () => {
+					const f = btn.dataset.labFilter || 'all';
+					filterBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+					updateFilter(f);
+				});
+			});
+
+			const sortExperiments = (mode: string) => {
+				const sorted = [...experiments].sort((a, b) => {
+					if (mode === 'title-asc') {
+						return (a.dataset.title || '').localeCompare(b.dataset.title || '');
+					} else if (mode === 'title-desc') {
+						return (b.dataset.title || '').localeCompare(a.dataset.title || '');
+					} else {
+						// Default index order
+						return Number(a.dataset.index || 0) - Number(b.dataset.index || 0);
+					}
+				});
+
+				sorted.forEach((exp) => {
+					container.appendChild(exp);
+				});
+				if (emptyState) {
+					container.appendChild(emptyState);
+				}
+			};
+
+			sortSelect?.addEventListener('change', () => {
+				sortExperiments(sortSelect.value);
+			});
+		}
+	}
+</script>
+
 <style>
 	.lab-body {
 		display: grid;
 		gap: clamp(1.5rem, 4vw, 2.75rem);
 		padding-block-end: clamp(3rem, 8vh, 6rem);
+	}
+
+	/* Filter & Sort Toolbar */
+	.lab-filter-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.85rem 1.5rem;
+		padding: 0.85rem 1.25rem;
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+	}
+
+	.lab-filter-group {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+
+	.lab-toolbar-label {
+		font-size: var(--text-micro);
+		letter-spacing: 0.08em;
+		margin-inline-end: 0.2rem;
+	}
+
+	.lab-filter-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.35rem 0.75rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		cursor: pointer;
+		transition: all 0.15s ease-out;
+		white-space: nowrap;
+	}
+
+	.lab-filter-btn:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+	}
+
+	.lab-filter-btn.is-active {
+		color: var(--text-strong);
+		background: var(--glass-bg-raised);
+		border-color: var(--accent-line);
+		box-shadow: 0 0 10px -2px var(--accent-soft);
+	}
+
+	.lab-filter-badge {
+		font-size: 0.65rem;
+		opacity: 0.65;
+	}
+
+	.lab-sort-group {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.lab-sort-select {
+		padding: 0.4rem 0.8rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		color: var(--text-strong);
+		font-size: var(--text-micro);
+		cursor: pointer;
+		outline: none;
+	}
+
+	.lab-sort-select:focus-visible {
+		border-color: var(--accent-strong);
+	}
+
+	/* Experiment Cards Container */
+	.lab-experiments-container {
+		display: grid;
+		gap: clamp(1.5rem, 4vw, 2.75rem);
+	}
+
+	.lab-experiment {
+		transition: opacity 0.2s ease-out;
+	}
+
+	.lab-experiment[hidden] {
+		display: none;
+	}
+
+	.lab-empty-state {
+		text-align: center;
+		padding: 3rem 1rem;
 	}
 
 	.lab-experiment__head {
@@ -190,19 +389,6 @@ const description = `Interactive experiments by ${SITE.author.name} — canvas s
 		font-size: 0.98rem;
 		line-height: 1.65;
 		max-width: 74ch;
-	}
-
-	.lab-experiment__question {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 0.6rem;
-		margin-block-start: 0.8rem;
-		padding-inline-start: 0.9rem;
-		border-inline-start: 2px solid var(--accent-line);
-		color: var(--text);
-		font-size: 0.95rem;
-		font-style: italic;
 	}
 
 	.lab-experiment__tags {
@@ -255,15 +441,5 @@ const description = `Interactive experiments by ${SITE.author.name} — canvas s
 		color: var(--text-muted);
 		font-size: 0.92rem;
 		line-height: 1.6;
-	}
-
-	.backlog-item__question {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--text-dim);
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		letter-spacing: 0.04em;
 	}
 </style>

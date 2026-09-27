@@ -269,13 +269,30 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 	.settings-gear__icon {
 		inline-size: 18px;
 		block-size: 18px;
+		transform-origin: center;
+		transition: transform 0.65s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	.settings-gear.is-spinning .settings-gear__icon {
+		animation: gear-spin 0.65s cubic-bezier(0.25, 1, 0.5, 1);
+	}
+
+	@keyframes gear-spin {
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.settings-gear,
-		.settings-gear:hover {
+		.settings-gear:hover,
+		.settings-gear.is-spinning .settings-gear__icon {
 			transition: none;
 			transform: none;
+			animation: none;
 		}
 	}
 
@@ -524,7 +541,9 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 		}
 
 		/* Dropdowns inside the sheet: an accordion, not a floating panel. The
-		   sheet is position:static territory — no edge flip can overflow it. */
+		   sheet is position:static territory — no edge flip can overflow it.
+		   When closed, it must be display:none and zeroed out so it does not
+		   create ghost spacing/gaps between siblings. */
 		.nav-group {
 			display: grid;
 			gap: 0.1rem;
@@ -541,12 +560,31 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 		.nav-group .nav-dropdown {
 			position: static;
 			min-inline-size: 0;
-			padding: 0.25rem 0.5rem 0.5rem;
+			padding: 0;
+			margin: 0;
+			height: 0;
+			overflow: hidden;
+			opacity: 0;
+			visibility: hidden;
+			display: none;
 			transform: none;
 		}
 
 		.nav-group.is-open .nav-dropdown {
+			display: grid;
+			height: auto;
+			padding: 0.25rem 0.5rem 0.5rem;
+			opacity: 1;
+			visibility: visible;
 			transform: none;
+		}
+
+		:global(html:not(.js)) .nav-group .nav-dropdown {
+			display: flex;
+			height: auto;
+			padding: 0.25rem 0.5rem 0.5rem;
+			opacity: 1;
+			visibility: visible;
 		}
 
 		:global(html:not(.js)) .nav-group .nav-dropdown ul {

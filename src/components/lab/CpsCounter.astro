@@ -1,0 +1,437 @@
+---
+/**
+ * Lab — CPS Counter (Clicks Per Second Benchmark).
+ *
+ * Measures neuromuscular finger actuation rate over standard timed bursts
+ * (5s sprint, 10s endurance) or free cadence. Renders live click rate, peak speed,
+ * click ripple feedback, and debounce stability.
+ *
+ * Isolation contract: owns its subtree + rAF loop; pauses when out of view;
+ * accessible via pointer or keyboard.
+ */
+---
+
+<div class="cps-counter" data-cps-counter>
+	<!-- HUD Metrics Strip -->
+	<div class="cps-hud mono">
+		<div class="cps-hud__item">
+			<span class="cps-hud__label">Rate</span>
+			<span class="cps-hud__val cps-hud__val--hero"><b data-cps-val>0.0</b> <small>CPS</small></span>
+		</div>
+		<div class="cps-hud__item">
+			<span class="cps-hud__label">Peak</span>
+			<span class="cps-hud__val"><b data-cps-peak>0.0</b> <small>CPS</small></span>
+		</div>
+		<div class="cps-hud__item">
+			<span class="cps-hud__label">Clicks</span>
+			<span class="cps-hud__val"><b data-cps-total>0</b></span>
+		</div>
+		<div class="cps-hud__item">
+			<span class="cps-hud__label">Time</span>
+			<span class="cps-hud__val"><b data-cps-time>5.0s</b></span>
+		</div>
+	</div>
+
+	<!-- Mode Selector -->
+	<div class="cps-modes" role="radiogroup" aria-label="CPS test duration">
+		<button class="cps-mode is-active mono" type="button" data-cps-mode="5">5s Sprint</button>
+		<button class="cps-mode mono" type="button" data-cps-mode="10">10s Endurance</button>
+		<button class="cps-mode mono" type="button" data-cps-mode="free">Free Cadence</button>
+	</div>
+
+	<!-- Main Interactive Click Stage -->
+	<div class="cps-stage">
+		<button
+			class="cps-pad"
+			data-glass="interactive"
+			data-cps-pad
+			type="button"
+			aria-label="Click speed test area — click rapidly or press Space/Enter"
+		>
+			<span class="cps-pad__prompt" data-cps-prompt>Click to Start</span>
+			<span class="cps-pad__sub mono" data-cps-sub>Press Space or click as fast as possible</span>
+			<div class="cps-ripples" data-cps-ripples aria-hidden="true"></div>
+		</button>
+	</div>
+
+	<!-- Controls & Accessibility Help -->
+	<div class="cps-footer">
+		<button class="glass-button glass-button--sm mono" type="button" data-cps-reset>
+			Reset Score
+		</button>
+		<p class="cps-help mono">
+			Click or press <kbd>Space</kbd> · Tracks rolling 1-second cadence window
+		</p>
+	</div>
+
+	<div class="sr-only" aria-live="polite" data-cps-live></div>
+</div>
+
+<script>
+	import { isPageVisible } from '../../scripts/environment';
+
+	const root = document.querySelector<HTMLElement>('[data-cps-counter]');
+	if (root) {
+		const pad = root.querySelector<HTMLButtonElement>('[data-cps-pad]');
+		const valEl = root.querySelector<HTMLElement>('[data-cps-val]');
+		const peakEl = root.querySelector<HTMLElement>('[data-cps-peak]');
+		const totalEl = root.querySelector<HTMLElement>('[data-cps-total]');
+		const timeEl = root.querySelector<HTMLElement>('[data-cps-time]');
+		const promptEl = root.querySelector<HTMLElement>('[data-cps-prompt]');
+		const subEl = root.querySelector<HTMLElement>('[data-cps-sub]');
+		const ripplesEl = root.querySelector<HTMLElement>('[data-cps-ripples]');
+		const resetBtn = root.querySelector<HTMLButtonElement>('[data-cps-reset]');
+		const modeBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-cps-mode]'));
+		const liveEl = root.querySelector<HTMLElement>('[data-cps-live]');
+
+		let mode: '5' | '10' | 'free' = '5';
+		let state: 'idle' | 'running' | 'finished' = 'idle';
+		let clicks: number[] = []; // Timestamps of clicks
+		let totalClicks = 0;
+		let peakCps = 0;
+		let startTime = 0;
+		let duration = 5; // seconds
+		let rafId = 0;
+
+		const setMode = (newMode: '5' | '10' | 'free') => {
+			mode = newMode;
+			duration = mode === '5' ? 5 : mode === '10' ? 10 : 0;
+			modeBtns.forEach((btn) => btn.classList.toggle('is-active', btn.dataset.cpsMode === newMode));
+			reset();
+		};
+
+		const reset = () => {
+			state = 'idle';
+			clicks = [];
+			totalClicks = 0;
+			peakCps = 0;
+			startTime = 0;
+			if (valEl) valEl.textContent = '0.0';
+			if (peakEl) peakEl.textContent = '0.0';
+			if (totalEl) totalEl.textContent = '0';
+			if (timeEl) timeEl.textContent = duration > 0 ? `${duration.toFixed(1)}s` : '0.0s';
+			if (promptEl) promptEl.textContent = 'Click to Start';
+			if (subEl) subEl.textContent = 'Press Space or click as fast as possible';
+			if (pad) {
+				pad.classList.remove('is-running', 'is-finished');
+				pad.disabled = false;
+			}
+			if (rafId) {
+				cancelAnimationFrame(rafId);
+				rafId = 0;
+			}
+		};
+
+		const spawnRipple = (x?: number, y?: number) => {
+			if (!ripplesEl || !pad) return;
+			const rect = pad.getBoundingClientRect();
+			const ripple = document.createElement('span');
+			ripple.className = 'cps-ripple';
+			const posX = x !== undefined ? x - rect.left : rect.width / 2;
+			const posY = y !== undefined ? y - rect.top : rect.height / 2;
+			ripple.style.left = `${posX}px`;
+			ripple.style.top = `${posY}px`;
+			ripplesEl.appendChild(ripple);
+			setTimeout(() => ripple.remove(), 550);
+		};
+
+		const tick = () => {
+			if (state !== 'running') return;
+			const now = performance.now();
+			const elapsed = (now - startTime) / 1000;
+
+			// Prune clicks older than 1 second for rolling CPS calculation
+			const oneSecAgo = now - 1000;
+			clicks = clicks.filter((t) => t > oneSecAgo);
+			const currentCps = clicks.length;
+
+			if (currentCps > peakCps) {
+				peakCps = currentCps;
+				if (peakEl) peakEl.textContent = peakCps.toFixed(1);
+			}
+
+			if (valEl) valEl.textContent = currentCps.toFixed(1);
+
+			if (duration > 0) {
+				const remaining = Math.max(0, duration - elapsed);
+				if (timeEl) timeEl.textContent = `${remaining.toFixed(1)}s`;
+
+				if (remaining <= 0) {
+					// Test finished
+					finish();
+					return;
+				}
+			} else {
+				if (timeEl) timeEl.textContent = `${elapsed.toFixed(1)}s`;
+			}
+
+			rafId = requestAnimationFrame(tick);
+		};
+
+		const finish = () => {
+			state = 'finished';
+			if (rafId) {
+				cancelAnimationFrame(rafId);
+				rafId = 0;
+			}
+			const finalCps = (totalClicks / duration).toFixed(2);
+			if (promptEl) promptEl.textContent = `${finalCps} CPS`;
+			if (subEl) subEl.textContent = `Sprint complete! ${totalClicks} total clicks in ${duration}s. Click Reset to retry.`;
+			if (timeEl) timeEl.textContent = '0.0s';
+			if (pad) {
+				pad.classList.remove('is-running');
+				pad.classList.add('is-finished');
+			}
+			if (liveEl) {
+				liveEl.textContent = `Test finished. Average speed: ${finalCps} clicks per second with ${totalClicks} total clicks.`;
+			}
+		};
+
+		const registerClick = (x?: number, y?: number) => {
+			if (state === 'finished') return;
+			const now = performance.now();
+
+			if (state === 'idle') {
+				state = 'running';
+				startTime = now;
+				if (promptEl) promptEl.textContent = 'CLICK!';
+				if (subEl) subEl.textContent = 'Keep pumping as fast as you can!';
+				if (pad) pad.classList.add('is-running');
+				rafId = requestAnimationFrame(tick);
+			}
+
+			clicks.push(now);
+			totalClicks++;
+			if (totalEl) totalEl.textContent = String(totalClicks);
+			spawnRipple(x, y);
+		};
+
+		// Pointer & Keyboard handlers
+		pad?.addEventListener('pointerdown', (e) => {
+			if (e.button !== 0) return;
+			registerClick(e.clientX, e.clientY);
+		});
+
+		pad?.addEventListener('keydown', (e) => {
+			if (e.key === ' ' || e.key === 'Enter') {
+				e.preventDefault();
+				registerClick();
+			}
+		});
+
+		resetBtn?.addEventListener('click', reset);
+
+		modeBtns.forEach((btn) => {
+			btn.addEventListener('click', () => {
+				const m = btn.dataset.cpsMode as '5' | '10' | 'free';
+				if (m) setMode(m);
+			});
+		});
+
+		// IntersectionObserver to pause loop offscreen
+		const observer = new IntersectionObserver((entries) => {
+			for (const entry of entries) {
+				if (!entry.isIntersecting && rafId) {
+					cancelAnimationFrame(rafId);
+					rafId = 0;
+				} else if (entry.isIntersecting && state === 'running' && !rafId) {
+					rafId = requestAnimationFrame(tick);
+				}
+			}
+		});
+		observer.observe(root);
+	}
+</script>
+
+<style>
+	.cps-counter {
+		display: grid;
+		gap: 1.25rem;
+		width: 100%;
+	}
+
+	.cps-hud {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+		gap: 0.75rem;
+	}
+
+	.cps-hud__item {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.75rem 1rem;
+		border-radius: var(--radius-md);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+	}
+
+	.cps-hud__label {
+		font-size: var(--text-micro);
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--text-dim);
+	}
+
+	.cps-hud__val {
+		font-size: 1.35rem;
+		font-weight: 600;
+		color: var(--text-strong);
+	}
+
+	.cps-hud__val--hero b {
+		color: var(--accent-strong);
+	}
+
+	.cps-hud__val small {
+		font-size: 0.7rem;
+		font-weight: 400;
+		color: var(--text-dim);
+	}
+
+	.cps-modes {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.cps-mode {
+		padding: 0.45rem 0.9rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		cursor: pointer;
+		transition: all var(--dur-fast) var(--ease-out);
+	}
+
+	.cps-mode:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+	}
+
+	.cps-mode.is-active {
+		color: var(--text-strong);
+		background: var(--glass-bg-raised);
+		border-color: var(--accent-line);
+		box-shadow: 0 0 12px -4px var(--accent-soft);
+	}
+
+	/* Click Pad Area */
+	.cps-stage {
+		width: 100%;
+	}
+
+	.cps-pad {
+		position: relative;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		width: 100%;
+		min-height: 220px;
+		padding: 2rem;
+		border-radius: var(--radius-xl);
+		cursor: pointer;
+		user-select: none;
+		-webkit-user-select: none;
+		touch-action: manipulation;
+		text-align: center;
+		transition: transform var(--dur-fast) var(--ease-spring);
+	}
+
+	.cps-pad:active {
+		transform: scale3d(0.985, 0.985, 1);
+	}
+
+	.cps-pad.is-running {
+		border-color: var(--accent-line);
+		box-shadow:
+			var(--glass-shadow-raised),
+			0 0 32px -8px var(--accent-soft),
+			inset 0 1px 2px var(--glass-fresnel-top);
+	}
+
+	.cps-pad.is-finished {
+		cursor: default;
+		border-color: var(--glass-border);
+	}
+
+	.cps-pad__prompt {
+		font-family: var(--font-display);
+		font-size: clamp(2rem, 5vw, 3.2rem);
+		font-weight: 700;
+		letter-spacing: var(--tracking-snug);
+		color: var(--text-strong);
+		line-height: 1.1;
+		pointer-events: none;
+	}
+
+	.cps-pad.is-running .cps-pad__prompt {
+		color: var(--accent-strong);
+	}
+
+	.cps-pad__sub {
+		font-size: var(--text-small);
+		color: var(--text-muted);
+		max-width: 36ch;
+		pointer-events: none;
+	}
+
+	/* Expanding Click Ripples */
+	.cps-ripples {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		overflow: hidden;
+	}
+
+	:global(.cps-ripple) {
+		position: absolute;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		transform: translate(-50%, -50%) scale(0);
+		background: radial-gradient(circle, var(--accent-strong) 0%, rgba(255, 255, 255, 0.4) 60%, transparent 100%);
+		border: 1px solid rgba(255, 255, 255, 0.8);
+		animation: cps-ripple-expand 0.55s ease-out forwards;
+		pointer-events: none;
+	}
+
+	@keyframes cps-ripple-expand {
+		0% {
+			transform: translate(-50%, -50%) scale(0);
+			opacity: 0.9;
+		}
+		100% {
+			transform: translate(-50%, -50%) scale(14);
+			opacity: 0;
+		}
+	}
+
+	.cps-footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.75rem 1.5rem;
+	}
+
+	.cps-help {
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+		margin: 0;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.cps-pad,
+		:global(.cps-ripple) {
+			transition: none;
+			animation: none;
+		}
+	}
+</style>

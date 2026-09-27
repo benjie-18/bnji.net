@@ -74,7 +74,11 @@ export function initSettingsOverlay(): void {
 	};
 
 	for (const trigger of openers) {
-		trigger.addEventListener('click', () => setOpen(!isOpen()));
+		trigger.addEventListener('click', () => {
+			trigger.classList.add('is-spinning');
+			setTimeout(() => trigger.classList.remove('is-spinning'), 650);
+			setOpen(!isOpen());
+		});
 	}
 	close?.addEventListener('click', () => setOpen(false));
 	backdrop.addEventListener('click', () => setOpen(false));

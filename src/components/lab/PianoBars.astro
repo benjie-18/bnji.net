@@ -1,0 +1,667 @@
+---
+/**
+ * Lab — 3D Piano Bars.
+ *
+ * 3D extruded loading bars acting as interactive piano tiles.
+ *
+ * Engineered 3D Architecture:
+ * - Precision-aligned 6-face cuboids centered at (0,0,0) in 3D space
+ * - Dedicated full-coverage pointer hitbox preventing hover flicker during 3D travel
+ * - True ground-plane floor shadow aligned under each key
+ * - Smooth anti-chop Web Audio chime generator
+ * - High-contrast lighting adapted for dark obsidian and light crystal themes
+ */
+const ALL_KEYS = [
+	{ note: 'C4', semitone: 0, key: '1' },
+	{ note: 'D4', semitone: 2, key: '2' },
+	{ note: 'E4', semitone: 4, key: '3' },
+	{ note: 'F4', semitone: 5, key: '4' },
+	{ note: 'G4', semitone: 7, key: '5' },
+	{ note: 'A4', semitone: 9, key: '6' },
+	{ note: 'B4', semitone: 11, key: '7' },
+	{ note: 'C5', semitone: 12, key: '8' },
+	{ note: 'D5', semitone: 14, key: '9' },
+	{ note: 'E5', semitone: 16, key: '0' },
+	{ note: 'F5', semitone: 17, key: '-' },
+	{ note: 'G5', semitone: 19, key: '=' },
+] as const;
+---
+
+<div class="piano-bars" data-piano-bars>
+	<!-- Top Mode & Audio Toolbar -->
+	<div class="piano-toolbar">
+		<div class="piano-modes" role="radiogroup" aria-label="Visualizer mode">
+			<button class="piano-mode is-active mono" type="button" data-pb-mode="wave">Wave Motion</button>
+			<button class="piano-mode mono" type="button" data-pb-mode="manual">Manual Piano</button>
+		</div>
+
+		<div class="piano-tools">
+			<button class="glass-button glass-button--sm mono" type="button" data-pb-audio aria-pressed="true">
+				<span class="dot dot--live" data-pb-audio-dot></span>
+				<span data-pb-audio-text>Sound: On</span>
+			</button>
+		</div>
+	</div>
+
+	<!-- 3D Perspective Stage -->
+	<div class="piano-stage">
+		<div class="piano-viewport">
+			<div class="piano-cluster" data-pb-cluster>
+				{
+					ALL_KEYS.map((item, index) => (
+						<div
+							class="piano-cube"
+							data-pb-cube
+							data-index={index}
+							data-base-semitone={item.semitone}
+							tabindex="0"
+							role="button"
+							aria-label={`Piano key ${item.note}`}
+							style={`--i: ${index};`}
+							hidden={index >= 8}
+						>
+							<!-- Dedicated interactive hitbox covering the 3D footprint -->
+							<div class="cube-hitbox" />
+
+							<!-- 6 Geometrically Aligned Faces -->
+							<div class="cube-face cube-face--front">
+								<span class="cube-note mono" data-pb-note>{item.note}</span>
+								<span class="cube-key mono">{item.key}</span>
+							</div>
+							<div class="cube-face cube-face--top" />
+							<div class="cube-face cube-face--left" />
+							<div class="cube-face cube-face--right" />
+							<div class="cube-face cube-face--back" />
+							<div class="cube-face cube-face--bottom" />
+
+							<!-- Ground Plane Shadow -->
+							<div class="cube-shadow" />
+						</div>
+					))
+				}
+			</div>
+		</div>
+		<p class="piano-hint mono">Hover or tap keys to play · Keyboard keys 1–9</p>
+	</div>
+
+	<!-- Controls & Sliders -->
+	<div class="lab-controls">
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Key Count <output data-pb-out="count">8 Keys</output>
+			</span>
+			<input class="lab-range" type="range" min="4" max="12" step="1" value="8" data-pb-in="count" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Pitch Shift <output data-pb-out="pitch">0 (Standard)</output>
+			</span>
+			<input class="lab-range" type="range" min="-12" max="12" step="1" value="0" data-pb-in="pitch" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Wave Speed <output data-pb-out="speed">1.2s</output>
+			</span>
+			<input class="lab-range" type="range" min="0.4" max="2.4" step="0.1" value="1.2" data-pb-in="speed" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Extrusion Depth <output data-pb-out="depth">50px</output>
+			</span>
+			<input class="lab-range" type="range" min="25" max="80" step="5" value="50" data-pb-in="depth" />
+		</label>
+	</div>
+</div>
+
+<script>
+	const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+	const root = document.querySelector<HTMLElement>('[data-piano-bars]');
+	if (root) {
+		const cluster = root.querySelector<HTMLElement>('[data-pb-cluster]')!;
+		const cubes = Array.from(root.querySelectorAll<HTMLElement>('[data-pb-cube]'));
+		const modeBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-pb-mode]'));
+		const audioBtn = root.querySelector<HTMLButtonElement>('[data-pb-audio]');
+		const audioText = root.querySelector<HTMLElement>('[data-pb-audio-text]');
+		const audioDot = root.querySelector<HTMLElement>('[data-pb-audio-dot]');
+
+		const countIn = root.querySelector<HTMLInputElement>('[data-pb-in="count"]');
+		const countOut = root.querySelector<HTMLOutputElement>('[data-pb-out="count"]');
+		const pitchIn = root.querySelector<HTMLInputElement>('[data-pb-in="pitch"]');
+		const pitchOut = root.querySelector<HTMLOutputElement>('[data-pb-out="pitch"]');
+		const speedIn = root.querySelector<HTMLInputElement>('[data-pb-in="speed"]');
+		const speedOut = root.querySelector<HTMLOutputElement>('[data-pb-out="speed"]');
+		const depthIn = root.querySelector<HTMLInputElement>('[data-pb-in="depth"]');
+		const depthOut = root.querySelector<HTMLOutputElement>('[data-pb-out="depth"]');
+
+		let keyCount = 8;
+		let pitchShift = 0;
+		let currentMode: 'wave' | 'manual' = 'wave';
+		let audioEnabled = true;
+
+		// Anti-chop Audio Synthesizer
+		let audioCtx: AudioContext | null = null;
+		let filterNode: BiquadFilterNode | null = null;
+		const lastTriggerMap = new Map<number, number>();
+
+		const getAudioContext = () => {
+			if (!audioCtx) {
+				const AudioClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+				audioCtx = new AudioClass();
+				filterNode = audioCtx.createBiquadFilter();
+				filterNode.type = 'lowpass';
+				filterNode.frequency.value = 2000;
+				filterNode.connect(audioCtx.destination);
+			}
+			if (audioCtx.state === 'suspended') {
+				audioCtx.resume();
+			}
+			return audioCtx;
+		};
+
+		const getFrequency = (semitone: number, shift: number) => {
+			const total = semitone + shift;
+			return 261.625565 * Math.pow(2, total / 12);
+		};
+
+		const getNoteLabel = (semitone: number, shift: number) => {
+			const total = semitone + shift;
+			const noteIndex = ((total % 12) + 12) % 12;
+			const octave = 4 + Math.floor(total / 12);
+			return `${NOTE_NAMES[noteIndex]}${octave}`;
+		};
+
+		const playKey = (freq: number, index: number) => {
+			if (!audioEnabled) return;
+			const nowMs = performance.now();
+			const last = lastTriggerMap.get(index) || 0;
+			if (nowMs - last < 65) return;
+			lastTriggerMap.set(index, nowMs);
+
+			try {
+				const ctx = getAudioContext();
+				const t = ctx.currentTime;
+				const osc = ctx.createOscillator();
+				const gain = ctx.createGain();
+
+				osc.type = 'sine';
+				osc.frequency.setValueAtTime(freq, t);
+
+				// Anti-chop smooth envelope: gentle attack, exponential decay
+				gain.gain.setValueAtTime(0, t);
+				gain.gain.linearRampToValueAtTime(0.18, t + 0.015);
+				gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+
+				osc.connect(gain);
+				if (filterNode) {
+					gain.connect(filterNode);
+				} else {
+					gain.connect(ctx.destination);
+				}
+
+				osc.start(t);
+				osc.stop(t + 0.65);
+			} catch {}
+		};
+
+		const triggerCube = (cube: HTMLElement) => {
+			cube.classList.add('is-active');
+			const baseSemitone = Number(cube.dataset.baseSemitone || 0);
+			const idx = Number(cube.dataset.index || 0);
+			const freq = getFrequency(baseSemitone, pitchShift);
+			playKey(freq, idx);
+
+			setTimeout(() => {
+				cube.classList.remove('is-active');
+			}, 250);
+		};
+
+		const updateNotes = () => {
+			cubes.forEach((cube, i) => {
+				cube.hidden = i >= keyCount;
+				const baseSemitone = Number(cube.dataset.baseSemitone || 0);
+				const noteLabel = getNoteLabel(baseSemitone, pitchShift);
+				const labelEl = cube.querySelector('[data-pb-note]');
+				if (labelEl) labelEl.textContent = noteLabel;
+				cube.setAttribute('aria-label', `Key ${noteLabel}`);
+			});
+		};
+
+		cubes.forEach((cube) => {
+			const hitbox = cube.querySelector('.cube-hitbox') || cube;
+
+			hitbox.addEventListener('pointerenter', (e) => {
+				if ((e as PointerEvent).pointerType === 'mouse' || currentMode === 'manual') {
+					triggerCube(cube);
+				}
+			});
+
+			hitbox.addEventListener('pointerdown', () => {
+				triggerCube(cube);
+			});
+
+			cube.addEventListener('keydown', (e) => {
+				if (e.key === ' ' || e.key === 'Enter') {
+					e.preventDefault();
+					triggerCube(cube);
+				}
+			});
+		});
+
+		window.addEventListener('keydown', (e) => {
+			if (!root.contains(document.activeElement)) return;
+			const num = parseInt(e.key, 10);
+			if (num >= 1 && num <= keyCount) {
+				const target = cubes[num - 1];
+				if (target && !target.hidden) {
+					e.preventDefault();
+					triggerCube(target);
+					target.focus();
+				}
+			}
+		});
+
+		modeBtns.forEach((btn) => {
+			btn.addEventListener('click', () => {
+				const m = btn.dataset.pbMode as 'wave' | 'manual';
+				if (!m) return;
+				currentMode = m;
+				modeBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+				cluster.classList.toggle('cluster--manual', m === 'manual');
+			});
+		});
+
+		audioBtn?.addEventListener('click', () => {
+			audioEnabled = !audioEnabled;
+			audioBtn.setAttribute('aria-pressed', String(audioEnabled));
+			if (audioText) audioText.textContent = audioEnabled ? 'Sound: On' : 'Sound: Off';
+			if (audioDot) audioDot.classList.toggle('dot--live', audioEnabled);
+		});
+
+		countIn?.addEventListener('input', () => {
+			keyCount = Number(countIn.value);
+			if (countOut) countOut.textContent = `${keyCount} Keys`;
+			updateNotes();
+		});
+
+		pitchIn?.addEventListener('input', () => {
+			pitchShift = Number(pitchIn.value);
+			const sign = pitchShift > 0 ? '+' : '';
+			if (pitchOut) pitchOut.textContent = pitchShift === 0 ? '0 (Standard)' : `${sign}${pitchShift} semitones`;
+			updateNotes();
+		});
+
+		speedIn?.addEventListener('input', () => {
+			const s = Number(speedIn.value);
+			if (speedOut) speedOut.textContent = `${s.toFixed(1)}s`;
+			cluster.style.setProperty('--pb-speed', `${s}s`);
+		});
+
+		depthIn?.addEventListener('input', () => {
+			const d = Number(depthIn.value);
+			if (depthOut) depthOut.textContent = `${d}px`;
+			cluster.style.setProperty('--pb-depth', `${d}px`);
+		});
+
+		updateNotes();
+
+		const obs = new IntersectionObserver((entries) => {
+			for (const entry of entries) {
+				cluster.classList.toggle('is-paused', !entry.isIntersecting);
+			}
+		});
+		obs.observe(root);
+	}
+</script>
+
+<style>
+	.piano-bars {
+		display: grid;
+		gap: 1.25rem;
+		width: 100%;
+	}
+
+	.piano-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+	}
+
+	.piano-modes {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.piano-mode {
+		padding: 0.4rem 0.9rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		cursor: pointer;
+		transition: all var(--dur-fast) var(--ease-out);
+	}
+
+	.piano-mode:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+	}
+
+	.piano-mode.is-active {
+		color: var(--text-strong);
+		background: var(--glass-bg-raised);
+		border-color: var(--accent-line);
+		box-shadow: 0 0 12px -2px var(--accent-soft);
+	}
+
+	/* 3D Perspective Stage */
+	.piano-stage {
+		position: relative;
+		width: 100%;
+		min-height: 330px;
+		border-radius: var(--radius-xl);
+		background:
+			radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.08), transparent 70%),
+			rgba(8, 12, 22, 0.65);
+		border: 1px solid var(--glass-border);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 3rem 1.5rem 2.5rem;
+		overflow: visible;
+	}
+
+	:global(html[data-theme='light']) .piano-stage {
+		background:
+			radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.16), transparent 70%),
+			rgba(240, 247, 255, 0.75);
+		border-color: rgba(30, 90, 160, 0.22);
+	}
+
+	.piano-viewport {
+		perspective: 1100px;
+		perspective-origin: 50% 20%;
+		width: 100%;
+		display: flex;
+		justify-content: center;
+		transform-style: preserve-3d;
+	}
+
+	.piano-cluster {
+		--pb-speed: 1.2s;
+		--pb-depth: 50px;
+		--cube-w: clamp(26px, 3.8vw, 34px);
+		--cube-h: clamp(110px, 16vw, 140px);
+		--cube-d: 34px;
+		display: flex;
+		gap: clamp(8px, 1.4vw, 15px);
+		transform-style: preserve-3d;
+		transform: rotateX(22deg) rotateY(-8deg);
+		transition: transform 0.3s ease-out;
+		padding: 24px 0 32px;
+	}
+
+	.piano-cluster.is-paused .piano-cube {
+		animation-play-state: paused !important;
+	}
+
+	/* 3D Rectangular Extruded Cuboid */
+	.piano-cube {
+		position: relative;
+		width: var(--cube-w);
+		height: var(--cube-h);
+		transform-style: preserve-3d;
+		user-select: none;
+		outline: none;
+		animation: pb-wave-bounce var(--pb-speed) ease-in-out infinite alternate;
+		animation-delay: calc(var(--i) * (var(--pb-speed) / 8));
+		transition: transform 0.2s var(--ease-spring);
+	}
+
+	.piano-cube[hidden] {
+		display: none;
+	}
+
+	.cluster--manual .piano-cube {
+		animation: none !important;
+	}
+
+	/* Dedicated invisible hitbox covering the 3D projected area */
+	.cube-hitbox {
+		position: absolute;
+		inset: -15px -6px -25px -6px;
+		z-index: 10;
+		cursor: pointer;
+		transform: translateZ(24px);
+	}
+
+	.piano-cube:focus-visible {
+		transform: translateZ(30px);
+	}
+
+	.piano-cube:focus-visible .cube-face--top {
+		outline: 2px solid var(--accent-strong);
+	}
+
+	/* Interactive Hit State */
+	.piano-cube.is-active,
+	.piano-cube:active {
+		transform: translateZ(calc(var(--pb-depth) * 1.15)) rotateX(4deg) !important;
+	}
+
+	.piano-cube.is-active .cube-face--top,
+	.piano-cube:active .cube-face--top {
+		background: #ffffff !important;
+		box-shadow:
+			0 0 24px 8px var(--accent-strong),
+			0 0 45px 16px var(--accent-soft),
+			inset 0 1px 3px #ffffff !important;
+	}
+
+	.piano-cube.is-active .cube-face--front,
+	.piano-cube:active .cube-face--front {
+		border-color: var(--accent-strong) !important;
+		box-shadow: 0 0 20px -2px var(--accent-soft) !important;
+	}
+
+	/* 6 Exact Geometric Faces — centered at (50%, 50%) of the cuboid */
+	.cube-face {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		box-sizing: border-box;
+		border: 1px solid var(--glass-border);
+		backface-visibility: visible;
+	}
+
+	/* Front Face: W x H at +D/2 */
+	.cube-face--front {
+		width: var(--cube-w);
+		height: var(--cube-h);
+		transform: translate3d(-50%, -50%, calc(var(--cube-d) / 2));
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+		padding: 0.5rem 0.2rem;
+		text-align: center;
+		border-radius: 4px;
+		background: linear-gradient(
+			180deg,
+			rgba(255, 255, 255, 0.2) 0%,
+			rgba(20, 32, 54, 0.88) 50%,
+			rgba(8, 14, 24, 0.98) 100%
+		);
+		box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4);
+		transition: all 0.2s ease-out;
+	}
+
+	:global(html[data-theme='light']) .cube-face--front {
+		background: linear-gradient(
+			180deg,
+			rgba(255, 255, 255, 0.98) 0%,
+			rgba(186, 230, 253, 0.88) 50%,
+			rgba(125, 211, 252, 0.7) 100%
+		);
+		border-color: rgba(30, 90, 160, 0.4);
+		box-shadow: inset 0 1px 2px #ffffff;
+	}
+
+	/* Back Face: W x H at -D/2 */
+	.cube-face--back {
+		width: var(--cube-w);
+		height: var(--cube-h);
+		transform: translate3d(-50%, -50%, calc(var(--cube-d) / -2)) rotateY(180deg);
+		background: rgba(8, 12, 20, 0.9);
+	}
+
+	:global(html[data-theme='light']) .cube-face--back {
+		background: rgba(147, 197, 253, 0.55);
+		border-color: rgba(30, 90, 160, 0.3);
+	}
+
+	/* Top Face: W x D at top edge */
+	.cube-face--top {
+		width: var(--cube-w);
+		height: var(--cube-d);
+		transform: translate3d(-50%, -50%, 0) translateY(calc(var(--cube-h) / -2)) rotateX(90deg);
+		background: rgba(255, 255, 255, 0.38);
+		border-radius: 4px;
+		box-shadow:
+			inset 0 1px 2px rgba(255, 255, 255, 0.85),
+			0 0 14px -2px var(--accent-soft);
+		transition: all 0.2s ease-out;
+	}
+
+	:global(html[data-theme='light']) .cube-face--top {
+		background: #ffffff;
+		border-color: rgba(30, 90, 160, 0.35);
+		box-shadow:
+			inset 0 1px 3px #ffffff,
+			0 0 12px -2px rgba(56, 189, 248, 0.55);
+	}
+
+	/* Bottom Face: W x D at bottom edge */
+	.cube-face--bottom {
+		width: var(--cube-w);
+		height: var(--cube-d);
+		transform: translate3d(-50%, -50%, 0) translateY(calc(var(--cube-h) / 2)) rotateX(-90deg);
+		background: rgba(4, 6, 12, 0.95);
+	}
+
+	:global(html[data-theme='light']) .cube-face--bottom {
+		background: rgba(160, 190, 220, 0.7);
+	}
+
+	/* Left Face: D x H at left edge */
+	.cube-face--left {
+		width: var(--cube-d);
+		height: var(--cube-h);
+		transform: translate3d(-50%, -50%, 0) translateX(calc(var(--cube-w) / -2)) rotateY(-90deg);
+		background: linear-gradient(
+			90deg,
+			rgba(14, 22, 36, 0.95) 0%,
+			rgba(24, 36, 56, 0.8) 100%
+		);
+	}
+
+	:global(html[data-theme='light']) .cube-face--left {
+		background: linear-gradient(
+			90deg,
+			rgba(2, 132, 199, 0.5) 0%,
+			rgba(56, 189, 248, 0.38) 100%
+		);
+		border-color: rgba(30, 90, 160, 0.35);
+	}
+
+	/* Right Face: D x H at right edge */
+	.cube-face--right {
+		width: var(--cube-d);
+		height: var(--cube-h);
+		transform: translate3d(-50%, -50%, 0) translateX(calc(var(--cube-w) / 2)) rotateY(90deg);
+		background: linear-gradient(
+			-90deg,
+			rgba(14, 22, 36, 0.95) 0%,
+			rgba(24, 36, 56, 0.8) 100%
+		);
+	}
+
+	:global(html[data-theme='light']) .cube-face--right {
+		background: linear-gradient(
+			-90deg,
+			rgba(2, 132, 199, 0.5) 0%,
+			rgba(56, 189, 248, 0.38) 100%
+		);
+		border-color: rgba(30, 90, 160, 0.35);
+	}
+
+	/* Ground Plane Contact Shadow — sits flat on the floor below the key */
+	.cube-shadow {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: calc(var(--cube-w) * 1.5);
+		height: calc(var(--cube-d) * 1.3);
+		transform: translate3d(-50%, -50%, 0) translateY(calc(var(--cube-h) / 2 + 18px)) rotateX(90deg);
+		border-radius: 50%;
+		background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.65) 0%, transparent 70%);
+		pointer-events: none;
+	}
+
+	:global(html[data-theme='light']) .cube-shadow {
+		background: radial-gradient(ellipse at center, rgba(14, 60, 110, 0.38) 0%, transparent 70%);
+	}
+
+	.cube-note {
+		font-size: var(--text-micro);
+		font-weight: 700;
+		color: var(--text-strong);
+	}
+
+	.cube-key {
+		font-size: 0.65rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		border: 1px solid var(--glass-border);
+		border-radius: 3px;
+		padding: 1px 4px;
+		background: rgba(0, 0, 0, 0.15);
+	}
+
+	:global(html[data-theme='light']) .cube-key {
+		background: rgba(255, 255, 255, 0.7);
+		border-color: rgba(30, 90, 160, 0.25);
+		color: var(--text-strong);
+	}
+
+	.piano-hint {
+		margin-top: 1.5rem;
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+		text-align: center;
+	}
+
+	@keyframes pb-wave-bounce {
+		0% {
+			transform: translateZ(0px) rotateX(0deg);
+		}
+		50% {
+			transform: translateZ(var(--pb-depth)) rotateX(4deg);
+		}
+		100% {
+			transform: translateZ(0px) rotateX(0deg);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.piano-cube {
+			animation: none !important;
+		}
+	}
+</style>

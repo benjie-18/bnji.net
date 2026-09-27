@@ -128,6 +128,16 @@ export function initCursorGlow(): void {
 				visible = true;
 			}
 			kick();
+
+			// Tame mouse parallax variables for CSS background layers (clouds, bokeh, aurora)
+			if (!prefersReducedMotion()) {
+				const cx = window.innerWidth / 2;
+				const cy = window.innerHeight / 2;
+				const px = Math.max(-10, Math.min(10, ((event.clientX - cx) / cx) * 10));
+				const py = Math.max(-10, Math.min(10, ((event.clientY - cy) / cy) * 10));
+				document.documentElement.style.setProperty('--bg-parallax-x', `${px.toFixed(1)}px`);
+				document.documentElement.style.setProperty('--bg-parallax-y', `${py.toFixed(1)}px`);
+			}
 		},
 		{ passive: true },
 	);

@@ -1,0 +1,646 @@
+---
+/**
+ * Lab — Trailing Cursor Laboratory.
+ *
+ * Interactive particle playground with customizable pointer trails.
+ *
+ * Features:
+ * - Simple, intuitive setting names: Stars, Bubbles, Ribbons, Dots, Sparkles
+ * - Harmonic presets: Star Wand, Bubbles, Rainbow Ribbon, Cosmic Dust
+ * - Motion styles: Drift, Orbit, Spray
+ * - Light & dark mode calibrated particle palettes (high contrast glass & neon)
+ * - Click-to-burst impulse
+ */
+---
+
+<div class="cursor-trails" data-cursor-trails>
+	<!-- Status Bar & Preset Chips -->
+	<div class="trail-header">
+		<div class="trail-metric">
+			<span class="mono text-muted trail-metric-label">PARTICLES</span>
+			<span class="trail-metric-value mono" data-ct-count>0</span>
+		</div>
+
+		<div class="trail-presets" role="radiogroup" aria-label="Trail Preset">
+			<button class="glass-button glass-button--sm mono is-active" type="button" data-ct-preset="stars">
+				Star Wand
+			</button>
+			<button class="glass-button glass-button--sm mono" type="button" data-ct-preset="bubbles">
+				Bubbles
+			</button>
+			<button class="glass-button glass-button--sm mono" type="button" data-ct-preset="ribbon">
+				Rainbow Ribbon
+			</button>
+			<button class="glass-button glass-button--sm mono" type="button" data-ct-preset="dust">
+				Cosmic Dust
+			</button>
+		</div>
+	</div>
+
+	<!-- Interactive Sandbox Canvas -->
+	<div class="trail-viewport" data-ct-viewport>
+		<canvas class="trail-canvas" data-ct-canvas width="800" height="420"></canvas>
+		<div class="trail-hint-box mono">
+			Move pointer or touch inside · Click to burst
+		</div>
+	</div>
+
+	<!-- Basic & Intuitive Controls -->
+	<div class="lab-controls">
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Shape <output data-ct-out="shape">Stars</output>
+			</span>
+			<select class="lab-select mono" data-ct-in="shape">
+				<option value="star" selected>Stars (✦)</option>
+				<option value="bubble">Bubbles (●)</option>
+				<option value="ribbon">Ribbons (~)</option>
+				<option value="dot">Dots (·)</option>
+				<option value="sparkle">Sparkles (◆)</option>
+			</select>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Motion Style <output data-ct-out="motion">Drift</output>
+			</span>
+			<select class="lab-select mono" data-ct-in="motion">
+				<option value="drift" selected>Drift (Smooth Follow)</option>
+				<option value="orbit">Orbit (Gravity Pull)</option>
+				<option value="spray">Spray (Velocity Burst)</option>
+			</select>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Color Theme <output data-ct-out="color">Sky Blue</output>
+			</span>
+			<select class="lab-select mono" data-ct-in="color">
+				<option value="cyan" selected>Sky Blue</option>
+				<option value="rainbow">Rainbow</option>
+				<option value="aurora">Emerald & Purple</option>
+				<option value="gold">Amber Gold</option>
+				<option value="frost">Frost Glass</option>
+			</select>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Trail Length <output data-ct-out="density">35</output>
+			</span>
+			<input class="lab-range" type="range" min="10" max="70" step="5" value="35" data-ct-in="density" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Size <output data-ct-out="scale">1.0×</output>
+			</span>
+			<input class="lab-range" type="range" min="0.5" max="2.0" step="0.1" value="1.0" data-ct-in="scale" />
+		</label>
+	</div>
+</div>
+
+<script>
+	interface Particle {
+		x: number;
+		y: number;
+		vx: number;
+		vy: number;
+		size: number;
+		maxLife: number;
+		life: number;
+		rot: number;
+		vRot: number;
+		hue: number;
+		shape: string;
+	}
+
+	interface PointHistory {
+		x: number;
+		y: number;
+		time: number;
+		hue: number;
+		width: number;
+	}
+
+	const root = document.querySelector<HTMLElement>('[data-cursor-trails]');
+	if (root) {
+		const viewport = root.querySelector<HTMLElement>('[data-ct-viewport]')!;
+		const canvas = root.querySelector<HTMLCanvasElement>('[data-ct-canvas]')!;
+		const ctx = canvas.getContext('2d')!;
+		const countEl = root.querySelector<HTMLElement>('[data-ct-count]')!;
+
+		const shapeIn = root.querySelector<HTMLSelectElement>('[data-ct-in="shape"]')!;
+		const shapeOut = root.querySelector<HTMLOutputElement>('[data-ct-out="shape"]')!;
+		const motionIn = root.querySelector<HTMLSelectElement>('[data-ct-in="motion"]')!;
+		const motionOut = root.querySelector<HTMLOutputElement>('[data-ct-out="motion"]')!;
+		const colorIn = root.querySelector<HTMLSelectElement>('[data-ct-in="color"]')!;
+		const colorOut = root.querySelector<HTMLOutputElement>('[data-ct-out="color"]')!;
+		const densityIn = root.querySelector<HTMLInputElement>('[data-ct-in="density"]')!;
+		const densityOut = root.querySelector<HTMLOutputElement>('[data-ct-out="density"]')!;
+		const scaleIn = root.querySelector<HTMLInputElement>('[data-ct-in="scale"]')!;
+		const scaleOut = root.querySelector<HTMLOutputElement>('[data-ct-out="scale"]')!;
+
+		const presetBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-ct-preset]'));
+
+		let shape = 'star';
+		let motion = 'drift';
+		let colorMode = 'cyan';
+		let density = 35;
+		let scale = 1.0;
+
+		const particles: Particle[] = [];
+		const points: PointHistory[] = [];
+
+		let pointerX = -100;
+		let pointerY = -100;
+		let prevPointerX = -100;
+		let prevPointerY = -100;
+		let isPointerInside = false;
+		let chromaticHue = 195;
+
+		const isLight = () => document.documentElement.dataset.theme === 'light';
+
+		const resize = () => {
+			const rect = viewport.getBoundingClientRect();
+			const dpr = Math.min(window.devicePixelRatio || 1, 2);
+			canvas.width = Math.round(rect.width * dpr);
+			canvas.height = Math.round(rect.height * dpr);
+			canvas.style.width = `${rect.width}px`;
+			canvas.style.height = `${rect.height}px`;
+			ctx.resetTransform();
+			ctx.scale(dpr, dpr);
+		};
+		window.addEventListener('resize', resize);
+		resize();
+
+		const getParticleColor = (p: Particle, alpha: number) => {
+			const light = isLight();
+			if (colorMode === 'cyan') {
+				return light ? `rgba(2, 132, 199, ${alpha * 0.95})` : `rgba(56, 189, 248, ${alpha})`;
+			} else if (colorMode === 'rainbow') {
+				const s = light ? 90 : 85;
+				const l = light ? 45 : 65;
+				return `hsla(${p.hue}, ${s}%, ${l}%, ${alpha})`;
+			} else if (colorMode === 'aurora') {
+				const h = p.hue % 2 === 0 ? (light ? 155 : 150) : (light ? 280 : 275);
+				const l = light ? 42 : 64;
+				return `hsla(${h}, 85%, ${l}%, ${alpha})`;
+			} else if (colorMode === 'gold') {
+				return light ? `rgba(217, 119, 6, ${alpha * 0.95})` : `rgba(253, 224, 71, ${alpha})`;
+			} else {
+				// Frost Glass
+				return light ? `rgba(71, 85, 105, ${alpha * 0.85})` : `rgba(255, 255, 255, ${alpha * 0.9})`;
+			}
+		};
+
+		const spawnParticles = (x: number, y: number, vx: number, vy: number, count = 1) => {
+			for (let i = 0; i < count; i++) {
+				if (particles.length >= density * 2) particles.shift();
+
+				let pvx = vx * 0.2 + (Math.random() - 0.5) * 2;
+				let pvy = vy * 0.2 + (Math.random() - 0.5) * 2;
+
+				if (motion === 'spray') {
+					const angle = Math.random() * Math.PI * 2;
+					const spd = 2 + Math.random() * 5.5;
+					pvx = Math.cos(angle) * spd + vx * 0.3;
+					pvy = Math.sin(angle) * spd + vy * 0.3;
+				}
+
+				const baseSize = shape === 'dot' ? 3.5 : shape === 'star' ? 14 : shape === 'bubble' ? 12 : 10;
+
+				particles.push({
+					x,
+					y,
+					vx: pvx,
+					vy: pvy,
+					size: (baseSize + Math.random() * 7) * scale,
+					maxLife: 0.65 + Math.random() * 0.45,
+					life: 0,
+					rot: Math.random() * Math.PI * 2,
+					vRot: (Math.random() - 0.5) * 0.12,
+					hue: (chromaticHue + i * 8) % 360,
+					shape,
+				});
+			}
+		};
+
+		// Draw 4-point star
+		const drawStar = (x: number, y: number, r: number, rot: number, color: string) => {
+			ctx.save();
+			ctx.translate(x, y);
+			ctx.rotate(rot);
+			ctx.fillStyle = color;
+			ctx.beginPath();
+			for (let i = 0; i < 8; i++) {
+				const radius = i % 2 === 0 ? r : r * 0.35;
+				const angle = (i * Math.PI) / 4;
+				const px = Math.cos(angle) * radius;
+				const py = Math.sin(angle) * radius;
+				if (i === 0) ctx.moveTo(px, py);
+				else ctx.lineTo(px, py);
+			}
+			ctx.closePath();
+			ctx.fill();
+			ctx.restore();
+		};
+
+		// Draw glass bubble with rim and specular highlight
+		const drawBubble = (x: number, y: number, r: number, color: string) => {
+			const light = isLight();
+			ctx.save();
+			// Translucent fluid body
+			ctx.fillStyle = color;
+			ctx.beginPath();
+			ctx.arc(x, y, r, 0, Math.PI * 2);
+			ctx.fill();
+
+			// Glass outer rim border for high visibility in light mode
+			ctx.strokeStyle = light ? 'rgba(2, 132, 199, 0.45)' : 'rgba(255, 255, 255, 0.6)';
+			ctx.lineWidth = 1;
+			ctx.stroke();
+
+			// Specular reflection highlight
+			ctx.fillStyle = light ? 'rgba(255, 255, 255, 0.9)' : '#ffffff';
+			ctx.beginPath();
+			ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.3, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.restore();
+		};
+
+		// Draw diamond sparkle
+		const drawSparkle = (x: number, y: number, r: number, rot: number, color: string) => {
+			ctx.save();
+			ctx.translate(x, y);
+			ctx.rotate(rot);
+			ctx.fillStyle = color;
+			ctx.beginPath();
+			ctx.moveTo(0, -r);
+			ctx.lineTo(r * 0.6, 0);
+			ctx.lineTo(0, r);
+			ctx.lineTo(-r * 0.6, 0);
+			ctx.closePath();
+			ctx.fill();
+			ctx.restore();
+		};
+
+		// Pointer tracking
+		viewport.addEventListener('pointerenter', () => {
+			isPointerInside = true;
+		});
+
+		viewport.addEventListener('pointerleave', () => {
+			isPointerInside = false;
+		});
+
+		viewport.addEventListener('pointermove', (e) => {
+			const rect = viewport.getBoundingClientRect();
+			pointerX = e.clientX - rect.left;
+			pointerY = e.clientY - rect.top;
+
+			const vx = pointerX - prevPointerX;
+			const vy = pointerY - prevPointerY;
+			const dist = Math.hypot(vx, vy);
+
+			if (dist > 3) {
+				const spawnCount = Math.min(Math.ceil(dist / 10), 3);
+				spawnParticles(pointerX, pointerY, vx, vy, spawnCount);
+
+				points.push({
+					x: pointerX,
+					y: pointerY,
+					time: performance.now(),
+					hue: chromaticHue,
+					width: Math.min(18 * scale, 4 + dist * 0.25 * scale),
+				});
+				if (points.length > density) points.shift();
+			}
+
+			prevPointerX = pointerX;
+			prevPointerY = pointerY;
+		});
+
+		// Burst on click
+		viewport.addEventListener('pointerdown', (e) => {
+			const rect = viewport.getBoundingClientRect();
+			const px = e.clientX - rect.left;
+			const py = e.clientY - rect.top;
+
+			for (let i = 0; i < 22; i++) {
+				const angle = (i / 22) * Math.PI * 2;
+				const spd = 3.5 + Math.random() * 7;
+				particles.push({
+					x: px,
+					y: py,
+					vx: Math.cos(angle) * spd,
+					vy: Math.sin(angle) * spd,
+					size: (12 + Math.random() * 8) * scale,
+					maxLife: 0.8,
+					life: 0,
+					rot: Math.random() * Math.PI * 2,
+					vRot: (Math.random() - 0.5) * 0.2,
+					hue: (chromaticHue + i * 16) % 360,
+					shape,
+				});
+			}
+		});
+
+		// Render loop
+		let animId = 0;
+		let lastTime = performance.now();
+
+		const render = (now: number) => {
+			const dt = Math.min((now - lastTime) / 1000, 0.1);
+			lastTime = now;
+			chromaticHue = (chromaticHue + 60 * dt) % 360;
+
+			const rect = viewport.getBoundingClientRect();
+			ctx.clearRect(0, 0, rect.width, rect.height);
+
+			// Render Ribbon trail if selected
+			if (shape === 'ribbon' && points.length > 2) {
+				const nowMs = performance.now();
+				while (points.length > 0 && nowMs - points[0].time > 750) {
+					points.shift();
+				}
+
+				for (let i = 1; i < points.length; i++) {
+					const p0 = points[i - 1];
+					const p1 = points[i];
+					const age = (nowMs - p1.time) / 750;
+					const alpha = Math.max(0, 1 - age);
+
+					ctx.save();
+					ctx.strokeStyle = getParticleColor({ hue: p1.hue } as Particle, alpha);
+					ctx.lineWidth = p1.width * (1 - age * 0.7);
+					ctx.lineCap = 'round';
+					ctx.lineJoin = 'round';
+					ctx.beginPath();
+					ctx.moveTo(p0.x, p0.y);
+					ctx.lineTo(p1.x, p1.y);
+					ctx.stroke();
+					ctx.restore();
+				}
+			}
+
+			// Render Particles
+			for (let i = particles.length - 1; i >= 0; i--) {
+				const p = particles[i];
+				p.life += dt;
+				if (p.life >= p.maxLife) {
+					particles.splice(i, 1);
+					continue;
+				}
+
+				const progress = p.life / p.maxLife;
+				const alpha = 1 - progress;
+				const curSize = p.size * (1 - progress * 0.35);
+
+				// Motions
+				if (motion === 'drift') {
+					p.x += p.vx;
+					p.y += p.vy;
+					p.vx *= 0.94;
+					p.vy *= 0.94;
+				} else if (motion === 'orbit') {
+					if (isPointerInside) {
+						const dx = pointerX - p.x;
+						const dy = pointerY - p.y;
+						const dist = Math.hypot(dx, dy) || 1;
+						const force = Math.min(220 / dist, 10);
+						p.vx += (dx / dist) * force * dt * 60;
+						p.vy += (dy / dist) * force * dt * 60;
+					}
+					p.x += p.vx;
+					p.y += p.vy;
+					p.vx *= 0.95;
+					p.vy *= 0.95;
+				} else if (motion === 'spray') {
+					p.x += p.vx;
+					p.y += p.vy;
+					p.vy += 2.0 * dt * 60;
+					p.vx *= 0.96;
+				}
+
+				p.rot += p.vRot;
+				const col = getParticleColor(p, alpha);
+
+				if (p.shape === 'star') {
+					drawStar(p.x, p.y, curSize, p.rot, col);
+				} else if (p.shape === 'bubble') {
+					drawBubble(p.x, p.y, curSize * 0.65, col);
+				} else if (p.shape === 'dot') {
+					ctx.fillStyle = col;
+					ctx.beginPath();
+					ctx.arc(p.x, p.y, curSize * 0.45, 0, Math.PI * 2);
+					ctx.fill();
+				} else if (p.shape === 'sparkle') {
+					drawSparkle(p.x, p.y, curSize, p.rot, col);
+				}
+			}
+
+			if (countEl) {
+				countEl.textContent = String(particles.length + (shape === 'ribbon' ? points.length : 0));
+			}
+
+			animId = requestAnimationFrame(render);
+		};
+
+		// Controls
+		shapeIn?.addEventListener('change', () => {
+			shape = shapeIn.value;
+			if (shapeOut) shapeOut.textContent = shapeIn.options[shapeIn.selectedIndex].text.split(' (')[0];
+		});
+
+		motionIn?.addEventListener('change', () => {
+			motion = motionIn.value;
+			if (motionOut) motionOut.textContent = motionIn.options[motionIn.selectedIndex].text.split(' (')[0];
+		});
+
+		colorIn?.addEventListener('change', () => {
+			colorMode = colorIn.value;
+			if (colorOut) colorOut.textContent = colorIn.options[colorIn.selectedIndex].text;
+		});
+
+		densityIn?.addEventListener('input', () => {
+			density = Number(densityIn.value);
+			if (densityOut) densityOut.textContent = String(density);
+		});
+
+		scaleIn?.addEventListener('input', () => {
+			scale = Number(scaleIn.value);
+			if (scaleOut) scaleOut.textContent = `${scale.toFixed(1)}×`;
+		});
+
+		// Presets
+		const applyPreset = (id: string) => {
+			particles.length = 0;
+			points.length = 0;
+
+			if (id === 'stars') {
+				shape = 'star';
+				motion = 'drift';
+				colorMode = 'gold';
+				density = 35;
+				scale = 1.1;
+			} else if (id === 'bubbles') {
+				shape = 'bubble';
+				motion = 'drift';
+				colorMode = 'cyan';
+				density = 30;
+				scale = 1.2;
+			} else if (id === 'ribbon') {
+				shape = 'ribbon';
+				motion = 'drift';
+				colorMode = 'rainbow';
+				density = 45;
+				scale = 1.1;
+			} else if (id === 'dust') {
+				shape = 'dot';
+				motion = 'spray';
+				colorMode = 'aurora';
+				density = 55;
+				scale = 0.9;
+			}
+
+			shapeIn.value = shape;
+			motionIn.value = motion;
+			colorIn.value = colorMode;
+			densityIn.value = String(density);
+			scaleIn.value = String(scale);
+
+			if (shapeOut) shapeOut.textContent = shapeIn.options[shapeIn.selectedIndex].text.split(' (')[0];
+			if (motionOut) motionOut.textContent = motionIn.options[motionIn.selectedIndex].text.split(' (')[0];
+			if (colorOut) colorOut.textContent = colorIn.options[colorIn.selectedIndex].text;
+			if (densityOut) densityOut.textContent = String(density);
+			if (scaleOut) scaleOut.textContent = `${scale.toFixed(1)}×`;
+		};
+
+		presetBtns.forEach((btn) => {
+			btn.addEventListener('click', () => {
+				const id = btn.dataset.ctPreset || 'stars';
+				presetBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+				applyPreset(id);
+			});
+		});
+
+		// Intersection observer
+		const obs = new IntersectionObserver((entries) => {
+			for (const entry of entries) {
+				if (entry.isIntersecting) {
+					lastTime = performance.now();
+					animId = requestAnimationFrame(render);
+				} else {
+					cancelAnimationFrame(animId);
+				}
+			}
+		});
+		obs.observe(root);
+	}
+</script>
+
+<style>
+	.cursor-trails {
+		display: grid;
+		gap: 1.25rem;
+		width: 100%;
+	}
+
+	.trail-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		padding: 0.65rem 1.25rem;
+		border-radius: var(--radius-md);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+	}
+
+	.trail-metric {
+		display: flex;
+		align-items: baseline;
+		gap: 0.65rem;
+	}
+
+	.trail-metric-label {
+		font-size: var(--text-micro);
+		letter-spacing: 0.08em;
+	}
+
+	.trail-metric-value {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--text-strong);
+	}
+
+	.trail-presets {
+		display: flex;
+		gap: 0.45rem;
+		flex-wrap: wrap;
+	}
+
+	.trail-viewport {
+		position: relative;
+		width: 100%;
+		height: 380px;
+		border-radius: var(--radius-xl);
+		background:
+			radial-gradient(100% 70% at 50% 20%, rgba(56, 189, 248, 0.08), transparent 70%),
+			rgba(8, 12, 22, 0.65);
+		border: 1px solid var(--glass-border);
+		overflow: hidden;
+		touch-action: none;
+		cursor: crosshair;
+	}
+
+	:global(html[data-theme='light']) .trail-viewport {
+		background:
+			radial-gradient(100% 70% at 50% 20%, rgba(56, 189, 248, 0.16), transparent 70%),
+			rgba(240, 247, 255, 0.75);
+		border-color: rgba(30, 90, 160, 0.22);
+	}
+
+	.trail-canvas {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+
+	.trail-hint-box {
+		position: absolute;
+		bottom: 12px;
+		left: 50%;
+		transform: translateX(-50%);
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+		padding: 4px 12px;
+		background: rgba(0, 0, 0, 0.4);
+		backdrop-filter: blur(6px);
+		border-radius: var(--radius-pill);
+		pointer-events: none;
+		white-space: nowrap;
+	}
+
+	:global(html[data-theme='light']) .trail-hint-box {
+		background: rgba(255, 255, 255, 0.7);
+		color: var(--text-muted);
+	}
+
+	.lab-select {
+		padding: 0.5rem 0.85rem;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		color: var(--text-strong);
+		font-size: var(--text-xs);
+		outline: none;
+		cursor: pointer;
+	}
+
+	.lab-select:focus-visible {
+		border-color: var(--accent-strong);
+	}
+</style>

@@ -40,7 +40,7 @@
 	   while the keyboard eats the visual one (iOS Safari). Over-constrained
 	   on purpose: with height set, `bottom: 0` from inset is ignored. */
 	height: calc(100dvh - var(--kb-inset, 0px));
-	z-index: var(--z-board);
+	z-index: var(--z-board, 25);
 	pointer-events: none;
 	overflow: hidden;
 }
@@ -129,85 +129,100 @@
 	border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
-/* Light: glossy aero bubble, hue-tinted. The pill radius on the base rule
-   keeps it bubble-like at every content size. */
+/* Light: glossy aero soap bubble matching the floating atmosphere, hue-tinted.
+   Pill radius keeps it fluid and bubble-like at any text length. */
 html[data-theme='light'] .board-msg__grab {
-	color: #0b3d52;
+	color: #092c42;
+	font-weight: 500;
+	border-radius: var(--radius-pill);
 	background:
-		radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.95), transparent 34%),
-		radial-gradient(circle at 68% 78%, hsla(var(--hue), 85%, 70%, 0.4), transparent 46%),
+		radial-gradient(circle at 35% 26%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.15) 28%, transparent 50%),
+		radial-gradient(circle at 72% 76%, hsla(calc(var(--hue) + 35), 90%, 75%, 0.35) 0%, transparent 52%),
 		radial-gradient(
 			circle at 50% 50%,
-			hsla(var(--hue), 90%, 96%, 0.55) 52%,
-			hsla(var(--hue), 85%, 84%, 0.72) 82%,
-			hsla(var(--hue), 90%, 98%, 0.95) 99%
+			hsla(var(--hue), 85%, 97%, 0.5) 0%,
+			hsla(var(--hue), 75%, 85%, 0.35) 58%,
+			hsla(var(--hue), 80%, 65%, 0.55) 86%,
+			rgba(255, 255, 255, 0.95) 100%
 		);
-	border-color: hsla(var(--hue), 90%, 99%, 0.9);
+	border: 1.5px solid rgba(255, 255, 255, 0.85);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
 	box-shadow:
-		0 10px 26px -14px hsla(var(--hue), 70%, 40%, 0.45),
-		inset 0 -8px 16px -10px hsla(var(--hue), 70%, 45%, 0.5),
-		inset 0 3px 8px -4px rgba(255, 255, 255, 0.9);
+		0 14px 32px -8px hsla(var(--hue), 70%, 40%, 0.28),
+		inset 0 -6px 14px -4px hsla(var(--hue), 80%, 70%, 0.45),
+		inset 0 3px 8px -2px rgba(255, 255, 255, 0.95);
+	text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
-/* Dark: an actual five-point star — clip-path carves the real silhouette out
-   of the hue-gradient body (it used to be a circle with a star-sounding class
-   name). Consequences handled here:
-     - clip-path clips box-shadow, so the outer glow moves to a drop-shadow
-       filter on the unclipped li, which follows the star's outline;
-     - star points eat the corners, so padding grows to keep text inside the
-       star's centre band;
-     - the border would be carved away mid-edge — dropped for the dark shape. */
+/* Bubble specular glint crescent inside */
+html[data-theme='light'] .board-msg__grab::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: 14%;
+	inset-block-start: 10%;
+	inline-size: 38%;
+	block-size: 26%;
+	border-radius: 50%;
+	background: radial-gradient(ellipse at 46% 38%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.4) 48%, transparent 80%);
+	transform: rotate(-18deg);
+	pointer-events: none;
+	filter: blur(0.5px);
+}
+
+/* Dark: round, tamed celestial star orbs with subtle starlight halos
+   and delicate pin-point diffraction glint. */
 html[data-theme='dark'] .board-msg {
-	filter: drop-shadow(0 0 12px hsla(var(--hue), 90%, 70%, 0.5));
+	filter: drop-shadow(0 0 6px hsla(var(--hue), 80%, 75%, 0.3));
 }
 html[data-theme='dark'] .board-msg__grab {
-	color: #081018;
-	background: radial-gradient(
-		circle at 50% 44%,
-		hsla(var(--hue), 96%, 90%, 0.98),
-		hsla(var(--hue), 88%, 68%, 0.62) 46%,
-		hsla(var(--hue), 82%, 46%, 0.16) 72%,
-		transparent 78%
-	);
-	border-color: transparent;
-	box-shadow: none;
-	padding: 1.35rem 1.9rem;
-	clip-path: polygon(
-		50% 0%,
-		61% 35%,
-		98% 35%,
-		68% 57%,
-		79% 91%,
-		50% 70%,
-		21% 91%,
-		32% 57%,
-		2% 35%,
-		39% 35%
-	);
-	border-radius: 0;
+	color: #ffffff;
+	font-weight: 500;
+	border-radius: var(--radius-pill);
+	background:
+		radial-gradient(
+			circle at 40% 30%,
+			hsla(var(--hue), 90%, 94%, 0.28) 0%,
+			hsla(var(--hue), 80%, 70%, 0.12) 36%,
+			rgba(10, 16, 26, 0.76) 100%
+		);
+	border: 1px solid hsla(var(--hue), 85%, 80%, 0.5);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	box-shadow:
+		0 4px 18px -4px rgba(0, 0, 0, 0.6),
+		inset 0 1px 1px 0 rgba(255, 255, 255, 0.4),
+		inset 0 0 8px hsla(var(--hue), 90%, 80%, 0.2);
+	text-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.85),
+		0 0 6px hsla(var(--hue), 90%, 80%, 0.4);
+	padding: 0.85rem 1.25rem;
+	clip-path: none;
 }
 
-/* Four-point sparkle behind dark orbs — the "star" read. */
+/* Subtle, tamed starlight glint flare behind dark star */
 html[data-theme='dark'] .board-msg::before {
 	content: '';
 	position: absolute;
-	inset: -18%;
+	inset: -8%;
 	pointer-events: none;
-	background: conic-gradient(
-		from 0deg,
-		transparent 0deg 40deg,
-		hsla(var(--hue), 95%, 85%, 0.5) 45deg,
-		transparent 50deg 130deg,
-		hsla(var(--hue), 95%, 85%, 0.5) 135deg,
-		transparent 140deg 220deg,
-		hsla(var(--hue), 95%, 85%, 0.5) 225deg,
-		transparent 230deg 310deg,
-		hsla(var(--hue), 95%, 85%, 0.5) 315deg,
-		transparent 320deg
-	);
-	mask: radial-gradient(circle, transparent 30%, black 42%, transparent 62%);
-	-webkit-mask: radial-gradient(circle, transparent 30%, black 42%, transparent 62%);
-	opacity: 0.8;
+	background:
+		radial-gradient(circle, hsla(var(--hue), 100%, 95%, 0.65) 0%, hsla(var(--hue), 90%, 75%, 0.2) 30%, transparent 68%),
+		conic-gradient(
+			from 0deg,
+			transparent 0deg 43deg,
+			hsla(var(--hue), 100%, 92%, 0.6) 45deg,
+			transparent 47deg 133deg,
+			hsla(var(--hue), 100%, 92%, 0.6) 135deg,
+			transparent 137deg 223deg,
+			hsla(var(--hue), 100%, 92%, 0.6) 225deg,
+			transparent 227deg 313deg,
+			hsla(var(--hue), 100%, 92%, 0.6) 315deg,
+			transparent 317deg
+		);
+	mask: radial-gradient(ellipse at center, black 25%, transparent 72%);
+	-webkit-mask: radial-gradient(ellipse at center, black 25%, transparent 72%);
+	opacity: 0.45;
 }
 
 /* Reduced motion: calm static grid, no pop animation. */
@@ -235,7 +250,7 @@ html[data-theme='dark'] .board-msg::before {
 	   published by scripts/board.ts (0 when no keyboard / no JS). */
 	bottom: calc(var(--gutter) + var(--kb-inset, 0px));
 	transform: translateX(-50%);
-	z-index: calc(var(--z-board) + 1);
+	z-index: calc(var(--z-board, 25) + 5) !important;
 	pointer-events: auto;
 	display: grid;
 	gap: 0.4rem;

@@ -27,6 +27,7 @@ import { initNavScrollState, initParallax, initReveal } from './scroll';
 import { initSettings } from './settings';
 import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
+import { initLiquidGlass } from './liquid-glass';
 
 function start(name: string, init: () => void): void {
 	try {
@@ -45,6 +46,7 @@ export function boot(): void {
 	// the pre-paint script) before anything consults them.
 	start('settings', initSettings);
 	start('theme', initTheme);
+	start('liquid-glass', initLiquidGlass);
 	start('settings-overlay', initSettingsOverlay);
 	start('music-player', initMusicPlayer);
 	start('starfield', initStarfield);

@@ -120,6 +120,8 @@ ol {
 	inset: -12vmax;
 	z-index: var(--z-aurora);
 	pointer-events: none;
+	transform: translate3d(calc(var(--bg-parallax-x, 0px) * 0.35), calc(var(--bg-parallax-y, 0px) * 0.35), 0);
+	transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 	/* The background (both themes, six token-driven radials) lives in
 	   aero.css — the single definition. A competing three-radial copy used to
 	   sit here and was dead weight: aero.css is imported after global.css and
@@ -138,10 +140,14 @@ ol {
 
 /* --- Structural shells ---------------------------------------------------- */
 
-.site-main,
-.site-footer {
+.site-main {
 	position: relative;
 	z-index: var(--z-content);
+}
+
+.site-footer {
+	position: relative;
+	z-index: var(--z-footer, 1);
 }
 
 /* The nav floats above everything but must not become an invisible wall: the

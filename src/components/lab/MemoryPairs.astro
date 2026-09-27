@@ -1,48 +1,172 @@
 ---
 /**
- * Lab — Memory Pairs. The classic flip-and-match game on a 4×4 glass grid.
+ * Lab — Memory Pairs. Flip-and-match memory game with liquid glass styling,
+ * customizable themes (Kaomoji, Cyber, Oceanic, Kawaii, Retro), custom pair sizes (4-12 pairs),
+ * high-performance hardware-accelerated 3D card flips, and clean settings separation.
  *
- * DOM-only (no canvas, no framework): each card is a real <button>, so the
- * game is fully keyboard playable and screen-reader announceable. Move
- * counter, session best score, win state and a reset. Flips are transform/
- * opacity only; reduced motion swaps the flip for an instant reveal.
- *
- * Isolation contract: no rAF loop at all (event-driven), owns its subtree.
+ * DOM-only, accessible via keyboard and screen readers, self-contained Web Audio synthesis.
  */
-const GLYPHS = ['◆', '●', '▲', '■', '★', '☾', '✚', '⬟'];
-const deck = [...GLYPHS, ...GLYPHS]
+const INITIAL_GLYPHS = ['◆', '●', '▲', '■', '★', '☾', '✚', '⬟'];
+const initialDeck = [...INITIAL_GLYPHS, ...INITIAL_GLYPHS]
 	.map((glyph, i) => ({ glyph, key: `${glyph}-${i}`, sort: Math.random() }))
 	.sort((a, b) => a.sort - b.sort)
 	.map((card) => card.glyph);
 ---
 
-<div class="memory" data-memory>
-	<div class="memory__hud mono">
-		<span>moves <b data-mem-moves>0</b></span>
-		<span>pairs <b data-mem-pairs>0</b>/8</span>
-		<span>best <b data-mem-best>—</b></span>
+<div class="memory" data-memory data-glass-variant="clear">
+	<!-- Concentric Liquid Glass Backdrop & Calibration Pattern -->
+	<div class="memory__backdrop" aria-hidden="true">
+		<div class="memory__grid-mesh"></div>
 	</div>
 
-	<div class="memory__grid" role="group" aria-label="Memory pairs board">
-		{
-			deck.map((glyph, index) => (
-				<button
-					class="memory__card"
-					type="button"
-					data-mem-card={glyph}
-					data-index={index}
-					aria-label={`Card ${index + 1}, face down`}
-				>
-					<span class="memory__face memory__face--back" aria-hidden="true">?</span>
-					<span class="memory__face memory__face--front" aria-hidden="true">{glyph}</span>
+	<!-- Top Toolbar: HUD, Presets, Settings Gear Button -->
+	<div class="memory__toolbar" data-glass="quiet">
+		<div class="memory__hud mono">
+			<div class="memory__hud-item">
+				<span class="hud-label">MOVES</span>
+				<b data-mem-moves>0</b>
+			</div>
+			<div class="memory__hud-item">
+				<span class="hud-label">PAIRS</span>
+				<b data-mem-pairs>0 / 8</b>
+			</div>
+			<div class="memory__hud-item">
+				<span class="hud-label">BEST</span>
+				<b data-mem-best>—</b>
+			</div>
+		</div>
+
+		<div class="memory__quick-actions">
+			<button class="memory__tool-btn mono" type="button" data-mem-preset="6">
+				6 Pairs
+			</button>
+			<button class="memory__tool-btn mono is-active" type="button" data-mem-preset="8">
+				8 Pairs
+			</button>
+			<button class="memory__tool-btn mono" type="button" data-mem-preset="12">
+				12 Pairs
+			</button>
+			<button class="memory__tool-btn mono" type="button" data-mem-preset="custom" title="Toggle custom game mode">
+				Custom
+			</button>
+
+			<!-- Small dedicated gear icon to configure settings -->
+			<button
+				class="memory__gear-btn"
+				type="button"
+				data-mem-settings-toggle
+				aria-expanded="false"
+				aria-label="Settings"
+				title="Settings"
+			>
+				<svg class="memory__gear-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path d="M12 15.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Z" stroke="currentColor" stroke-width="1.8"></path>
+					<path d="M19.4 14.4a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.86 2.86l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.11a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.86-2.86l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.11a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.86-2.86l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.11a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.86 2.86l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.11a1.7 1.7 0 0 0-1.49 1.4Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+
+			<button class="memory__reset-btn mono" type="button" data-mem-reset title="Restart current game">
+				↻ Reset
+			</button>
+		</div>
+	</div>
+
+	<!-- Collapsible Liquid Glass Settings Panel -->
+	<div class="memory__settings-drawer" data-glass="quiet" data-mem-settings-drawer hidden>
+		<div class="memory__settings-grid">
+			<!-- Theme Selector -->
+			<div class="setting-group">
+				<label class="setting-label mono" for="mem-theme-select">CARD THEME</label>
+				<select id="mem-theme-select" class="setting-select mono" data-mem-setting="theme">
+					<option value="retro" selected>Retro Glyphs (◆ ● ▲ ★)</option>
+					<option value="kaomoji">Liquid Aero (Kaomoji)</option>
+					<option value="oceanic">Oceanic Crystal (🫧 🐬 🌊)</option>
+					<option value="cyber">Cyber Synth (⚡ 💾 💎)</option>
+					<option value="kawaii">Kawaii Animals (🐱 🦊 🐼)</option>
+				</select>
+			</div>
+
+			<!-- Pairs Count Slider -->
+			<div class="setting-group">
+				<div class="setting-header mono">
+					<label class="setting-label" for="mem-pairs-slider">CUSTOM PAIRS COUNT</label>
+					<span class="setting-val" data-mem-val="pairs">8 Pairs (16 Cards)</span>
+				</div>
+				<input
+					id="mem-pairs-slider"
+					class="setting-slider"
+					type="range"
+					min="4"
+					max="12"
+					step="1"
+					value="8"
+					data-mem-setting="pairs"
+				/>
+			</div>
+
+			<!-- Card Back Emblem -->
+			<div class="setting-group">
+				<label class="setting-label mono" for="mem-back-select">CARD BACK</label>
+				<select id="mem-back-select" class="setting-select mono" data-mem-setting="back">
+					<option value="?" selected>? (Classic Mystery)</option>
+					<option value="✦">✦ (Prism Star)</option>
+					<option value="🫧">🫧 (Liquid Bubble)</option>
+					<option value="◈">◈ (Rhombus Gem)</option>
+				</select>
+			</div>
+
+			<!-- Glass Finish -->
+			<div class="setting-group">
+				<label class="setting-label mono" for="mem-glass-select">GLASS FINISH</label>
+				<select id="mem-glass-select" class="setting-select mono" data-mem-setting="glass">
+					<option value="clear" selected>Crystal Clear (Refractive)</option>
+					<option value="frosted">Frosted Milk (Diffused)</option>
+					<option value="prism">Prism Aurora (Iridescent)</option>
+				</select>
+			</div>
+
+			<!-- Sound FX Toggle -->
+			<div class="setting-group setting-group--toggle">
+				<span class="setting-label mono">AUDIO FX</span>
+				<button class="memory__audio-toggle mono is-active" type="button" data-mem-audio-toggle aria-pressed="true">
+					<span class="dot dot--live" aria-hidden="true"></span>
+					<span data-mem-audio-label>Sound: On</span>
 				</button>
-			))
-		}
+			</div>
+		</div>
 	</div>
 
-	<div class="memory__actions">
-		<button class="memory__reset mono" type="button" data-mem-reset>Reset board</button>
-		<p class="memory__status mono" data-mem-status role="status" aria-live="polite"></p>
+	<!-- Memory Cards Board Container -->
+	<div class="memory__board-frame">
+		<div
+			class="memory__grid"
+			role="group"
+			aria-label="Memory pairs board"
+			data-mem-grid
+			style="--mem-cols: 4;"
+		>
+			{
+				initialDeck.map((glyph, index) => (
+					<button
+						class="memory__card"
+						type="button"
+						data-mem-card={glyph}
+						data-index={index}
+						aria-label={`Card ${index + 1}, face down`}
+					>
+						<span class="memory__card-inner">
+							<span class="memory__face memory__face--back" aria-hidden="true">?</span>
+							<span class="memory__face memory__face--front" aria-hidden="true">{glyph}</span>
+						</span>
+					</button>
+				))
+			}
+		</div>
+	</div>
+
+	<!-- Status / Win Banner -->
+	<div class="memory__status-bar mono" data-mem-status role="status" aria-live="polite">
+		Flip two cards to find matching pairs.
 	</div>
 </div>
 
@@ -50,36 +174,158 @@ const deck = [...GLYPHS, ...GLYPHS]
 	const host =
 		(document.currentScript?.closest?.('[data-memory]') as HTMLElement | null) ??
 		document.querySelector<HTMLElement>('[data-memory]');
+
 	if (host) {
-		const cards = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-mem-card]'));
+		const grid = host.querySelector<HTMLElement>('[data-mem-grid]');
 		const movesEl = host.querySelector<HTMLElement>('[data-mem-moves]');
 		const pairsEl = host.querySelector<HTMLElement>('[data-mem-pairs]');
 		const bestEl = host.querySelector<HTMLElement>('[data-mem-best]');
 		const statusEl = host.querySelector<HTMLElement>('[data-mem-status]');
-		const reset = host.querySelector<HTMLButtonElement>('[data-mem-reset]');
-		if (movesEl && pairsEl && bestEl && statusEl && reset) {
+		const resetBtn = host.querySelector<HTMLButtonElement>('[data-mem-reset]');
+		const settingsToggle = host.querySelector<HTMLButtonElement>('[data-mem-settings-toggle]');
+		const settingsDrawer = host.querySelector<HTMLElement>('[data-mem-settings-drawer]');
+		const presetBtns = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-mem-preset]'));
+
+		const themeSelect = host.querySelector<HTMLSelectElement>('[data-mem-setting="theme"]');
+		const pairsSlider = host.querySelector<HTMLInputElement>('[data-mem-setting="pairs"]');
+		const pairsValText = host.querySelector<HTMLElement>('[data-mem-val="pairs"]');
+		const backSelect = host.querySelector<HTMLSelectElement>('[data-mem-setting="back"]');
+		const glassSelect = host.querySelector<HTMLSelectElement>('[data-mem-setting="glass"]');
+		const audioToggle = host.querySelector<HTMLButtonElement>('[data-mem-audio-toggle]');
+		const audioLabel = host.querySelector<HTMLElement>('[data-mem-audio-label]');
+
+		if (grid && movesEl && pairsEl && bestEl && statusEl && resetBtn) {
+			// Sound synthesis
+			let soundEnabled = true;
+			let audioCtx: AudioContext | null = null;
+			const getAudioCtx = () => {
+				if (!audioCtx) {
+					const AudioContextClass =
+						window.AudioContext ||
+						(window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+					if (AudioContextClass) audioCtx = new AudioContextClass();
+				}
+				if (audioCtx && audioCtx.state === 'suspended') {
+					audioCtx.resume();
+				}
+				return audioCtx;
+			};
+
+			const playFlipSound = () => {
+				if (!soundEnabled) return;
+				try {
+					const ctx = getAudioCtx();
+					if (!ctx) return;
+					const t = ctx.currentTime;
+					const osc = ctx.createOscillator();
+					const gain = ctx.createGain();
+					osc.type = 'sine';
+					osc.frequency.setValueAtTime(380, t);
+					osc.frequency.exponentialRampToValueAtTime(190, t + 0.045);
+					gain.gain.setValueAtTime(0.14, t);
+					gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+					osc.connect(gain);
+					gain.connect(ctx.destination);
+					osc.start(t);
+					osc.stop(t + 0.055);
+				} catch {}
+			};
+
+			const playMatchSound = () => {
+				if (!soundEnabled) return;
+				try {
+					const ctx = getAudioCtx();
+					if (!ctx) return;
+					const t = ctx.currentTime;
+					[523.25, 659.25].forEach((freq, idx) => {
+						const osc = ctx.createOscillator();
+						const gain = ctx.createGain();
+						osc.type = 'triangle';
+						osc.frequency.setValueAtTime(freq, t + idx * 0.08);
+						gain.gain.setValueAtTime(0, t + idx * 0.08);
+						gain.gain.linearRampToValueAtTime(0.18, t + idx * 0.08 + 0.01);
+						gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.08 + 0.22);
+						osc.connect(gain);
+						gain.connect(ctx.destination);
+						osc.start(t + idx * 0.08);
+						osc.stop(t + idx * 0.08 + 0.25);
+					});
+				} catch {}
+			};
+
+			const playWinSound = () => {
+				if (!soundEnabled) return;
+				try {
+					const ctx = getAudioCtx();
+					if (!ctx) return;
+					const t = ctx.currentTime;
+					const notes = [523.25, 659.25, 783.99, 1046.5];
+					notes.forEach((freq, idx) => {
+						const osc = ctx.createOscillator();
+						const gain = ctx.createGain();
+						osc.type = 'sine';
+						osc.frequency.setValueAtTime(freq, t + idx * 0.09);
+						gain.gain.setValueAtTime(0, t + idx * 0.09);
+						gain.gain.linearRampToValueAtTime(0.2, t + idx * 0.09 + 0.01);
+						gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.09 + 0.35);
+						osc.connect(gain);
+						gain.connect(ctx.destination);
+						osc.start(t + idx * 0.09);
+						osc.stop(t + idx * 0.09 + 0.4);
+					});
+				} catch {}
+			};
+
+			// Card Theme Glyphs
+			const THEMES: Record<string, string[]> = {
+				retro: ['◆', '●', '▲', '■', '★', '☾', '✚', '⬟', '✦', '❖', '◈', '☼'],
+				kaomoji: [
+					'(・_・)',
+					'(^_^)',
+					'(>_<)',
+					'(*_*)',
+					'(o_o)',
+					'(^o^)',
+					'(;_;)',
+					'(=^･ω･^=)',
+					'(~_~)',
+					'(¬_¬)',
+					'(ᵔᴥᵔ)',
+					'(^з^)',
+				],
+				oceanic: ['🫧', '🐬', '🪸', '🐚', '🦀', '🌊', '🐠', '🦪', '🦑', '🐙', '🦈', '🐳'],
+				cyber: ['⚡', '💾', '🛰️', '🔋', '📡', '💎', '🛸', '🔮', '🕹️', '📟', '🔌', '💿'],
+				kawaii: ['🐱', '🦊', '🐰', '🐼', '🐨', '🐯', '🐸', '🦉', '🦋', '🐢', '🦄', '🐝'],
+			};
+
+			let currentTheme = 'retro';
+			let pairCount = 8;
+			let customPairCount = 10;
+			let currentBack = '?';
 			let first: HTMLButtonElement | null = null;
 			let lock = false;
 			let moves = 0;
-			let pairs = 0;
+			let matchedPairs = 0;
 
-			const readBest = (): number | null => {
+			const readBest = (pairs: number): number | null => {
 				try {
-					const value = sessionStorage.getItem('bnji-memory-best');
-					return value ? Number(value) : null;
+					const val = sessionStorage.getItem(`bnji-mem-best-${pairs}`);
+					return val ? Number(val) : null;
 				} catch {
 					return null;
 				}
 			};
-			const writeBest = (value: number) => {
+
+			const writeBest = (pairs: number, val: number) => {
 				try {
-					sessionStorage.setItem('bnji-memory-best', String(value));
-				} catch {
-					/* storage blocked: best score simply won't persist */
-				}
+					sessionStorage.setItem(`bnji-mem-best-${pairs}`, String(val));
+				} catch {}
 			};
-			const best = readBest();
-			bestEl.textContent = best ? String(best) : '—';
+
+			const updateBestDisplay = () => {
+				const b = readBest(pairCount);
+				bestEl.textContent = b !== null ? String(b) : '—';
+			};
 
 			const setFace = (card: HTMLButtonElement, up: boolean, matched: boolean) => {
 				card.classList.toggle('memory__card--up', up);
@@ -93,53 +339,183 @@ const deck = [...GLYPHS, ...GLYPHS]
 			};
 
 			const finish = () => {
-				statusEl.textContent = `Solved in ${moves} moves.`;
-				const previous = readBest();
-				if (previous === null || moves < previous) {
-					writeBest(moves);
+				statusEl.textContent = `★ All ${pairCount} pairs matched in ${moves} moves!`;
+				playWinSound();
+				const prev = readBest(pairCount);
+				if (prev === null || moves < prev) {
+					writeBest(pairCount, moves);
 					bestEl.textContent = String(moves);
-					statusEl.textContent += ' New best.';
+					statusEl.textContent += ' New personal best!';
 				}
 			};
 
-			for (const card of cards) {
-				card.addEventListener('click', () => {
-					if (lock || card.classList.contains('memory__card--up')) return;
-					setFace(card, true, false);
-					if (!first) {
-						first = card;
-						return;
-					}
-					moves += 1;
-					movesEl.textContent = String(moves);
-					const a = first;
-					first = null;
-					if (a.dataset.memCard === card.dataset.memCard) {
-						setFace(a, true, true);
-						setFace(card, true, true);
-						pairs += 1;
-						pairsEl.textContent = String(pairs);
-						if (pairs === 8) finish();
-					} else {
-						lock = true;
-						setTimeout(() => {
-							setFace(a, false, false);
-							setFace(card, false, false);
-							lock = false;
-						}, 700);
-					}
-				});
-			}
-
-			reset.addEventListener('click', () => {
+			// Build and shuffle cards
+			const renderBoard = () => {
 				first = null;
 				lock = false;
 				moves = 0;
-				pairs = 0;
+				matchedPairs = 0;
 				movesEl.textContent = '0';
-				pairsEl.textContent = '0';
-				statusEl.textContent = '';
-				for (const card of cards) setFace(card, false, false);
+				pairsEl.textContent = `0 / ${pairCount}`;
+				statusEl.textContent = 'Find all matching pairs.';
+				updateBestDisplay();
+
+				const themePool = THEMES[currentTheme] || THEMES.retro;
+				const selectedGlyphs = themePool.slice(0, pairCount);
+				const deck = [...selectedGlyphs, ...selectedGlyphs]
+					.map((glyph, i) => ({ glyph, key: `${glyph}-${i}`, sort: Math.random() }))
+					.sort((a, b) => a.sort - b.sort)
+					.map((card) => card.glyph);
+
+				// Compute optimal column count
+				let cols = 4;
+				const total = deck.length;
+				if (total <= 8) cols = 4;
+				else if (total <= 12) cols = 4;
+				else if (total <= 16) cols = 4;
+				else if (total <= 20) cols = 5;
+				else cols = 6;
+
+				grid.style.setProperty('--mem-cols', String(cols));
+				grid.classList.toggle('is-kaomoji', currentTheme === 'kaomoji');
+
+				// Clear existing cards
+				grid.innerHTML = '';
+
+				deck.forEach((glyph, index) => {
+					const card = document.createElement('button');
+					card.className = 'memory__card';
+					card.type = 'button';
+					card.dataset.memCard = glyph;
+					card.dataset.index = String(index);
+					card.setAttribute('aria-label', `Card ${index + 1}, face down`);
+
+					const inner = document.createElement('span');
+					inner.className = 'memory__card-inner';
+
+					const back = document.createElement('span');
+					back.className = 'memory__face memory__face--back';
+					back.setAttribute('aria-hidden', 'true');
+					back.textContent = currentBack;
+
+					const front = document.createElement('span');
+					front.className = 'memory__face memory__face--front';
+					front.setAttribute('aria-hidden', 'true');
+					front.textContent = glyph;
+
+					inner.appendChild(back);
+					inner.appendChild(front);
+					card.appendChild(inner);
+
+					card.addEventListener('click', () => {
+						if (lock || card.classList.contains('memory__card--up')) return;
+						playFlipSound();
+						setFace(card, true, false);
+
+						if (!first) {
+							first = card;
+							return;
+						}
+
+						moves += 1;
+						movesEl.textContent = String(moves);
+						const a = first;
+						first = null;
+
+						if (a.dataset.memCard === card.dataset.memCard) {
+							setFace(a, true, true);
+							setFace(card, true, true);
+							matchedPairs += 1;
+							pairsEl.textContent = `${matchedPairs} / ${pairCount}`;
+							playMatchSound();
+
+							if (matchedPairs === pairCount) {
+								finish();
+							}
+						} else {
+							lock = true;
+							setTimeout(() => {
+								setFace(a, false, false);
+								setFace(card, false, false);
+								lock = false;
+							}, 600);
+						}
+					});
+
+					grid.appendChild(card);
+				});
+			};
+
+			// Initial setup on static template
+			renderBoard();
+
+			// Preset mode toggle buttons
+			presetBtns.forEach((btn) => {
+				btn.addEventListener('click', () => {
+					const preset = btn.dataset.memPreset;
+					if (!preset) return;
+					presetBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+
+					if (preset === 'custom') {
+						pairCount = customPairCount;
+						if (pairsSlider) pairsSlider.value = String(pairCount);
+						if (pairsValText) pairsValText.textContent = `${pairCount} Pairs (${pairCount * 2} Cards)`;
+					} else {
+						pairCount = parseInt(preset, 10);
+						if (pairsSlider) pairsSlider.value = String(pairCount);
+						if (pairsValText) pairsValText.textContent = `${pairCount} Pairs (${pairCount * 2} Cards)`;
+					}
+					renderBoard();
+				});
+			});
+
+			// Settings Drawer Toggle via dedicated gear button
+			settingsToggle?.addEventListener('click', () => {
+				if (!settingsDrawer) return;
+				const isOpen = !settingsDrawer.hidden;
+				settingsDrawer.hidden = isOpen;
+				settingsToggle.setAttribute('aria-expanded', String(!isOpen));
+				settingsToggle.classList.toggle('is-open', !isOpen);
+			});
+
+			// Settings listeners
+			themeSelect?.addEventListener('change', () => {
+				currentTheme = themeSelect.value;
+				renderBoard();
+			});
+
+			pairsSlider?.addEventListener('input', () => {
+				pairCount = parseInt(pairsSlider.value, 10);
+				customPairCount = pairCount;
+				if (pairsValText) {
+					pairsValText.textContent = `${pairCount} Pairs (${pairCount * 2} Cards)`;
+				}
+				// Activate custom preset pill
+				presetBtns.forEach((b) =>
+					b.classList.toggle('is-active', b.dataset.memPreset === 'custom'),
+				);
+				renderBoard();
+			});
+
+			backSelect?.addEventListener('change', () => {
+				currentBack = backSelect.value;
+				const backs = grid.querySelectorAll<HTMLElement>('.memory__face--back');
+				backs.forEach((b) => (b.textContent = currentBack));
+			});
+
+			glassSelect?.addEventListener('change', () => {
+				host.dataset.glassVariant = glassSelect.value;
+			});
+
+			audioToggle?.addEventListener('click', () => {
+				soundEnabled = !soundEnabled;
+				audioToggle.setAttribute('aria-pressed', String(soundEnabled));
+				audioToggle.classList.toggle('is-active', soundEnabled);
+				if (audioLabel) audioLabel.textContent = soundEnabled ? 'Sound: On' : 'Sound: Off';
+			});
+
+			resetBtn.addEventListener('click', () => {
+				renderBoard();
 			});
 		}
 	}
@@ -147,107 +523,422 @@ const deck = [...GLYPHS, ...GLYPHS]
 
 <style>
 	.memory {
+		position: relative;
 		display: grid;
-		gap: 0.7rem;
+		gap: 0.9rem;
+		padding: 1.25rem;
+		border-radius: var(--radius-lg);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+		box-shadow: var(--glass-shadow-raised);
+		overflow: hidden;
+		user-select: none;
 	}
+
+	/* Concentric subtle optical grid */
+	.memory__backdrop {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 0;
+		opacity: 0.28;
+	}
+	.memory__grid-mesh {
+		inline-size: 100%;
+		block-size: 100%;
+		background-image:
+			linear-gradient(to right, var(--glass-border) 1px, transparent 1px),
+			linear-gradient(to bottom, var(--glass-border) 1px, transparent 1px);
+		background-size: 24px 24px;
+	}
+
+	/* Top Toolbar */
+	.memory__toolbar {
+		position: relative;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		padding: 0.55rem 0.85rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+	}
+
 	.memory__hud {
 		display: flex;
-		gap: 1.2rem;
+		align-items: center;
+		gap: 1.25rem;
 		font-size: var(--text-micro);
 		letter-spacing: var(--tracking-mono);
-		text-transform: uppercase;
+	}
+	.memory__hud-item {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.hud-label {
 		color: var(--text-dim);
+		font-size: 0.65rem;
 	}
 	.memory__hud b {
 		color: var(--text-strong);
-		font-weight: 600;
+		font-size: 0.92rem;
+		font-weight: 700;
 	}
-	.memory__grid {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 0.5rem;
-	}
-	.memory__card {
-		position: relative;
-		aspect-ratio: 1;
-		border: 1px solid var(--glass-border);
-		border-radius: var(--radius-sm);
-		background: var(--glass-bg-quiet);
-		color: var(--text);
-		cursor: pointer;
-		perspective: 400px;
-		transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-	}
-	.memory__card:hover {
-		transform: translateY(-2px);
-		border-color: var(--glass-border-strong);
-	}
-	.memory__card:focus-visible {
-		outline: 2px solid var(--accent-strong);
-		outline-offset: 2px;
-	}
-	.memory__face {
-		position: absolute;
-		inset: 0;
-		display: grid;
-		place-items: center;
-		font-size: clamp(1rem, 3vw, 1.5rem);
-		transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-	}
-	.memory__face--front {
-		opacity: 0;
-		transform: rotateY(90deg);
-		color: var(--accent);
-	}
-	.memory__face--back {
-		color: var(--text-faint);
-	}
-	.memory__card--up .memory__face--front {
-		opacity: 1;
-		transform: rotateY(0);
-	}
-	.memory__card--up .memory__face--back {
-		opacity: 0;
-		transform: rotateY(-90deg);
-	}
-	.memory__card--done {
-		border-color: var(--signal-live);
-		background: var(--accent-soft);
-	}
-	.memory__actions {
+
+	.memory__quick-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.9rem;
+		gap: 0.45rem;
 		flex-wrap: wrap;
 	}
-	.memory__reset {
-		padding: 0.4rem 0.9rem;
+
+	.memory__tool-btn {
+		padding: 0.32rem 0.65rem;
 		border: 1px solid var(--glass-border);
 		border-radius: var(--radius-pill);
 		background: var(--glass-bg-quiet);
 		color: var(--text-muted);
 		font-size: var(--text-micro);
 		letter-spacing: var(--tracking-mono);
-		text-transform: uppercase;
 		cursor: pointer;
+		transition: all var(--dur-fast) var(--ease-out);
 	}
-	.memory__reset:hover {
+	.memory__tool-btn:hover {
 		color: var(--text-strong);
 		background: var(--glass-bg);
+		border-color: var(--glass-border-strong);
 	}
-	.memory__reset:focus-visible {
+	.memory__tool-btn.is-active {
+		color: var(--accent-strong);
+		border-color: var(--accent-strong);
+		background: var(--accent-soft);
+	}
+
+	/* Dedicated Gear Icon Button */
+	.memory__gear-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		inline-size: 28px;
+		block-size: 28px;
+		border: 1px solid var(--glass-border);
+		border-radius: 50%;
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all var(--dur-fast) var(--ease-out);
+	}
+	.memory__gear-btn:hover {
+		color: var(--text-strong);
+		background: var(--glass-bg);
+		border-color: var(--glass-border-strong);
+	}
+	.memory__gear-btn.is-open {
+		color: var(--accent-strong);
+		border-color: var(--accent-strong);
+		background: var(--accent-soft);
+	}
+	.memory__gear-icon {
+		inline-size: 15px;
+		block-size: 15px;
+		transition: transform var(--dur-base) var(--ease-spring);
+	}
+	.memory__gear-btn.is-open .memory__gear-icon {
+		transform: rotate(45deg);
+	}
+
+	.memory__reset-btn {
+		padding: 0.32rem 0.8rem;
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-pill);
+		background: var(--glass-bg-quiet);
+		color: var(--text-strong);
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		cursor: pointer;
+		font-weight: 600;
+		transition: all var(--dur-fast) var(--ease-out);
+	}
+	.memory__reset-btn:hover {
+		color: var(--accent);
+		background: var(--glass-bg);
+		border-color: var(--accent);
+		transform: rotate(-10deg);
+	}
+
+	/* Settings Drawer */
+	.memory__settings-drawer {
+		position: relative;
+		z-index: 2;
+		padding: 0.95rem 1.15rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		animation: drawer-slide-down 0.22s var(--ease-out);
+	}
+	@keyframes drawer-slide-down {
+		from {
+			opacity: 0;
+			transform: translateY(-8px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.memory__settings-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 0.95rem 1.4rem;
+	}
+	.setting-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	.setting-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		font-size: var(--text-micro);
+	}
+	.setting-label {
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		color: var(--text-dim);
+		text-transform: uppercase;
+	}
+	.setting-val {
+		color: var(--text-strong);
+		font-weight: 600;
+	}
+	.setting-select {
+		padding: 0.35rem 0.55rem;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-strong);
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
+	.setting-slider {
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+
+	.setting-group--toggle {
+		justify-content: flex-end;
+	}
+	.memory__audio-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.35rem 0.75rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		cursor: pointer;
+		align-self: flex-start;
+		transition: all var(--dur-fast) var(--ease-out);
+	}
+	.memory__audio-toggle.is-active {
+		border-color: var(--accent);
+		color: var(--text-strong);
+	}
+
+	/* Board Frame */
+	.memory__board-frame {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		min-block-size: 280px;
+	}
+
+	/* Dynamic Grid */
+	.memory__grid {
+		display: grid;
+		grid-template-columns: repeat(var(--mem-cols, 4), minmax(0, 1fr));
+		gap: 0.65rem;
+		inline-size: 100%;
+		max-inline-size: 580px;
+	}
+
+	/* --- Hardware-accelerated 3D Card Architecture --- */
+	:global(.memory__card) {
+		position: relative;
+		aspect-ratio: 1;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		perspective: 900px;
+		user-select: none;
+		touch-action: manipulation;
+	}
+
+	:global(.memory__card-inner) {
+		position: relative;
+		display: block;
+		inline-size: 100%;
+		block-size: 100%;
+		border-radius: var(--radius-md);
+		transform-style: preserve-3d;
+		-webkit-transform-style: preserve-3d;
+		transition: transform 0.4s cubic-bezier(0.25, 1.25, 0.5, 1);
+		will-change: transform;
+	}
+
+	:global(.memory__card:hover:not(.memory__card--up) .memory__card-inner) {
+		transform: translateY(-2px) scale(1.02);
+	}
+
+	:global(.memory__card:focus-visible) {
+		outline: none;
+	}
+	:global(.memory__card:focus-visible .memory__card-inner) {
 		outline: 2px solid var(--accent-strong);
 		outline-offset: 2px;
 	}
-	.memory__status {
-		margin: 0;
-		font-size: var(--text-micro);
-		color: var(--signal-live);
+
+	/* 180° Flip */
+	:global(.memory__card--up .memory__card-inner) {
+		transform: rotateY(180deg);
 	}
+
+	/* Both Faces */
+	:global(.memory__face) {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-md);
+		border: 2px solid var(--glass-border-strong);
+		backface-visibility: hidden;
+		-webkit-backface-visibility: hidden;
+		box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 3px 8px rgba(0, 0, 0, 0.14);
+		transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+	}
+
+	/* Back Face (Unrevealed) */
+	:global(.memory__face--back) {
+		background: var(--glass-bg-quiet);
+		color: var(--text-dim);
+		font-size: clamp(1.2rem, 3.8vw, 1.85rem);
+		font-weight: 700;
+		transform: rotateY(0deg);
+	}
+	:global(.memory__card:hover:not(.memory__card--up) .memory__face--back) {
+		border-color: var(--accent);
+		background: var(--glass-bg);
+		box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+	}
+
+	/* Front Face (Revealed Item) */
+	:global(.memory__face--front) {
+		background: var(--glass-bg);
+		border-color: var(--accent);
+		color: var(--accent-strong);
+		font-size: clamp(1.2rem, 3.8vw, 1.85rem);
+		font-weight: 700;
+		transform: rotateY(180deg);
+		text-shadow: 0 0 12px rgba(122, 196, 255, 0.4);
+	}
+
+	/* In kaomoji mode, font scales cleanly */
+	:global(.memory__grid.is-kaomoji .memory__face--front) {
+		font-size: clamp(0.72rem, 2.2vw, 0.95rem);
+		font-family: var(--font-mono);
+		font-weight: 600;
+	}
+
+	/* Matched State */
+	:global(.memory__card--done .memory__face--front) {
+		border-color: var(--signal-live) !important;
+		background: var(--accent-soft) !important;
+		color: var(--signal-live) !important;
+		box-shadow: 0 0 14px rgba(46, 204, 113, 0.28) !important;
+	}
+
+	/* Light Mode Contrast Calibrations */
+	:global(html[data-theme='light']) .memory {
+		background: rgba(240, 246, 255, 0.85);
+		border-color: rgba(0, 70, 140, 0.2);
+	}
+	:global(html[data-theme='light'] .memory__toolbar),
+	:global(html[data-theme='light'] .memory__settings-drawer) {
+		background: rgba(255, 255, 255, 0.88);
+		border-color: rgba(0, 80, 160, 0.22);
+	}
+	:global(html[data-theme='light'] .memory__face--back) {
+		background: #ffffff;
+		border-color: rgba(0, 70, 140, 0.35);
+		color: #386184;
+		box-shadow: inset 0 1px 1px rgba(255, 255, 255, 1), 0 3px 8px rgba(0, 40, 100, 0.08);
+	}
+	:global(html[data-theme='light'] .memory__card:hover:not(.memory__card--up) .memory__face--back) {
+		border-color: var(--accent);
+		box-shadow: 0 6px 14px rgba(0, 60, 140, 0.16);
+	}
+	:global(html[data-theme='light'] .memory__face--front) {
+		background: #ffffff;
+		border-color: var(--accent-strong);
+		color: #034f84;
+		text-shadow: none;
+		box-shadow: inset 0 1px 1px rgba(255, 255, 255, 1), 0 3px 8px rgba(0, 40, 100, 0.08);
+	}
+	:global(html[data-theme='light'] .memory__card--done .memory__face--front) {
+		border-color: #27ae60 !important;
+		background: rgba(46, 204, 113, 0.15) !important;
+		color: #1e824c !important;
+	}
+
+	/* Glass Material Variants */
+	.memory[data-glass-variant='frosted'] {
+		backdrop-filter: blur(28px) saturate(140%);
+	}
+	.memory[data-glass-variant='prism'] {
+		border-image: linear-gradient(135deg, rgba(120, 210, 255, 0.6), rgba(255, 160, 220, 0.6), rgba(120, 255, 200, 0.6)) 1;
+	}
+
+	/* Status Bar */
+	.memory__status-bar {
+		position: relative;
+		z-index: 2;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-align: center;
+		color: var(--text-dim);
+		padding: 0.2rem 0;
+	}
+
+	@media (max-width: 600px) {
+		.memory {
+			padding: 0.85rem;
+		}
+		.memory__toolbar {
+			flex-direction: column;
+			align-items: stretch;
+		}
+		.memory__hud {
+			justify-content: space-around;
+		}
+		.memory__quick-actions {
+			justify-content: center;
+		}
+	}
+
 	@media (prefers-reduced-motion: reduce) {
-		.memory__face,
-		.memory__card {
-			transition: none;
+		:global(.memory__card-inner) {
+			transition: none !important;
 		}
 	}
 </style>
