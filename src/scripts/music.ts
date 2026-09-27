@@ -80,7 +80,44 @@ export function initMusicPlayer(): void {
 	const muteButton = root.querySelector<HTMLButtonElement>('[data-music-mute]');
 	const status = root.querySelector<HTMLElement>('[data-music-status]');
 	const embedHost = root.querySelector<HTMLElement>('[data-music-embed]');
+	const toggleButton = root.querySelector<HTMLButtonElement>('[data-music-toggle]');
 	if (!playButton || !muteButton || !status || !embedHost) return;
+
+	/* --- Collapse toggle state --- */
+	const isBoard = window.location.pathname.startsWith('/board');
+	let isCollapsed = false;
+	try {
+		const saved = sessionStorage.getItem('bnji-music-collapsed');
+		isCollapsed = saved !== null ? saved === 'true' : isBoard;
+	} catch {
+		isCollapsed = isBoard;
+	}
+
+	const setCollapsed = (collapsed: boolean) => {
+		isCollapsed = collapsed;
+		root.dataset.collapsed = String(collapsed);
+		if (toggleButton) {
+			toggleButton.setAttribute('aria-expanded', String(!collapsed));
+			toggleButton.setAttribute('aria-label', collapsed ? 'Expand music player' : 'Collapse music player');
+			toggleButton.title = collapsed ? 'Expand music player' : 'Collapse music player';
+		}
+		try {
+			sessionStorage.setItem('bnji-music-collapsed', String(collapsed));
+		} catch {}
+	};
+
+	setCollapsed(isCollapsed);
+
+	toggleButton?.addEventListener('click', (e) => {
+		e.stopPropagation();
+		setCollapsed(!isCollapsed);
+	});
+
+	root.addEventListener('click', () => {
+		if (isCollapsed) {
+			setCollapsed(false);
+		}
+	});
 
 	const config = MUSIC_SOURCE;
 	const setState = (state: MusicState, message?: string) => {

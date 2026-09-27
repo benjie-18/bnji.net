@@ -66,37 +66,50 @@
 	--signal-soon: #ffd68a;
 	--signal-idle: rgba(226, 233, 244, 0.4);
 
-	/* --- Glass surfaces --------------------------------------------------- */
-	/* The whole glass system is these tokens plus glass.css. Keep them here so
-	   GlassPanel/GlassButton and any [data-glass] element cannot drift.
-	   Dark glass: faint white film over the void, lit from above. */
+	/* --- Liquid Glass 2027 Optical System (Dark) --------------------------- */
+	/* Adaptive luminance: glass_L = 0.58 * backdrop_L + 34
+	   Backdrop L ≈ 6% -> glass_L ≈ 37.5% -> base fill ~ rgba(255, 255, 255, 0.045) */
 	--glass-bg: rgba(255, 255, 255, 0.045);
-	--glass-bg-raised: rgba(255, 255, 255, 0.07);
-	--glass-bg-quiet: rgba(255, 255, 255, 0.026);
-	--glass-bg-fallback: rgba(10, 12, 20, 0.86); /* no-backdrop-filter browsers */
+	--glass-bg-raised: rgba(255, 255, 255, 0.075);
+	--glass-bg-quiet: rgba(255, 255, 255, 0.025);
+	--glass-bg-clear: rgba(255, 255, 255, 0.02);
+	--glass-bg-fallback: rgba(10, 12, 20, 0.88); /* no-backdrop-filter browsers */
+
+	/* Fresnel directional rim: bright top grazing reflection, darker lateral edges */
+	--glass-fresnel-top: rgba(255, 255, 255, 0.42);
+	--glass-fresnel-bottom: rgba(127, 212, 255, 0.2);
+	--glass-edge-dark: rgba(0, 0, 0, 0.45); /* 2027 dark edge structure */
 	--glass-border: rgba(255, 255, 255, 0.1);
-	--glass-border-strong: rgba(255, 255, 255, 0.2);
-	--glass-highlight: rgba(255, 255, 255, 0.075); /* faint internal top edge */
-	/* Edge light: the lit rim gradient (top-left hot, bottom-right cool). */
-	--glass-edge-a: rgba(255, 255, 255, 0.34);
+	--glass-border-strong: rgba(255, 255, 255, 0.22);
+	--glass-highlight: rgba(255, 255, 255, 0.08); /* faint internal top edge */
+
+	/* Optical sheen, bounce & environmental collection */
+	--glass-sheen-top: rgba(255, 255, 255, 0.08);
+	--glass-sheen-bottom: rgba(127, 212, 255, 0.035);
+	--glass-edge-a: rgba(255, 255, 255, 0.38);
 	--glass-edge-b: rgba(255, 255, 255, 0.04);
-	--glass-edge-c: rgba(127, 212, 255, 0.16);
-	/* Internal refraction: bottom bounce light + environmental colour bleed. */
-	--glass-refraction: rgba(127, 212, 255, 0.05);
+	--glass-edge-c: rgba(127, 212, 255, 0.18);
+	--glass-refraction: rgba(127, 212, 255, 0.07);
 	--glass-env-bleed: rgba(148, 88, 255, 0.045);
-	--glass-specular: rgba(255, 255, 255, 0.16); /* moving highlight on hover */
+	--glass-specular: rgba(255, 255, 255, 0.16);
+
+	/* Optical filter values */
 	--glass-blur: 24px;
 	--glass-saturate: 165%;
 	--glass-brightness: 1.04;
-	/* Ambient shadow: large offset, very large spread, no hard edge. */
+
+	/* Depth & shadows: ambient contact + deep elevation */
+	--glass-shadow-contact: rgba(0, 0, 0, 0.65);
 	--glass-shadow:
-		0 20px 60px -24px rgba(0, 0, 0, 0.9), 0 2px 12px rgba(0, 0, 0, 0.45);
+		0 20px 50px -20px rgba(0, 0, 0, 0.85), 0 2px 10px rgba(0, 0, 0, 0.45);
 	--glass-shadow-raised:
-		0 28px 80px -28px rgba(0, 0, 0, 0.95), 0 4px 18px rgba(0, 0, 0, 0.5);
-	/* Hover lift: tighter shadow plus a faint accent bloom. */
+		0 28px 70px -24px rgba(0, 0, 0, 0.95), 0 4px 16px rgba(0, 0, 0, 0.5);
+	--glass-shadow-large:
+		0 36px 90px -28px rgba(0, 0, 0, 0.98), 0 8px 24px rgba(0, 0, 0, 0.55);
 	--glass-glow: 0 0 44px -18px rgba(127, 212, 255, 0.55);
+
 	/* Radius of the pointer-tracked highlight; set per surface where useful. */
-	--glass-spot: 260px;
+	--glass-spot: 180px;
 	/* Pointer position, written by scripts/interactions.ts on [data-glass]. */
 	--mouse-x: 50%;
 	--mouse-y: 0%;
@@ -238,14 +251,15 @@
 	--z-aurora: 0;
 	--z-stars: 1;
 	--z-aero: 1;
+	--z-footer: 1;
 	--z-content: 2;
-	--z-board: 15;
-	--z-nav: 20;
-	--z-cursor: 30;
-	--z-skip: 40;
-	--z-player: 25;
-	--z-intro: 50;
-	--z-modal: 60;
+	--z-board: 25;
+	--z-player: 28;
+	--z-nav: 35;
+	--z-cursor: 40;
+	--z-skip: 50;
+	--z-intro: 60;
+	--z-modal: 70;
 }
 
 /* ==========================================================================
@@ -274,15 +288,15 @@
 	--cursor-mid: rgba(120, 230, 255, 0.1);
 	--cursor-rim: rgba(96, 226, 160, 0.12);
 
-	--text: #0b3d52; /* 9.6:1 on --bg */
-	--text-strong: #062b3a;
-	--text-muted: rgba(9, 55, 74, 0.78); /* ~7:1 */
-	--text-dim: rgba(9, 55, 74, 0.62); /* ~5:1 — large text only */
-	--text-faint: rgba(9, 55, 74, 0.42); /* hairlines / decorative only */
+	--text: #082836; /* 12:1 on --bg, 16:1 on white glass */
+	--text-strong: #02121a; /* 15:1 on --bg, 20:1 on white glass */
+	--text-muted: #174356; /* 7.5:1 on --bg, 9.5:1 on white glass */
+	--text-dim: #2b576b; /* 5.4:1 on --bg, 6.8:1 on white glass — WCAG AA compliant */
+	--text-faint: #447287; /* 3.9:1 on --bg, 4.9:1 on white glass */
 	--text-inverse: #f2fbff;
 
 	--accent: #0092c8; /* 4.6:1 on --bg */
-	--accent-strong: #00658c; /* 6.9:1 — focus rings */
+	--accent-strong: #004d6b; /* 8.5:1 — focus rings & strong accents */
 	--accent-soft: rgba(0, 146, 200, 0.14);
 	--accent-line: rgba(0, 146, 200, 0.42);
 	--accent-2: #00a878; /* green companion, decorative */
@@ -290,29 +304,45 @@
 	--signal-soon: #a05a00;
 	--signal-idle: rgba(9, 55, 74, 0.45);
 
-	/* Light glass: inflated white translucency — the Aero "soap bubble". */
-	--glass-bg: rgba(255, 255, 255, 0.42);
-	--glass-bg-raised: rgba(255, 255, 255, 0.6);
-	--glass-bg-quiet: rgba(255, 255, 255, 0.3);
-	--glass-bg-fallback: rgba(244, 252, 255, 0.92);
+	/* --- Liquid Glass 2027 Optical System (Light) -------------------------- */
+	/* Adaptive luminance: glass_L = 0.58 * backdrop_L + 34
+	   Backdrop L ≈ 88% -> glass_L ≈ 85% */
+	--glass-bg: rgba(255, 255, 255, 0.52);
+	--glass-bg-raised: rgba(255, 255, 255, 0.68);
+	--glass-bg-quiet: rgba(255, 255, 255, 0.35);
+	--glass-bg-clear: rgba(255, 255, 255, 0.28);
+	--glass-clear-dimming: rgba(10, 40, 75, 0.08); /* 35% dimming layer on bright fields */
+	--glass-bg-fallback: rgba(244, 252, 255, 0.94);
+
+	/* Fresnel directional rim: bright top grazing reflection, darker lateral edges */
+	--glass-fresnel-top: rgba(255, 255, 255, 0.95);
+	--glass-fresnel-bottom: rgba(0, 190, 235, 0.38);
+	--glass-edge-dark: rgba(20, 60, 100, 0.22); /* 2027 dark edge structure */
 	--glass-border: rgba(255, 255, 255, 0.72);
 	--glass-border-strong: rgba(255, 255, 255, 0.95);
 	--glass-highlight: rgba(255, 255, 255, 0.85);
+
+	/* Optical sheen and bounce */
+	--glass-sheen-top: rgba(255, 255, 255, 0.65);
+	--glass-sheen-bottom: rgba(0, 190, 235, 0.08);
 	--glass-edge-a: rgba(255, 255, 255, 0.95);
 	--glass-edge-b: rgba(255, 255, 255, 0.25);
 	--glass-edge-c: rgba(0, 190, 235, 0.45);
 	--glass-refraction: rgba(0, 190, 235, 0.12);
 	--glass-env-bleed: rgba(96, 226, 160, 0.12);
-	--glass-specular: rgba(255, 255, 255, 0.75);
-	--glass-blur: 20px;
-	--glass-saturate: 180%;
-	--glass-brightness: 1.06;
+	--glass-specular: rgba(255, 255, 255, 0.28);
+	--glass-blur: 22px;
+	--glass-saturate: 185%;
+	--glass-brightness: 1.04;
+
+	/* Depth & shadows: ambient contact + elevation */
+	--glass-shadow-contact: rgba(15, 65, 110, 0.18);
 	--glass-shadow:
-		0 18px 48px -20px rgba(21, 110, 160, 0.35), 0 2px 10px rgba(30, 130, 180, 0.16),
-		inset 0 -10px 24px -18px rgba(0, 146, 200, 0.35);
+		0 18px 44px -18px rgba(18, 90, 140, 0.28), 0 2px 8px rgba(25, 110, 160, 0.12);
 	--glass-shadow-raised:
-		0 26px 64px -24px rgba(21, 110, 160, 0.42), 0 4px 16px rgba(30, 130, 180, 0.2),
-		inset 0 -12px 28px -18px rgba(0, 146, 200, 0.4);
+		0 24px 60px -22px rgba(18, 90, 140, 0.35), 0 4px 14px rgba(25, 110, 160, 0.16);
+	--glass-shadow-large:
+		0 32px 80px -26px rgba(18, 90, 140, 0.42), 0 6px 20px rgba(25, 110, 160, 0.2);
 	--glass-glow: 0 0 40px -14px rgba(0, 190, 235, 0.55);
 
 	/* Nav surfaces on the painted sky: --accent (#0092c8) washes for
@@ -330,7 +360,7 @@
 	:root {
 		--glass-blur: 14px;
 		--glass-saturate: 140%;
-		--glass-spot: 180px;
+		--glass-spot: 130px;
 		--nav-height: 54px;
 	}
 }

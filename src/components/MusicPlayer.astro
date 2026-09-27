@@ -2,28 +2,21 @@
 /**
  * MusicPlayer — the small, unobtrusive music control (bottom right).
  *
- * One compact glass pill: a status dot, play/pause and mute. That is the
- * whole footprint — VOLUME LIVES IN THE SETTINGS OVERLAY, and every audio
- * preference flows through the settings store (scripts/settings.ts); this
- * component renders no slider and persists nothing.
+ * Configurable layout:
+ * - Open: (d s no music... ♫)
+ * - Closed: (♫) — a small circular glass badge
+ * Clicking ♫ toggles between open and closed.
  *
  * States ([data-state], driven by scripts/music.ts): idle, loading, playing,
- * paused, blocked, error, disabled — including the explicit autoplay-blocked
- * affordance: playback is attempted on page load, and when the browser
- * refuses, the play button grows a pulsing ring and the dot turns attention-
- * amber until a real click happens. No workaround is attempted.
- *
- * data-provider on the root switches the only provider-specific surface:
- * Spotify exposes no transport API, so its embed IS the control — it mounts
- * visibly above the pill on play and unmounts on pause. YouTube's iframe and
- * the file provider's audio element stay invisible; the pill is their UI.
- *
- * Placement: fixed bottom-right so it never collides with the message-board
- * composer (bottom centre) or the nav (top centre); on phones it moves under
- * the nav, same as before.
+ * paused, blocked, error, disabled.
  */
 import { MUSIC_SOURCE } from '../config/music.config';
 
+interface Props {
+	isBoard?: boolean;
+}
+
+const { isBoard = false } = Astro.props;
 const providerLabel =
 	MUSIC_SOURCE.provider === 'none' ? 'not configured' : MUSIC_SOURCE.provider;
 ---
@@ -34,36 +27,52 @@ const providerLabel =
 	data-music-player
 	data-provider={MUSIC_SOURCE.provider}
 	data-state="idle"
+	data-collapsed={isBoard ? 'true' : 'false'}
+	data-on-board={isBoard ? 'true' : 'false'}
 	role="group"
 	aria-label={`Background music (${providerLabel})`}
 >
-	<span class="music-player__dot" aria-hidden="true"></span>
+	<div class="music-player__controls" data-music-controls>
+		<button class="music-player__btn" type="button" data-music-play aria-label="Play music">
+			<svg class="music-player__icon music-player__icon--play" viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M8.5 5.8v12.4L19 12 8.5 5.8Z" fill="currentColor" />
+			</svg>
+			<svg class="music-player__icon music-player__icon--pause" viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M8 5.5h3v13H8zM13 5.5h3v13h-3z" fill="currentColor" />
+			</svg>
+			<span class="music-player__spinner" aria-hidden="true"></span>
+		</button>
 
-	<button class="music-player__btn" type="button" data-music-play aria-label="Play music">
-		<svg class="music-player__icon music-player__icon--play" viewBox="0 0 24 24" aria-hidden="true">
-			<path d="M8.5 5.8v12.4L19 12 8.5 5.8Z" fill="currentColor" />
-		</svg>
-		<svg class="music-player__icon music-player__icon--pause" viewBox="0 0 24 24" aria-hidden="true">
-			<path d="M8 5.5h3v13H8zM13 5.5h3v13h-3z" fill="currentColor" />
-		</svg>
-		<span class="music-player__spinner" aria-hidden="true"></span>
-	</button>
+		<button
+			class="music-player__btn"
+			type="button"
+			data-music-mute
+			aria-pressed="false"
+			aria-label="Mute music"
+		>
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M4 9.5v5h3.4L12 18.6V5.4L7.4 9.5H4Z" fill="currentColor" />
+				<path class="music-player__wave" d="M15 9.2a4 4 0 0 1 0 5.6M17.4 7a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" />
+				<path class="music-player__cross" d="M15 9.5l5 5M20 9.5l-5 5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" />
+			</svg>
+		</button>
+
+		<p class="music-player__status mono" data-music-status aria-live="polite">Music off</p>
+	</div>
 
 	<button
-		class="music-player__btn"
+		class="music-player__btn music-player__toggle"
 		type="button"
-		data-music-mute
-		aria-pressed="false"
-		aria-label="Mute music"
+		data-music-toggle
+		aria-label={isBoard ? 'Expand music player' : 'Collapse music player'}
+		aria-expanded={isBoard ? 'false' : 'true'}
+		title="Toggle music player"
 	>
-		<svg viewBox="0 0 24 24" aria-hidden="true">
-			<path d="M4 9.5v5h3.4L12 18.6V5.4L7.4 9.5H4Z" fill="currentColor" />
-			<path class="music-player__wave" d="M15 9.2a4 4 0 0 1 0 5.6M17.4 7a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" />
-			<path class="music-player__cross" d="M15 9.5l5 5M20 9.5l-5 5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" />
+		<svg class="music-player__note-icon" viewBox="0 0 24 24" aria-hidden="true">
+			<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6Z" fill="currentColor" />
 		</svg>
+		<span class="music-player__dot-badge" aria-hidden="true"></span>
 	</button>
-
-	<p class="music-player__status mono" data-music-status aria-live="polite">Music off</p>
 
 	<!-- Provider embed host: hidden for youtube (API-driven, pill is the UI),
 	     visible above the pill for spotify (the embed is the UI), unused for
@@ -77,37 +86,121 @@ const providerLabel =
 		right: var(--gutter);
 		bottom: var(--gutter);
 		z-index: var(--z-player);
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.3rem 0.35rem 0.3rem 0.55rem;
+		border-radius: var(--radius-pill);
+		transition: all var(--dur-base) var(--ease-spring);
+		user-select: none;
+	}
+
+	.music-player__controls {
 		display: flex;
 		align-items: center;
 		gap: 0.45rem;
-		padding: 0.3rem 0.7rem 0.3rem 0.55rem;
-		border-radius: var(--radius-pill);
+		transition: opacity var(--dur-fast) var(--ease-out);
 	}
 
-	/* --- status dot: the "is anything happening" glance ------------------- */
-	.music-player__dot {
-		inline-size: 7px;
-		block-size: 7px;
+	/* --- Collapsed mode: (♫) small circle --- */
+	.music-player[data-collapsed='true'] {
+		padding: 0;
+		gap: 0;
+		inline-size: 38px;
+		block-size: 38px;
+		border-radius: 50%;
+		justify-content: center;
+		cursor: pointer;
+	}
+
+	.music-player[data-collapsed='true'] .music-player__controls {
+		display: none;
+	}
+
+	.music-player[data-collapsed='true'] .music-player__toggle {
+		inline-size: 100%;
+		block-size: 100%;
+		border: none;
+		background: transparent;
+	}
+
+	/* --- buttons --- */
+	.music-player__btn {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		inline-size: 28px;
+		block-size: 28px;
 		flex: none;
+		border: 1px solid var(--glass-border);
+		border-radius: 50%;
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-spring);
+	}
+	.music-player__btn:hover:not(:disabled) {
+		color: var(--text-strong);
+		background: var(--glass-bg);
+		transform: scale(1.05);
+	}
+	.music-player__btn:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+	.music-player__btn:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+	.music-player__btn svg {
+		inline-size: 13px;
+		block-size: 13px;
+	}
+
+	/* Toggle ♫ Button */
+	.music-player__toggle {
+		color: var(--text-muted);
+	}
+	.music-player__note-icon {
+		inline-size: 14px;
+		block-size: 14px;
+		fill: currentColor;
+		transition: transform var(--dur-fast) var(--ease-spring), color var(--dur-fast) var(--ease-out);
+	}
+
+	/* Dot badge on the ♫ toggle button */
+	.music-player__dot-badge {
+		position: absolute;
+		top: 3px;
+		right: 3px;
+		inline-size: 5px;
+		block-size: 5px;
 		border-radius: 50%;
 		background: var(--text-dim);
-		transition: background-color var(--dur-base) var(--ease-out);
+		pointer-events: none;
+		transition: background-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 	}
-	.music-player[data-state='playing'] .music-player__dot {
+	.music-player[data-state='playing'] .music-player__dot-badge {
 		background: var(--accent);
+		box-shadow: 0 0 6px var(--accent);
 		animation: music-dot-pulse 2.6s var(--ease-soft) infinite;
 	}
-	.music-player[data-state='loading'] .music-player__dot {
+	.music-player[data-state='playing'] .music-player__note-icon {
+		color: var(--accent-strong);
+	}
+	.music-player[data-state='loading'] .music-player__dot-badge {
 		background: var(--accent);
 		animation: music-dot-blink 0.9s linear infinite;
 	}
-	.music-player[data-state='blocked'] .music-player__dot,
-	.music-player[data-state='error'] .music-player__dot {
+	.music-player[data-state='blocked'] .music-player__dot-badge,
+	.music-player[data-state='error'] .music-player__dot-badge {
 		background: var(--signal-soon);
 	}
-	.music-player[data-state='disabled'] .music-player__dot {
-		opacity: 0.5;
+	.music-player[data-state='disabled'] .music-player__dot-badge {
+		opacity: 0.4;
 	}
+
 	@keyframes music-dot-pulse {
 		0%,
 		100% {
@@ -127,40 +220,7 @@ const providerLabel =
 		}
 	}
 
-	/* --- buttons ----------------------------------------------------------- */
-	.music-player__btn {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		inline-size: 28px;
-		block-size: 28px;
-		flex: none;
-		border: 1px solid var(--glass-border);
-		border-radius: 50%;
-		background: var(--glass-bg-quiet);
-		color: var(--text-muted);
-		cursor: pointer;
-		transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
-	}
-	.music-player__btn:hover:not(:disabled) {
-		color: var(--text-strong);
-		background: var(--glass-bg);
-	}
-	.music-player__btn:focus-visible {
-		outline: 2px solid var(--accent-strong);
-		outline-offset: 2px;
-	}
-	.music-player__btn:disabled {
-		opacity: 0.55;
-		cursor: not-allowed;
-	}
-	.music-player__btn svg {
-		inline-size: 13px;
-		block-size: 13px;
-	}
-
-	/* Icon + spinner state machine, pure CSS against [data-state]. */
+	/* Icon + spinner state machine */
 	.music-player__icon--pause,
 	.music-player__spinner {
 		display: none;
@@ -190,8 +250,7 @@ const providerLabel =
 		}
 	}
 
-	/* The blocked autoplay affordance: small, but unmistakably a play button
-	   — an attention ring pulses around it until the visitor clicks. */
+	/* Blocked ring */
 	.music-player[data-state='blocked'] .music-player__btn[data-music-play] {
 		color: var(--text-strong);
 		border-color: var(--accent-strong);
@@ -207,7 +266,7 @@ const providerLabel =
 		}
 	}
 
-	/* Mute cross only when pressed. */
+	/* Mute cross */
 	.music-player__cross {
 		display: none;
 	}
@@ -218,7 +277,7 @@ const providerLabel =
 		display: none;
 	}
 
-	/* --- status line ------------------------------------------------------- */
+	/* Status line */
 	.music-player__status {
 		margin: 0;
 		font-size: var(--text-micro);
@@ -247,8 +306,7 @@ const providerLabel =
 		border-color: var(--signal-soon);
 	}
 
-	/* --- provider embed host ----------------------------------------------- */
-	/* Default: invisible box for the YouTube API iframe (the pill is the UI). */
+	/* Provider embed host */
 	.music-player__embed {
 		position: absolute;
 		inset: 0;
@@ -257,9 +315,6 @@ const providerLabel =
 		opacity: 0;
 	}
 
-	/* Spotify: the embed is the control surface (no transport API exists), so
-	   it mounts visibly above the pill and takes pointer events. Empty host
-	   (paused → unmounted) collapses away entirely. */
 	.music-player[data-provider='spotify'] .music-player__embed:not(:empty) {
 		position: fixed;
 		right: var(--gutter);
@@ -273,10 +328,21 @@ const providerLabel =
 		box-shadow: var(--glass-shadow-raised);
 	}
 
-	/* On phones the pill lives under the nav rather than in the bottom
-	   corner: on /board/ that corner belongs to the message-board composer,
-	   and keeping one consistent phone placement everywhere avoids the pill
-	   jumping between pages. */
+	/* Placement rules: On the board page at <= 980px or on mobile <= 720px,
+	   mount underneath the top nav dock so it NEVER collides with the composer */
+	@media (max-width: 980px) {
+		.music-player[data-on-board='true'],
+		:global(body:has(.board)) .music-player {
+			top: calc(var(--nav-offset) + var(--nav-height) + 8px);
+			bottom: auto;
+		}
+		.music-player[data-on-board='true'][data-provider='spotify'] .music-player__embed:not(:empty),
+		:global(body:has(.board)) .music-player[data-provider='spotify'] .music-player__embed:not(:empty) {
+			top: calc(var(--nav-offset) + var(--nav-height) + 52px);
+			bottom: auto;
+		}
+	}
+
 	@media (max-width: 720px) {
 		.music-player {
 			top: calc(var(--nav-offset) + var(--nav-height) + 8px);
@@ -295,7 +361,7 @@ const providerLabel =
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.music-player__dot,
+		.music-player__dot-badge,
 		.music-player[data-state='blocked'] .music-player__btn[data-music-play],
 		.music-player[data-state='loading'] .music-player__spinner {
 			animation: none;

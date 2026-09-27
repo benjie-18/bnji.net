@@ -39,7 +39,12 @@
 		if (ctx) {
 			const reduced = prefersReducedMotion();
 			type Bubble = { x: number; y: number; r: number; v: number; hue: number; wobble: number };
+			type PopParticle = { x: number; y: number; vx: number; vy: number; r: number; hue: number; alpha: number };
+			type PopRing = { x: number; y: number; r: number; maxR: number; hue: number; alpha: number };
+
 			let bubbles: Bubble[] = [];
+			let popParticles: PopParticle[] = [];
+			let popRings: PopRing[] = [];
 			let score = 0;
 			let combo = 1;
 			let popped = 0;
@@ -73,6 +78,8 @@
 
 			const draw = () => {
 				ctx.clearRect(0, 0, width, height);
+
+				// Draw active floating bubbles
 				for (const b of bubbles) {
 					const gradient = ctx.createRadialGradient(
 						b.x - b.r * 0.35,
@@ -91,8 +98,31 @@
 					ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
 					ctx.fill();
 					ctx.strokeStyle = `hsla(${b.hue}, 90%, 92%, 0.8)`;
-					ctx.lineWidth = 1;
+					ctx.lineWidth = 1.2;
 					ctx.stroke();
+
+					// Specular crescent glint
+					ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+					ctx.beginPath();
+					ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.32, b.r * 0.22, 0, Math.PI * 2);
+					ctx.fill();
+				}
+
+				// Draw expanding pop shockwave rings
+				for (const ring of popRings) {
+					ctx.strokeStyle = `hsla(${ring.hue}, 95%, 90%, ${Math.max(0, ring.alpha)})`;
+					ctx.lineWidth = Math.max(0.5, 2.5 * ring.alpha);
+					ctx.beginPath();
+					ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
+					ctx.stroke();
+				}
+
+				// Draw bursting pop droplets
+				for (const p of popParticles) {
+					ctx.fillStyle = `hsla(${p.hue}, 90%, 85%, ${Math.max(0, p.alpha)})`;
+					ctx.beginPath();
+					ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+					ctx.fill();
 				}
 			};
 
@@ -101,6 +131,7 @@
 				if (!isPageVisible()) return;
 				const dt = last ? Math.min((now - last) / 1000, 0.05) : 0.016;
 				last = now;
+
 				if (!reduced) {
 					for (const b of bubbles) {
 						b.y -= b.v * dt;
@@ -109,14 +140,95 @@
 					}
 					bubbles = bubbles.filter((b) => b.y > -b.r - 10);
 					if (Math.random() < dt * 1.4) spawn();
+
+					// Step popping rings
+					for (const ring of popRings) {
+						ring.r += (ring.maxR - ring.r) * 16 * dt + 20 * dt;
+						ring.alpha -= 3.4 * dt;
+					}
+					popRings = popRings.filter((r) => r.alpha > 0);
+
+					// Step popping droplets
+					for (const p of popParticles) {
+						p.x += p.vx * dt;
+						p.y += p.vy * dt;
+						p.vy += 90 * dt; // gravity
+						p.alpha -= 2.8 * dt;
+					}
+					popParticles = popParticles.filter((p) => p.alpha > 0);
 				}
 				draw();
+			};
+
+			let audioCtx: AudioContext | null = null;
+			const playPopSound = (currentCombo: number, radius: number) => {
+				try {
+					if (!audioCtx) {
+						const AudioContextClass =
+							window.AudioContext ||
+							(window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+						if (!AudioContextClass) return;
+						audioCtx = new AudioContextClass();
+					}
+					if (audioCtx.state === 'suspended') {
+						audioCtx.resume();
+					}
+					const t = audioCtx.currentTime;
+					const osc = audioCtx.createOscillator();
+					const gain = audioCtx.createGain();
+
+					const sizeFactor = Math.max(0.65, Math.min(1.45, 26 / (radius || 24)));
+					const comboFactor = 1 + Math.min(0.55, (currentCombo - 1) * 0.06);
+					const baseFreq = 440 * sizeFactor * comboFactor;
+					const endFreq = 960 * sizeFactor * comboFactor;
+
+					osc.type = 'sine';
+					osc.frequency.setValueAtTime(baseFreq, t);
+					osc.frequency.exponentialRampToValueAtTime(endFreq, t + 0.045);
+
+					gain.gain.setValueAtTime(0, t);
+					gain.gain.linearRampToValueAtTime(0.22, t + 0.005);
+					gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+
+					osc.connect(gain);
+					gain.connect(audioCtx.destination);
+
+					osc.start(t);
+					osc.stop(t + 0.075);
+				} catch {
+					// Audio not permitted without user gesture or unsupported
+				}
 			};
 
 			const popAt = (x: number, y: number): boolean => {
 				for (let i = bubbles.length - 1; i >= 0; i--) {
 					const b = bubbles[i];
-					if (Math.hypot(b.x - x, b.y - y) <= b.r + 6) {
+					if (Math.hypot(b.x - x, b.y - y) <= b.r + 8) {
+						// Spawn popping animation (ring + burst particles)
+						popRings.push({
+							x: b.x,
+							y: b.y,
+							r: b.r * 0.9,
+							maxR: b.r * 1.6,
+							hue: b.hue,
+							alpha: 1,
+						});
+
+						const particleCount = Math.floor(8 + Math.random() * 5);
+						for (let k = 0; k < particleCount; k++) {
+							const angle = (k / particleCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+							const speed = 70 + Math.random() * 160;
+							popParticles.push({
+								x: b.x,
+								y: b.y,
+								vx: Math.cos(angle) * speed,
+								vy: Math.sin(angle) * speed,
+								r: 1.8 + Math.random() * 2.2,
+								hue: b.hue,
+								alpha: 0.95,
+							});
+						}
+
 						bubbles.splice(i, 1);
 						const now = performance.now();
 						combo = now - lastPop < 900 ? Math.min(combo + 1, 9) : 1;
@@ -126,6 +238,7 @@
 						scoreEl.textContent = String(score);
 						comboEl.textContent = `×${combo}`;
 						poppedEl.textContent = String(popped);
+						playPopSound(combo, b.r);
 						return true;
 					}
 				}
@@ -205,6 +318,11 @@
 		cursor: crosshair;
 		touch-action: manipulation;
 	}
+	:global(html[data-theme='light']) .bubble-pop__canvas {
+		background: linear-gradient(180deg, rgba(200, 230, 255, 0.45) 0%, rgba(225, 242, 255, 0.65) 100%);
+		border-color: rgba(50, 120, 200, 0.22);
+		box-shadow: inset 0 2px 8px rgba(0, 50, 120, 0.05);
+	}
 	.bubble-pop__help {
 		margin: 0;
 		font-size: var(--text-micro);
@@ -216,5 +334,10 @@
 		border: 1px solid var(--glass-border);
 		border-radius: 6px;
 		font-family: var(--font-mono);
+	}
+	:global(html[data-theme='light']) .bubble-pop__help kbd {
+		background: rgba(255, 255, 255, 0.7);
+		border-color: rgba(30, 90, 160, 0.2);
+		color: var(--text-strong);
 	}
 </style>

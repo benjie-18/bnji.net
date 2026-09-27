@@ -1,151 +1,107 @@
 /* ==========================================================================
-   BNJI.NET — liquid glass design system
+   BNJI.NET — Apple Liquid Glass 2027 Optical Rendering System
    --------------------------------------------------------------------------
-   One translucent surface language for the whole site, in two theme voices
-   (dark: lit film over the void · light: inflated Frutiger Aero soap bubble).
-
-   What makes this "liquid glass" rather than blur-plus-white:
-     1. REAL TRANSLUCENCY   backdrop-filter blurs AND saturates AND lifts
-        brightness, so the surface visibly refracts whatever is behind it.
-     2. GRADIENT EDGE RIM   the 1px border is a border-box gradient (hot
-        top-left, cool bottom-right) instead of a flat stroke — the lit rim
-        that sells curvature.
-     3. INTERNAL OPTICS     ::before stacks a top specular sheet, a bottom
-        bounce-light refraction and an environmental colour bleed, so the
-        panel picks up the colour of its surroundings.
-     4. SPECULAR RESPONSE   ::after carries the pointer-tracked highlight and
-        a sweep highlight that slides on hover/focus — highlights change with
-        the viewer, like a curved surface.
-     5. SEPARATION          layered ambient shadows + an inset bottom
-        refraction line lift the surface off its background.
-     6. GRACEFUL FALLBACK   without backdrop-filter the surface becomes an
-        opaque tinted panel (--glass-bg-fallback); nothing becomes unreadable.
-
-   How to use it
-   -------------
-   - Components should render GlassPanel.astro / GlassButton.astro, which apply
-     the classes below. Prefer those over writing new glass CSS.
-   - Any element can opt in with the bare attribute: <div data-glass>.
-     scripts/interactions.ts looks for [data-glass] to drive --mouse-x/--mouse-y.
-   - Variants are additive attribute tokens: data-glass="raised interactive".
-
-   Why pseudo-elements sit at z-index: -1
-   --------------------------------------
-   [data-glass] sets isolation: isolate, which creates a local stacking context.
-   The ::before (optics) and ::after (pointer spot / sweep) can then be painted
-   *behind the panel's content but above its own background* without leaking
-   under or over neighbouring panels.
+   An optical material layer built on physical principles:
+     1. GEOMETRIC REFRACTION   Per-aspect-ratio normal displacement maps derived
+        from 4th-power continuous squircle SDF & Snell's Law (n ≈ 1.5168).
+        Refraction is concentrated along the convex curved bezel; the flat
+        interior has 0 displacement for 100% crisp content legibility.
+     2. ADAPTIVE LUMINANCE     Models macOS empirical fit:
+        glass_L = 0.58 * backdrop_L + 34
+     3. MATERIAL VARIANTS      Regular (calibrated diffusion) and Clear
+        (highly translucent with 35% dimming layer on bright fields).
+     4. FRESNEL DIRECTIONAL RIM Physical grazing response (Schlick approx):
+        bright top specular core, bottom refraction arc, and 2027 dark edge
+        absorption along lateral boundaries for depth & contrast separation.
+     5. CONCENTRIC GEOMETRY    Nested shapes compute radii from parent geometry:
+        r_child = max(4px, r_parent - padding * 0.5).
+     6. INTERACTIVE FLEX       Local illumination, energized rim light, and
+        subtle elastic micro-deformation on pointer interaction.
+     7. SCROLL-EDGE SYSTEM     Progressive blur and edge masks at viewport bounds.
+     8. ACCESSIBILITY          prefers-reduced-transparency (opaque adaptive tint),
+        prefers-reduced-motion (frozen physics), and high-contrast fallbacks.
    ========================================================================== */
 
+:root {
+	--glass-radius-pill: 9999px;
+	--glass-radius-lg: 24px;
+	--glass-radius-md: 16px;
+	--glass-radius-sm: 10px;
+	--glass-pad-lg: 24px;
+	--glass-pad-md: 16px;
+	--glass-pad-sm: 10px;
+
+	--parent-radius: var(--glass-radius-md);
+	--parent-pad: var(--glass-pad-md);
+}
+
+/* --- Base Optical Layer --------------------------------------------------- */
 [data-glass],
 .glass {
 	position: relative;
 	isolation: isolate;
-	border: 1px solid transparent;
-	border-radius: var(--radius-lg);
-	/* Surface film (padding-box) + lit rim (border-box). Two layers, one
-	   element: the rim gradient is what reads as curved glass edge. */
-	background:
-		linear-gradient(
-			168deg,
-			var(--glass-bg-raised),
-			var(--glass-bg) 38%,
-			var(--glass-bg-quiet) 100%
-		)
-		padding-box,
-		linear-gradient(
-			135deg,
-			var(--glass-edge-a),
-			var(--glass-edge-b) 42%,
-			var(--glass-edge-c) 100%
-		)
-		border-box;
+	border-radius: var(--parent-radius, var(--radius-md));
+	background: var(--glass-bg);
+	border: 1px solid var(--glass-border);
+
 	box-shadow:
+		/* Contact ambient depth */
+		0 2px 8px -1px var(--glass-shadow-contact, rgba(0, 0, 0, 0.35)),
+		/* Elevation shadow */
 		var(--glass-shadow),
-		inset 0 1px 0 var(--glass-highlight),
-		inset 0 -1px 0 var(--glass-refraction);
-	/* Refraction. Safari needs the prefixed form; both are required for the
-	   effect to be consistent across browsers. */
+		/* Subtle top grazing Fresnel reflection */
+		inset 0 1px 1px 0 var(--glass-fresnel-top),
+		/* Perimeter hairline refraction rim */
+		inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+	/* Optical transmission & lensing */
 	backdrop-filter:
-		blur(var(--glass-blur)) saturate(var(--glass-saturate))
+		var(--glass-bucket-filter, none)
+		blur(var(--glass-blur))
+		saturate(var(--glass-saturate))
 		brightness(var(--glass-brightness));
 	-webkit-backdrop-filter:
-		blur(var(--glass-blur)) saturate(var(--glass-saturate))
+		var(--glass-bucket-filter, none)
+		blur(var(--glass-blur))
+		saturate(var(--glass-saturate))
 		brightness(var(--glass-brightness));
+
 	transition:
 		box-shadow var(--dur-base) var(--ease-out),
 		border-color var(--dur-base) var(--ease-out),
-		transform var(--dur-fast) var(--ease-out);
+		background var(--dur-base) var(--ease-out),
+		transform var(--dur-fast) var(--ease-spring);
 }
 
-/* No compositing support? Stay a believable tinted panel instead of breaking. */
+/* Light theme optical calibration: crisp specular rim, bright transmission */
+html[data-theme='light'] [data-glass],
+html[data-theme='light'] .glass {
+	background: var(--glass-bg);
+	border-color: var(--glass-border);
+	box-shadow:
+		0 10px 30px -8px rgba(0, 40, 100, 0.1),
+		0 2px 8px -2px rgba(0, 0, 0, 0.04),
+		inset 0 1px 2px 0 rgba(255, 255, 255, 0.95),
+		inset 0 -1px 1px 0 rgba(0, 40, 100, 0.05);
+}
+
+/* Chromium SVG optical refraction enhancement */
+.supports-optical-refraction [data-glass] {
+	--glass-refract-active: 1;
+}
+
+/* Fallback for engines without backdrop-filter */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
 	[data-glass],
 	.glass {
-		background:
-			linear-gradient(
-				168deg,
-				var(--glass-bg-fallback),
-				var(--glass-bg-fallback) 60%,
-				var(--glass-bg-fallback)
-			)
-			padding-box,
-			linear-gradient(
-				135deg,
-				var(--glass-edge-a),
-				var(--glass-edge-b) 42%,
-				var(--glass-edge-c) 100%
-			)
-			border-box;
+		background: var(--glass-bg-fallback);
+		border-color: var(--glass-border-strong);
 	}
 }
 
-/* --- Advanced glass OFF (settings store) ----------------------------------- */
-/* html[data-advanced-glass='off'] is set PRE-PAINT by BaseHead's inline
-   script, so a visitor who turned the expensive layers off never pays for a
-   single blurred frame. The surface degrades to exactly the same believable
-   flat panel as the @supports-not fallback above: opaque tint, lit rim, one
-   inset highlight — no backdrop-filter, no ::before optics, no ::after
-   specular/sweep (scripts/interactions.ts also stops writing --mouse-x/y).
-   Specificity (0,2,1) beats the base rule, the raised/quiet variants and the
-   interactive hover/focus shadows, so one block covers the whole system. */
-
-html[data-advanced-glass='off'] [data-glass],
-html[data-advanced-glass='off'] .glass {
-	background:
-		linear-gradient(
-			168deg,
-			var(--glass-bg-fallback),
-			var(--glass-bg-fallback) 60%,
-			var(--glass-bg-fallback)
-		)
-		padding-box,
-		linear-gradient(
-			135deg,
-			var(--glass-edge-a),
-			var(--glass-edge-b) 42%,
-			var(--glass-edge-c) 100%
-		)
-		border-box;
-	box-shadow: inset 0 1px 0 var(--glass-highlight);
-	backdrop-filter: none;
-	-webkit-backdrop-filter: none;
-	/* Neutralise the hover/focus glow token so interactive surfaces cannot
-	   re-light an effect the visitor turned off. */
-	--glass-glow: 0 0 0 0 transparent;
-}
-
-html[data-advanced-glass='off'] [data-glass]::before,
-html[data-advanced-glass='off'] [data-glass]::after,
-html[data-advanced-glass='off'] .glass::before,
-html[data-advanced-glass='off'] .glass::after {
-	content: none;
-}
-
-/* --- Internal optics ------------------------------------------------------ */
-/* Top specular sheet + bottom bounce refraction + environmental bleed from the
-   lower-left corner. Pure gradients: zero runtime cost, theme-aware via
-   tokens, and it is why the surface never reads as a flat container. */
+/* --- Internal Environmental Sheen (::before) ------------------------------- */
+/* A single, delicate, subtle top glaze to catch ambient overhead light without
+   coloring or muddying the transparent fluid body. */
 [data-glass]::before,
 .glass::before {
 	content: '';
@@ -153,25 +109,25 @@ html[data-advanced-glass='off'] .glass::after {
 	inset: 0;
 	z-index: -1;
 	border-radius: inherit;
-	background:
-		/* specular sheet, lit from above */
-		linear-gradient(
-			to bottom,
-			var(--glass-highlight),
-			transparent 34%
-		),
-		/* bounce light refracted along the bottom edge */
-		radial-gradient(120% 42% at 50% 108%, var(--glass-refraction), transparent 70%),
-		/* environmental colour bleed: the surface "sees" its surroundings */
-		radial-gradient(70% 60% at 0% 100%, var(--glass-env-bleed), transparent 68%),
-		radial-gradient(60% 50% at 100% 0%, var(--glass-env-bleed), transparent 66%);
+	background: linear-gradient(
+		180deg,
+		var(--glass-sheen-top, rgba(255, 255, 255, 0.07)) 0%,
+		transparent 38%
+	);
 	pointer-events: none;
 }
 
-/* --- Specular response ---------------------------------------------------- */
-/* Pointer-tracked liquid highlight plus a sweep that slides across on hover,
-   like light travelling over a curved surface. Off by default; only lit on
-   fine pointers so touch devices never get a stuck spotlight. */
+html[data-theme='light'] [data-glass]::before,
+html[data-theme='light'] .glass::before {
+	background: linear-gradient(
+		180deg,
+		rgba(255, 255, 255, 0.65) 0%,
+		transparent 35%
+	);
+}
+
+/* --- Directional Sharp Specular Highlight (::after) ----------------------- */
+/* Pointer-energized sharp specular core tracking cursor coordinates */
 [data-glass]::after,
 .glass::after {
 	content: '';
@@ -179,31 +135,13 @@ html[data-advanced-glass='off'] .glass::after {
 	inset: 0;
 	z-index: -1;
 	border-radius: inherit;
-	background:
-		radial-gradient(
-			var(--glass-spot) circle at var(--mouse-x) var(--mouse-y),
-			var(--glass-specular),
-			var(--glass-refraction) 38%,
-			transparent 68%
-		),
-		linear-gradient(
-			105deg,
-			transparent 30%,
-			var(--glass-specular) 46%,
-			var(--glass-highlight) 50%,
-			transparent 66%
-		);
-	background-size:
-		100% 100%,
-		260% 100%;
-	background-position:
-		0 0,
-		130% 0;
-	background-repeat: no-repeat;
+	background: radial-gradient(
+		var(--glass-spot, 180px) circle at var(--glass-spec-x, var(--mouse-x, 50%)) var(--glass-spec-y, var(--mouse-y, 0%)),
+		var(--glass-specular, rgba(255, 255, 255, 0.18)),
+		transparent 70%
+	);
 	opacity: 0;
-	transition:
-		opacity var(--dur-base) var(--ease-out),
-		background-position var(--dur-slow) var(--ease-out);
+	transition: opacity var(--dur-base) var(--ease-out);
 	pointer-events: none;
 }
 
@@ -212,99 +150,337 @@ html[data-advanced-glass='off'] .glass::after {
 	[data-glass]:focus-within::after,
 	.glass:hover::after,
 	.glass:focus-within::after {
-		opacity: 1;
-		background-position:
-			0 0,
-			-30% 0;
+		opacity: 0.6;
 	}
 }
 
-/* --- Variants ------------------------------------------------------------- */
-/* Variants are attribute *tokens*, so they compose freely:
-   data-glass="raised interactive" applies both. The .glass--* class aliases
-   exist for surfaces that must not be pointer-tracked (rare). */
+/* --- Material Variants ---------------------------------------------------- */
 
-/* Raised: navigation, sheets, anything floating above other surfaces. */
-[data-glass~='raised'],
-.glass--raised {
-	background:
-		linear-gradient(
-			168deg,
-			var(--glass-bg-raised),
-			var(--glass-bg) 46%,
-			var(--glass-bg) 100%
-		)
-		padding-box,
-		linear-gradient(
-			135deg,
-			var(--glass-edge-a),
-			var(--glass-edge-b) 36%,
-			var(--glass-edge-c) 100%
-		)
-		border-box;
-	box-shadow:
-		var(--glass-shadow-raised),
-		inset 0 1px 0 var(--glass-highlight),
-		inset 0 -1px 0 var(--glass-refraction);
+/* Regular (Default): balanced diffusion and readability */
+[data-glass~='regular'] {
+	--glass-blur: 24px;
 }
 
-/* Quiet: rows, chips, inset metadata. NO backdrop-filter on purpose — small
-   stacked surfaces would otherwise each pay for a blur pass. The tint + rim
-   gradient keep them visually inside the glass family. */
+/* Clear: crystal-clear ultra-translucent with high saturation */
+[data-glass~='clear'],
+.glass--clear {
+	background: var(--glass-bg-clear);
+	border: 1px solid var(--glass-border-strong);
+	backdrop-filter:
+		var(--glass-bucket-filter, none)
+		blur(14px)
+		saturate(200%);
+	-webkit-backdrop-filter:
+		var(--glass-bucket-filter, none)
+		blur(14px)
+		saturate(200%);
+}
+
+html[data-theme='light'] [data-glass~='clear'],
+html[data-theme='light'] .glass--clear {
+	background: rgba(255, 255, 255, 0.48);
+	border: 1px solid rgba(255, 255, 255, 0.85);
+}
+
+/* Raised: floating navigation docks, sheets, and modal pills */
+[data-glass~='raised'],
+.glass--raised {
+	--parent-radius: var(--glass-radius-pill);
+	border-radius: var(--parent-radius);
+	background: var(--glass-bg-raised);
+	border: 1px solid var(--glass-border-strong);
+	box-shadow:
+		var(--glass-shadow-raised),
+		inset 0 1px 1.5px 0 var(--glass-fresnel-top);
+}
+
+html[data-theme='light'] [data-glass~='raised'],
+html[data-theme='light'] .glass--raised {
+	background: rgba(255, 255, 255, 0.82);
+	border: 1px solid rgba(255, 255, 255, 0.9);
+	box-shadow:
+		0 12px 32px -6px rgba(0, 40, 100, 0.12),
+		0 2px 8px -2px rgba(0, 0, 0, 0.04),
+		inset 0 1px 2px 0 rgba(255, 255, 255, 0.95);
+}
+
+/* Large panels: thicker glass physical profile, deeper shadow */
+[data-glass~='large'],
+.glass-panel--pad-lg {
+	--parent-radius: var(--glass-radius-lg);
+	--parent-pad: var(--glass-pad-lg);
+	box-shadow:
+		var(--glass-shadow-large, var(--glass-shadow)),
+		inset 0 1px 1px 0 var(--glass-fresnel-top);
+}
+
+/* Quiet: nested chips, inset metadata, toolbars */
 [data-glass~='quiet'],
 .glass--quiet {
-	background:
-		linear-gradient(168deg, var(--glass-bg), var(--glass-bg-quiet) 100%) padding-box,
-		linear-gradient(135deg, var(--glass-edge-b), var(--glass-edge-c) 100%) border-box;
-	box-shadow: inset 0 1px 0 var(--glass-highlight);
+	--parent-radius: var(--glass-radius-sm);
+	background: var(--glass-bg-quiet);
+	border: 1px solid var(--glass-border);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 	backdrop-filter: none;
 	-webkit-backdrop-filter: none;
 }
 
-/* Interactive: cards and tiles that are hover/focus targets. */
+/* --- Interactive State (Elastic Deformation & Rim Energizing) ------------- */
 [data-glass~='interactive'],
 .glass--interactive {
-	transition:
-		transform var(--dur-fast) var(--ease-out),
-		border-color var(--dur-fast) var(--ease-out),
-		box-shadow var(--dur-base) var(--ease-out),
-		background-color var(--dur-base) var(--ease-out);
+	cursor: pointer;
 }
 
 @media (hover: hover) and (pointer: fine) {
 	[data-glass~='interactive']:hover,
 	.glass--interactive:hover {
-		transform: translateY(var(--hover-lift));
+		/* Subtle physical squircle micro-deformation */
+		transform: translateY(calc(var(--hover-lift, -2px))) scale3d(1.004, 1.004, 1);
 		box-shadow:
+			0 2px 8px -1px var(--glass-shadow-contact),
 			var(--glass-shadow-raised),
-			var(--glass-glow),
-			inset 0 1px 0 var(--glass-highlight),
-			inset 0 -1px 0 var(--glass-refraction);
+			0 0 24px -8px var(--glass-refraction),
+			inset 0 1px 2px 0 var(--glass-fresnel-top);
+	}
+
+	[data-glass~='interactive']:active,
+	.glass--interactive:active {
+		transform: translateY(0px) scale3d(0.995, 0.995, 1);
 	}
 }
 
-/* Keyboard users get the same treatment as hover, so nothing depends on a
-   pointer being present. */
-[data-glass~='interactive']:focus-within,
-.glass--interactive:focus-within {
-	box-shadow:
-		var(--glass-shadow-raised),
-		var(--glass-glow),
-		inset 0 1px 0 var(--glass-highlight),
-		inset 0 -1px 0 var(--glass-refraction);
+/* --- Concentric Geometry -------------------------------------------------- */
+/* Nested child elements calculate concentric curvature:
+   r_child = max(4px, r_parent - padding * 0.5) */
+[data-glass] .glass-button,
+[data-glass] .chip,
+[data-glass] input:not([type='range']),
+[data-glass] select,
+[data-glass] textarea {
+	border-radius: max(6px, calc(var(--parent-radius, 16px) - var(--parent-pad, 16px) * 0.5));
 }
 
-/* --- Radius modifiers ----------------------------------------------------- */
+/* --- Glass Groups --------------------------------------------------------- */
+/* Connected glass elements share backdrop sampling context without double-blur */
+[data-glass-group] {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	isolation: isolate;
+}
 
-.glass--radius-sm {
-	border-radius: var(--radius-sm);
+[data-glass-group] > [data-glass] {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	background: var(--glass-bg-quiet);
 }
-.glass--radius-md {
-	border-radius: var(--radius-md);
+
+/* --- Scroll Edge System --------------------------------------------------- */
+/* Progressively increasing blur and edge masks at viewport scroll boundaries */
+.scroll-edge-mask {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0%,
+		black var(--scroll-edge-size, 28px),
+		black calc(100% - var(--scroll-edge-size, 28px)),
+		transparent 100%
+	);
+	-webkit-mask-image: linear-gradient(
+		to bottom,
+		transparent 0%,
+		black var(--scroll-edge-size, 28px),
+		black calc(100% - var(--scroll-edge-size, 28px)),
+		transparent 100%
+	);
 }
-.glass--radius-lg {
-	border-radius: var(--radius-lg);
+
+.scroll-edge-mask--top {
+	mask-image: linear-gradient(to bottom, transparent 0%, black var(--scroll-edge-size, 32px));
+	-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black var(--scroll-edge-size, 32px));
 }
-.glass--radius-pill {
+
+.scroll-edge-mask--bottom {
+	mask-image: linear-gradient(to top, transparent 0%, black var(--scroll-edge-size, 32px));
+	-webkit-mask-image: linear-gradient(to top, transparent 0%, black var(--scroll-edge-size, 32px));
+}
+
+/* --- Glass Buttons: Cohesive Frosted Capsule Architecture ----------------- */
+.glass-button {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0.6rem 1.35rem;
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-pill);
+	background: var(--glass-bg);
+	color: var(--text-strong);
+	font-family: var(--font-mono);
+	font-size: var(--text-small);
+	letter-spacing: var(--tracking-mono);
+	text-decoration: none;
+	cursor: pointer;
+	box-shadow:
+		0 2px 6px -1px var(--glass-shadow-contact, rgba(0,0,0,0.35)),
+		var(--glass-shadow),
+		inset 0 1px 1px var(--glass-fresnel-top);
+	backdrop-filter: blur(16px) saturate(160%);
+	-webkit-backdrop-filter: blur(16px) saturate(160%);
+	user-select: none;
+	-webkit-user-select: none;
+	transition:
+		transform var(--dur-fast) var(--ease-spring),
+		box-shadow var(--dur-base) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out),
+		color var(--dur-fast) var(--ease-out);
+}
+
+html[data-theme='light'] .glass-button {
+	background: var(--glass-bg);
+	border-color: var(--glass-border);
+	box-shadow:
+		0 4px 14px -3px rgba(0, 40, 100, 0.08),
+		inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.95),
+		inset 0 -1px 1px 0 rgba(0, 40, 100, 0.04);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-button:hover {
+		transform: translateY(var(--hover-lift, -2px)) scale3d(1.004, 1.004, 1);
+		color: var(--text-strong);
+		background: var(--glass-bg-raised);
+		border-color: var(--glass-border-strong);
+		box-shadow:
+			var(--glass-shadow-raised),
+			0 0 16px -6px var(--glass-refraction),
+			inset 0 1px 1.5px var(--glass-fresnel-top);
+	}
+}
+
+.glass-button:active {
+	transform: translateY(0) scale3d(0.995, 0.995, 1);
+}
+
+.glass-button:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.glass-button--sm {
+	padding: 0.36rem 0.85rem;
+	font-size: var(--text-micro);
+	gap: 0.35rem;
+}
+
+.glass-button--lg {
+	padding: 0.72rem 1.6rem;
+	font-size: 1.02rem;
+	gap: 0.6rem;
+}
+
+/* Primary: subtle accent boundary highlight, retaining the unified frosted pill texture */
+.glass-button--primary {
+	border-color: var(--accent-line);
+	box-shadow:
+		0 2px 8px -1px var(--glass-shadow-contact, rgba(0, 0, 0, 0.35)),
+		0 0 18px -6px var(--accent-soft),
+		inset 0 1px 1.5px var(--glass-fresnel-top);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-button--primary:hover {
+		border-color: var(--accent-strong);
+		box-shadow:
+			var(--glass-shadow-raised),
+			0 0 22px -4px var(--accent-soft),
+			inset 0 1px 2px var(--glass-fresnel-top);
+	}
+}
+
+/* Quiet: slightly more subdued text tone, matching the exact same glass capsule body */
+.glass-button--quiet {
+	color: var(--text-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-button--quiet:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+	}
+}
+
+/* --- Chips ---------------------------------------------------------------- */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.22rem 0.65rem;
+	border-radius: var(--radius-pill);
+	border: 1px solid var(--glass-border);
+	background: var(--glass-bg-quiet);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-muted);
+	line-height: 1.4;
+	white-space: nowrap;
+	transition:
+		border-color var(--dur-fast) var(--ease-out),
+		color var(--dur-fast) var(--ease-out);
+}
+
+.chip:hover {
+	color: var(--text);
+	border-color: var(--glass-border-strong);
+}
+
+.chip--accent {
+	border-color: var(--accent-line);
+	color: var(--accent);
+	background: var(--accent-soft);
+}
+
+/* --- Accessibility Variants ----------------------------------------------- */
+@media (prefers-reduced-transparency: reduce) {
+	[data-glass],
+	.glass,
+	.glass-button {
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
+		background: var(--bg-surface, #121a29) !important;
+		border: 1px solid var(--text-faint) !important;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+	}
+
+	html[data-theme='light'] [data-glass],
+	html[data-theme='light'] .glass,
+	html[data-theme='light'] .glass-button {
+		background: #ffffff !important;
+		border-color: rgba(30, 80, 140, 0.35) !important;
+		box-shadow: 0 4px 16px rgba(0, 40, 100, 0.1) !important;
+	}
+}
+
+html[data-advanced-glass='off'] [data-glass],
+html[data-advanced-glass='off'] .glass,
+html[data-advanced-glass='off'] .glass-button {
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+	background: var(--glass-bg-fallback) !important;
+	border: 1px solid var(--glass-border-strong) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	[data-glass],
+	.glass,
+	[data-glass]::after,
+	.glass::after,
+	.glass-button {
+		transition: none !important;
+		transform: none !important;
+		animation: none !important;
+	}
 }

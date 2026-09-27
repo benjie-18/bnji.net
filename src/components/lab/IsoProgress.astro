@@ -1,0 +1,709 @@
+---
+/**
+ * Lab — 3D Isometric Progress Prism.
+ *
+ * True parallel isometric 3D optical prism with zero clipping between fluid core and casing.
+ *
+ * Physical 3D Pipeline:
+ * - Exact 3D outward normal dot product with camera gaze vector C = (cos 30°, 1.0, cos 30°)
+ * - 0% base rear cap correctly culled; front cap correctly rendered
+ * - Multi-pass occlusion: Glass back -> Fluid core & meniscus -> Glass front & specular
+ * - 6-facet Hexagonal Crystal Prism and 3-facet Triangular Optical Prism
+ * - Interactive horizontal scrubbing, calibration divisions, and theme-adaptive palettes
+ */
+---
+
+<div class="iso-progress" data-iso-progress>
+	<!-- Status Header & Readout -->
+	<div class="iso-header">
+		<div class="iso-metric">
+			<span class="mono text-muted iso-metric-label">FILL RATIO</span>
+			<span class="iso-metric-value mono" data-ip-value>68%</span>
+		</div>
+
+		<div class="iso-actions">
+			<button class="glass-button glass-button--sm mono" type="button" data-ip-auto aria-pressed="false">
+				<span class="dot" data-ip-auto-dot></span> Auto Loop
+			</button>
+			<button class="glass-button glass-button--sm mono" type="button" data-ip-reset>
+				Reset View
+			</button>
+		</div>
+	</div>
+
+	<!-- 3D Viewport Stage -->
+	<div class="iso-stage" data-ip-stage>
+		<canvas class="iso-canvas" data-ip-canvas width="720" height="380"></canvas>
+		<div class="iso-canvas-hint mono">
+			Click or drag horizontally to scrub fill · True 30° Isometric Optical Prism
+		</div>
+	</div>
+
+	<!-- Controls Panel -->
+	<div class="lab-controls">
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Progress Value <output data-ip-out="progress">68%</output>
+			</span>
+			<input class="lab-range" type="range" min="0" max="100" step="1" value="68" data-ip-in="progress" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Prism Geometry <output data-ip-out="geom">Hexagonal Crystal Prism</output>
+			</span>
+			<select class="lab-select mono" data-ip-in="geom">
+				<option value="hexagonal" selected>Hexagonal Crystal Prism</option>
+				<option value="triangular">Triangular Prism (Classic Optical)</option>
+				<option value="rhombic">Rhombic Diamond Prism</option>
+			</select>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Prism Radius <output data-ip-out="depth">46px</output>
+			</span>
+			<input class="lab-range" type="range" min="32" max="64" step="2" value="46" data-ip-in="depth" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Colorway Prism <output data-ip-out="color">Aero Cyan</output>
+			</span>
+			<div class="color-palette" role="radiogroup" aria-label="Colorway">
+				<button class="color-swatch is-active" type="button" data-ip-color="cyan" aria-label="Aero Cyan" style="--c: #38bdf8;"></button>
+				<button class="color-swatch" type="button" data-ip-color="violet" aria-label="Aurora Violet" style="--c: #c084fc;"></button>
+				<button class="color-swatch" type="button" data-ip-color="emerald" aria-label="Emerald Neon" style="--c: #34d399;"></button>
+				<button class="color-swatch" type="button" data-ip-color="amber" aria-label="Amber Flare" style="--c: #fbbf24;"></button>
+				<button class="color-swatch" type="button" data-ip-color="rose" aria-label="Rose Quartz" style="--c: #f472b6;"></button>
+			</div>
+		</label>
+	</div>
+</div>
+
+<script>
+	interface ColorwayConfig {
+		name: string;
+		coreFill: string;
+		coreCap: string;
+		coreGlow: string;
+		edge: string;
+	}
+
+	const COLORWAYS: Record<string, ColorwayConfig> = {
+		cyan: {
+			name: 'Aero Cyan',
+			coreFill: 'rgba(14, 165, 233, 0.82)',
+			coreCap: '#7dd3fc',
+			coreGlow: 'rgba(56, 189, 248, 0.6)',
+			edge: '#bae6fd',
+		},
+		violet: {
+			name: 'Aurora Violet',
+			coreFill: 'rgba(168, 85, 247, 0.82)',
+			coreCap: '#d8b4fe',
+			coreGlow: 'rgba(192, 132, 252, 0.6)',
+			edge: '#f3e8ff',
+		},
+		emerald: {
+			name: 'Emerald Neon',
+			coreFill: 'rgba(16, 185, 129, 0.82)',
+			coreCap: '#6ee7b7',
+			coreGlow: 'rgba(52, 211, 153, 0.6)',
+			edge: '#a7f3d0',
+		},
+		amber: {
+			name: 'Amber Flare',
+			coreFill: 'rgba(245, 158, 11, 0.82)',
+			coreCap: '#fcd34d',
+			coreGlow: 'rgba(251, 191, 36, 0.6)',
+			edge: '#fef3c7',
+		},
+		rose: {
+			name: 'Rose Quartz',
+			coreFill: 'rgba(236, 72, 153, 0.82)',
+			coreCap: '#f472b6',
+			coreGlow: 'rgba(244, 114, 182, 0.6)',
+			edge: '#fce7f3',
+		},
+	};
+
+	interface Point3D {
+		x: number;
+		y: number;
+		z: number;
+	}
+
+	interface PolygonFace {
+		pts: Point3D[];
+		fill: string;
+		stroke?: string;
+		strokeWidth?: number;
+		depth: number;
+	}
+
+	const root = document.querySelector<HTMLElement>('[data-iso-progress]');
+	if (root) {
+		const stage = root.querySelector<HTMLElement>('[data-ip-stage]')!;
+		const canvas = root.querySelector<HTMLCanvasElement>('[data-ip-canvas]')!;
+		const ctx = canvas.getContext('2d')!;
+		const valDisplay = root.querySelector<HTMLElement>('[data-ip-value]')!;
+		const autoBtn = root.querySelector<HTMLButtonElement>('[data-ip-auto]')!;
+		const autoDot = root.querySelector<HTMLElement>('[data-ip-auto-dot]')!;
+		const resetBtn = root.querySelector<HTMLButtonElement>('[data-ip-reset]')!;
+
+		const progressIn = root.querySelector<HTMLInputElement>('[data-ip-in="progress"]');
+		const progressOut = root.querySelector<HTMLOutputElement>('[data-ip-out="progress"]');
+		const geomIn = root.querySelector<HTMLSelectElement>('[data-ip-in="geom"]');
+		const geomOut = root.querySelector<HTMLOutputElement>('[data-ip-out="geom"]');
+		const depthIn = root.querySelector<HTMLInputElement>('[data-ip-in="depth"]');
+		const depthOut = root.querySelector<HTMLOutputElement>('[data-ip-out="depth"]');
+		const colorBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-ip-color]'));
+		const colorOut = root.querySelector<HTMLOutputElement>('[data-ip-out="color"]');
+
+		let progress = 68;
+		let prismGeom = 'hexagonal';
+		let prismRadius = 46;
+		let activeColor = 'cyan';
+		let isAuto = false;
+		let autoDir = 1;
+		let autoAnimId = 0;
+		let isDragging = false;
+
+		const isLight = () => document.documentElement.dataset.theme === 'light';
+
+		const resize = () => {
+			const rect = stage.getBoundingClientRect();
+			const dpr = Math.min(window.devicePixelRatio || 1, 2);
+			canvas.width = Math.round(rect.width * dpr);
+			canvas.height = Math.round(rect.height * dpr);
+			canvas.style.width = `${rect.width}px`;
+			canvas.style.height = `${rect.height}px`;
+			ctx.resetTransform();
+			ctx.scale(dpr, dpr);
+		};
+		window.addEventListener('resize', resize);
+		resize();
+
+		// True affine 30-degree isometric projection:
+		const projectIso = (p: Point3D, ox: number, oy: number) => {
+			const cos30 = 0.866025;
+			const sin30 = 0.5;
+			const screenX = ox + (p.x - p.z) * cos30;
+			const screenY = oy + (p.x + p.z) * sin30 - p.y;
+			return { x: screenX, y: screenY };
+		};
+
+		// 3D Camera direction vector in isometric projection:
+		const CAM = { x: 0.866025, y: 1.0, z: 0.866025 };
+
+		// Build cross-section vertices in (Y, Z) plane
+		const getCrossSection = (radius: number, geom: string): Array<{ y: number; z: number }> => {
+			const pts: Array<{ y: number; z: number }> = [];
+
+			if (geom === 'triangular') {
+				// Apex at top (+Y)
+				pts.push({ y: radius * 0.95, z: 0 });
+				pts.push({ y: -radius * 0.55, z: radius * 0.866 });
+				pts.push({ y: -radius * 0.55, z: -radius * 0.866 });
+			} else if (geom === 'hexagonal') {
+				// 6-sided regular hexagon
+				for (let i = 0; i < 6; i++) {
+					const a = (i * Math.PI) / 3;
+					pts.push({ y: Math.sin(a) * radius * 0.75, z: Math.cos(a) * radius * 0.75 });
+				}
+			} else {
+				// Rhombic Diamond
+				pts.push({ y: radius * 0.8, z: 0 });
+				pts.push({ y: 0, z: radius * 0.8 });
+				pts.push({ y: -radius * 0.8, z: 0 });
+				pts.push({ y: 0, z: -radius * 0.8 });
+			}
+
+			return pts;
+		};
+
+		const drawPolygon = (pts2D: Array<{ x: number; y: number }>, fill: string, stroke?: string, strokeW = 1) => {
+			if (pts2D.length < 3) return;
+			ctx.save();
+			ctx.fillStyle = fill;
+			ctx.beginPath();
+			ctx.moveTo(pts2D[0].x, pts2D[0].y);
+			for (let i = 1; i < pts2D.length; i++) {
+				ctx.lineTo(pts2D[i].x, pts2D[i].y);
+			}
+			ctx.closePath();
+			ctx.fill();
+
+			if (stroke) {
+				ctx.strokeStyle = stroke;
+				ctx.lineWidth = strokeW;
+				ctx.lineJoin = 'round';
+				ctx.stroke();
+			}
+			ctx.restore();
+		};
+
+		const render = () => {
+			const rect = stage.getBoundingClientRect();
+			ctx.clearRect(0, 0, rect.width, rect.height);
+
+			const ox = rect.width / 2;
+			const oy = rect.height * 0.54;
+
+			const prismLength = Math.min(380, rect.width - 80);
+			const halfL = prismLength / 2;
+			const light = isLight();
+			const cw = COLORWAYS[activeColor] || COLORWAYS.cyan;
+
+			// Ground contact shadow
+			const s0 = projectIso({ x: -halfL - 25, y: -prismRadius - 12, z: -prismRadius * 1.2 }, ox, oy);
+			const s1 = projectIso({ x: halfL + 25, y: -prismRadius - 12, z: -prismRadius * 1.2 }, ox, oy);
+			const s2 = projectIso({ x: halfL + 25, y: -prismRadius - 12, z: prismRadius * 1.2 }, ox, oy);
+			const s3 = projectIso({ x: -halfL - 25, y: -prismRadius - 12, z: prismRadius * 1.2 }, ox, oy);
+
+			ctx.save();
+			ctx.fillStyle = light ? 'rgba(30, 80, 140, 0.25)' : 'rgba(0, 0, 0, 0.55)';
+			ctx.filter = 'blur(16px)';
+			ctx.beginPath();
+			ctx.moveTo(s0.x, s0.y);
+			ctx.lineTo(s1.x, s1.y);
+			ctx.lineTo(s2.x, s2.y);
+			ctx.lineTo(s3.x, s3.y);
+			ctx.closePath();
+			ctx.fill();
+			ctx.restore();
+
+			const outerCross = getCrossSection(prismRadius, prismGeom);
+			const numSides = outerCross.length;
+
+			// Longitudinal side faces classification via 3D normal vector
+			interface SideFaceDef {
+				index: number;
+				pA: { y: number; z: number };
+				pB: { y: number; z: number };
+				normal: { x: number; y: number; z: number };
+				isVisible: boolean;
+			}
+
+			const sideDefs: SideFaceDef[] = [];
+			for (let i = 0; i < numSides; i++) {
+				const nextI = (i + 1) % numSides;
+				const pA = outerCross[i];
+				const pB = outerCross[nextI];
+
+				// Outward normal in Y-Z plane
+				const dy = pB.y - pA.y;
+				const dz = pB.z - pA.z;
+				const my = (pA.y + pB.y) / 2;
+				const mz = (pA.z + pB.z) / 2;
+
+				let ny = dz;
+				let nz = -dy;
+				if (ny * my + nz * mz < 0) {
+					ny = -ny;
+					nz = -nz;
+				}
+
+				// Normal dot product with isometric camera gaze:
+				// N = (0, ny, nz), CAM = (cos 30°, 1.0, cos 30°)
+				const isVisible = ny * CAM.y + nz * CAM.z > 0;
+				sideDefs.push({
+					index: i,
+					pA,
+					pB,
+					normal: { x: 0, y: ny, z: nz },
+					isVisible,
+				});
+			}
+
+			// =========================================================================
+			// PASS 1: Outer Glass Casing BACK Facets (isVisible === false)
+			// =========================================================================
+			sideDefs
+				.filter((s) => !s.isVisible)
+				.forEach((s) => {
+					const pts3D: Point3D[] = [
+						{ x: -halfL, y: s.pA.y, z: s.pA.z },
+						{ x: halfL, y: s.pA.y, z: s.pA.z },
+						{ x: halfL, y: s.pB.y, z: s.pB.z },
+						{ x: -halfL, y: s.pB.y, z: s.pB.z },
+					];
+					const pts2D = pts3D.map((p) => projectIso(p, ox, oy));
+					const fill = light ? 'rgba(215, 235, 255, 0.45)' : 'rgba(12, 18, 32, 0.7)';
+					const stroke = light ? 'rgba(30, 90, 160, 0.25)' : 'rgba(255, 255, 255, 0.12)';
+					drawPolygon(pts2D, fill, stroke, 1);
+				});
+
+			// NOTE: Left Cap at X = -halfL (the 0% base) has outward normal (-1, 0, 0).
+			// Dot with CAM is -cos 30° < 0 (pointing away from viewer).
+			// It is strictly in the rear and hidden by the front faces, so it must NOT be drawn above the front!
+
+			// =========================================================================
+			// PASS 2: Inner Fluid Core (nested strictly inside chamber: R_in = 0.86 * R)
+			// =========================================================================
+			const fluidRadius = prismRadius * 0.86;
+			const innerCross = getCrossSection(fluidRadius, prismGeom);
+			const usableL = prismLength - 12;
+			const fillL = usableL * (progress / 100);
+			const startX = -halfL + 6;
+			const endX = startX + fillL;
+
+			if (progress > 0) {
+				// Inner fluid rear faces
+				sideDefs
+					.filter((s) => !s.isVisible)
+					.forEach((s) => {
+						const ipA = innerCross[s.index];
+						const ipB = innerCross[(s.index + 1) % numSides];
+						const pts3D: Point3D[] = [
+							{ x: startX, y: ipA.y, z: ipA.z },
+							{ x: endX, y: ipA.y, z: ipA.z },
+							{ x: endX, y: ipB.y, z: ipB.z },
+							{ x: startX, y: ipB.y, z: ipB.z },
+						];
+						const pts2D = pts3D.map((p) => projectIso(p, ox, oy));
+						drawPolygon(pts2D, cw.coreFill);
+					});
+
+				// Inner fluid front faces
+				sideDefs
+					.filter((s) => s.isVisible)
+					.forEach((s) => {
+						const ipA = innerCross[s.index];
+						const ipB = innerCross[(s.index + 1) % numSides];
+						const pts3D: Point3D[] = [
+							{ x: startX, y: ipA.y, z: ipA.z },
+							{ x: endX, y: ipA.y, z: ipA.z },
+							{ x: endX, y: ipB.y, z: ipB.z },
+							{ x: startX, y: ipB.y, z: ipB.z },
+						];
+						const pts2D = pts3D.map((p) => projectIso(p, ox, oy));
+						drawPolygon(pts2D, cw.coreFill, cw.edge, 1);
+					});
+
+				// Fluid Meniscus Cap (at X = endX, facing +X towards camera)
+				// Outward normal is (+1, 0, 0), dot with CAM is +cos 30° > 0 (VISIBLE)
+				const fluidCap3D: Point3D[] = innerCross.map((p) => ({ x: endX, y: p.y, z: p.z }));
+				const fluidCap2D = fluidCap3D.map((p) => projectIso(p, ox, oy));
+				drawPolygon(fluidCap2D, cw.coreCap, '#ffffff', 1.5);
+			}
+
+			// =========================================================================
+			// PASS 3: Outer Glass Casing FRONT Facets (isVisible === true)
+			// =========================================================================
+			sideDefs
+				.filter((s) => s.isVisible)
+				.forEach((s) => {
+					const pts3D: Point3D[] = [
+						{ x: -halfL, y: s.pA.y, z: s.pA.z },
+						{ x: halfL, y: s.pA.y, z: s.pA.z },
+						{ x: halfL, y: s.pB.y, z: s.pB.z },
+						{ x: -halfL, y: s.pB.y, z: s.pB.z },
+					];
+					const pts2D = pts3D.map((p) => projectIso(p, ox, oy));
+
+					// Translucent refractive glass layer
+					const glassGrad = ctx.createLinearGradient(pts2D[0].x, pts2D[0].y, pts2D[2].x, pts2D[2].y);
+					if (light) {
+						glassGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+						glassGrad.addColorStop(0.5, 'rgba(235, 245, 255, 0.28)');
+						glassGrad.addColorStop(1, 'rgba(200, 230, 255, 0.42)');
+					} else {
+						glassGrad.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+						glassGrad.addColorStop(0.5, 'rgba(30, 50, 80, 0.18)');
+						glassGrad.addColorStop(1, 'rgba(15, 25, 45, 0.35)');
+					}
+
+					const stroke = light ? 'rgba(30, 90, 160, 0.55)' : 'rgba(255, 255, 255, 0.35)';
+					drawPolygon(pts2D, glassGrad, stroke, 1.5);
+				});
+
+			// =========================================================================
+			// PASS 4: Outer Glass Casing FRONT End Cap at X = +halfL
+			// Outward normal is (+1, 0, 0), dot with CAM is +cos 30° > 0 (VISIBLE)
+			// =========================================================================
+			const rightCap3D: Point3D[] = outerCross.map((p) => ({ x: halfL, y: p.y, z: p.z }));
+			const rightCap2D = rightCap3D.map((p) => projectIso(p, ox, oy));
+			const rightCapFill = light ? 'rgba(215, 238, 255, 0.85)' : 'rgba(28, 42, 68, 0.85)';
+			const rightCapStroke = light ? 'rgba(30, 90, 160, 0.65)' : 'rgba(255, 255, 255, 0.5)';
+			drawPolygon(rightCap2D, rightCapFill, rightCapStroke, 1.5);
+
+			// =========================================================================
+			// Calibration Percent Ticks
+			// =========================================================================
+			ctx.save();
+			ctx.font = '700 11px monospace';
+			ctx.fillStyle = light ? '#0369a1' : 'rgba(255, 255, 255, 0.85)';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'top';
+
+			[
+				{ pct: 0, text: '0%' },
+				{ pct: 0.25, text: '25%' },
+				{ pct: 0.5, text: '50%' },
+				{ pct: 0.75, text: '75%' },
+				{ pct: 1.0, text: '100%' },
+			].forEach((item) => {
+				const x = -halfL + prismLength * item.pct;
+				const pBottom = outerCross[1] || outerCross[0];
+				const pos = projectIso({ x, y: pBottom.y - 12, z: pBottom.z + 10 }, ox, oy);
+				ctx.fillText(item.text, pos.x, pos.y);
+			});
+			ctx.restore();
+		};
+
+		const setProgress = (val: number) => {
+			progress = Math.max(0, Math.min(100, val));
+			if (valDisplay) valDisplay.textContent = `${Math.round(progress)}%`;
+			if (progressOut) progressOut.textContent = `${Math.round(progress)}%`;
+			if (progressIn && !isAuto && !isDragging) progressIn.value = String(Math.round(progress));
+			render();
+		};
+
+		const scrubFromPointer = (e: PointerEvent) => {
+			const rect = canvas.getBoundingClientRect();
+			const x = e.clientX - rect.left;
+			const pad = 60;
+			const usableW = rect.width - pad * 2;
+			const pct = ((x - pad) / usableW) * 100;
+			setProgress(pct);
+		};
+
+		canvas.addEventListener('pointerdown', (e) => {
+			isDragging = true;
+			canvas.setPointerCapture(e.pointerId);
+			if (isAuto) stopAuto();
+			scrubFromPointer(e);
+		});
+
+		canvas.addEventListener('pointermove', (e) => {
+			if (isDragging) {
+				scrubFromPointer(e);
+			}
+		});
+
+		canvas.addEventListener('pointerup', (e) => {
+			isDragging = false;
+			try {
+				canvas.releasePointerCapture(e.pointerId);
+			} catch {}
+		});
+
+		// Auto ping-pong loop
+		const autoStep = () => {
+			if (!isAuto) return;
+			progress += autoDir * 0.45;
+			if (progress >= 100) {
+				progress = 100;
+				autoDir = -1;
+			} else if (progress <= 0) {
+				progress = 0;
+				autoDir = 1;
+			}
+			setProgress(progress);
+			autoAnimId = requestAnimationFrame(autoStep);
+		};
+
+		const startAuto = () => {
+			isAuto = true;
+			autoBtn.setAttribute('aria-pressed', 'true');
+			autoDot.classList.add('dot--live');
+			cancelAnimationFrame(autoAnimId);
+			autoAnimId = requestAnimationFrame(autoStep);
+		};
+
+		const stopAuto = () => {
+			isAuto = false;
+			autoBtn.setAttribute('aria-pressed', 'false');
+			autoDot.classList.remove('dot--live');
+			cancelAnimationFrame(autoAnimId);
+		};
+
+		autoBtn.addEventListener('click', () => {
+			if (isAuto) stopAuto();
+			else startAuto();
+		});
+
+		resetBtn.addEventListener('click', () => {
+			stopAuto();
+			prismGeom = 'hexagonal';
+			prismRadius = 46;
+			progress = 68;
+
+			if (geomIn) geomIn.value = 'hexagonal';
+			if (geomOut) geomOut.textContent = 'Hexagonal Crystal Prism';
+			if (depthIn) depthIn.value = '46';
+			if (depthOut) depthOut.textContent = '46px';
+
+			setProgress(68);
+		});
+
+		progressIn?.addEventListener('input', () => {
+			if (isAuto) stopAuto();
+			setProgress(Number(progressIn.value));
+		});
+
+		geomIn?.addEventListener('change', () => {
+			prismGeom = geomIn.value;
+			if (geomOut) geomOut.textContent = geomIn.options[geomIn.selectedIndex].text.split(' (')[0];
+			render();
+		});
+
+		depthIn?.addEventListener('input', () => {
+			prismRadius = Number(depthIn.value);
+			if (depthOut) depthOut.textContent = `${prismRadius}px`;
+			render();
+		});
+
+		colorBtns.forEach((btn) => {
+			btn.addEventListener('click', () => {
+				const id = btn.dataset.ipColor || 'cyan';
+				const cfg = COLORWAYS[id];
+				if (!cfg) return;
+
+				activeColor = id;
+				colorBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+				if (colorOut) colorOut.textContent = cfg.name;
+				render();
+			});
+		});
+
+		const themeObserver = new MutationObserver(() => {
+			render();
+		});
+		themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+		setProgress(68);
+	}
+</script>
+
+<style>
+	.iso-progress {
+		display: grid;
+		gap: 1.25rem;
+		width: 100%;
+	}
+
+	.iso-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.65rem 1.25rem;
+		border-radius: var(--radius-md);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+	}
+
+	.iso-metric {
+		display: flex;
+		align-items: baseline;
+		gap: 0.65rem;
+	}
+
+	.iso-metric-label {
+		font-size: var(--text-micro);
+		letter-spacing: 0.08em;
+	}
+
+	.iso-metric-value {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--text-strong);
+	}
+
+	.iso-actions {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	/* 3D Prism Stage */
+	.iso-stage {
+		position: relative;
+		width: 100%;
+		height: 320px;
+		border-radius: var(--radius-xl);
+		background:
+			radial-gradient(100% 70% at 50% 20%, rgba(56, 189, 248, 0.08), transparent 70%),
+			rgba(8, 12, 22, 0.65);
+		border: 1px solid var(--glass-border);
+		overflow: hidden;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: ew-resize;
+		touch-action: none;
+	}
+
+	:global(html[data-theme='light']) .iso-stage {
+		background:
+			radial-gradient(100% 70% at 50% 20%, rgba(56, 189, 248, 0.16), transparent 70%),
+			rgba(240, 247, 255, 0.75);
+		border-color: rgba(30, 90, 160, 0.22);
+	}
+
+	.iso-canvas {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+
+	.iso-canvas-hint {
+		position: absolute;
+		bottom: 12px;
+		left: 50%;
+		transform: translateX(-50%);
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+		padding: 4px 12px;
+		background: rgba(0, 0, 0, 0.4);
+		backdrop-filter: blur(6px);
+		border-radius: var(--radius-pill);
+		pointer-events: none;
+		white-space: nowrap;
+	}
+
+	:global(html[data-theme='light']) .iso-canvas-hint {
+		background: rgba(255, 255, 255, 0.7);
+		color: var(--text-muted);
+	}
+
+	.lab-select {
+		padding: 0.45rem 0.85rem;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		color: var(--text-strong);
+		font-size: var(--text-xs);
+		outline: none;
+		cursor: pointer;
+	}
+
+	/* Color Swatches */
+	.color-palette {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.color-swatch {
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		background: var(--c);
+		border: 2px solid transparent;
+		cursor: pointer;
+		transition: transform 0.15s ease, border-color 0.15s ease;
+		outline: none;
+	}
+
+	.color-swatch:hover {
+		transform: scale(1.15);
+	}
+
+	.color-swatch.is-active {
+		border-color: #ffffff;
+		box-shadow: 0 0 10px var(--c);
+		transform: scale(1.18);
+	}
+</style>

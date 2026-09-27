@@ -190,6 +190,9 @@ export function applySettingsToRoot(settings: Settings = state): void {
 		(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
 			? 'off'
 			: 'on';
+	if (root.dataset.intro === 'off') {
+		root.dataset.introState = 'done';
+	}
 	// Root font-size multiplier for the uiScale setting (global.css:
 	// html { font-size: calc(100% * var(--ui-scale, 1)) }). Set pre-paint by
 	// BaseHead's inline script; this keeps it in sync on live changes.

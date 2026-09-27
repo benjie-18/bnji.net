@@ -67,23 +67,13 @@ const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SIT
 				/>
 				<GlassPanel pad="lg" reveal class="prose">
 					<p>
-						Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
-						tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
-						veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
-						commodo consequat duis aute irure dolor.
+						The site itself is part of the work: a canvas starfield, a 2027 liquid glass optical system built
+						on CSS custom properties and SVG displacement mapping, and no client-side framework bloat.
 					</p>
 					<p>
-						The site itself is part of the work. It is prerendered Astro served from
-						a Cloudflare Worker, with a canvas starfield, a glass design system built
-						on CSS custom properties, and no client-side framework. Everything
-						animated is animated with <code>opacity</code> and <code>transform</code>,
-						and everything that reacts to a pointer stops reacting if you ask your
-						operating system for less motion.
-					</p>
-					<p>
-						Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium
-						doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo
-						inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+						Everything animated uses GPU-composited <code>opacity</code> and <code>transform</code>.
+						Pointer and lighting physics react smoothly to cursor coordinates and gracefully
+						stand down whenever a visitor requests reduced motion or reduced transparency.
 					</p>
 				</GlassPanel>
 			</section>
@@ -107,6 +97,7 @@ const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SIT
 				</div>
 			</section>
 
+			{/* Optional toolbox placeholder section (can be populated with real tools and re-enabled):
 			<section class="section section--tight" aria-labelledby="toolbox-title">
 				<SectionHeading
 					label="TOOLBOX"
@@ -119,6 +110,7 @@ const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SIT
 					</ul>
 				</GlassPanel>
 			</section>
+			*/}
 		</div>
 	</div>
 </Layout>

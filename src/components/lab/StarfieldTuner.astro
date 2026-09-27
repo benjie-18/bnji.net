@@ -16,12 +16,12 @@
 ---
 
 <div class="tuner">
-	<div class="lab-stage">
+	<div class="lab-stage starfield-stage">
 		<canvas class="lab-canvas" data-tuner-canvas aria-hidden="true"></canvas>
 		<p class="lab-fallback" data-tuner-fallback hidden>
 			This experiment needs a 2D canvas, which this browser did not provide.
 		</p>
-		<p class="lab-hint mono">pointer response is live</p>
+		<p class="lab-hint mono">pointer response is live &middot; simulated night sky</p>
 	</div>
 
 	<div class="lab-controls">
@@ -244,5 +244,25 @@
 <style>
 	.tuner {
 		display: block;
+	}
+
+	.starfield-stage {
+		background:
+			radial-gradient(120% 100% at 50% 10%, rgba(20, 50, 100, 0.45), transparent 70%),
+			#040813 !important;
+		border: 1px solid var(--glass-border) !important;
+		box-shadow: inset 0 2px 14px rgba(0, 0, 0, 0.6) !important;
+	}
+
+	:global(html[data-theme='light']) .starfield-stage {
+		background:
+			radial-gradient(120% 100% at 50% 10%, rgba(25, 60, 120, 0.55), transparent 70%),
+			#050a18 !important;
+		border-color: rgba(30, 90, 160, 0.35) !important;
+		box-shadow: inset 0 2px 18px rgba(0, 0, 0, 0.75), 0 4px 16px rgba(0, 40, 100, 0.08) !important;
+	}
+
+	:global(html[data-theme='light']) .tuner .lab-hint {
+		color: rgba(220, 240, 255, 0.8) !important;
 	}
 </style>

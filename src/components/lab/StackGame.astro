@@ -1,0 +1,802 @@
+---
+/**
+ * Lab — Isometric Stack Game.
+ *
+ * 3D isometric block stacking game styled with bnji.net's glass tokens.
+ *
+ * Features:
+ * - 5 distinct theme palettes: Aero Sky, Aurora Neon, Sunset Quartz, Cyber Magenta, Monochrome Crystal
+ * - Proper debris depth-sorting and unbounded falling physics to prevent clipping
+ * - Adjustable Layer Thickness and Camera Zoom controls
+ * - Spark burst particle explosions on perfect placements
+ * - Alternating X/Z movement axes with combo multiplier (<3px snap)
+ * - Web Audio synth feedback for placements, chops, combos, and game over
+ */
+---
+
+<div class="stack-game" data-stack-game>
+	<!-- Scoreboard Header -->
+	<div class="stack-header">
+		<div class="stack-score-group">
+			<span class="mono text-muted stack-label">SCORE</span>
+			<span class="stack-score-val mono" data-sg-score>0</span>
+		</div>
+
+		<div class="stack-combo mono" data-sg-combo hidden>
+			<span class="stack-combo-badge">COMBO ×<span data-sg-combo-count>1</span></span>
+		</div>
+
+		<div class="stack-high-group">
+			<span class="mono text-faint stack-label">BEST</span>
+			<span class="mono text-muted" data-sg-best>0</span>
+		</div>
+	</div>
+
+	<!-- Interactive Game Canvas Viewport -->
+	<div class="stack-viewport">
+		<canvas class="stack-canvas" data-sg-canvas width="640" height="520"></canvas>
+
+		<!-- Overlay Messages -->
+		<div class="stack-overlay" data-sg-overlay>
+			<div class="stack-overlay-card">
+				<h3 class="stack-overlay-title mono" data-sg-title>ISO STACK</h3>
+				<p class="stack-overlay-desc" data-sg-desc>Tap or press Space to drop layers. Align blocks cleanly to maintain tower surface.</p>
+				<button class="glass-button glass-button--primary mono" type="button" data-sg-start>
+					Start Game
+				</button>
+			</div>
+		</div>
+
+		<!-- In-game controls HUD -->
+		<div class="stack-hud">
+			<button class="glass-button glass-button--sm mono" type="button" data-sg-restart aria-label="Restart Stack Game">
+				↺ Reset
+			</button>
+			<button class="glass-button glass-button--sm mono" type="button" data-sg-audio aria-pressed="true">
+				<span class="dot dot--live" data-sg-audio-dot></span> Sound
+			</button>
+		</div>
+	</div>
+
+	<!-- Customization Controls & Sliders -->
+	<div class="lab-controls">
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Theme Palette <output data-sg-out="theme">Aero Sky</output>
+			</span>
+			<input class="lab-range" type="range" min="0" max="4" step="1" value="0" data-sg-in="theme" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Layer Thickness <output data-sg-out="thickness">18px (Standard)</output>
+			</span>
+			<input class="lab-range" type="range" min="12" max="28" step="4" value="18" data-sg-in="thickness" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Camera View Zoom <output data-sg-out="zoom">1.0×</output>
+			</span>
+			<input class="lab-range" type="range" min="0.7" max="1.3" step="0.1" value="1.0" data-sg-in="zoom" />
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">
+				Movement Speed <output data-sg-out="speed">Normal</output>
+			</span>
+			<input class="lab-range" type="range" min="1" max="3" step="1" value="2" data-sg-in="speed" />
+		</label>
+	</div>
+</div>
+
+<script>
+	interface Layer {
+		x: number;
+		z: number;
+		w: number;
+		d: number;
+		y: number;
+		colorIndex: number;
+	}
+
+	interface Debris {
+		x: number;
+		z: number;
+		w: number;
+		d: number;
+		y: number;
+		vy: number;
+		vx: number;
+		vz: number;
+		opacity: number;
+		colorIndex: number;
+	}
+
+	interface Spark {
+		x: number;
+		y: number;
+		vx: number;
+		vy: number;
+		life: number;
+		maxLife: number;
+		size: number;
+		color: string;
+	}
+
+	const THEMES = [
+		{ name: 'Aero Sky', baseHue: 195, step: 10, sat: 85, light: 55 },
+		{ name: 'Aurora Neon', baseHue: 150, step: 14, sat: 88, light: 52 },
+		{ name: 'Sunset Quartz', baseHue: 335, step: 12, sat: 85, light: 58 },
+		{ name: 'Cyber Magenta', baseHue: 280, step: 15, sat: 92, light: 56 },
+		{ name: 'Monochrome Crystal', baseHue: 210, step: 0, sat: 10, light: 62 },
+	];
+
+	const root = document.querySelector<HTMLElement>('[data-stack-game]');
+	if (root) {
+		const canvas = root.querySelector<HTMLCanvasElement>('[data-sg-canvas]')!;
+		const ctx = canvas.getContext('2d')!;
+		const scoreEl = root.querySelector<HTMLElement>('[data-sg-score]')!;
+		const bestEl = root.querySelector<HTMLElement>('[data-sg-best]')!;
+		const comboEl = root.querySelector<HTMLElement>('[data-sg-combo]')!;
+		const comboCountEl = root.querySelector<HTMLElement>('[data-sg-combo-count]')!;
+		const overlay = root.querySelector<HTMLElement>('[data-sg-overlay]')!;
+		const overlayTitle = root.querySelector<HTMLElement>('[data-sg-title]')!;
+		const overlayDesc = root.querySelector<HTMLElement>('[data-sg-desc]')!;
+		const startBtn = root.querySelector<HTMLButtonElement>('[data-sg-start]')!;
+		const restartBtn = root.querySelector<HTMLButtonElement>('[data-sg-restart]')!;
+		const audioBtn = root.querySelector<HTMLButtonElement>('[data-sg-audio]')!;
+		const audioDot = root.querySelector<HTMLElement>('[data-sg-audio-dot]')!;
+
+		const themeIn = root.querySelector<HTMLInputElement>('[data-sg-in="theme"]');
+		const themeOut = root.querySelector<HTMLOutputElement>('[data-sg-out="theme"]');
+		const thicknessIn = root.querySelector<HTMLInputElement>('[data-sg-in="thickness"]');
+		const thicknessOut = root.querySelector<HTMLOutputElement>('[data-sg-out="thickness"]');
+		const zoomIn = root.querySelector<HTMLInputElement>('[data-sg-in="zoom"]');
+		const zoomOut = root.querySelector<HTMLOutputElement>('[data-sg-out="zoom"]');
+		const speedIn = root.querySelector<HTMLInputElement>('[data-sg-in="speed"]');
+		const speedOut = root.querySelector<HTMLOutputElement>('[data-sg-out="speed"]');
+
+		const STORAGE_KEY = 'bnji-stack-best';
+		let bestScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+		bestEl.textContent = String(bestScore);
+
+		// Audio Synthesizer
+		let audioEnabled = true;
+		let audioCtx: AudioContext | null = null;
+		const playTone = (freq: number, type: OscillatorType = 'sine', dur = 0.22) => {
+			if (!audioEnabled) return;
+			try {
+				if (!audioCtx) {
+					const AudioClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+					audioCtx = new AudioClass();
+				}
+				if (audioCtx.state === 'suspended') audioCtx.resume();
+				const now = audioCtx.currentTime;
+				const osc = audioCtx.createOscillator();
+				const gain = audioCtx.createGain();
+				osc.type = type;
+				osc.frequency.setValueAtTime(freq, now);
+				gain.gain.setValueAtTime(0.14, now);
+				gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+				osc.connect(gain);
+				gain.connect(audioCtx.destination);
+				osc.start(now);
+				osc.stop(now + dur);
+			} catch {
+				// AudioContext unavailable
+			}
+		};
+
+		// Configs
+		let layerHeight = 18;
+		const BASE_SIZE = 140;
+		let speedMultiplier = 1.0;
+		let snapThreshold = 3.5;
+		let themeIdx = 0;
+		let viewZoom = 1.0;
+
+		// Game State
+		let isPlaying = false;
+		let isGameOver = false;
+		let score = 0;
+		let combo = 0;
+		let cameraY = 0;
+		let targetCameraY = 0;
+
+		let stack: Layer[] = [];
+		let debris: Debris[] = [];
+		let sparks: Spark[] = [];
+
+		// Active block
+		let activeAxis: 'x' | 'z' = 'x';
+		let activePos = 0;
+		let activeDir = 1;
+		let activeW = BASE_SIZE;
+		let activeD = BASE_SIZE;
+		let activeY = 0;
+
+		const isLight = () => document.documentElement.dataset.theme === 'light';
+
+		// Color generator
+		const getColors = (idx: number) => {
+			const th = THEMES[themeIdx];
+			let h = (th.baseHue + idx * th.step) % 360;
+			let s = th.sat;
+			let l = isLight() ? th.light + 10 : th.light;
+
+			if (themeIdx === 4) {
+				// Monochrome crystal: shade variation
+				l = isLight() ? 70 + (idx % 4) * 5 : 45 + (idx % 4) * 6;
+				s = 5;
+			}
+
+			return {
+				top: `hsl(${h}, ${s}%, ${l + 14}%)`,
+				left: `hsl(${h}, ${Math.max(0, s - 12)}%, ${l - 12}%)`,
+				right: `hsl(${h}, ${Math.max(0, s - 8)}%, ${l - 4}%)`,
+				edge: `hsla(${h}, 100%, 94%, 0.85)`,
+			};
+		};
+
+		const initGame = () => {
+			stack = [
+				{
+					x: 0,
+					z: 0,
+					w: BASE_SIZE,
+					d: BASE_SIZE,
+					y: 0,
+					colorIndex: 0,
+				},
+			];
+			debris = [];
+			sparks = [];
+			score = 0;
+			combo = 0;
+			cameraY = 0;
+			targetCameraY = 0;
+			scoreEl.textContent = '0';
+			comboEl.hidden = true;
+			isGameOver = false;
+
+			spawnBlock();
+		};
+
+		const spawnBlock = () => {
+			const prev = stack[stack.length - 1];
+			activeAxis = activeAxis === 'x' ? 'z' : 'x';
+			activeW = prev.w;
+			activeD = prev.d;
+			activeY = stack.length * layerHeight;
+			activeDir = 1;
+			activePos = -170;
+			targetCameraY = activeY;
+		};
+
+		const spawnSparks = (screenX: number, screenY: number, count = 16) => {
+			for (let i = 0; i < count; i++) {
+				const angle = Math.random() * Math.PI * 2;
+				const spd = 2 + Math.random() * 5;
+				sparks.push({
+					x: screenX,
+					y: screenY,
+					vx: Math.cos(angle) * spd,
+					vy: Math.sin(angle) * spd - 1.5,
+					life: 0,
+					maxLife: 0.5 + Math.random() * 0.4,
+					size: 2 + Math.random() * 3,
+					color: isLight() ? '#0284c7' : '#38bdf8',
+				});
+			}
+		};
+
+		const dropBlock = () => {
+			if (!isPlaying || isGameOver) return;
+
+			const prev = stack[stack.length - 1];
+			let curX = activeAxis === 'x' ? activePos : prev.x;
+			let curZ = activeAxis === 'z' ? activePos : prev.z;
+			let diff = activeAxis === 'x' ? curX - prev.x : curZ - prev.z;
+
+			const ox = canvas.width / 2;
+			const oy = canvas.height * 0.74;
+
+			// Snap check for perfect alignment
+			if (Math.abs(diff) <= snapThreshold) {
+				diff = 0;
+				if (activeAxis === 'x') curX = prev.x;
+				else curZ = prev.z;
+				combo++;
+				comboCountEl.textContent = String(combo);
+				comboEl.hidden = false;
+				playTone(480 + combo * 55, 'triangle', 0.35);
+
+				// Trigger celebration sparks at top center of placed layer
+				const pt = projectIso(curX, activeY + layerHeight, curZ, ox, oy);
+				spawnSparks(pt.x, pt.y);
+			} else {
+				combo = 0;
+				comboEl.hidden = true;
+				playTone(300 + (stack.length % 8) * 28, 'sine', 0.18);
+			}
+
+			let newW = prev.w;
+			let newD = prev.d;
+
+			if (activeAxis === 'x') {
+				const overhang = Math.abs(diff);
+				if (overhang >= prev.w) {
+					endGame();
+					return;
+				}
+
+				newW = prev.w - overhang;
+				const slicedW = overhang;
+				const slicedX = diff > 0 ? prev.x + newW + slicedW / 2 : prev.x - slicedW / 2;
+
+				// Spawn debris piece falling
+				debris.push({
+					x: slicedX,
+					z: curZ,
+					w: slicedW,
+					d: prev.d,
+					y: activeY,
+					vy: 0,
+					vx: diff > 0 ? 1.4 : -1.4,
+					vz: 0,
+					opacity: 1,
+					colorIndex: stack.length,
+				});
+
+				curX = diff > 0 ? prev.x + overhang / 2 : prev.x - overhang / 2;
+			} else {
+				const overhang = Math.abs(diff);
+				if (overhang >= prev.d) {
+					endGame();
+					return;
+				}
+
+				newD = prev.d - overhang;
+				const slicedD = overhang;
+				const slicedZ = diff > 0 ? prev.z + newD + slicedD / 2 : prev.z - slicedD / 2;
+
+				debris.push({
+					x: curX,
+					z: slicedZ,
+					w: prev.w,
+					d: slicedD,
+					y: activeY,
+					vy: 0,
+					vx: 0,
+					vz: diff > 0 ? 1.4 : -1.4,
+					opacity: 1,
+					colorIndex: stack.length,
+				});
+
+				curZ = diff > 0 ? prev.z + overhang / 2 : prev.z - overhang / 2;
+			}
+
+			stack.push({
+				x: curX,
+				z: curZ,
+				w: newW,
+				d: newD,
+				y: activeY,
+				colorIndex: stack.length,
+			});
+
+			score++;
+			scoreEl.textContent = String(score);
+			if (score > bestScore) {
+				bestScore = score;
+				bestEl.textContent = String(bestScore);
+				localStorage.setItem(STORAGE_KEY, String(bestScore));
+			}
+
+			spawnBlock();
+		};
+
+		const endGame = () => {
+			isGameOver = true;
+			isPlaying = false;
+			playTone(160, 'sawtooth', 0.5);
+
+			overlayTitle.textContent = 'GAME OVER';
+			overlayDesc.textContent = `Stacked ${score} crystal layers! Best combo: ${combo}.`;
+			startBtn.textContent = 'Play Again';
+			overlay.removeAttribute('hidden');
+		};
+
+		// 3D Isometric projection with scale/zoom
+		const projectIso = (x: number, y: number, z: number, originX: number, originY: number) => {
+			const cos30 = 0.866025;
+			const sin30 = 0.5;
+
+			const screenX = originX + (x - z) * cos30 * viewZoom;
+			const screenY = originY + (x + z) * sin30 * viewZoom - (y - cameraY) * viewZoom;
+			return { x: screenX, y: screenY, depth: x + z };
+		};
+
+		const drawIsoBox = (
+			x: number,
+			y: number,
+			z: number,
+			w: number,
+			d: number,
+			h: number,
+			colorIdx: number,
+			opacity = 1
+		) => {
+			if (w <= 0 || d <= 0) return;
+			const ox = canvas.width / 2;
+			const oy = canvas.height * 0.74;
+			const colors = getColors(colorIdx);
+
+			const p0 = projectIso(x - w / 2, y, z - d / 2, ox, oy);
+			const p1 = projectIso(x + w / 2, y, z - d / 2, ox, oy);
+			const p2 = projectIso(x + w / 2, y, z + d / 2, ox, oy);
+			const p3 = projectIso(x - w / 2, y, z + d / 2, ox, oy);
+
+			const p4 = projectIso(x - w / 2, y + h, z - d / 2, ox, oy);
+			const p5 = projectIso(x + w / 2, y + h, z - d / 2, ox, oy);
+			const p6 = projectIso(x + w / 2, y + h, z + d / 2, ox, oy);
+			const p7 = projectIso(x - w / 2, y + h, z + d / 2, ox, oy);
+
+			ctx.save();
+			ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+
+			// Left Face
+			ctx.fillStyle = colors.left;
+			ctx.beginPath();
+			ctx.moveTo(p3.x, p3.y);
+			ctx.lineTo(p2.x, p2.y);
+			ctx.lineTo(p6.x, p6.y);
+			ctx.lineTo(p7.x, p7.y);
+			ctx.closePath();
+			ctx.fill();
+
+			// Right Face
+			ctx.fillStyle = colors.right;
+			ctx.beginPath();
+			ctx.moveTo(p2.x, p2.y);
+			ctx.lineTo(p1.x, p1.y);
+			ctx.lineTo(p5.x, p5.y);
+			ctx.lineTo(p6.x, p6.y);
+			ctx.closePath();
+			ctx.fill();
+
+			// Top Face
+			ctx.fillStyle = colors.top;
+			ctx.beginPath();
+			ctx.moveTo(p4.x, p4.y);
+			ctx.lineTo(p5.x, p5.y);
+			ctx.lineTo(p6.x, p6.y);
+			ctx.lineTo(p7.x, p7.y);
+			ctx.closePath();
+			ctx.fill();
+
+			// Specular top rim
+			ctx.strokeStyle = colors.edge;
+			ctx.lineWidth = 1;
+			ctx.stroke();
+
+			ctx.restore();
+		};
+
+		// Animation frame render loop
+		let animId = 0;
+		let lastTime = performance.now();
+
+		const render = (now: number) => {
+			const dt = Math.min((now - lastTime) / 1000, 0.1);
+			lastTime = now;
+
+			// Smooth camera tracking
+			cameraY += (targetCameraY - cameraY) * 0.08;
+
+			// Active block movement
+			if (isPlaying && !isGameOver) {
+				const speed = 155 * speedMultiplier;
+				activePos += activeDir * speed * dt;
+				if (activePos > 170) {
+					activePos = 170;
+					activeDir = -1;
+				} else if (activePos < -170) {
+					activePos = -170;
+					activeDir = 1;
+				}
+			}
+
+			// Update falling debris
+			for (let i = debris.length - 1; i >= 0; i--) {
+				const d = debris[i];
+				d.vy -= 900 * dt;
+				d.y += d.vy * dt;
+				d.x += d.vx;
+				d.z += d.vz;
+				d.opacity -= 0.65 * dt;
+				if (d.opacity <= 0 || d.y < -250) {
+					debris.splice(i, 1);
+				}
+			}
+
+			// Update sparks
+			for (let i = sparks.length - 1; i >= 0; i--) {
+				const s = sparks[i];
+				s.life += dt;
+				if (s.life >= s.maxLife) {
+					sparks.splice(i, 1);
+					continue;
+				}
+				s.x += s.vx;
+				s.y += s.vy;
+				s.vy += 2.5 * dt * 60;
+			}
+
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+			// Draw ground contact shadow
+			const ox = canvas.width / 2;
+			const oy = canvas.height * 0.74;
+			const shadowCenter = projectIso(0, 0, 0, ox, oy);
+			ctx.save();
+			const shadowGrad = ctx.createRadialGradient(
+				shadowCenter.x,
+				shadowCenter.y,
+				10,
+				shadowCenter.x,
+				shadowCenter.y,
+				150 * viewZoom
+			);
+			shadowGrad.addColorStop(0, isLight() ? 'rgba(30, 80, 140, 0.35)' : 'rgba(0, 0, 0, 0.55)');
+			shadowGrad.addColorStop(1, 'transparent');
+			ctx.fillStyle = shadowGrad;
+			ctx.beginPath();
+			ctx.ellipse(shadowCenter.x, shadowCenter.y, 150 * viewZoom, 70 * viewZoom, 0, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.restore();
+
+			// Render stack layers
+			stack.forEach((layer) => {
+				drawIsoBox(layer.x, layer.y, layer.z, layer.w, layer.d, layerHeight, layer.colorIndex);
+			});
+
+			// Render falling debris pieces
+			debris.forEach((d) => {
+				drawIsoBox(d.x, d.y, d.z, d.w, d.d, layerHeight, d.colorIndex, d.opacity);
+			});
+
+			// Render active moving block
+			if (isPlaying && !isGameOver) {
+				const prev = stack[stack.length - 1];
+				const curX = activeAxis === 'x' ? activePos : prev.x;
+				const curZ = activeAxis === 'z' ? activePos : prev.z;
+				drawIsoBox(curX, activeY, curZ, activeW, activeD, layerHeight, stack.length);
+			}
+
+			// Render celebration sparks
+			sparks.forEach((s) => {
+				const alpha = 1 - s.life / s.maxLife;
+				ctx.save();
+				ctx.globalAlpha = alpha;
+				ctx.fillStyle = s.color;
+				ctx.beginPath();
+				ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.restore();
+			});
+
+			animId = requestAnimationFrame(render);
+		};
+
+		// Event handlers
+		const handleAction = () => {
+			if (!isPlaying) {
+				overlay.setAttribute('hidden', '');
+				isPlaying = true;
+				initGame();
+			} else {
+				dropBlock();
+			}
+		};
+
+		canvas.addEventListener('pointerdown', (e) => {
+			e.preventDefault();
+			handleAction();
+		});
+
+		window.addEventListener('keydown', (e) => {
+			if (!root.contains(document.activeElement) && e.target !== document.body) return;
+			if (e.code === 'Space') {
+				e.preventDefault();
+				handleAction();
+			}
+		});
+
+		startBtn.addEventListener('click', () => {
+			overlay.setAttribute('hidden', '');
+			isPlaying = true;
+			initGame();
+		});
+
+		restartBtn.addEventListener('click', () => {
+			overlay.removeAttribute('hidden');
+			overlayTitle.textContent = 'ISO STACK';
+			overlayDesc.textContent = 'Drop alternating blocks cleanly to construct the tallest glass tower.';
+			startBtn.textContent = 'Start Game';
+			isPlaying = false;
+			initGame();
+		});
+
+		audioBtn.addEventListener('click', () => {
+			audioEnabled = !audioEnabled;
+			audioBtn.setAttribute('aria-pressed', String(audioEnabled));
+			audioDot.classList.toggle('dot--live', audioEnabled);
+		});
+
+		// Controls
+		themeIn?.addEventListener('input', () => {
+			themeIdx = Number(themeIn.value);
+			if (themeOut) themeOut.textContent = THEMES[themeIdx].name;
+		});
+
+		thicknessIn?.addEventListener('input', () => {
+			layerHeight = Number(thicknessIn.value);
+			if (thicknessOut) thicknessOut.textContent = `${layerHeight}px (${layerHeight <= 14 ? 'Slim' : layerHeight >= 24 ? 'Thick' : 'Standard'})`;
+		});
+
+		zoomIn?.addEventListener('input', () => {
+			viewZoom = Number(zoomIn.value);
+			if (zoomOut) zoomOut.textContent = `${viewZoom.toFixed(1)}×`;
+		});
+
+		speedIn?.addEventListener('input', () => {
+			const val = Number(speedIn.value);
+			speedMultiplier = val === 1 ? 0.75 : val === 2 ? 1.0 : 1.5;
+			if (speedOut) speedOut.textContent = val === 1 ? 'Relaxed' : val === 2 ? 'Normal' : 'Hyper';
+		});
+
+		// Intersection observer
+		const obs = new IntersectionObserver((entries) => {
+			for (const entry of entries) {
+				if (entry.isIntersecting) {
+					lastTime = performance.now();
+					animId = requestAnimationFrame(render);
+				} else {
+					cancelAnimationFrame(animId);
+				}
+			}
+		});
+		obs.observe(root);
+		initGame();
+	}
+</script>
+
+<style>
+	.stack-game {
+		display: grid;
+		gap: 1.25rem;
+		width: 100%;
+	}
+
+	.stack-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.65rem 1.25rem;
+		border-radius: var(--radius-md);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+	}
+
+	.stack-score-group,
+	.stack-high-group {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+	}
+
+	.stack-label {
+		font-size: var(--text-micro);
+		letter-spacing: 0.08em;
+	}
+
+	.stack-score-val {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--text-strong);
+	}
+
+	.stack-combo-badge {
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-pill);
+		background: linear-gradient(135deg, var(--accent-strong), var(--accent-violet));
+		color: #ffffff;
+		font-size: var(--text-micro);
+		font-weight: 700;
+		box-shadow: 0 0 14px var(--accent-soft);
+	}
+
+	.stack-viewport {
+		position: relative;
+		width: 100%;
+		border-radius: var(--radius-xl);
+		background:
+			radial-gradient(100% 70% at 50% 20%, rgba(56, 189, 248, 0.08), transparent 70%),
+			rgba(8, 12, 22, 0.65);
+		border: 1px solid var(--glass-border);
+		overflow: hidden;
+		display: flex;
+		justify-content: center;
+		touch-action: none;
+	}
+
+	:global(html[data-theme='light']) .stack-viewport {
+		background:
+			radial-gradient(100% 70% at 50% 20%, rgba(56, 189, 248, 0.16), transparent 70%),
+			rgba(240, 247, 255, 0.75);
+		border-color: rgba(30, 90, 160, 0.22);
+	}
+
+	.stack-canvas {
+		width: 100%;
+		max-width: 640px;
+		height: auto;
+		display: block;
+		cursor: pointer;
+	}
+
+	.stack-hud {
+		position: absolute;
+		top: 1rem;
+		right: 1rem;
+		display: flex;
+		gap: 0.5rem;
+		z-index: 5;
+	}
+
+	.stack-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(6, 10, 18, 0.75);
+		backdrop-filter: blur(10px);
+		z-index: 10;
+		padding: 1rem;
+	}
+
+	:global(html[data-theme='light']) .stack-overlay {
+		background: rgba(255, 255, 255, 0.85);
+	}
+
+	.stack-overlay[hidden] {
+		display: none;
+	}
+
+	.stack-overlay-card {
+		max-width: 320px;
+		text-align: center;
+		display: grid;
+		gap: 0.9rem;
+		padding: 1.6rem;
+		border-radius: var(--radius-lg);
+		background: var(--glass-bg-raised);
+		border: 1px solid var(--glass-border-strong);
+		box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+	}
+
+	.stack-overlay-title {
+		font-size: 1.3rem;
+		letter-spacing: 0.05em;
+		color: var(--text-strong);
+	}
+
+	.stack-overlay-desc {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+		line-height: 1.45;
+	}
+</style>

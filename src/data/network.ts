@@ -30,7 +30,7 @@ export const SERVICES: ServiceEndpoint[] = [
 	{
 		host: 'bnji.net',
 		label: 'This site',
-		description: 'Astro prerendered and served by a Cloudflare Worker.',
+		description: 'Personal digital hub and interactive playground.',
 		visibility: 'live',
 		href: 'https://bnji.net/',
 	},

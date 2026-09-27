@@ -33,7 +33,14 @@ export type LabComponentKey =
 	| 'OrbitField'
 	| 'BubblePop'
 	| 'MemoryPairs'
-	| 'ReactionTimer';
+	| 'ReactionTimer'
+	| 'CpsCounter'
+	| 'PianoBars'
+	| 'StackGame'
+	| 'IsoProgress'
+	| 'CursorTrails'
+	| 'VoxelMap'
+	| 'GlassMinesweeper';
 
 export type Experiment = {
 	slug: string;
@@ -49,93 +56,146 @@ export type Experiment = {
 
 export const EXPERIMENTS: Experiment[] = [
 	{
+		slug: 'piano-bars',
+		title: '3D Piano Bars',
+		description:
+			'Extruded 3D glass cuboids in continuous sine-wave motion or interactive piano mode. Light up upon hover, press, and keyboard actuation with Web Audio harmonic chime feedback, adapting between dark obsidian and frosty aqua crystal.',
+		tags: ['3d', 'audio', 'interactive'],
+		status: 'live',
+		component: 'PianoBars',
+	},
+	{
+		slug: 'stack-game',
+		title: 'Isometric Stack',
+		description:
+			'A 3D isometric block stacking game adapted to bnji.net’s glass palette. Drop alternating blocks, chop overhangs into falling debris, and sustain combo streaks with precise alignment.',
+		tags: ['game', '3d', 'physics'],
+		status: 'live',
+		component: 'StackGame',
+	},
+	{
+		slug: 'iso-progress',
+		title: '3D Isometric Progress Bar',
+		description:
+			'An extruded 3D isometric progress bar with multi-facet lighting, liquid crystal fluid fill, interactive tilt/yaw perspective sliders, and selectable bnji.net aero colorways.',
+		tags: ['3d', 'tools', 'interactive'],
+		status: 'live',
+		component: 'IsoProgress',
+	},
+	{
+		slug: 'cursor-trails',
+		title: 'Trailing Cursor Laboratory',
+		description:
+			'An interactive pointer trail laboratory with customizable particle shapes (starlight sparks, glass orbs, ribbon streamers, neon dust), physics dynamics (spring drift, gravitational pull, scatter burst), and adaptive themes.',
+		tags: ['particles', 'physics', 'interactive'],
+		status: 'live',
+		component: 'CursorTrails',
+	},
+	{
+		slug: 'voxel-map',
+		title: '3D Voxel Map Creator',
+		description:
+			'An isometric 3D voxel terrain studio with 4-way turntable camera orbit, elevation sculpting tools (raise, lower, flatten), preset topographies, and 6 translucent aero glass materials.',
+		tags: ['3d', 'tools', 'interactive'],
+		status: 'live',
+		component: 'VoxelMap',
+	},
+	{
+		slug: 'glass-minesweeper',
+		title: 'Minesweeper',
+		description:
+			'Classic Minesweeper reimagined in liquid aero glass styling. Features reactive status smiley, live mine counter, digital stopwatch, flag mode toggle, and safe first-click guarantee.',
+		tags: ['game', 'interactive'],
+		status: 'live',
+		component: 'GlassMinesweeper',
+	},
+	{
+		slug: 'cps-counter',
+		title: 'CPS Counter',
+		description:
+			'A high-frequency neuromuscular click speed benchmark. Track burst click frequency across 5s sprint, 10s endurance, or free cadence with live rate, peak velocity, and dynamic ripple feedback.',
+		tags: ['benchmark', 'tools', 'interactive'],
+		status: 'live',
+		component: 'CpsCounter',
+	},
+	{
 		slug: 'starfield-tuner',
 		title: 'Starfield Tuner',
 		description:
 			'The same engine that draws the site background, exposed through live controls. Dial in density, twinkle and cursor response, then copy the numbers back into the component.',
-		tags: ['canvas', 'starfield', 'tuning'],
+		tags: ['canvas', 'tools'],
 		status: 'live',
 		component: 'StarfieldTuner',
-		question: 'How sparse can a sky be before it feels dead?',
 	},
 	{
 		slug: 'glass-bench',
-		title: 'Liquid Glass Bench',
+		title: 'Liquid Glass Optical Laboratory',
 		description:
-			'A test surface for the glass design system: opacity, blur, saturation and border strength as sliders, with the resulting token values printed live.',
-		tags: ['css', 'design system', 'glass'],
+			'An optical calibration laboratory recreating Apple 2027 Liquid Glass: Snell’s Law refraction, 4th-power squircle SDF bezels, adaptive luminance (glass_L = 0.58·L_bg + 34), Fresnel rims, and test backdrops.',
+		tags: ['tools', 'interactive'],
 		status: 'live',
 		component: 'GlassBench',
-		question: 'Where does glass stop being glass and become fog?',
 	},
 	{
 		slug: 'orbit-field',
 		title: 'Orbit Field',
 		description:
 			'A few hundred particles under pointer gravity, integrated with semi-implicit Euler and clamped so a fast cursor cannot explode the simulation.',
-		tags: ['canvas', 'physics', 'pointer'],
+		tags: ['particles', 'physics', 'canvas'],
 		status: 'live',
 		component: 'OrbitField',
-		question: 'Can a physics toy stay under 1% CPU on a phone?',
 	},
 	{
 		slug: 'webgl-nebula',
 		title: 'WebGL Nebula',
 		description:
 			'A raymarched volumetric background meant to sit behind the hero at a fraction of the cost of the current gradient layers.',
-		tags: ['webgl', 'shaders'],
+		tags: ['3d', 'canvas'],
 		status: 'wip',
-		question: 'Is a shader cheaper than four backdrop-filters?',
 	},
 	{
 		slug: 'audio-reactive-sky',
 		title: 'Audio-Reactive Sky',
 		description:
 			'Web Audio analyser driving star brightness — music makes the sky breathe. Needs a user gesture to start, so it lives in the Lab and not on the homepage.',
-		tags: ['web audio', 'canvas'],
+		tags: ['audio', 'canvas'],
 		status: 'idea',
-		question: 'What does a mix look like as a starfield?',
 	},
 	{
 		slug: 'minecraft-world-viewer',
 		title: 'Minecraft World Viewer',
 		description:
 			'Read a region file, draw chunks on a canvas, pan around a world without launching the game.',
-		tags: ['minecraft', 'canvas', 'parsing'],
+		tags: ['3d', 'tools'],
 		status: 'idea',
-		question: 'How fast can region files be decoded in the browser?',
 	},
 	{
 		slug: 'bubble-pop',
 		title: 'Bubble Pop',
 		description:
 			'A small arcade loop: glossy bubbles rise through the panel and pop when clicked or tapped. Score, combo streak and a calm mode for reduced motion.',
-		tags: ['game', 'canvas', 'arcade'],
+		tags: ['game', 'canvas', 'interactive'],
 		status: 'live',
 		component: 'BubblePop',
-		question: 'How few lines can a genuinely playable browser toy be?',
 	},
 	{
 		slug: 'memory-pairs',
 		title: 'Memory Pairs',
 		description:
 			'The classic flip-and-match card game on a 4x4 glass grid. Move counter, best score in session storage, fully keyboard playable.',
-		tags: ['game', 'dom', 'keyboard'],
+		tags: ['game', 'interactive'],
 		status: 'live',
 		component: 'MemoryPairs',
-		question: 'Can a DOM game stay smooth without a canvas or a framework?',
 	},
 	{
 		slug: 'reaction-timer',
 		title: 'Reaction Timer',
 		description:
 			'Measure response time in milliseconds: wait for the glow, click or press Space as fast as possible. Five rounds, median and best tracked.',
-		tags: ['tool', 'input', 'measurement'],
+		tags: ['benchmark', 'tools', 'interactive'],
 		status: 'live',
 		component: 'ReactionTimer',
-		question: 'How does input latency feel across devices and themes?',
 	},
-
 ];
 
 /** Experiments that can actually be run on the page. */

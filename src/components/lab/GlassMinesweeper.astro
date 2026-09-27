@@ -1,0 +1,1319 @@
+---
+/**
+ * Lab — Glass Minesweeper.
+ *
+ * Classic Minesweeper reimagined in authentic Apple Liquid Glass aesthetic.
+ *
+ * Architecture & Dynamic Features:
+ * - Adaptive grid engine: dynamically scales down so 16×14 Expert or any custom size always fits without overflowing
+ * - Sleek Liquid Glass Settings drawer: custom grid dimensions, mine density, emoji themes, and glass materials
+ * - 5 Emoji themes: Liquid Aero, Cyber Synth, Oceanic Crystal, Kawaii Cat, Retro Classic
+ * - 3 Glass material finishes: Crystal Clear, Frosted Milk, Prism Aurora
+ * - High-contrast Light Mode: deep royal sapphire, jade, ruby, and violet numbers with crisp delimitation
+ * - Raised HUD chassis with dark crystal counters and reactive circular liquid lens smiley face
+ * - Safe first-click guarantee with auto-cascade clearing
+ * - Web Audio harmonic sound generator
+ */
+---
+
+<div class="glass-minesweeper" data-minesweeper>
+	<!-- Status HUD Header -->
+	<div class="ms-hud" data-glass="raised">
+		<!-- Mine Counter -->
+		<div class="ms-counter mono" aria-label="Remaining Mines">
+			<span class="ms-counter-label">MINES</span>
+			<span class="ms-digits" data-ms-mines>010</span>
+		</div>
+
+		<!-- Status / Reset Face -->
+		<button class="ms-face-button mono" type="button" data-glass="interactive" data-ms-face aria-label="Reset Minesweeper game">
+			<span class="ms-face-emoji" data-ms-face-icon>(◕‿◕)</span>
+		</button>
+
+		<!-- Elapsed Timer -->
+		<div class="ms-counter mono" aria-label="Elapsed Time">
+			<span class="ms-counter-label">TIME</span>
+			<span class="ms-digits" data-ms-time>000</span>
+		</div>
+	</div>
+
+	<!-- Mode & Difficulty Toolbar -->
+	<div class="ms-toolbar">
+		<div class="ms-difficulties" role="radiogroup" aria-label="Game Difficulty">
+			<button class="difficulty-btn mono is-active" type="button" data-ms-diff="easy">
+				Beginner (9×9)
+			</button>
+			<button class="difficulty-btn mono" type="button" data-ms-diff="medium">
+				Intermediate (12×12)
+			</button>
+			<button class="difficulty-btn mono" type="button" data-ms-diff="hard">
+				Expert (16×14)
+			</button>
+			<button class="difficulty-btn mono" type="button" data-ms-diff="custom">
+				Custom
+			</button>
+		</div>
+
+		<div class="ms-tools">
+			<button class="glass-button glass-button--sm mono" type="button" data-ms-flag-toggle aria-pressed="false">
+				<span data-ms-flag-label>Mode: ⛏ Dig</span>
+			</button>
+			<button class="glass-button glass-button--sm mono" type="button" data-ms-audio aria-pressed="true">
+				<span class="dot dot--live" data-ms-audio-dot></span> Sound
+			</button>
+			<button class="glass-button glass-button--sm mono" type="button" data-ms-settings-toggle aria-expanded="false" aria-label="Toggle game settings">
+				⚙ Settings
+			</button>
+		</div>
+	</div>
+
+	<!-- Collapsible Liquid Glass Settings Drawer -->
+	<div class="ms-settings-drawer" data-ms-settings-drawer hidden>
+		<div class="ms-settings-panel" data-glass="quiet">
+			<div class="ms-settings-header">
+				<span class="mono text-muted ms-settings-title">CUSTOM CONFIGURATION & THEMES</span>
+				<button class="glass-button glass-button--sm mono" type="button" data-ms-settings-close>Close ✕</button>
+			</div>
+
+			<div class="ms-settings-grid">
+				<label class="lab-control">
+					<span class="lab-control__label">
+						Columns <output data-ms-out="cols">9 Cols</output>
+					</span>
+					<input class="lab-range" type="range" min="8" max="20" step="1" value="9" data-ms-in="cols" />
+				</label>
+
+				<label class="lab-control">
+					<span class="lab-control__label">
+						Rows <output data-ms-out="rows">9 Rows</output>
+					</span>
+					<input class="lab-range" type="range" min="8" max="16" step="1" value="9" data-ms-in="rows" />
+				</label>
+
+				<label class="lab-control">
+					<span class="lab-control__label">
+						Mines <output data-ms-out="mines">10 Mines (12%)</output>
+					</span>
+					<input class="lab-range" type="range" min="5" max="45" step="1" value="10" data-ms-in="mines" />
+				</label>
+
+				<label class="lab-control">
+					<span class="lab-control__label">
+						Emoji Theme <output data-ms-out="theme">Liquid Aero</output>
+					</span>
+					<select class="lab-select mono" data-ms-in="theme">
+						<option value="aero" selected>Liquid Aero (Kaomoji)</option>
+						<option value="cyber">Cyber Synth (Robot & EMP)</option>
+						<option value="ocean">Oceanic Crystal (Bubbles & Torpedo)</option>
+						<option value="kawaii">Kawaii Cat (Kitten & Paw)</option>
+						<option value="retro">Retro Classic (Smiley & Mine)</option>
+					</select>
+				</label>
+
+				<label class="lab-control">
+					<span class="lab-control__label">
+						Glass Material <output data-ms-out="glass">Crystal Clear</output>
+					</span>
+					<select class="lab-select mono" data-ms-in="glass">
+						<option value="clear" selected>Crystal Clear (Translucent)</option>
+						<option value="frosted">Frosted Milk (Deep Diffusion)</option>
+						<option value="prism">Prism Aurora (Iridescent)</option>
+					</select>
+				</label>
+
+				<div class="ms-settings-actions">
+					<button class="glass-button mono is-accent" type="button" data-ms-apply-custom>
+						Apply & Start Game
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Minesweeper Grid Viewport (Adaptive Optical Stage) -->
+	<div class="ms-board-viewport" data-ms-viewport>
+		<div
+			class="ms-grid"
+			data-glass="panel"
+			data-ms-grid
+			role="grid"
+			aria-label="Minesweeper Board"
+			style="--grid-cols: 9; --grid-rows: 9; --cell-font-size: 1.4rem; --cell-radius: 9px; --cell-border: 2.2px;"
+		>
+			{
+				Array.from({ length: 81 }).map((_, i) => (
+					<button
+						type="button"
+						class="ms-cell mono is-unrevealed"
+						data-glass="interactive clear"
+						data-r={Math.floor(i / 9)}
+						data-c={i % 9}
+						role="gridcell"
+						aria-label={`Tile ${Math.floor(i / 9) + 1}, ${(i % 9) + 1} (unrevealed)`}
+					/>
+				))
+			}
+		</div>
+	</div>
+
+	<!-- Footer Hint -->
+	<div class="lab-hint mono">
+		Left-click to reveal · Right-click or toggle Flag mode to plant 🚩 · First tap is always safe
+	</div>
+</div>
+
+<script>
+	interface CellData {
+		r: number;
+		c: number;
+		isMine: boolean;
+		isRevealed: boolean;
+		isFlagged: boolean;
+		count: number;
+	}
+
+	interface DifficultyConfig {
+		rows: number;
+		cols: number;
+		mines: number;
+	}
+
+	interface EmojiTheme {
+		name: string;
+		normal: string;
+		pressed: string;
+		dead: string;
+		won: string;
+		mine: string;
+		flag: string;
+		empty: string;
+	}
+
+	const DIFFICULTIES: Record<string, DifficultyConfig> = {
+		easy: { rows: 9, cols: 9, mines: 10 },
+		medium: { rows: 12, cols: 12, mines: 24 },
+		hard: { rows: 14, cols: 16, mines: 40 },
+	};
+
+	const EMOJI_THEMES: Record<string, EmojiTheme> = {
+		aero: {
+			name: 'Liquid Aero',
+			normal: '(◕‿◕)',
+			pressed: '(・_・)',
+			dead: '(×_×)',
+			won: '(★‿★)',
+			mine: '💣',
+			flag: '🚩',
+			empty: '·',
+		},
+		cyber: {
+			name: 'Cyber Synth',
+			normal: '🤖',
+			pressed: '⚡',
+			dead: '💀',
+			won: '👑',
+			mine: '💥',
+			flag: '💠',
+			empty: '◇',
+		},
+		ocean: {
+			name: 'Oceanic Crystal',
+			normal: '🫧',
+			pressed: '🌊',
+			dead: '🦈',
+			won: '💎',
+			mine: '🐡',
+			flag: '⚓',
+			empty: '°',
+		},
+		kawaii: {
+			name: 'Kawaii Cat',
+			normal: '🐱',
+			pressed: '🙀',
+			dead: '😿',
+			won: '😻',
+			mine: '🐾',
+			flag: '🐟',
+			empty: '·',
+		},
+		retro: {
+			name: 'Retro Classic',
+			normal: '🙂',
+			pressed: '😮',
+			dead: '😵',
+			won: '😎',
+			mine: '💣',
+			flag: '🚩',
+			empty: '·',
+		},
+	};
+
+	const root = document.querySelector<HTMLElement>('[data-minesweeper]');
+	if (root) {
+		const gridEl = root.querySelector<HTMLElement>('[data-ms-grid]')!;
+		const minesEl = root.querySelector<HTMLElement>('[data-ms-mines]')!;
+		const timeEl = root.querySelector<HTMLElement>('[data-ms-time]')!;
+		const faceBtn = root.querySelector<HTMLButtonElement>('[data-ms-face]')!;
+		const faceIcon = root.querySelector<HTMLElement>('[data-ms-face-icon]')!;
+		const flagToggleBtn = root.querySelector<HTMLButtonElement>('[data-ms-flag-toggle]')!;
+		const flagLabel = root.querySelector<HTMLElement>('[data-ms-flag-label]')!;
+		const audioBtn = root.querySelector<HTMLButtonElement>('[data-ms-audio]')!;
+		const audioDot = root.querySelector<HTMLElement>('[data-ms-audio-dot]')!;
+		const settingsToggleBtn = root.querySelector<HTMLButtonElement>('[data-ms-settings-toggle]')!;
+		const settingsCloseBtn = root.querySelector<HTMLButtonElement>('[data-ms-settings-close]')!;
+		const settingsDrawer = root.querySelector<HTMLElement>('[data-ms-settings-drawer]')!;
+		const diffBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-ms-diff]'));
+
+		// Settings inputs & outputs
+		const colsIn = root.querySelector<HTMLInputElement>('[data-ms-in="cols"]');
+		const colsOut = root.querySelector<HTMLOutputElement>('[data-ms-out="cols"]');
+		const rowsIn = root.querySelector<HTMLInputElement>('[data-ms-in="rows"]');
+		const rowsOut = root.querySelector<HTMLOutputElement>('[data-ms-out="rows"]');
+		const minesIn = root.querySelector<HTMLInputElement>('[data-ms-in="mines"]');
+		const minesOut = root.querySelector<HTMLOutputElement>('[data-ms-out="mines"]');
+		const themeIn = root.querySelector<HTMLSelectElement>('[data-ms-in="theme"]');
+		const themeOut = root.querySelector<HTMLOutputElement>('[data-ms-out="theme"]');
+		const glassIn = root.querySelector<HTMLSelectElement>('[data-ms-in="glass"]');
+		const glassOut = root.querySelector<HTMLOutputElement>('[data-ms-out="glass"]');
+		const applyCustomBtn = root.querySelector<HTMLButtonElement>('[data-ms-apply-custom]');
+
+		let currentDiff = 'easy';
+		let rows = 9;
+		let cols = 9;
+		let totalMines = 10;
+		let activeThemeKey = 'aero';
+		let activeGlassKey = 'clear';
+
+		let board: CellData[][] = [];
+		let isFirstClick = true;
+		let isGameOver = false;
+		let isGameWon = false;
+		let isFlagMode = false;
+		let audioEnabled = true;
+
+		let flagsPlaced = 0;
+		let cellsRevealed = 0;
+		let timerId: number | null = null;
+		let elapsedSeconds = 0;
+
+		const getTheme = () => EMOJI_THEMES[activeThemeKey] || EMOJI_THEMES.aero;
+
+		let audioCtx: AudioContext | null = null;
+		const getAudioContext = () => {
+			if (!audioCtx) {
+				const AudioClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+				audioCtx = new AudioClass();
+			}
+			if (audioCtx.state === 'suspended') {
+				audioCtx.resume();
+			}
+			return audioCtx;
+		};
+
+		const playSound = (freq: number, type: OscillatorType = 'sine', duration = 0.12) => {
+			if (!audioEnabled) return;
+			try {
+				const ctx = getAudioContext();
+				const t = ctx.currentTime;
+				const osc = ctx.createOscillator();
+				const gain = ctx.createGain();
+
+				osc.type = type;
+				osc.frequency.setValueAtTime(freq, t);
+
+				gain.gain.setValueAtTime(0.12, t);
+				gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+				osc.connect(gain);
+				gain.connect(ctx.destination);
+
+				osc.start(t);
+				osc.stop(t + duration);
+			} catch {}
+		};
+
+		const startTimer = () => {
+			if (timerId !== null) return;
+			elapsedSeconds = 0;
+			timerId = window.setInterval(() => {
+				elapsedSeconds = Math.min(999, elapsedSeconds + 1);
+				timeEl.textContent = String(elapsedSeconds).padStart(3, '0');
+			}, 1000);
+		};
+
+		const stopTimer = () => {
+			if (timerId !== null) {
+				clearInterval(timerId);
+				timerId = null;
+			}
+		};
+
+		const setFace = (state: 'normal' | 'pressed' | 'dead' | 'won') => {
+			if (!faceIcon) return;
+			const theme = getTheme();
+			faceIcon.textContent = theme[state];
+		};
+
+		const updateMinesDisplay = () => {
+			const remaining = Math.max(-99, totalMines - flagsPlaced);
+			minesEl.textContent = remaining < 0 ? `-${String(Math.abs(remaining)).padStart(2, '0')}` : String(remaining).padStart(3, '0');
+		};
+
+		const updateInputs = () => {
+			if (colsIn) colsIn.value = String(cols);
+			if (colsOut) colsOut.textContent = `${cols} Cols`;
+			if (rowsIn) rowsIn.value = String(rows);
+			if (rowsOut) rowsOut.textContent = `${rows} Rows`;
+
+			const maxM = Math.max(5, rows * cols - 9);
+			if (minesIn) {
+				minesIn.max = String(maxM);
+				minesIn.value = String(totalMines);
+			}
+			if (minesOut) {
+				const pct = Math.round((totalMines / (rows * cols)) * 100);
+				minesOut.textContent = `${totalMines} Mines (${pct}%)`;
+			}
+		};
+
+		const createBoard = () => {
+			board = [];
+			for (let r = 0; r < rows; r++) {
+				const row: CellData[] = [];
+				for (let c = 0; c < cols; c++) {
+					row.push({
+						r,
+						c,
+						isMine: false,
+						isRevealed: false,
+						isFlagged: false,
+						count: 0,
+					});
+				}
+				board.push(row);
+			}
+		};
+
+		const seedMines = (safeR: number, safeC: number) => {
+			let planted = 0;
+			const maxPossible = rows * cols - 1;
+			const targetMines = Math.min(totalMines, maxPossible);
+
+			while (planted < targetMines) {
+				const r = Math.floor(Math.random() * rows);
+				const c = Math.floor(Math.random() * cols);
+
+				if (Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1) {
+					continue;
+				}
+
+				if (!board[r][c].isMine) {
+					board[r][c].isMine = true;
+					planted++;
+				}
+			}
+
+			for (let r = 0; r < rows; r++) {
+				for (let c = 0; c < cols; c++) {
+					if (board[r][c].isMine) continue;
+					let count = 0;
+					for (let dr = -1; dr <= 1; dr++) {
+						for (let dc = -1; dc <= 1; dc++) {
+							const nr = r + dr;
+							const nc = c + dc;
+							if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].isMine) {
+								count++;
+							}
+						}
+					}
+					board[r][c].count = count;
+				}
+			}
+		};
+
+		const renderDOM = () => {
+			gridEl.innerHTML = '';
+			gridEl.style.setProperty('--grid-cols', String(cols));
+			gridEl.style.setProperty('--grid-rows', String(rows));
+
+			// Dynamically scale cell font and radius so large grids fit flawlessly
+			const cellFontRem = Math.max(0.68, Math.min(1.45, 13.5 / cols));
+			const cellRadiusPx = Math.max(4, Math.min(10, Math.round(90 / cols)));
+			const cellBorderPx = cols > 13 ? 1.5 : 2.2;
+
+			gridEl.style.setProperty('--cell-font-size', `${cellFontRem.toFixed(2)}rem`);
+			gridEl.style.setProperty('--cell-radius', `${cellRadiusPx}px`);
+			gridEl.style.setProperty('--cell-border', `${cellBorderPx}px`);
+
+			// Update glass material attribute on grid container
+			gridEl.setAttribute('data-glass-theme', activeGlassKey);
+
+			for (let r = 0; r < rows; r++) {
+				for (let c = 0; c < cols; c++) {
+					const btn = document.createElement('button');
+					btn.type = 'button';
+					btn.className = 'ms-cell mono is-unrevealed';
+					btn.setAttribute('data-glass', 'interactive clear');
+					btn.dataset.r = String(r);
+					btn.dataset.c = String(c);
+					btn.setAttribute('role', 'gridcell');
+					btn.setAttribute('aria-label', `Tile ${r + 1}, ${c + 1} (unrevealed)`);
+					gridEl.appendChild(btn);
+				}
+			}
+		};
+
+		// Event delegation on grid container
+		gridEl.addEventListener('click', (e) => {
+			const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ms-cell');
+			if (!btn) return;
+			e.preventDefault();
+			const r = Number(btn.dataset.r);
+			const c = Number(btn.dataset.c);
+			if (isFlagMode) {
+				toggleFlag(r, c);
+			} else {
+				revealCell(r, c);
+			}
+		});
+
+		gridEl.addEventListener('contextmenu', (e) => {
+			const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ms-cell');
+			if (!btn) return;
+			e.preventDefault();
+			const r = Number(btn.dataset.r);
+			const c = Number(btn.dataset.c);
+			toggleFlag(r, c);
+		});
+
+		gridEl.addEventListener('pointerdown', (e) => {
+			const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ms-cell');
+			if (btn && !isGameOver && !isGameWon) setFace('pressed');
+		});
+
+		window.addEventListener('pointerup', () => {
+			if (!isGameOver && !isGameWon) setFace('normal');
+		});
+
+		const getCellButton = (r: number, c: number): HTMLButtonElement | null => {
+			return gridEl.querySelector<HTMLButtonElement>(`[data-r="${r}"][data-c="${c}"]`);
+		};
+
+		const revealCell = (r: number, c: number) => {
+			if (isGameOver || isGameWon) return;
+			const cell = board[r][c];
+			if (cell.isRevealed || cell.isFlagged) return;
+
+			if (isFirstClick) {
+				isFirstClick = false;
+				seedMines(r, c);
+				startTimer();
+			}
+
+			cell.isRevealed = true;
+			cellsRevealed++;
+			const btn = getCellButton(r, c);
+			if (!btn) return;
+
+			btn.classList.remove('is-unrevealed');
+			btn.classList.add('is-revealed');
+			btn.removeAttribute('data-glass');
+			btn.setAttribute('aria-expanded', 'true');
+
+			const theme = getTheme();
+
+			if (cell.isMine) {
+				btn.classList.add('is-detonated');
+				btn.innerHTML = '💥';
+				gameOver(false);
+				return;
+			}
+
+			playSound(340 + cell.count * 45, 'sine', 0.1);
+
+			if (cell.count > 0) {
+				btn.textContent = String(cell.count);
+				btn.dataset.count = String(cell.count);
+				btn.setAttribute('aria-label', `${cell.count} adjacent mines`);
+			} else {
+				// Empty safe cell: mark with dot indicator
+				btn.classList.add('is-empty');
+				btn.innerHTML = `<span class="empty-dot">${theme.empty}</span>`;
+				btn.setAttribute('aria-label', 'Empty cleared tile');
+
+				// Cascade neighbors
+				for (let dr = -1; dr <= 1; dr++) {
+					for (let dc = -1; dc <= 1; dc++) {
+						const nr = r + dr;
+						const nc = c + dc;
+						if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+							if (!board[nr][nc].isRevealed) {
+								revealCell(nr, nc);
+							}
+						}
+					}
+				}
+			}
+
+			checkWinCondition();
+		};
+
+		const toggleFlag = (r: number, c: number) => {
+			if (isGameOver || isGameWon) return;
+			const cell = board[r][c];
+			if (cell.isRevealed) return;
+
+			const btn = getCellButton(r, c);
+			if (!btn) return;
+
+			const theme = getTheme();
+			cell.isFlagged = !cell.isFlagged;
+			if (cell.isFlagged) {
+				flagsPlaced++;
+				btn.classList.add('is-flagged');
+				btn.innerHTML = theme.flag;
+				btn.setAttribute('aria-label', `Tile ${r + 1}, ${c + 1} (flagged)`);
+				playSound(520, 'triangle', 0.08);
+			} else {
+				flagsPlaced--;
+				btn.classList.remove('is-flagged');
+				btn.innerHTML = '';
+				btn.setAttribute('aria-label', `Tile ${r + 1}, ${c + 1} (unrevealed)`);
+				playSound(380, 'triangle', 0.08);
+			}
+
+			updateMinesDisplay();
+		};
+
+		const checkWinCondition = () => {
+			const safeTilesTotal = rows * cols - totalMines;
+			if (cellsRevealed === safeTilesTotal) {
+				gameOver(true);
+			}
+		};
+
+		const gameOver = (won: boolean) => {
+			stopTimer();
+			const theme = getTheme();
+			if (won) {
+				isGameWon = true;
+				setFace('won');
+				playSound(587.33, 'triangle', 0.15);
+				setTimeout(() => playSound(880, 'sine', 0.35), 140);
+
+				for (let r = 0; r < rows; r++) {
+					for (let c = 0; c < cols; c++) {
+						if (board[r][c].isMine) {
+							const btn = getCellButton(r, c);
+							if (btn && !board[r][c].isFlagged) {
+								btn.innerHTML = theme.flag;
+								btn.classList.add('is-flagged');
+							}
+						}
+					}
+				}
+				minesEl.textContent = '000';
+			} else {
+				isGameOver = true;
+				setFace('dead');
+				playSound(180, 'sawtooth', 0.35);
+
+				for (let r = 0; r < rows; r++) {
+					for (let c = 0; c < cols; c++) {
+						const cell = board[r][c];
+						const btn = getCellButton(r, c);
+						if (!btn) continue;
+
+						if (cell.isMine && !cell.isRevealed) {
+							btn.classList.remove('is-unrevealed');
+							btn.classList.add('is-mine-revealed');
+							btn.removeAttribute('data-glass');
+							btn.innerHTML = theme.mine;
+						} else if (!cell.isMine && cell.isFlagged) {
+							btn.classList.add('is-wrong-flag');
+							btn.innerHTML = '❌';
+						}
+					}
+				}
+			}
+		};
+
+		const resetGame = () => {
+			stopTimer();
+			isFirstClick = true;
+			isGameOver = false;
+			isGameWon = false;
+			flagsPlaced = 0;
+			cellsRevealed = 0;
+			elapsedSeconds = 0;
+			timeEl.textContent = '000';
+			updateMinesDisplay();
+			setFace('normal');
+			updateInputs();
+			createBoard();
+			renderDOM();
+		};
+
+		faceBtn.addEventListener('click', resetGame);
+
+		flagToggleBtn.addEventListener('click', () => {
+			isFlagMode = !isFlagMode;
+			flagToggleBtn.setAttribute('aria-pressed', String(isFlagMode));
+			if (flagLabel) {
+				const theme = getTheme();
+				flagLabel.textContent = isFlagMode ? `Mode: ${theme.flag} Flag` : 'Mode: ⛏ Dig';
+			}
+			flagToggleBtn.classList.toggle('is-active', isFlagMode);
+		});
+
+		audioBtn.addEventListener('click', () => {
+			audioEnabled = !audioEnabled;
+			audioBtn.setAttribute('aria-pressed', String(audioEnabled));
+			audioDot.classList.toggle('dot--live', audioEnabled);
+		});
+
+		// Settings drawer toggle
+		const toggleSettings = (force?: boolean) => {
+			const isHidden = settingsDrawer ? settingsDrawer.hidden : false;
+			const nextState = force !== undefined ? !force : isHidden;
+			if (settingsDrawer) settingsDrawer.hidden = !nextState;
+			settingsToggleBtn.setAttribute('aria-expanded', String(nextState));
+			settingsToggleBtn.classList.toggle('is-active', nextState);
+		};
+
+		settingsToggleBtn?.addEventListener('click', () => toggleSettings());
+		settingsCloseBtn?.addEventListener('click', () => toggleSettings(false));
+
+		diffBtns.forEach((btn) => {
+			btn.addEventListener('click', () => {
+				const d = btn.dataset.msDiff || 'easy';
+				diffBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+				currentDiff = d;
+
+				if (d === 'custom') {
+					toggleSettings(true);
+					return;
+				}
+
+				const cfg = DIFFICULTIES[d];
+				if (!cfg) return;
+
+				rows = cfg.rows;
+				cols = cfg.cols;
+				totalMines = cfg.mines;
+				resetGame();
+			});
+		});
+
+		// Custom Sliders
+		colsIn?.addEventListener('input', () => {
+			const c = Number(colsIn.value);
+			if (colsOut) colsOut.textContent = `${c} Cols`;
+			const maxM = Math.max(5, c * Number(rowsIn?.value || rows) - 9);
+			if (minesIn) minesIn.max = String(maxM);
+		});
+
+		rowsIn?.addEventListener('input', () => {
+			const r = Number(rowsIn.value);
+			if (rowsOut) rowsOut.textContent = `${r} Rows`;
+			const maxM = Math.max(5, r * Number(colsIn?.value || cols) - 9);
+			if (minesIn) minesIn.max = String(maxM);
+		});
+
+		minesIn?.addEventListener('input', () => {
+			const m = Number(minesIn.value);
+			const totalCells = Number(colsIn?.value || cols) * Number(rowsIn?.value || rows);
+			const pct = Math.round((m / totalCells) * 100);
+			if (minesOut) minesOut.textContent = `${m} Mines (${pct}%)`;
+		});
+
+		themeIn?.addEventListener('change', () => {
+			activeThemeKey = themeIn.value;
+			if (themeOut) themeOut.textContent = themeIn.options[themeIn.selectedIndex].text.split(' (')[0];
+			setFace(isGameOver ? 'dead' : isGameWon ? 'won' : 'normal');
+
+			// Refresh visible flags & mines with the new theme
+			const theme = getTheme();
+			for (let r = 0; r < rows; r++) {
+				for (let c = 0; c < cols; c++) {
+					const cell = board[r][c];
+					const btn = getCellButton(r, c);
+					if (!btn) continue;
+					if (cell.isFlagged) {
+						btn.innerHTML = theme.flag;
+					} else if (cell.isRevealed && cell.count === 0) {
+						btn.innerHTML = `<span class="empty-dot">${theme.empty}</span>`;
+					} else if (isGameOver && cell.isMine) {
+						btn.innerHTML = theme.mine;
+					}
+				}
+			}
+			if (flagLabel) {
+				flagLabel.textContent = isFlagMode ? `Mode: ${theme.flag} Flag` : 'Mode: ⛏ Dig';
+			}
+		});
+
+		glassIn?.addEventListener('change', () => {
+			activeGlassKey = glassIn.value;
+			if (glassOut) glassOut.textContent = glassIn.options[glassIn.selectedIndex].text.split(' (')[0];
+			gridEl.setAttribute('data-glass-theme', activeGlassKey);
+		});
+
+		applyCustomBtn?.addEventListener('click', () => {
+			cols = Number(colsIn?.value || 9);
+			rows = Number(rowsIn?.value || 9);
+			const maxM = Math.max(5, rows * cols - 9);
+			totalMines = Math.min(Number(minesIn?.value || 10), maxM);
+
+			currentDiff = 'custom';
+			diffBtns.forEach((b) => b.classList.toggle('is-active', b.dataset.msDiff === 'custom'));
+			toggleSettings(false);
+			resetGame();
+		});
+
+		resetGame();
+	}
+</script>
+
+<style>
+	.glass-minesweeper {
+		display: grid;
+		gap: 1.25rem;
+		width: 100%;
+		max-width: 680px;
+		margin: 0 auto;
+	}
+
+	/* HUD Header: Reusing Liquid Glass raised bar */
+	.ms-hud {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.85rem 1.6rem;
+		border-radius: var(--radius-xl);
+		background: var(--glass-bg-raised);
+		border: 1px solid var(--glass-border-strong);
+		box-shadow: var(--glass-shadow-raised), 0 8px 24px -4px rgba(0, 0, 0, 0.35);
+	}
+
+	:global(html[data-theme='light']) .ms-hud {
+		background: rgba(255, 255, 255, 0.82);
+		border-color: rgba(30, 90, 160, 0.35);
+		box-shadow: 0 10px 28px -6px rgba(0, 40, 100, 0.12), inset 0 1px 2px #ffffff;
+	}
+
+	/* Counter displays: dark optical LCD well */
+	.ms-counter {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 0.4rem 0.95rem;
+		border-radius: var(--radius-sm);
+		background: rgba(4, 8, 16, 0.95);
+		border: 1.5px solid rgba(255, 255, 255, 0.15);
+		box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
+	}
+
+	:global(html[data-theme='light']) .ms-counter {
+		background: rgba(14, 30, 56, 0.96);
+		border-color: rgba(30, 90, 160, 0.45);
+		box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.65), 0 2px 6px rgba(0, 40, 100, 0.1);
+	}
+
+	.ms-counter-label {
+		font-size: 0.6rem;
+		color: var(--text-faint);
+		letter-spacing: 0.12em;
+	}
+
+	.ms-digits {
+		font-size: 1.45rem;
+		font-weight: 700;
+		color: var(--accent-strong);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.05em;
+	}
+
+	:global(html[data-theme='light']) .ms-digits {
+		color: #38bdf8;
+		text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+	}
+
+	/* Status Face Button: Circular Liquid Lens */
+	.ms-face-button {
+		width: 48px;
+		height: 48px;
+		border-radius: 50%;
+		border: 1.5px solid var(--glass-border-strong);
+		background: var(--glass-bg-raised);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow:
+			inset 0 1.5px 2px rgba(255, 255, 255, 0.7),
+			0 4px 12px rgba(0, 0, 0, 0.25);
+		transition: all 0.15s var(--ease-spring);
+		outline: none;
+	}
+
+	:global(html[data-theme='light']) .ms-face-button {
+		background: #ffffff;
+		border-color: rgba(30, 90, 160, 0.45);
+		box-shadow:
+			inset 0 1.5px 2px #ffffff,
+			0 4px 12px rgba(15, 45, 90, 0.18);
+	}
+
+	.ms-face-button:hover {
+		transform: scale(1.08);
+		border-color: var(--accent-strong);
+		box-shadow:
+			inset 0 1.5px 2px #ffffff,
+			0 0 14px var(--accent-soft);
+	}
+
+	.ms-face-button:active {
+		transform: scale(0.92);
+	}
+
+	.ms-face-emoji {
+		font-size: 0.95rem;
+		font-weight: 700;
+		color: var(--text-strong);
+	}
+
+	/* Toolbar & Difficulties */
+	.ms-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.65rem;
+	}
+
+	.ms-difficulties,
+	.ms-tools {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		flex-wrap: wrap;
+	}
+
+	.difficulty-btn {
+		padding: 0.4rem 0.85rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		cursor: pointer;
+		transition: all 0.15s ease-out;
+	}
+
+	.difficulty-btn:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+	}
+
+	.difficulty-btn.is-active {
+		color: var(--text-strong);
+		background: var(--glass-bg-raised);
+		border-color: var(--accent-line);
+		box-shadow: 0 0 10px -2px var(--accent-soft);
+	}
+
+	/* Settings Drawer */
+	.ms-settings-drawer {
+		animation: ms-drawer-slide 0.25s var(--ease-spring);
+	}
+
+	.ms-settings-drawer[hidden] {
+		display: none;
+	}
+
+	@keyframes ms-drawer-slide {
+		from {
+			opacity: 0;
+			transform: translateY(-8px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.ms-settings-panel {
+		border-radius: var(--radius-xl);
+		padding: 1.25rem 1.4rem;
+		border: 1px solid var(--glass-border-strong);
+		display: grid;
+		gap: 1.1rem;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	}
+
+	.ms-settings-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.ms-settings-title {
+		font-size: var(--text-micro);
+		letter-spacing: 0.1em;
+	}
+
+	.ms-settings-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+		gap: 0.9rem 1.25rem;
+		align-items: end;
+	}
+
+	.ms-settings-actions {
+		display: flex;
+		align-items: flex-end;
+	}
+
+	/* Board Viewport: Optical Stage with Calibration Grid */
+	.ms-board-viewport {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		padding: clamp(1rem, 2.5vw, 1.8rem);
+		border-radius: var(--radius-xl);
+		background:
+			radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.12), transparent 70%),
+			repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0px, rgba(255, 255, 255, 0.035) 1px, transparent 1px, transparent 24px),
+			repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0px, rgba(255, 255, 255, 0.035) 1px, transparent 1px, transparent 24px),
+			rgba(8, 12, 22, 0.75);
+		border: 1px solid var(--glass-border);
+		box-shadow: inset 0 2px 14px rgba(0, 0, 0, 0.45);
+		overflow: hidden;
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	:global(html[data-theme='light']) .ms-board-viewport {
+		background:
+			radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.22), transparent 70%),
+			repeating-linear-gradient(0deg, rgba(30, 90, 160, 0.06) 0px, rgba(30, 90, 160, 0.06) 1px, transparent 1px, transparent 24px),
+			repeating-linear-gradient(90deg, rgba(30, 90, 160, 0.06) 0px, rgba(30, 90, 160, 0.06) 1px, transparent 1px, transparent 24px),
+			rgba(238, 246, 255, 0.9);
+		border-color: rgba(30, 90, 160, 0.35);
+		box-shadow:
+			inset 0 2px 12px rgba(30, 80, 140, 0.12),
+			0 10px 30px -4px rgba(0, 40, 100, 0.1);
+	}
+
+	/* The Grid Chassis: Concentric Liquid Glass Panel with Auto-Fit Scaling */
+	.ms-grid {
+		--grid-cols: 9;
+		--grid-rows: 9;
+		display: grid;
+		grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
+		gap: clamp(3px, 0.8vw, 6px);
+		user-select: none;
+		padding: clamp(8px, 1.8vw, 14px);
+		background: rgba(0, 0, 0, 0.45);
+		backdrop-filter: blur(20px) saturate(160%);
+		-webkit-backdrop-filter: blur(20px) saturate(160%);
+		border-radius: var(--radius-xl);
+		border: 2px solid var(--glass-border-strong);
+		box-shadow:
+			inset 0 2px 10px rgba(0, 0, 0, 0.4),
+			0 12px 36px -6px rgba(0, 0, 0, 0.4);
+		width: 100%;
+		max-width: min(100%, calc(var(--grid-cols) * 44px + (var(--grid-cols) - 1) * 6px + 28px));
+		box-sizing: border-box;
+		margin: 0 auto;
+	}
+
+	:global(html[data-theme='light']) .ms-grid {
+		background: rgba(215, 235, 252, 0.65);
+		border-color: rgba(30, 90, 160, 0.45);
+		box-shadow:
+			inset 0 2px 8px rgba(30, 80, 140, 0.18),
+			0 12px 30px -6px rgba(15, 45, 90, 0.18);
+	}
+
+	/* Base Box Geometry: strictly square aspect ratio with dynamic auto-scaling */
+	:global(.ms-cell) {
+		width: 100%;
+		height: auto;
+		aspect-ratio: 1;
+		min-width: 0;
+		min-height: 0;
+		border-radius: var(--cell-radius, 9px);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: var(--cell-font-size, 1.45rem);
+		font-weight: 900;
+		line-height: 1;
+		transition:
+			transform 0.12s var(--ease-spring),
+			background 0.15s ease,
+			border-color 0.15s ease,
+			box-shadow 0.15s ease;
+		outline: none;
+		padding: 0;
+		box-sizing: border-box;
+	}
+
+	/* =========================================================================
+	   1. UNREVEALED BOXES: Liquid Glass Clear Variant Tiles
+	   ========================================================================= */
+	:global(.ms-cell.is-unrevealed) {
+		background: linear-gradient(
+			135deg,
+			rgba(255, 255, 255, 0.2) 0%,
+			rgba(20, 38, 64, 0.5) 45%,
+			rgba(8, 16, 32, 0.8) 100%
+		);
+		backdrop-filter: blur(12px) saturate(200%);
+		-webkit-backdrop-filter: blur(12px) saturate(200%);
+		border: var(--cell-border, 2.2px) solid rgba(255, 255, 255, 0.38);
+		box-shadow:
+			inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.75),
+			inset 0 -2px 3px 0 rgba(0, 0, 0, 0.4),
+			0 4px 10px -1px rgba(0, 0, 0, 0.45);
+	}
+
+	/* High-contrast Light Mode Unrevealed Crystal Tile */
+	:global(html[data-theme='light'] .ms-cell.is-unrevealed) {
+		background: linear-gradient(
+			135deg,
+			rgba(255, 255, 255, 0.96) 0%,
+			rgba(225, 242, 255, 0.88) 50%,
+			rgba(195, 228, 255, 0.8) 100%
+		);
+		backdrop-filter: blur(12px) saturate(180%);
+		-webkit-backdrop-filter: blur(12px) saturate(180%);
+		border: var(--cell-border, 2.2px) solid rgba(2, 132, 199, 0.75);
+		box-shadow:
+			inset 0 1.5px 2px 0 #ffffff,
+			inset 0 -1.5px 2px 0 rgba(2, 132, 199, 0.3),
+			0 4px 10px -2px rgba(15, 45, 90, 0.28);
+	}
+
+	/* Interactive Flex & Specular Hover */
+	:global(.ms-cell.is-unrevealed:hover) {
+		transform: translateY(-2px) scale(1.04);
+		border-color: var(--accent-strong);
+		box-shadow:
+			inset 0 1.5px 2px #ffffff,
+			0 0 16px -1px var(--accent-strong),
+			0 6px 16px rgba(0, 0, 0, 0.45);
+	}
+
+	:global(html[data-theme='light'] .ms-cell.is-unrevealed:hover) {
+		border-color: #0284c7;
+		box-shadow:
+			inset 0 1.5px 2px #ffffff,
+			0 0 16px rgba(56, 189, 248, 0.65),
+			0 6px 14px rgba(15, 45, 90, 0.3);
+	}
+
+	:global(.ms-cell:active) {
+		transform: scale(0.92);
+	}
+
+	/* =========================================================================
+	   Material Variant Finishes (Controlled via data-glass-theme)
+	   ========================================================================= */
+	/* Frosted Milk Finish */
+	[data-glass-theme='frosted'] :global(.ms-cell.is-unrevealed) {
+		background: rgba(255, 255, 255, 0.22) !important;
+		backdrop-filter: blur(24px) saturate(130%) !important;
+		-webkit-backdrop-filter: blur(24px) saturate(130%) !important;
+	}
+
+	:global(html[data-theme='light']) [data-glass-theme='frosted'] :global(.ms-cell.is-unrevealed) {
+		background: rgba(255, 255, 255, 0.95) !important;
+		border-color: rgba(30, 90, 160, 0.5) !important;
+	}
+
+	/* Prism Aurora Finish */
+	[data-glass-theme='prism'] :global(.ms-cell.is-unrevealed) {
+		border-color: rgba(192, 132, 252, 0.65) !important;
+		box-shadow:
+			inset 0 1.5px 2px rgba(255, 255, 255, 0.85),
+			0 0 12px -2px rgba(168, 85, 247, 0.45) !important;
+	}
+
+	/* =========================================================================
+	   2. REVEALED BOXES: Sunken Optical Wells
+	   ========================================================================= */
+	:global(.ms-cell.is-revealed) {
+		background: rgba(6, 12, 22, 0.92);
+		border: var(--cell-border, 2.2px) solid rgba(255, 255, 255, 0.22);
+		box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85);
+		cursor: default;
+	}
+
+	/* High-contrast Light Mode Sunken Well */
+	:global(html[data-theme='light'] .ms-cell.is-revealed) {
+		background: rgba(230, 242, 255, 0.95);
+		border: var(--cell-border, 2.2px) solid rgba(30, 90, 160, 0.55);
+		box-shadow:
+			inset 0 2px 6px rgba(15, 50, 100, 0.25),
+			inset 0 -1px 1px #ffffff;
+	}
+
+	/* Empty revealed well with subtle center pip */
+	:global(.ms-cell.is-empty) {
+		background: rgba(4, 8, 16, 0.88);
+		border: var(--cell-border, 2.2px) solid rgba(255, 255, 255, 0.16);
+	}
+
+	:global(html[data-theme='light'] .ms-cell.is-empty) {
+		background: rgba(220, 238, 252, 0.9);
+		border: var(--cell-border, 2.2px) solid rgba(30, 90, 160, 0.42);
+	}
+
+	:global(.empty-dot) {
+		color: var(--text-faint);
+		font-size: 1.6rem;
+		opacity: 0.45;
+		line-height: 1;
+	}
+
+	/* Flagged Box */
+	:global(.ms-cell.is-flagged) {
+		border-color: var(--accent-line) !important;
+		box-shadow: 0 0 14px var(--accent-soft);
+	}
+
+	/* =========================================================================
+	   3. BOLD, VIBRANT, HIGH-CONTRAST NUMBERS
+	   ========================================================================= */
+	:global(.ms-cell[data-count]) {
+		border: var(--cell-border, 2.2px) solid rgba(255, 255, 255, 0.4);
+		font-family: var(--font-display), var(--font-mono);
+		letter-spacing: -0.02em;
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count]) {
+		border: var(--cell-border, 2.2px) solid rgba(30, 90, 160, 0.65);
+	}
+
+	/* 1 — Sapphire Blue */
+	:global(.ms-cell[data-count='1']) {
+		color: #38bdf8;
+		border-color: rgba(56, 189, 248, 0.6);
+		text-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count='1']) {
+		color: #0284c7;
+		border-color: rgba(2, 132, 199, 0.75);
+		text-shadow: 0 1px 2px rgba(2, 132, 199, 0.3);
+	}
+
+	/* 2 — Forest Emerald */
+	:global(.ms-cell[data-count='2']) {
+		color: #34d399;
+		border-color: rgba(52, 211, 153, 0.6);
+		text-shadow: 0 0 12px rgba(52, 211, 153, 0.5);
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count='2']) {
+		color: #047857;
+		border-color: rgba(4, 120, 87, 0.75);
+		text-shadow: 0 1px 2px rgba(4, 120, 87, 0.3);
+	}
+
+	/* 3 — Ruby Crimson */
+	:global(.ms-cell[data-count='3']) {
+		color: #f87171;
+		border-color: rgba(248, 113, 113, 0.6);
+		text-shadow: 0 0 12px rgba(248, 113, 113, 0.5);
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count='3']) {
+		color: #b91c1c;
+		border-color: rgba(185, 28, 28, 0.75);
+		text-shadow: 0 1px 2px rgba(185, 28, 28, 0.3);
+	}
+
+	/* 4 — Deep Violet */
+	:global(.ms-cell[data-count='4']) {
+		color: #a78bfa;
+		border-color: rgba(167, 139, 250, 0.6);
+		text-shadow: 0 0 12px rgba(167, 139, 250, 0.5);
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count='4']) {
+		color: #6d28d9;
+		border-color: rgba(109, 40, 217, 0.75);
+		text-shadow: 0 1px 2px rgba(109, 40, 217, 0.25);
+	}
+
+	/* 5 — Burnt Amber */
+	:global(.ms-cell[data-count='5']) {
+		color: #fb923c;
+		border-color: rgba(251, 146, 60, 0.6);
+		text-shadow: 0 0 12px rgba(251, 146, 60, 0.5);
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count='5']) {
+		color: #c2410c;
+		border-color: rgba(194, 65, 12, 0.75);
+		text-shadow: 0 1px 2px rgba(194, 65, 12, 0.25);
+	}
+
+	/* 6 — Deep Teal */
+	:global(.ms-cell[data-count='6']) {
+		color: #2dd4bf;
+		border-color: rgba(45, 212, 191, 0.6);
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count='6']) {
+		color: #0f766e;
+		border-color: rgba(15, 118, 110, 0.75);
+	}
+
+	/* 7 — Magenta */
+	:global(.ms-cell[data-count='7']) {
+		color: #f472b6;
+		border-color: rgba(244, 114, 182, 0.6);
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count='7']) {
+		color: #be185d;
+		border-color: rgba(190, 24, 93, 0.75);
+	}
+
+	/* 8 — Obsidian Slate */
+	:global(.ms-cell[data-count='8']) {
+		color: #cbd5e1;
+		border-color: rgba(203, 213, 225, 0.6);
+	}
+	:global(html[data-theme='light'] .ms-cell[data-count='8']) {
+		color: #1e293b;
+		border-color: rgba(30, 41, 59, 0.75);
+	}
+
+	/* Detonated Mine */
+	:global(.ms-cell.is-detonated) {
+		background: rgba(239, 68, 68, 0.45) !important;
+		border-color: #ef4444 !important;
+		box-shadow: 0 0 20px rgba(239, 68, 68, 0.8) !important;
+		animation: ms-detonate 0.3s var(--ease-spring);
+	}
+
+	:global(.ms-cell.is-mine-revealed) {
+		background: rgba(239, 68, 68, 0.18);
+		border-color: rgba(239, 68, 68, 0.5);
+	}
+
+	:global(.ms-cell.is-wrong-flag) {
+		background: rgba(239, 68, 68, 0.22);
+	}
+
+	@keyframes ms-detonate {
+		0% {
+			transform: scale(0.7);
+		}
+		50% {
+			transform: scale(1.15);
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
+</style>

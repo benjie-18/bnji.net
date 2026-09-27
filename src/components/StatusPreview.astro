@@ -30,7 +30,7 @@ const ACCENTED_KINDS = new Set(['model', 'output']);
 			index="04"
 			label="SYSTEM"
 			titleId="system-title"
-			title="AI &amp; homelab"
+			title="AI & homelab"
 			description="One workstation, a GPU, and a chain of small services that turn a chat message into a deployed change on this site."
 			actionHref="/projects/"
 			actionLabel="The details"
@@ -138,8 +138,8 @@ const ACCENTED_KINDS = new Set(['model', 'output']);
 		min-width: 0;
 		padding: 0.7rem 0.85rem;
 		border-radius: var(--radius-md);
-		border: 1px solid rgba(255, 255, 255, 0.09);
-		background: rgba(255, 255, 255, 0.035);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
 		transition:
 			border-color var(--dur-base) var(--ease-out),
 			background-color var(--dur-base) var(--ease-out);
@@ -153,7 +153,7 @@ const ACCENTED_KINDS = new Set(['model', 'output']);
 	/* Hovering the panel walks the chain: cheap, and it makes the flow legible
 	   without any JavaScript. */
 	.pipeline:hover .pipeline__node {
-		border-color: rgba(255, 255, 255, 0.16);
+		border-color: var(--glass-border-strong);
 	}
 
 	.pipeline__label {
@@ -208,8 +208,8 @@ const ACCENTED_KINDS = new Set(['model', 'output']);
 		gap: 0.45em;
 		padding: 0.35em 0.7em;
 		border-radius: var(--radius-pill);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		background: rgba(255, 255, 255, 0.025);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
 		letter-spacing: 0.08em;
@@ -241,7 +241,7 @@ const ACCENTED_KINDS = new Set(['model', 'output']);
 		display: grid;
 		gap: 0.2rem;
 		padding-block-end: 0.7rem;
-		border-block-end: 1px solid rgba(255, 255, 255, 0.055);
+		border-block-end: 1px solid var(--glass-border);
 	}
 
 	.facts__row:last-child {
