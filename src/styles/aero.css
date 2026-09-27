@@ -234,35 +234,26 @@ html[data-theme='light'] .aero-sky {
 		radial-gradient(40px 40px at 92% 16%, var(--aero-bokeh-soft), transparent 72%);
 }
 
-/* --- Meadow band -------------------------------------------------------------- */
-/* The ground plane: a green band anchoring the bottom of the viewport with a
-   soft highlight line along its top edge (the horizon catching sky light).
-   Sits above the clouds in DOM order so cloud bottoms can tuck behind the
-   hill, and below the orbs so they float over the meadow. */
+/* --- Meadow band (rolling Frutiger Aero hills) --------------------------------- */
+/* The ground plane: two rolling green hills anchoring the bottom of the
+   viewport with soft illuminated highlight lines along their curved crests.
+   Sits above the clouds in DOM order so cloud bottoms tuck behind the
+   hills, and below the orbs so they float over the meadow. */
 .aero-meadow {
 	position: absolute;
 	inset-inline: 0;
 	inset-block-end: 0;
-	block-size: clamp(110px, 18vh, 200px);
-	background: linear-gradient(180deg, var(--aero-meadow-1), var(--aero-meadow-2));
+	block-size: clamp(140px, 24vh, 320px);
+	pointer-events: none;
+	overflow: hidden;
 }
 
-.aero-meadow::before {
-	content: '';
+.aero-meadow__svg {
 	position: absolute;
-	inset-inline: 0;
-	inset-block-start: 0;
-	block-size: 3px;
-	background: linear-gradient(
-		90deg,
-		transparent,
-		var(--aero-meadow-edge) 14%,
-		var(--aero-meadow-edge) 86%,
-		transparent
-	);
-	/* A hair of softness so the line reads as light, not as a border. Small
-	   element, static, one-off raster — the cheap kind of blur. */
-	filter: blur(1.5px);
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	display: block;
 }
 
 /* --- Floating glossy orbs ------------------------------------------------------ */

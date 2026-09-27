@@ -100,6 +100,17 @@
 /* Timings used by the homepage: background 0ms, nav 200ms, wordmark 400ms,
    subtitle 650ms, call to action 850ms. */
 
+/* While the homepage opening star intro is active, the navigation dock and
+   music player remain hidden so they appear after the intro rather than on top.
+   They smoothly ease in once introState flips to 'done'. */
+html.js[data-intro-state='active'] .nav-dock,
+html.js[data-intro-state='active'] .music-player {
+	opacity: 0 !important;
+	pointer-events: none !important;
+	transform: translateY(-8px);
+	transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
+}
+
 @media (prefers-reduced-motion: no-preference) {
 	html.js [data-load] {
 		opacity: 0;

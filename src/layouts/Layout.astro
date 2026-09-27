@@ -7,7 +7,7 @@
  *   content (main / header / footer) -> cursor glow.
  * The z-index scale for that stack lives in styles/tokens.css.
  *
- * The single <script> at the bottom is the whole client bundle: boot() starts
+ * The single script tag at the bottom is the whole client bundle: boot() starts
  * the starfield, pointer interactions and scroll choreography. Everything else
  * on the page is HTML and CSS, which is why the site still works when the
  * script is slow, blocked or absent (see the html.js guards in animations.css).
@@ -37,7 +37,7 @@ const { title, description, image, type, publishedTime, modifiedTime, noindex } 
 ---
 
 <!doctype html>
-<html lang={SITE.locale}>
+<html lang={SITE.locale} data-theme="dark">
 	<head>
 		<BaseHead
 			title={title}
@@ -57,6 +57,8 @@ const { title, description, image, type, publishedTime, modifiedTime, noindex } 
 		<Starfield />
 		<AeroSky />
 		<CursorGlow />
+
+		<slot name="intro" />
 
 		<Header />
 

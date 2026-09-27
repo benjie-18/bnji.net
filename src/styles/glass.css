@@ -308,3 +308,183 @@ html[data-advanced-glass='off'] .glass::after {
 .glass--radius-pill {
 	border-radius: var(--radius-pill);
 }
+
+/* --- GlassButton ---------------------------------------------------------- */
+/* One button/link component for the whole site. Styled as a liquid-glass pill
+   with subtle hover lift, focus ring and size/variant modifiers. */
+
+.glass-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0.56rem 1.25rem;
+	border-radius: var(--radius-pill);
+	border: 1px solid var(--glass-border);
+	background:
+		linear-gradient(
+			168deg,
+			var(--glass-bg-raised),
+			var(--glass-bg) 46%,
+			var(--glass-bg-quiet) 100%
+		)
+		padding-box,
+		linear-gradient(
+			135deg,
+			var(--glass-edge-a),
+			var(--glass-edge-b) 36%,
+			var(--glass-edge-c) 100%
+		)
+		border-box;
+	box-shadow:
+		var(--glass-shadow),
+		inset 0 1px 0 var(--glass-highlight);
+	color: var(--text-strong);
+	font-family: var(--font-display);
+	font-size: var(--text-small);
+	font-weight: 500;
+	letter-spacing: var(--tracking-snug);
+	line-height: 1.3;
+	text-decoration: none;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+	-webkit-user-select: none;
+	transition:
+		transform var(--dur-fast) var(--ease-out),
+		box-shadow var(--dur-base) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out),
+		color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-base) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-button:hover {
+		transform: translateY(var(--hover-lift));
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+		box-shadow:
+			var(--glass-shadow-raised),
+			var(--glass-glow),
+			inset 0 1px 0 var(--glass-highlight);
+	}
+}
+
+.glass-button:active {
+	transform: translateY(0);
+	transition-duration: var(--dur-instant);
+}
+
+.glass-button:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.glass-button[aria-disabled='true'],
+.glass-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+/* Sizes */
+.glass-button--sm {
+	padding: 0.36rem 0.85rem;
+	font-size: var(--text-micro);
+	gap: 0.35rem;
+}
+
+.glass-button--lg {
+	padding: 0.72rem 1.6rem;
+	font-size: 1.02rem;
+	gap: 0.6rem;
+}
+
+/* Variants */
+.glass-button--primary {
+	background:
+		linear-gradient(
+			168deg,
+			var(--accent-soft),
+			var(--glass-bg-raised) 46%,
+			var(--glass-bg) 100%
+		)
+		padding-box,
+		linear-gradient(
+			135deg,
+			var(--accent-line),
+			var(--glass-edge-a) 40%,
+			var(--glass-edge-c) 100%
+		)
+		border-box;
+	border-color: var(--accent-line);
+	color: var(--text-strong);
+	box-shadow:
+		var(--glass-shadow),
+		0 0 28px -10px var(--accent-soft),
+		inset 0 1px 0 var(--glass-highlight);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-button--primary:hover {
+		border-color: var(--accent-strong);
+		box-shadow:
+			var(--glass-shadow-raised),
+			0 0 36px -8px var(--accent-soft),
+			var(--glass-glow),
+			inset 0 1px 0 var(--glass-highlight);
+	}
+}
+
+.glass-button--quiet {
+	background: var(--glass-bg-quiet);
+	border: 1px solid var(--glass-border);
+	box-shadow: none;
+	color: var(--text-muted);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-button--quiet:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+		box-shadow: var(--glass-shadow);
+	}
+}
+
+/* --- Chips ---------------------------------------------------------------- */
+/* Small mono labels for metadata, tags and system status. Token-driven, light
+   fill, crisp borders, no expensive blur pass. */
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.22rem 0.65rem;
+	border-radius: var(--radius-pill);
+	border: 1px solid var(--glass-border);
+	background: var(--glass-bg-quiet);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	color: var(--text-muted);
+	line-height: 1.4;
+	white-space: nowrap;
+	transition:
+		border-color var(--dur-fast) var(--ease-out),
+		color var(--dur-fast) var(--ease-out);
+}
+
+.chip:hover {
+	color: var(--text);
+	border-color: var(--glass-border-strong);
+}
+
+.chip--accent {
+	border-color: var(--accent-line);
+	color: var(--accent);
+	background: var(--accent-soft);
+}

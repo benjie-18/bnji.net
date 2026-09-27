@@ -47,6 +47,10 @@
 	margin: 0;
 }
 
+[hidden] {
+	display: none !important;
+}
+
 html {
 	/* UI scale setting (settings store, applied pre-paint as --ui-scale):
 	   the scale tokens (--text-*, --space-*) are rem-based, so multiplying
@@ -562,14 +566,14 @@ b {
    later-in-file wins — so the forced-colours reset below still overrides
    both, and non-supporting browsers keep the solid --text-strong fallback. */
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
-	:where(html[data-theme='light']) .text-luminous {
+	html[data-theme='light'] .text-luminous {
 		background-image: linear-gradient(
 			178deg,
 			var(--text-strong) 8%,
 			var(--text) 48%,
 			var(--accent-strong) 98%
 		);
-		text-shadow: 0 0 90px var(--accent-soft);
+		text-shadow: 0 0 40px var(--accent-soft);
 	}
 }
 

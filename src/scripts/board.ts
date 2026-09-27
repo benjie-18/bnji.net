@@ -107,11 +107,14 @@ export function initMessageBoard(): void {
 	};
 
 	/* Publish the keyboard overlap for CSS (--kb-inset): how much of the
-	   layout viewport the visual viewport no longer shows at the bottom. */
+	   layout viewport the visual viewport no longer shows at the bottom.
+	   Threshold at 80px ensures normal browser address bar collapsing or
+	   desktop resize jitter does not falsely lift the composer. */
 	const updateKeyboardInset = () => {
 		const vv = window.visualViewport;
 		if (!vv) return;
-		const hidden = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+		const diff = window.innerHeight - vv.height - vv.offsetTop;
+		const hidden = diff > 80 ? Math.round(diff) : 0;
 		root.style.setProperty('--kb-inset', `${hidden}px`);
 	};
 

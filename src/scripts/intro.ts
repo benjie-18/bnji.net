@@ -59,16 +59,22 @@ export function initIntro(): void {
 		if (p <= 0.001) {
 			layer.hidden = false;
 			layer.style.opacity = '1';
+			layer.style.pointerEvents = 'auto';
 			star.style.transform = 'translate3d(-50%, -50%, 0) scale(1) rotate(0deg)';
 			energy.style.opacity = '0';
+			root.dataset.introState = 'active';
 			return;
 		}
 		if (p >= 1) {
 			// Fully transitioned: stop compositing the layer at all.
 			layer.hidden = true;
+			layer.style.pointerEvents = 'none';
+			root.dataset.introState = 'done';
 			return;
 		}
 		layer.hidden = false;
+		layer.style.pointerEvents = p >= 0.86 ? 'none' : 'auto';
+		root.dataset.introState = p >= 0.86 ? 'done' : 'active';
 
 		// Ease-in growth: slow at first, then dominant — the star "arrives".
 		const growth = Math.pow(p, 1.7);

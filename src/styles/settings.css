@@ -16,6 +16,11 @@
    clears the home indicator.
    ========================================================================== */
 
+.settings-backdrop[hidden],
+.settings-overlay[hidden] {
+	display: none !important;
+}
+
 /* Dim + click target behind the panel. */
 .settings-backdrop {
 	position: fixed;

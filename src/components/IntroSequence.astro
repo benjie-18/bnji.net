@@ -60,6 +60,12 @@ import { INTRO_CONFIG } from '../config/access.config';
 	)
 }
 
+<script is:inline>
+	if (document.documentElement.dataset.intro !== 'off' && window.scrollY < 20) {
+		document.documentElement.dataset.introState = 'active';
+	}
+</script>
+
 <script>
 	import { initIntro } from '../scripts/intro';
 	initIntro();
@@ -82,7 +88,7 @@ import { INTRO_CONFIG } from '../config/access.config';
 		position: fixed;
 		inset: 0;
 		z-index: var(--z-intro);
-		pointer-events: none;
+		pointer-events: auto;
 		background: #ffffff;
 		will-change: opacity;
 	}

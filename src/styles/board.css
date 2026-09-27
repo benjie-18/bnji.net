@@ -26,6 +26,12 @@
    composer usable.
    ========================================================================== */
 
+.board__archive[hidden],
+.board__listview[hidden],
+.board__preview[hidden] {
+	display: none !important;
+}
+
 .board {
 	position: fixed;
 	inset: 0;
@@ -220,8 +226,10 @@ html[data-theme='dark'] .board-msg::before {
 
 /* --- Composer: anchored bottom-centre, always ------------------------------ */
 
+.board .board__composer,
+.board__composer[data-glass],
 .board__composer {
-	position: fixed;
+	position: fixed !important;
 	left: 50%;
 	/* Rides above the virtual keyboard: --kb-inset is the keyboard overlap
 	   published by scripts/board.ts (0 when no keyboard / no JS). */
@@ -631,6 +639,8 @@ html[data-theme='dark'] .board-msg::before {
 /* Narrow screens: composer owns the bottom; the music pill moves to the top
    right so the two never fight for the same corner. */
 @media (max-width: 720px) {
+	.board .board__composer,
+	.board__composer[data-glass],
 	.board__composer {
 		width: 96vw;
 		bottom: calc(10px + var(--kb-inset, 0px));

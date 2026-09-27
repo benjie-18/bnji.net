@@ -53,7 +53,65 @@ const PUFFS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 	<span class="aero-bokeh"></span>
 
-	<div class="aero-meadow"></div>
+	<div class="aero-meadow">
+		<svg class="aero-meadow__svg" viewBox="0 0 1440 320" preserveAspectRatio="none" fill="none" aria-hidden="true">
+			<defs>
+				<linearGradient id="aero-hill-back" x1="0" y1="0" x2="0" y2="1">
+					<stop offset="0%" stop-color="#9de9b9" />
+					<stop offset="35%" stop-color="#72d698" />
+					<stop offset="100%" stop-color="#3da067" />
+				</linearGradient>
+				<linearGradient id="aero-hill-front" x1="0" y1="0" x2="0" y2="1">
+					<stop offset="0%" stop-color="#6ee09e" />
+					<stop offset="30%" stop-color="#46c37f" />
+					<stop offset="100%" stop-color="#288751" />
+				</linearGradient>
+				<linearGradient id="aero-hill-edge-back" x1="0" y1="0" x2="1" y2="0">
+					<stop offset="0%" stop-color="rgba(255, 255, 255, 0.4)" />
+					<stop offset="30%" stop-color="rgba(255, 255, 255, 0.85)" />
+					<stop offset="70%" stop-color="rgba(234, 252, 255, 0.75)" />
+					<stop offset="100%" stop-color="rgba(255, 255, 255, 0.35)" />
+				</linearGradient>
+				<linearGradient id="aero-hill-edge-front" x1="0" y1="0" x2="1" y2="0">
+					<stop offset="0%" stop-color="rgba(255, 255, 255, 0.5)" />
+					<stop offset="25%" stop-color="rgba(255, 255, 255, 0.95)" />
+					<stop offset="65%" stop-color="rgba(255, 255, 255, 0.9)" />
+					<stop offset="100%" stop-color="rgba(234, 252, 255, 0.45)" />
+				</linearGradient>
+				<radialGradient id="aero-hill-sunlit" cx="45%" cy="15%" r="60%">
+					<stop offset="0%" stop-color="rgba(255, 255, 255, 0.4)" />
+					<stop offset="50%" stop-color="rgba(255, 255, 255, 0.08)" />
+					<stop offset="100%" stop-color="transparent" />
+				</radialGradient>
+			</defs>
+			<!-- Background rolling hill: crests gently across the mid-right -->
+			<path
+				d="M0,160 C300,100 560,75 860,115 C1100,145 1280,90 1440,60 L1440,320 L0,320 Z"
+				fill="url(#aero-hill-back)"
+			/>
+			<path
+				d="M0,160 C300,100 560,75 860,115 C1100,145 1280,90 1440,60"
+				fill="none"
+				stroke="url(#aero-hill-edge-back)"
+				stroke-width="2.5"
+			/>
+			<!-- Foreground rolling hill: classic Frutiger Aero rolling curve -->
+			<path
+				d="M0,225 C260,160 460,125 720,155 C960,185 1180,95 1440,135 L1440,320 L0,320 Z"
+				fill="url(#aero-hill-front)"
+			/>
+			<path
+				d="M0,225 C260,160 460,125 720,155 C960,185 1180,95 1440,135 L1440,320 L0,320 Z"
+				fill="url(#aero-hill-sunlit)"
+			/>
+			<path
+				d="M0,225 C260,160 460,125 720,155 C960,185 1180,95 1440,135"
+				fill="none"
+				stroke="url(#aero-hill-edge-front)"
+				stroke-width="3"
+			/>
+		</svg>
+	</div>
 
 	<span class="aero-orb aero-orb--aqua" style="animation-duration:15s"></span>
 	<span class="aero-orb aero-orb--green" style="animation-duration:19s;animation-delay:-7s"></span>

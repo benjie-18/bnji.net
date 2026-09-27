@@ -274,15 +274,15 @@
 	--cursor-mid: rgba(120, 230, 255, 0.1);
 	--cursor-rim: rgba(96, 226, 160, 0.12);
 
-	--text: #0b3d52; /* 9.6:1 on --bg */
-	--text-strong: #062b3a;
-	--text-muted: rgba(9, 55, 74, 0.78); /* ~7:1 */
-	--text-dim: rgba(9, 55, 74, 0.62); /* ~5:1 — large text only */
-	--text-faint: rgba(9, 55, 74, 0.42); /* hairlines / decorative only */
+	--text: #082836; /* 12:1 on --bg, 16:1 on white glass */
+	--text-strong: #02121a; /* 15:1 on --bg, 20:1 on white glass */
+	--text-muted: #174356; /* 7.5:1 on --bg, 9.5:1 on white glass */
+	--text-dim: #2b576b; /* 5.4:1 on --bg, 6.8:1 on white glass — WCAG AA compliant */
+	--text-faint: #447287; /* 3.9:1 on --bg, 4.9:1 on white glass */
 	--text-inverse: #f2fbff;
 
 	--accent: #0092c8; /* 4.6:1 on --bg */
-	--accent-strong: #00658c; /* 6.9:1 — focus rings */
+	--accent-strong: #004d6b; /* 8.5:1 — focus rings & strong accents */
 	--accent-soft: rgba(0, 146, 200, 0.14);
 	--accent-line: rgba(0, 146, 200, 0.42);
 	--accent-2: #00a878; /* green companion, decorative */
@@ -291,10 +291,10 @@
 	--signal-idle: rgba(9, 55, 74, 0.45);
 
 	/* Light glass: inflated white translucency — the Aero "soap bubble". */
-	--glass-bg: rgba(255, 255, 255, 0.42);
-	--glass-bg-raised: rgba(255, 255, 255, 0.6);
-	--glass-bg-quiet: rgba(255, 255, 255, 0.3);
-	--glass-bg-fallback: rgba(244, 252, 255, 0.92);
+	--glass-bg: rgba(255, 255, 255, 0.55);
+	--glass-bg-raised: rgba(255, 255, 255, 0.72);
+	--glass-bg-quiet: rgba(255, 255, 255, 0.38);
+	--glass-bg-fallback: rgba(244, 252, 255, 0.94);
 	--glass-border: rgba(255, 255, 255, 0.72);
 	--glass-border-strong: rgba(255, 255, 255, 0.95);
 	--glass-highlight: rgba(255, 255, 255, 0.85);
