@@ -1,7 +1,9 @@
 {
 	"name": "bnjibot",
 	"compatibility_date": "2026-09-14",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"main": "@astrojs/cloudflare/entrypoints/server",
 	"assets": {
 		"directory": "./dist",
@@ -11,14 +13,20 @@
 		{
 			"binding": "BOARD_DB",
 			"database_name": "bnji-board",
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			"database_id": "4a121806-46a2-4d19-ae17-e06e5ad794f3",
 			"migrations_dir": "migrations"
+		},
+		{
+			"binding": "bnji_board",
+			"database_name": "bnji-board",
+			"database_id": "4a121806-46a2-4d19-ae17-e06e5ad794f3",
+			"remote": true
 		}
 	],
 	"kv_namespaces": [
 		{
 			"binding": "BOARD_KV",
-			"id": "00000000000000000000000000000000"
+			"id": "593c5c160a1c44e78f81dc9aaa857e9c"
 		}
 	],
 	"observability": {
