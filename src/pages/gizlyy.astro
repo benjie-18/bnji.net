@@ -1,0 +1,299 @@
+---/**
+ * /gizlyy — gizlyy's personal/social profile page.
+ *
+ * SSR (prerender = false) so view stats and reaction counts are rendered
+ * into the initial HTML from D1. The page degrades gracefully if the
+ * database is unavailable: the card content (from static data) still
+ * renders, and only the analytics numbers show fallback values.
+ *
+ * This page uses the generic ProfilePage component with the gizlyy
+ * profile data from src/data/profiles/gizlyy.ts. To add another profile,
+ * create a new page file (e.g. src/pages/benji.astro) that follows the
+ * same pattern with different profile data.
+ *
+ * A failed read renders an em dash, never a zero — see `viewsAvailable` below.
+ */
+import Layout from '../layouts/Layout.astro';
+import ProfilePage from '../components/ProfilePage.astro';
+import { gizlyyProfile } from '../data/profiles/gizlyy';
+import { getProfileStore } from '../server/profile-store';
+import { serverEnvironment } from '../server/env';
+import { PROFILE_CONFIG } from '../config/profile.config';
+
+export const prerender = false;
+
+const profile = gizlyyProfile;
+const slug = profile.slug;
+
+// Fetch analytics data (degrades gracefully on failure).
+let viewStats = { total: 0, today: 0, week: 0, month: 0 };
+let reactionCounts: Record<string, number> = {};
+
+// "0 views" and "could not read the store" are different facts, and the page
+// must not show the first when it means the second — a confident zero reads as
+// a measurement, which is the one thing a counter must never be. Each source
+// carries its own flag, so a views failure still lets real reaction counts
+// through and vice versa; both are set only after a settled read.
+// ProfilePage needs no flag of its own: an undefined viewCount already
+// suppresses the pill rather than inventing a number.
+let viewsAvailable = false;
+let reactionsAvailable = false;
+
+try {
+	const env = await serverEnvironment();
+	const store = getProfileStore(env);
+	if (store) {
+		const [views, reactions] = await Promise.allSettled([
+			store.getViewStats(slug),
+			store.getReactionCounts(slug),
+		]);
+		if (views.status === 'fulfilled') {
+			viewStats = views.value;
+			viewsAvailable = true;
+		} else {
+			console.warn('[bnji] profile view stats unavailable:', views.reason);
+		}
+		if (reactions.status === 'fulfilled') {
+			reactionCounts = reactions.value;
+			reactionsAvailable = true;
+		} else {
+			console.warn('[bnji] profile reaction counts unavailable:', reactions.reason);
+		}
+	}
+} catch (error) {
+	console.warn('[bnji] profile page data load failed:', error);
+}
+
+const unavailable = '—';
+
+const totalReactions = Object.values(reactionCounts).reduce((sum, n) => sum + n, 0);
+const allReactions = PROFILE_CONFIG.allowedReactions;
+---
+
+<Layout title={profile.pageTitle} description={profile.pageDescription} noindex={false}>
+	<div class="profile-container">
+		<div class="profile-card-wrap" data-reveal>
+			<ProfilePage profile={profile} viewCount={viewsAvailable ? viewStats.total : undefined} />
+		</div>
+
+		{/* Reactions */}
+		<div class="profile-reactions" data-reveal style="--reveal-delay: 120ms">
+			<div class="profile-reactions__row">
+				{allReactions.map((emoji) => (
+					<button
+						class="profile-reactions__btn"
+						type="button"
+						data-reaction={emoji}
+						aria-label={`React with ${emoji}`}
+					>
+						<span class="profile-reactions__emoji" aria-hidden="true">{emoji}</span>
+						<span class="profile-reactions__count" data-reaction-count>
+							{reactionsAvailable ? (reactionCounts[emoji] ?? 0) : unavailable}
+						</span>
+					</button>
+				))}
+			</div>
+		</div>
+
+		{/* Public stats */}
+		<div class="profile-stats" data-reveal style="--reveal-delay: 200ms">
+			<div class="profile-stats__row">
+				<div class="profile-stats__item">
+					<span class="profile-stats__value">{viewsAvailable ? viewStats.total : unavailable}</span>
+					<span class="profile-stats__label mono">views</span>
+				</div>
+				<div class="profile-stats__item">
+					<span class="profile-stats__value">{viewsAvailable ? viewStats.today : unavailable}</span>
+					<span class="profile-stats__label mono">today</span>
+				</div>
+				<div class="profile-stats__item">
+					<span class="profile-stats__value">{reactionsAvailable ? totalReactions : unavailable}</span>
+					<span class="profile-stats__label mono">reactions</span>
+				</div>
+			</div>
+			<p class="profile-stats__note mono">
+				{
+					viewsAvailable
+						? 'Views are counted per session per day, since the site launched.'
+						: 'Counts are unavailable right now — the store could not be read.'
+				}
+			</p>
+		</div>
+	</div>
+
+	<div class="profile-footer" data-load style="--load-delay: 800ms">
+		<a class="profile-footer__back" href="/">← Back to hub</a>
+	</div>
+</Layout>
+
+<script>
+	import { initProfile } from '../scripts/profile';
+	initProfile('gizlyy');
+</script>
+
+<style>
+	/* --- Profile container ---------------------------------------------- */
+	.profile-container {
+		padding-block: clamp(4rem, 10vh, 7rem) clamp(1.5rem, 4vh, 3rem);
+		display: grid;
+		gap: clamp(1.25rem, 3vw, 2rem);
+		justify-items: center;
+	}
+
+	.profile-card-wrap {
+		/* Offset for the avatar overlapping the card top. */
+		padding-top: 48px;
+	}
+
+	/* --- Reactions ------------------------------------------------------- */
+	.profile-reactions {
+		width: min(100%, 420px);
+	}
+
+	.profile-reactions__row {
+		display: flex;
+		justify-content: center;
+		gap: 0.5rem;
+	}
+
+	.profile-reactions__btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.4rem 0.7rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-size: var(--text-small);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-spring);
+	}
+
+	.profile-reactions__btn:hover:not(:disabled) {
+		background: var(--glass-bg);
+		border-color: var(--glass-border-strong);
+		transform: translateY(-1px);
+	}
+
+	.profile-reactions__btn:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	.profile-reactions__btn:disabled {
+		cursor: default;
+		opacity: 0.85;
+	}
+
+	.profile-reactions__btn.is-reacted {
+		border-color: var(--accent-line);
+		background: var(--accent-soft);
+	}
+
+	.profile-reactions__btn.is-cooldown {
+		border-color: rgba(255, 214, 138, 0.3);
+	}
+
+	.profile-reactions__emoji {
+		font-size: 1.1em;
+		line-height: 1;
+	}
+
+	.profile-reactions__count {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		min-width: 1ch;
+		text-align: center;
+	}
+
+	/* --- Stats ----------------------------------------------------------- */
+	.profile-stats {
+		width: min(100%, 420px);
+		padding: 0.85rem 1.2rem;
+		border-radius: var(--radius-lg);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+		text-align: center;
+	}
+
+	.profile-stats__row {
+		display: flex;
+		justify-content: center;
+		gap: 2rem;
+	}
+
+	.profile-stats__item {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.15rem;
+	}
+
+	.profile-stats__value {
+		font-family: var(--font-display);
+		font-size: 1.15rem;
+		font-weight: 600;
+		color: var(--text-strong);
+		letter-spacing: var(--tracking-snug);
+	}
+
+	.profile-stats__label {
+		font-size: var(--text-micro);
+		color: var(--text-dim);
+	}
+
+	.profile-stats__note {
+		margin: 0.6rem 0 0;
+		font-size: 0.6rem;
+		color: var(--text-faint);
+		letter-spacing: 0.06em;
+	}
+
+	/* --- Footer ---------------------------------------------------------- */
+	.profile-footer {
+		text-align: center;
+		padding-block: clamp(1rem, 3vh, 2rem) clamp(2rem, 5vh, 4rem);
+	}
+
+	.profile-footer__back {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4em;
+		padding: 0.5em 1em;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		text-decoration: none;
+		transition:
+			color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out),
+			background-color var(--dur-fast) var(--ease-out);
+	}
+
+	.profile-footer__back:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+	}
+
+	/* --- Reduced motion -------------------------------------------------- */
+	@media (prefers-reduced-motion: reduce) {
+		.profile-reactions__btn {
+			transition: none;
+			transform: none;
+		}
+
+		.profile-footer__back {
+			transition: none;
+		}
+	}
+</style>

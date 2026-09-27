@@ -40,11 +40,52 @@ export type RouteAccessRule = {
 	auth: 'token' | 'password';
 	/** Where to send unauthenticated requests (default: 401 JSON). */
 	redirectTo?: string;
+	/**
+	 * Exact pathnames this rule does NOT apply to, even though they match the
+	 * prefix. Needed for a login page living under its own protected prefix:
+	 * `pattern: '/admin'` would otherwise match '/admin/login' and bounce it
+	 * back to itself forever. Comparison is exact on the pathname (ignoring a
+	 * trailing slash), so a crafted path cannot slip past.
+	 */
+	exclude?: readonly string[];
+	/**
+	 * The pattern the session cookie is signed for. Defaults to `pattern`.
+	 *
+	 * A session is bound to exactly one pattern — that binding is what stops a
+	 * cookie minted for one protected area from opening another. It also
+	 * means a surface whose PAGE and DATA live under different prefixes needs
+	 * a shared binding: '/admin' and '/api/admin' are separate rules (each
+	 * matches a different set of paths) but must accept the SAME cookie, or
+	 * the dashboard would load and every fetch it makes would 401.
+	 *
+	 * Set this only when the rules are one logical surface. It is a widening
+	 * of cookie scope, so it must never point two unrelated areas at a shared
+	 * value.
+	 */
+	sessionPattern?: string;
 };
 
 export const ACCESS_RULES: RouteAccessRule[] = [
+	// The admin surface. `prerender = false` on /admin and on every
+	// /api/admin/* route is what makes these rules reachable at all: the
+	// middleware only runs on requests that execute Worker code, so a
+	// prerendered admin page would be served without ever being checked.
+	// scripts/verify-access.mjs asserts that at build time.
+	//
+	// The dashboard's HTML and its data are gated by the same credential.
+	// Both rules carry sessionPattern: '/admin' so ONE cookie opens both: the
+	// page rule and the API rule have different path prefixes, but a session
+	// is bound to a single pattern, so without this the browser would load
+	// /admin/ and then get 401 on every /api/admin/* fetch it makes.
+	{ pattern: '/admin', auth: 'token', redirectTo: '/admin/login', exclude: ['/admin/login'], sessionPattern: '/admin' },
+	// /api/admin/session is excluded because it IS the credential exchange:
+	// it takes the token in a JSON body, which the middleware cannot see —
+	// the middleware only knows about Bearer headers and cookies. Gating it
+	// would mean you must already hold a session to obtain a session. The
+	// route does its own verification (constant-time compare, plus a
+	// rate limit), so the exclusion moves the check rather than removing it.
+	{ pattern: '/api/admin', auth: 'token', exclude: ['/api/admin/session'], sessionPattern: '/admin' },
 	// ▼▼▼ CONFIGURE HERE — example (keep commented until a real route exists):
-	// { pattern: '/admin', auth: 'password', redirectTo: '/' },
 	// { pattern: '/monitoring', auth: 'token' },
 	// ▲▲▲ CONFIGURE HERE
 ];

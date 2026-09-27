@@ -768,17 +768,30 @@
 			if (orbitOut) orbitOut.textContent = orbitSpeed === 1 ? 'Slow' : orbitSpeed === 2 ? 'Normal' : 'Fast';
 		});
 
+		// Intersection observer
+		//
+		// Two gates, not one: onscreen (this observer) and unhidden (the tab).
+		// A page scrolled past the experiment otherwise keeps the loop running
+		// while its own tab is backgrounded or another tab is in front, which is
+		// exactly the case AGENTS.md §5 rules out. syncLoop owns both the start
+		// and the stop so the gates cannot disagree.
+		let onscreen = false;
+
+		const syncLoop = () => {
+			cancelAnimationFrame(animId);
+			if (!onscreen || document.hidden) return;
+			animId = requestAnimationFrame(render);
+		};
+
 		const obs = new IntersectionObserver((entries) => {
 			for (const entry of entries) {
-				if (entry.isIntersecting) {
-					cancelAnimationFrame(animId);
-					animId = requestAnimationFrame(render);
-				} else {
-					cancelAnimationFrame(animId);
-				}
+				onscreen = entry.isIntersecting;
+				syncLoop();
 			}
 		});
 		obs.observe(root);
+
+		document.addEventListener('visibilitychange', syncLoop);
 	}
 </script>
 

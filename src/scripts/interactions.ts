@@ -12,6 +12,8 @@
  *
  * Wiring lives in scripts/boot.ts. Markup opts in with data attributes:
  *   [data-cursor-glow]  the soft cursor halo element
+ *   (background parallax needs no opt-in: it publishes --bg-parallax-* to
+ *    :root and the CSS decides which layers consume them)
  *   [data-glass]        liquid-glass surface (writes --mouse-x / --mouse-y)
  *   [data-magnetic]     small pointer attraction wrapper
  *   [data-nav-toggle] / [data-nav-panel]  mobile navigation disclosure
@@ -19,6 +21,11 @@
  *                               header dropdown groups (touch included —
  *                               the nav disclosures are the pointer-only
  *                               rule's deliberate exception)
+ *
+ * Teardown: every binding is registered as it is created, so
+ * teardownInteractions() detaches the whole module and resets its guards.
+ * Nothing on the current site calls it — the document boots once and this
+ * module lives for the page — but it makes the module safe to re-initialise.
  */
 
 import { clamp, createFrameScheduler, hasFinePointer, prefersReducedMotion } from './environment';
@@ -26,10 +33,79 @@ import { getSettings, subscribeSettings } from './settings';
 
 /** Guards, so importing this module twice can never double-bind listeners. */
 let cursorGlowStarted = false;
+let parallaxStarted = false;
 let glassTrackingStarted = false;
 let magneticStarted = false;
 let navToggleStarted = false;
 let navDropdownsStarted = false;
+
+/* --------------------------------------------------------------------------
+   Teardown
+   --------------------------------------------------------------------------
+   Every listener, subscription and media-query binding this module creates is
+   registered as a disposer the moment it is created. teardownInteractions()
+   then undoes the entire module in one call and clears the guards, so the
+   module can be re-initialised afterwards.
+
+   The site currently boots once per document load and never tears this module
+   down, so none of this is on the hot path — it exists so that a future
+   client-side navigation, a test harness, or a hot reload can get a clean
+   document without leaking listeners into the next page.
+   -------------------------------------------------------------------------- */
+
+const teardowns: Array<() => void> = [];
+
+/** addEventListener + the matching removal, registered for teardown. */
+function listen<E extends Event>(
+	target: EventTarget,
+	type: string,
+	handler: (event: E) => void,
+	options?: boolean | AddEventListenerOptions,
+): void {
+	target.addEventListener(type, handler as EventListener, options);
+	teardowns.push(() => target.removeEventListener(type, handler as EventListener, options));
+}
+
+/** subscribeSettings + the returned unsubscribe, registered for teardown. */
+function watchSettings(listener: Parameters<typeof subscribeSettings>[0]): void {
+	teardowns.push(subscribeSettings(listener));
+}
+
+/** Media-query change binding, with the Safari < 14 fallback in one place. */
+function watchMedia(query: MediaQueryList, handler: () => void): void {
+	if (typeof query.addEventListener === 'function') {
+		query.addEventListener('change', handler);
+		teardowns.push(() => query.removeEventListener('change', handler));
+	} else {
+		// Safari < 14 fallback.
+		query.addListener(handler);
+		teardowns.push(() => query.removeListener(handler));
+	}
+}
+
+/**
+ * Remove every listener, subscription, media-query binding and pending
+ * animation frame this module created, and reset the guards so the module can
+ * be initialised again from a clean slate.
+ *
+ * One failing disposer must not strand the rest, so each is run in isolation.
+ */
+export function teardownInteractions(): void {
+	while (teardowns.length) {
+		const undo = teardowns.pop();
+		try {
+			undo?.();
+		} catch (error) {
+			console.warn('[interactions] teardown step failed', error);
+		}
+	}
+	cursorGlowStarted = false;
+	parallaxStarted = false;
+	glassTrackingStarted = false;
+	magneticStarted = false;
+	navToggleStarted = false;
+	navDropdownsStarted = false;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Cursor glow                                                                */
@@ -103,7 +179,7 @@ export function initCursorGlow(): void {
 		if (!frame) frame = requestAnimationFrame(settle);
 	};
 
-	subscribeSettings((settings) => {
+	watchSettings((settings) => {
 		const next = settings.cursorEffects && !settings.reducedEffects;
 		if (next === cursorOn) return;
 		cursorOn = next;
@@ -115,8 +191,16 @@ export function initCursorGlow(): void {
 		}
 	});
 
-	window.addEventListener(
-		'pointermove',
+	// The settle loop is the module's only other live resource; stop it when
+	// the element is torn away so it cannot keep a rAF alive.
+	teardowns.push(() => {
+		if (frame) cancelAnimationFrame(frame);
+		frame = 0;
+		glow.style.transform = '';
+		glow.style.opacity = '';
+	});
+
+	listen<PointerEvent>(window, 'pointermove',
 		(event) => {
 			// Ignore pen/touch so a stylus tap does not spawn a cursor halo.
 			if (event.pointerType !== 'mouse' || !cursorOn) return;
@@ -128,22 +212,11 @@ export function initCursorGlow(): void {
 				visible = true;
 			}
 			kick();
-
-			// Tame mouse parallax variables for CSS background layers (clouds, bokeh, aurora)
-			if (!prefersReducedMotion()) {
-				const cx = window.innerWidth / 2;
-				const cy = window.innerHeight / 2;
-				const px = Math.max(-10, Math.min(10, ((event.clientX - cx) / cx) * 10));
-				const py = Math.max(-10, Math.min(10, ((event.clientY - cy) / cy) * 10));
-				document.documentElement.style.setProperty('--bg-parallax-x', `${px.toFixed(1)}px`);
-				document.documentElement.style.setProperty('--bg-parallax-y', `${py.toFixed(1)}px`);
-			}
 		},
 		{ passive: true },
 	);
 
-	window.addEventListener(
-		'pointerdown',
+	listen<PointerEvent>(window, 'pointerdown',
 		(event) => {
 			if (event.pointerType !== 'mouse') return;
 			pressed = true;
@@ -152,8 +225,7 @@ export function initCursorGlow(): void {
 		{ passive: true },
 	);
 
-	window.addEventListener(
-		'pointerup',
+	listen<PointerEvent>(window, 'pointerup',
 		() => {
 			pressed = false;
 			kick();
@@ -162,10 +234,70 @@ export function initCursorGlow(): void {
 	);
 
 	// Leaving the window: fade out instead of parking a halo on the edge.
-	document.addEventListener('pointerleave', () => {
+	listen<Event>(document, 'pointerleave', () => {
 		visible = false;
 		kick();
 	});
+}
+
+/* -------------------------------------------------------------------------- */
+/* Background parallax                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Pointer-driven drift for the painted background layers: the cloud plane and
+ * sun bloom in the light theme, the aurora sheet in the dark one. All of them
+ * read --bg-parallax-x / --bg-parallax-y and nothing else.
+ *
+ * This used to be a tail on initCursorGlow's pointermove handler, which was
+ * wrong twice over. It tied an ambient background effect to a cursor
+ * affordance — any page without [data-cursor-glow] got no parallax at all, and
+ * turning cursor effects off in Settings silently switched the sky off with it.
+ * And it wrote two custom properties synchronously inside the event, while
+ * pointermove fires far more often than the display refreshes, so most of
+ * those style writes were thrown away before they were ever painted.
+ *
+ * Now it is its own feature with its own listener, and the writes are
+ * coalesced through createFrameScheduler: a burst of events costs at most one
+ * pair of property writes per frame.
+ */
+export function initBackgroundParallax(): void {
+	if (parallaxStarted) return;
+	parallaxStarted = true;
+	if (!hasFinePointer() || prefersReducedMotion()) return;
+
+	const root = document.documentElement;
+	// The same +/-10px bound the old inline code used: enough to read as depth,
+	// small enough that the background never appears to slide out from under
+	// the content sitting on top of it.
+	const MAX_OFFSET = 10;
+
+	let pendingX = 0;
+	let pendingY = 0;
+
+	const flush = createFrameScheduler(() => {
+		root.style.setProperty('--bg-parallax-x', `${pendingX.toFixed(1)}px`);
+		root.style.setProperty('--bg-parallax-y', `${pendingY.toFixed(1)}px`);
+	});
+
+	// Park the layers back on their neutral offset when the module goes away.
+	teardowns.push(() => {
+		root.style.removeProperty('--bg-parallax-x');
+		root.style.removeProperty('--bg-parallax-y');
+	});
+
+	listen<PointerEvent>(window, 'pointermove',
+		(event) => {
+			// Ignore pen/touch, matching the rest of this module.
+			if (event.pointerType !== 'mouse') return;
+			const cx = window.innerWidth / 2;
+			const cy = window.innerHeight / 2;
+			pendingX = clamp(((event.clientX - cx) / cx) * MAX_OFFSET, -MAX_OFFSET, MAX_OFFSET);
+			pendingY = clamp(((event.clientY - cy) / cy) * MAX_OFFSET, -MAX_OFFSET, MAX_OFFSET);
+			flush();
+		},
+		{ passive: true },
+	);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -191,7 +323,7 @@ export function initGlassTracking(): void {
 	// then would be work for nothing. Flag-checked per event, so the overlay
 	// toggle applies live.
 	let trackingOn = getSettings().advancedGlass;
-	subscribeSettings((settings) => {
+	watchSettings((settings) => {
 		trackingOn = settings.advancedGlass;
 	});
 
@@ -206,8 +338,7 @@ export function initGlassTracking(): void {
 		pending.style.setProperty('--mouse-y', `${Math.round(pendingY - box.top)}px`);
 	});
 
-	document.addEventListener(
-		'pointermove',
+	listen<PointerEvent>(document, 'pointermove',
 		(event) => {
 			if (!trackingOn) return;
 			const target = event.target as Element | null;
@@ -269,15 +400,14 @@ export function initMagnetic(): void {
 			if (!frame) frame = requestAnimationFrame(apply);
 		};
 
-		element.addEventListener('pointerenter', (event) => {
-			if ((event as PointerEvent).pointerType !== 'mouse') return;
+		listen<PointerEvent>(element, 'pointerenter', (event) => {
+			if (event.pointerType !== 'mouse') return;
 			element.classList.add('is-magnetised');
 		});
 
-		element.addEventListener(
-			'pointermove',
+		listen<PointerEvent>(element, 'pointermove',
 			(event) => {
-				if ((event as PointerEvent).pointerType !== 'mouse') return;
+				if (event.pointerType !== 'mouse') return;
 				pointerX = event.clientX;
 				pointerY = event.clientY;
 				schedule();
@@ -295,8 +425,15 @@ export function initMagnetic(): void {
 			element.style.transform = '';
 		};
 
-		element.addEventListener('pointerleave', release);
-		element.addEventListener('pointercancel', release);
+		listen<Event>(element, 'pointerleave', release);
+		listen<PointerEvent>(element, 'pointercancel', release);
+
+		// A pending frame outliving its element would write a transform into a
+		// detached node every frame until it settles.
+		teardowns.push(() => {
+			if (frame) cancelAnimationFrame(frame);
+			frame = 0;
+		});
 	});
 }
 
@@ -326,22 +463,21 @@ export function initNavToggle(): void {
 		document.documentElement.classList.toggle('nav-is-open', open);
 	};
 
-	toggle.addEventListener('click', () => setOpen(!isOpen()));
+	listen<MouseEvent>(toggle, 'click', () => setOpen(!isOpen()));
 
-	panel.addEventListener('click', (event) => {
+	listen<MouseEvent>(panel, 'click', (event) => {
 		// Navigating away must close the sheet, otherwise a back-navigation
 		// returns to a page with the menu already open.
 		if ((event.target as Element | null)?.closest('a')) setOpen(false);
 	});
 
-	document.addEventListener('keydown', (event) => {
+	listen<KeyboardEvent>(document, 'keydown', (event) => {
 		if (event.key !== 'Escape' || !isOpen()) return;
 		setOpen(false);
 		toggle.focus();
 	});
 
-	document.addEventListener(
-		'pointerdown',
+	listen<PointerEvent>(document, 'pointerdown',
 		(event) => {
 			if (!isOpen()) return;
 			const target = event.target as Element | null;
@@ -353,15 +489,9 @@ export function initNavToggle(): void {
 
 	// Leaving phone widths with the sheet open would leave a stale class behind.
 	const desktop = matchMedia('(min-width: 900px)');
-	const onBreakpointChange = () => {
+	watchMedia(desktop, () => {
 		if (desktop.matches) setOpen(false);
-	};
-	if (typeof desktop.addEventListener === 'function') {
-		desktop.addEventListener('change', onBreakpointChange);
-	} else {
-		// Safari < 14 fallback.
-		desktop.addListener(onBreakpointChange);
-	}
+	});
 }
 
 /* -------------------------------------------------------------------------- */
@@ -462,12 +592,12 @@ export function initNavDropdowns(): void {
 
 	for (const group of groups) {
 		// One toggle path for mouse click, touch tap and button activation.
-		group.trigger.addEventListener('click', () => {
+		listen<MouseEvent>(group.trigger, 'click', () => {
 			if (isOpen(group)) closeGroup(group);
 			else openGroup(group);
 		});
 
-		group.root.addEventListener('keydown', (event) => {
+		listen<KeyboardEvent>(group.root, 'keydown', (event) => {
 			const focusables = [group.trigger, ...group.links];
 			const active = document.activeElement as HTMLElement | null;
 			const index = active ? focusables.indexOf(active) : -1;
@@ -542,22 +672,21 @@ export function initNavDropdowns(): void {
 		});
 
 		// Blur dismissal: focus left the group entirely.
-		group.root.addEventListener('focusout', (event) => {
-			const next = (event as FocusEvent).relatedTarget as Node | null;
+		listen<FocusEvent>(group.root, 'focusout', (event) => {
+			const next = event.relatedTarget as Node | null;
 			if (next && group.root.contains(next)) return;
 			closeGroup(group);
 		});
 
 		// Navigating away closes the panel so a back-navigation never lands on
 		// a stale open dropdown (same rule as the mobile sheet).
-		group.panel.addEventListener('click', (event) => {
+		listen<MouseEvent>(group.panel, 'click', (event) => {
 			if ((event.target as Element | null)?.closest('a')) closeGroup(group);
 		});
 	}
 
 	// Tap/click outside every group closes them all.
-	document.addEventListener(
-		'pointerdown',
+	listen<PointerEvent>(document, 'pointerdown',
 		(event) => {
 			const target = event.target as Element | null;
 			if (target?.closest('[data-nav-group]')) return;
@@ -567,16 +696,10 @@ export function initNavDropdowns(): void {
 	);
 
 	// Leaving phone widths with a panel open would leave stale state behind.
-	const onBreakpointChange = () => closeAll();
-	if (typeof desktop.addEventListener === 'function') {
-		desktop.addEventListener('change', onBreakpointChange);
-	} else {
-		// Safari < 14 fallback.
-		desktop.addListener(onBreakpointChange);
-	}
+	watchMedia(desktop, () => closeAll());
 
 	// Re-check the edge flip while a panel is open (rotation, window resize).
-	window.addEventListener('resize', () => {
+	listen<UIEvent>(window, 'resize', () => {
 		for (const group of groups) {
 			if (isOpen(group)) place(group);
 		}

@@ -73,7 +73,7 @@ irrelevant here.
 | `BOARD_CONFIG.provider` | PUBLIC | `src/config/board.config.ts` | `'d1' \| 'rest'` preference. **No in-memory production fallback**: an unconfigured store returns an honest `503 storage_unconfigured` instead of silently losing messages. |
 | `maxTextLength: 250` | PUBLIC | same | Enforced server-side in `/api/board` with **422 `text_too_long`** — long posts are rejected, never truncated. |
 | other limits (`maxImageBytes`, `allowedImageTypes`, `postCooldownSeconds`, `hourlyPostLimit`, `pollIntervalMs`, visible-count range) | PUBLIC | same | Abuse/size policy; the server re-validates everything. |
-| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | One-time setup: `npx wrangler d1 create bnji-board`, paste the printed `database_id` into `wrangler.json` (the committed placeholder is a nil UUID so `wrangler dev` works locally but a deploy fails loudly until replaced), then `npx wrangler d1 migrations apply bnji-board --remote`. Local dev: `--local` instead. Schema: `migrations/0001_board_messages.sql`. |
+| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | One-time setup: `npx wrangler d1 create bnji-board`, paste the printed `database_id` into `wrangler.json` (the committed placeholder is a nil UUID so `wrangler dev` works locally but a deploy fails loudly until replaced), then `npx wrangler d1 migrations apply BOARD_DB --remote`. Local dev: `--local` instead. Schema: the five files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
 | `BOARD_KV` KV binding | **INFRA** | `wrangler.json` | Shared rate limiting (see below). `npx wrangler kv namespace create BOARD_KV`, paste the id (same placeholder rule). |
 | `BOARD_REST_URL`, `BOARD_REST_TOKEN` | **SECRET** | Worker env | Optional external JSON API provider (`provider: 'rest'`). |
 
@@ -87,12 +87,59 @@ exact but adds deployment infra for no practical gain here. If KV is missing
 entirely, rate limiting **fails open** with a console warning — it is an abuse
 throttle, not authentication.
 
+### 5.1 D1 schema — five migrations, one database
+
+There is **one** D1 database (`bnji-board`, bound twice: see the note below). The
+migrations are cumulative and tracked by D1 in its own `d1_migrations` table, so
+`migrations apply` only runs what has not run yet. Applying them again is safe
+and is the normal way to move an existing database forward.
+
+| # | File | Adds |
+| --- | --- | --- |
+| 0001 | `board_messages.sql` | `board_messages` + `idx_board_public`. The public feed's only table. |
+| 0002 | `profiles.sql` | `profile_views` (per-session daily dedup), `profile_link_clicks`, `profile_reactions`. Powers `/gizlyy/`. |
+| 0003 | `security_events.sql` | `security_events` + 4 indexes. Abuse telemetry, 60-day retention, admin-only, never public. |
+| 0004 | `board_moderation.sql` | 4 columns on `board_messages` (`report_count`, `reported_at`, `status_note`, `moderated_at`), `board_reports`, 2 indexes. Makes the `status` column reachable from a real report flow. |
+| 0005 | `admin_credentials.sql` | `admin_credentials` (one row, `id = 1` enforced by CHECK). Holds `hex(sha256(token))` — the hashed admin token, rotated from the panel. |
+
+⚠️ 0004 uses `ALTER TABLE … ADD COLUMN`, so it must run after 0001. The filename
+order D1 applies them in guarantees this — do not run the files by hand or
+rename them.
+
+⚠️ 0005 **seeds the admin credential with the token from the build request**,
+which is published. Run it, then rotate on first login (see below).
+
+### 5.2 `BOARD_DB` is bound twice — one of the two is a problem
+
+`wrangler.json` binds the same `database_id` twice:
+
+- `BOARD_DB` — the normal binding, used by all the code.
+- `bnji_board` — identical, but `"remote": true`.
+
+Nothing reads `bnji_board`. The duplicate is harmless in production but breaks
+local development: `npx wrangler dev` tries to open a remote session, demands a
+`CLOUDFLARE_API_TOKEN`, and exits. Until it is removed, run local dev as
+`npx wrangler dev --local`. Deleting the `bnji_board` binding block is the fix
+and touches no application code.
+
+### 5.3 Secrets
+
+| Name | Required? | Notes |
+| --- | --- | --- |
+| `ACCESS_SECRET` | **Yes, for `/admin`** | Signs admin session cookies. Without it `/admin` and every `/api/admin/*` route return `503` — they fail closed, deliberately. `wrangler secret put ACCESS_SECRET`. A random 32+ byte value is fine. |
+| `ACCESS_TOKEN` | No | Legacy generic gate for `ACCESS_RULES`. The admin surface ignores it in favour of the DB-backed credential; keep it only if a non-admin `ACCESS_RULES` prefix needs it. |
+| `ACCESS_PASSWORD_SHA` | No | Same — generic HMAC rule support. |
+| `DISCORD_WEBHOOK_URL` / `NTFY_URL` | No | `/api/dm` delivery. Unset means the contact form returns `503` and says so. |
+| `BOARD_REST_URL` / `BOARD_REST_TOKEN` | No | External board store instead of D1. |
+
 **Moderation groundwork**: every message row carries `status`
 (`visible | hidden | reported | deleted`). The public feed selects
 `status IN ('visible','reported')` in SQL, so hidden/deleted messages can
 never reach a public response, and the status field itself is stripped from
-API payloads. Flipping status is a server-side `UPDATE` (`setStatus`) — no
-moderation UI ships yet, by design.
+API payloads. Flipping status is a server-side `UPDATE` (`setStatus`).
+The admin panel exposes it: delete and restore from the board moderation
+list, delete-only by design. Moderation requires the admin session, and no
+moderation capability is present in unauthenticated HTML, CSS or JS.
 
 UI (`src/components/MessageBoard.astro`) ↔ API (`src/pages/api/board.ts`) ↔
 store (`src/server/board-store.ts`): swapping persistence never touches UI.
@@ -101,21 +148,58 @@ store (`src/server/board-store.ts`): swapping persistence never touches UI.
 response's `nextCursor` (opaque base64 of `[createdAt, id]`) fetches the next
 page of *older* messages; `null` means exhausted. Page numbers are never used,
 so concurrent inserts can't shift or duplicate entries between pages.
-Legacy `?all=1` still works (archive first page + cursor walking).
+Legacy `?all=1` still works (the full list's data source: first page at
+`archivePageSize` + cursor walking). It returns **visible messages only**, so
+a removed message is never listed to a visitor; the admin API
+(`/api/admin/board`) is the view that includes hidden and deleted ones.
 
 ## 6. Access control / future auth — rules PUBLIC, credentials SECRET
 
 | Value | Kind | Location | Notes |
 | --- | --- | --- | --- |
 | `ACCESS_RULES` | PUBLIC | `src/config/access.config.ts` | Declare protected route prefixes + auth kind. **Empty by default: everything current stays public.** |
-| `ACCESS_TOKEN` | **SECRET** | Worker env | Bearer token for `auth: 'token'` rules. |
+| `ACCESS_TOKEN` | **SECRET** | Worker env | Bearer token for generic `auth: 'token'` rules. **Not** the admin token — see below. |
 | `ACCESS_PASSWORD_SHA` | **SECRET** | Worker env | sha256(hex) of the password for `auth: 'password'` rules. Store the hash, never the password. |
-| `ACCESS_SECRET` | **SECRET** | Worker env | HMAC key signing the session cookie. |
+| `ACCESS_SECRET` | **SECRET** | Worker env | HMAC key signing the session cookie. Required for admin sessions. |
 
 Honest limitations (also in `src/middleware.ts`): prerendered static pages
 cannot be protected — a private route must set `export const prerender = false;`
 so requests run the middleware. Client-side hiding is never used as security.
 With no secrets configured, rules fail **closed**.
+
+### 6a. The admin access token — in D1, not in the environment
+
+The admin surface (`/admin`, `/api/admin`) has its own credential, owned end to
+end by `src/server/admin.ts`. `ACCESS_TOKEN` is **not** consulted for it — the
+generic env path still exists for any other `auth: 'token'` rule, but an admin
+request is answered by one guard that reads the database.
+
+| Value | Kind | Location | Notes |
+| --- | --- | --- | --- |
+| `admin_credentials.token_hash` | **SECRET** | `BOARD_DB`, `migrations/0005_admin_credentials.sql` | `hex(sha256(token))` for a single row (`id = 1`). The plaintext is never stored and never appears anywhere in the repository. |
+| `admin_credentials.updated_at` | PUBLIC | same | Epoch ms of the last rotation; `0` means the seeded value is still in place, which the panel surfaces as a prompt to change it. |
+
+- **Setup:** apply the migration (`npx wrangler d1 migrations apply bnji-board --remote`)
+  and set `ACCESS_SECRET` (`wrangler secret put ACCESS_SECRET`). Missing either,
+  the guard fails **closed** with `503 admin_not_configured` rather than serving.
+- **Rotation:** *Settings → Access token* in `/admin`. Requires the **current**
+  token in addition to a valid session, stores only the new hash, and needs
+  8+ characters. Because sessions are bound to a fingerprint of the token they
+  were minted under, rotating **invalidates every existing session immediately**.
+- **Sessions:** `bnji_session`, 8h, `HttpOnly; Secure; SameSite=Strict`. Set
+  only by `POST /api/admin/session` after the token is verified. `Authorization:
+  Bearer <token>` is still accepted for curl and scripts.
+- **Login throttle:** 10 failed attempts / 15 min / IP, KV-backed, charged on
+  failure only so a burst of *successful* sign-ins cannot lock the owner out.
+- **No accounts.** One operator, one token, no roles, no OAuth, no second admin —
+  enforced by the `CHECK (id = 1)` constraint, not just by application discipline.
+- **Rotation drill:** if the token is lost it cannot be recovered (only its hash
+  is stored). Reseed the row by hand: compute `hex(sha256(<new token>))` and
+  `UPDATE admin_credentials SET token_hash = '…' WHERE id = 1`.
+
+`POST /api/admin/session` with `newToken` performs the rotation; without it, the
+body is a login. Both paths live on the one route because they are the one
+concern: the credential and the sessions derived from it.
 
 ## 7. Intro sequence — PUBLIC
 

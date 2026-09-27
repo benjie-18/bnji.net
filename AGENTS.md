@@ -114,11 +114,26 @@ build a monolithic page template with inline content — put content in
 
 ## 7. Verification before finishing any change
 
+The inner loop while iterating, then the full gate before calling it done:
+
 ```bash
 npm run build          # must pass, no new warnings
-npx tsc --noEmit       # must be clean
-npm run check          # build + tsc + wrangler deploy --dry-run
+npm exec -- tsc        # must be clean (typecheck only)
+npm run check          # the gate: build + tsc + wrangler deploy --dry-run
 ```
+
+`npm run check` already runs the first two, so running it covers all of them;
+the separate lines are for a fast inner loop. Two things to know about the
+typecheck step:
+
+- Use `npm exec -- tsc`, **not** `npx tsc`. If `node_modules` is missing or
+  only partly installed, `npx` finds no local `tsc` binary and silently fetches
+  an unrelated package of that name from the registry (`tsc@2.0.4`, which is
+  not TypeScript and prints "This is not the tsc command you are looking for").
+  `npm exec` fails loudly instead.
+- `--noEmit` is not needed and is not in the `check` script: `astro/tsconfigs/
+  base.json` already sets `noEmit: true`, which the project tsconfig extends.
+  A bare `tsc` therefore type-checks without writing `.js` into `src/`.
 
 Then sanity-grep the output:
 

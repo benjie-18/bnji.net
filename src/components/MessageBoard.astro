@@ -11,21 +11,52 @@
  * Structure:
  *   - a fixed, pointer-transparent field that holds one floating element per
  *     message: glossy Frutiger Aero bubbles in the light theme, glowing star
- *     orbs in the dark theme (styles/board.css, switched by html[data-theme]);
+ *     orbs in the dark theme (styles/board.css, switched by html[data-theme]).
+ *     These are VISUAL ONLY. They carry no buttons, no controls, no handlers
+ *     beyond drag — an interaction affordance on a physics object invites
+ *     the reader to treat it as a menu item, and every pixel of a bubble is
+ *     already spent on the message;
  *   - a composer anchored bottom-centre at all times: text, optional image,
- *     send, plus the visible-count slider and the full-archive button.
- *     Mobile-safe: dvh/svh sizing, env(safe-area-inset-*) padding, and a
- *     --kb-inset hook (scripts/board.ts) that lifts it above the virtual
- *     keyboard so it never covers the field or its own slider. The control
- *     strip (visible-count slider, list-view toggle, archive button) is
- *     docked ABOVE the composer as its own glass pill, so the two never
- *     overlap at any viewport or keyboard state;
- *   - a plain, non-physics LIST VIEW of the same messages — one toggle in the
- *     control strip flips between the sky and a static, keyboard- and
- *     screen-reader-reachable <ol>. It renders the messages the existing
- *     fetch/pagination state already holds (scripts/board.ts syncListView);
- *     it never fetches on its own;
- *   - an archive dialog listing every message ever sent.
+ *     send, plus the visible-count slider. Mobile-safe: dvh/svh sizing,
+ *     env(safe-area-inset-*) padding, and a --kb-inset hook
+ *     (scripts/board.ts) that lifts it above the virtual keyboard so it never
+ *     covers the field or its own slider;
+ *   - THE FULL LIST — the single non-physics view of the board. One toggle
+ *     in the control strip opens a scrollable panel of every message ever
+ *     sent, newest first.
+ *
+ * WHY THERE IS EXACTLY ONE NON-PHYSICS VIEW
+ * -----------------------------------------
+ * There used to be two: this full list, and a separate "List view" panel
+ * toggled from the same strip. They overlapped each other, they overlapped
+ * the sky, and they showed different data — the panel only ever rendered
+ * the messages the physics field happened to have loaded (the slider caps
+ * that at 3-30), so "the list" silently disagreed with "all messages". Two
+ * views of one collection is one too many when they cannot be made to
+ * agree. The panel and its toggle are gone; this is the only one.
+ *
+ * CONTAINMENT (the overlap bug this view had)
+ * -------------------------------------------
+ * It used to be a bare `position: fixed` box with no scrim, no focus trap
+ * and no backdrop, floating over the bubbles — so the sky showed through
+ * around and behind it, and its 8svh top offset plus an 84svh max-height
+ * could run into the composer. It is now a real modal layer: a dimming
+ * scrim that owns the viewport, a sheet that is flex-laid-out so its header
+ * and footer are pinned while only the message column scrolls, and a height
+ * that is derived from the space between the safe top inset and the
+ * composer, so it cannot reach the composer at any viewport size.
+ *
+ * MODERATION
+ * ----------
+ * Every message-level action lives here, and nowhere else. Deleting is
+ * server-enforced (POST /api/admin/board rejects any caller without the
+ * admin session) — but enforcement alone is not the same as absence, and a
+ * control shipped to everyone and merely refused would still tell every
+ * visitor the capability exists. So the controls are RENDERED ONLY for an
+ * authenticated admin: `isAdmin` is resolved while the page renders, the
+ * markup is not emitted at all for anyone else, and the client script only
+ * builds a delete button when the flag it was given is true. A non-admin's
+ * HTML, CSS and JS contain no trace of it.
  *
  * The UI talks only to /api/board; persistence, validation, rate limiting and
  * sanitization live server-side (src/pages/api/board.ts, src/server/*). The
@@ -36,17 +67,27 @@
  * composer and rise; bubbles/stars are sized to fit their own text/image
  * content (no fixed diameter); dark theme renders a real five-point star
  * (clip-path), light theme a soap bubble; only the 10 most recent load
- * initially, and the slider
- * (3-30) walks older CURSOR pages — never the full history in one fetch;
- * polling pauses entirely while the tab is hidden and revalidates with
- * ETags; reduced motion gets a calm static grid; everything is keyboard
- * reachable.
+ * initially, and the slider (3-30) walks older CURSOR pages — never the full
+ * history in one fetch; polling pauses entirely while the tab is hidden and
+ * revalidates with ETags; reduced motion gets a calm static grid; everything
+ * is keyboard reachable.
+ *
+ * @param isAdmin Whether the current request is an authenticated admin. Gates
+ *   the moderation controls; see MODERATION above.
  */
 import '../styles/board.css';
 import { BOARD_CONFIG } from '../config/board.config';
+
+interface Props {
+	isAdmin?: boolean;
+}
+
+const { isAdmin = false } = Astro.props;
+
+const MAX_IMAGE_LABEL = `${Math.round(BOARD_CONFIG.maxImageBytes / 1024)} KB`;
 ---
 
-<div class="board" data-board>
+<div class="board" data-board data-board-admin={isAdmin ? 'true' : 'false'}>
 	<ul class="board__field" role="list" aria-label="Visitor messages" data-board-field></ul>
 
 	<form class="board__composer" data-glass="raised" data-board-composer aria-label="Post a message to the public board">
@@ -64,7 +105,7 @@ import { BOARD_CONFIG } from '../config/board.config';
 				0/{BOARD_CONFIG.maxTextLength}
 			</span>
 
-			<label class="board__attach" title="Attach an image (PNG, JPEG, WebP or GIF, 400 KB max)">
+			<label class="board__attach" title={`Attach an image (PNG, JPEG, WebP or GIF, ${MAX_IMAGE_LABEL} max)`}>
 				<span class="sr-only">Attach an image</span>
 				<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-board-file />
 				<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -104,12 +145,9 @@ import { BOARD_CONFIG } from '../config/board.config';
 				class="board__view-toggle mono"
 				type="button"
 				data-board-view-toggle
-				aria-pressed="false"
-				aria-controls="board-listview"
+				aria-expanded="false"
+				aria-controls="board-list"
 			>
-				List view
-			</button>
-			<button class="board__archive-open mono" type="button" data-board-archive-open>
 				All messages
 			</button>
 		</div>
@@ -117,33 +155,27 @@ import { BOARD_CONFIG } from '../config/board.config';
 		<p class="board__status mono" data-board-status role="status" aria-live="polite"></p>
 	</form>
 
-	<section
-		class="board__listview"
-		id="board-listview"
-		data-glass="raised"
-		data-board-listview
-		role="region"
-		aria-label="Message board, list view"
-		tabindex="0"
-		hidden
-	>
-		<p class="board__listview-note mono">
-			The same messages as the sky, newest first — no dragging required.
-		</p>
-		<ol class="board__listview-items" data-board-list-items role="list"></ol>
-	</section>
-
-	<div class="board__archive" data-glass="raised" data-board-archive role="dialog" aria-modal="true" aria-label="Every message ever sent" hidden>
-		<header class="board__archive-head">
-			<h2 class="board__archive-title">Every message</h2>
-			<button class="board__archive-close" type="button" data-board-archive-close>
-				<span class="sr-only">Close the message archive</span>
-				<svg viewBox="0 0 24 24" aria-hidden="true">
-					<path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-				</svg>
-			</button>
-		</header>
-		<ol class="board__archive-list" data-board-archive-list></ol>
+	<!-- The full list: the board's one non-physics view. Shown as a scrim +
+	     sheet so it owns the viewport instead of floating over the sky. -->
+	<div class="board__list" data-board-list role="dialog" aria-modal="true" aria-labelledby="board-list-title" hidden>
+		<div class="board__list-scrim" data-board-list-scrim></div>
+		<section class="board__list-sheet" data-glass="raised" tabindex="-1">
+			<header class="board__list-head">
+				<div class="board__list-heading">
+					<h2 class="board__list-title" id="board-list-title">Every message</h2>
+					<p class="board__list-sub mono" data-board-list-count>Loading…</p>
+				</div>
+				<button class="board__list-close" type="button" data-board-list-close>
+					<span class="sr-only">Close the message list</span>
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+					</svg>
+				</button>
+			</header>
+			<div class="board__list-scroll">
+				<ol class="board__list-items" data-board-list-items role="list"></ol>
+			</div>
+		</section>
 	</div>
 </div>
 

@@ -298,6 +298,22 @@
 
 		const getTheme = () => EMOJI_THEMES[activeThemeKey] || EMOJI_THEMES.aero;
 
+		/* Cell glyphs are written with textContent / replaceChildren, never
+		   innerHTML. Every value here is a literal out of EMOJI_THEMES above,
+		   so there is no injection surface today — but textContent cannot parse
+		   a payload even if one is ever threaded in, and it skips an HTML parse
+		   on every cell of every reveal. The .empty-dot wrapper genuinely needs
+		   an element, so it is built and appended rather than serialised from a
+		   template string. */
+		const setGlyph = (btn: HTMLButtonElement, glyph: string) => {
+			btn.textContent = glyph;
+		};
+		const setDot = (btn: HTMLButtonElement, glyph: string) => {
+			const dot = document.createElement('span');
+			dot.className = 'empty-dot';
+			dot.textContent = glyph;
+			btn.replaceChildren(dot);
+		};
 		let audioCtx: AudioContext | null = null;
 		const getAudioContext = () => {
 			if (!audioCtx) {
@@ -432,7 +448,7 @@
 		};
 
 		const renderDOM = () => {
-			gridEl.innerHTML = '';
+			gridEl.replaceChildren();
 			gridEl.style.setProperty('--grid-cols', String(cols));
 			gridEl.style.setProperty('--grid-rows', String(rows));
 
@@ -524,7 +540,7 @@
 
 			if (cell.isMine) {
 				btn.classList.add('is-detonated');
-				btn.innerHTML = '💥';
+				setGlyph(btn, '💥');
 				gameOver(false);
 				return;
 			}
@@ -538,7 +554,7 @@
 			} else {
 				// Empty safe cell: mark with dot indicator
 				btn.classList.add('is-empty');
-				btn.innerHTML = `<span class="empty-dot">${theme.empty}</span>`;
+				setDot(btn, theme.empty);
 				btn.setAttribute('aria-label', 'Empty cleared tile');
 
 				// Cascade neighbors
@@ -571,13 +587,13 @@
 			if (cell.isFlagged) {
 				flagsPlaced++;
 				btn.classList.add('is-flagged');
-				btn.innerHTML = theme.flag;
+				setGlyph(btn, theme.flag);
 				btn.setAttribute('aria-label', `Tile ${r + 1}, ${c + 1} (flagged)`);
 				playSound(520, 'triangle', 0.08);
 			} else {
 				flagsPlaced--;
 				btn.classList.remove('is-flagged');
-				btn.innerHTML = '';
+				btn.replaceChildren();
 				btn.setAttribute('aria-label', `Tile ${r + 1}, ${c + 1} (unrevealed)`);
 				playSound(380, 'triangle', 0.08);
 			}
@@ -606,7 +622,7 @@
 						if (board[r][c].isMine) {
 							const btn = getCellButton(r, c);
 							if (btn && !board[r][c].isFlagged) {
-								btn.innerHTML = theme.flag;
+								setGlyph(btn, theme.flag);
 								btn.classList.add('is-flagged');
 							}
 						}
@@ -628,10 +644,10 @@
 							btn.classList.remove('is-unrevealed');
 							btn.classList.add('is-mine-revealed');
 							btn.removeAttribute('data-glass');
-							btn.innerHTML = theme.mine;
+							setGlyph(btn, theme.mine);
 						} else if (!cell.isMine && cell.isFlagged) {
 							btn.classList.add('is-wrong-flag');
-							btn.innerHTML = '❌';
+							setGlyph(btn, '❌');
 						}
 					}
 				}
@@ -740,11 +756,11 @@
 					const btn = getCellButton(r, c);
 					if (!btn) continue;
 					if (cell.isFlagged) {
-						btn.innerHTML = theme.flag;
+						setGlyph(btn, theme.flag);
 					} else if (cell.isRevealed && cell.count === 0) {
-						btn.innerHTML = `<span class="empty-dot">${theme.empty}</span>`;
+						setDot(btn, theme.empty);
 					} else if (isGameOver && cell.isMine) {
-						btn.innerHTML = theme.mine;
+						setGlyph(btn, theme.mine);
 					}
 				}
 			}

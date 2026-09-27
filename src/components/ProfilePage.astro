@@ -1,0 +1,506 @@
+---/**
+ * ProfilePage — reusable native profile card component.
+ *
+ * Renders a full personal/social profile from a ProfileData object.
+ * Content lives in src/data/profiles/<slug>.ts; this component only handles
+ * presentation. It reuses BNJI's glass system, tokens, and existing
+ * components (Icon, Chip) for visual consistency.
+ *
+ * Structure mirrors the Ayo profile card layout (avatar -> name -> badges ->
+ * counter -> bio -> loves -> identities -> links -> copy blocks) while
+ * feeling native to the BNJI design language.
+ *
+ * The component renders the card only — the page header, reactions, stats,
+ * and analytics script are handled by the page route.
+ */
+import type { ProfileData } from '../data/profiles/types';
+import Icon from './Icon.astro';
+import type { IconName } from './Icon.astro';
+
+interface Props {
+	profile: ProfileData;
+	/**
+	 * Live total views for this profile, from the profile analytics store.
+	 *
+	 * When supplied it replaces the historical `counter` pill. The old pill
+	 * showed a hand-entered number carried over from another site, which
+	 * could never move; this one is the same `getViewStats()` total the stats
+	 * panel and the page's own stat block report, so there is one number on
+	 * the site rather than two that can drift.
+	 *
+	 * Optional: with no store (or no prop) the component falls back to the
+	 * static `counter` block, and with neither it renders no pill at all.
+	 */
+	viewCount?: number;
+}
+
+const { profile, viewCount } = Astro.props;
+const linkRel = 'noopener noreferrer';
+
+// Exactly one pill, from exactly one source: the live count when the page
+// could read the store, otherwise the historical figure as a fallback.
+const counterValue = viewCount ?? profile.counter?.value;
+const counterEmoji = viewCount !== undefined ? '👁' : profile.counter?.emoji;
+const counterNote = viewCount !== undefined ? 'views' : profile.counter?.note;
+---
+
+<article class="profile-page" aria-label={`${profile.displayName}'s profile`}>
+
+	{/* Avatar */}
+	<div class="profile-page__avatar-wrap">
+		<div class="profile-page__avatar" data-glass="raised">
+			<img
+				src={profile.avatar}
+				alt={profile.avatarAlt}
+				width="96"
+				height="96"
+				loading="eager"
+				decoding="async"
+			/>
+		</div>
+	</div>
+
+	{/* Name */}
+	<h1 class="profile-page__name">{profile.displayName}</h1>
+
+	{/* Badges */}
+	{profile.badges && profile.badges.length > 0 && (
+		<ul class="profile-page__badges" role="list" aria-label="Badges">
+			{profile.badges.map((badge) => (
+				<li class="profile-page__badge" data-glass="quiet">
+					{badge.emoji && <span class="profile-page__badge-emoji" aria-hidden="true">{badge.emoji}</span>}
+					<span class="mono">{badge.text}</span>
+				</li>
+			))}
+		</ul>
+	)}
+
+	{/* View count pill — live from the profile store, see `viewCount` above. */}
+	{counterValue !== undefined && (
+		<div class="profile-page__counter" data-glass="quiet" aria-label="Total views">
+			<span class="profile-page__counter-emoji" aria-hidden="true">{counterEmoji}</span>
+			<span class="profile-page__counter-value">{counterValue}</span>
+			{counterNote && <span class="profile-page__counter-note mono">{counterNote}</span>}
+		</div>
+	)}
+
+	{/* Bio */}
+	<p class="profile-page__bio">{profile.bio}</p>
+
+	{/* Extras (free-form text lines) */}
+	{profile.extras && profile.extras.length > 0 && (
+		<div class="profile-page__extras">
+			{profile.extras.map((line) => (
+				<p class="profile-page__extra">{line}</p>
+			))}
+		</div>
+	)}
+
+	{/* Identity/metadata chips */}
+	{profile.identities && profile.identities.length > 0 && (
+		<ul class="profile-page__identities" role="list">
+			{profile.identities.map((id) => (
+				<li class="profile-page__identity" data-glass="quiet">{id}</li>
+			))}
+		</ul>
+	)}
+
+	{/* Loves section */}
+	{profile.loves.length > 0 && (
+		<div class="profile-page__loves-section">
+			<p class="profile-page__loves-label mono">{profile.lovesLabel ?? 'Loves :'}</p>
+			<ul class="profile-page__loves" role="list">
+				{profile.loves.map((love) => (
+					<li class="profile-page__love">{love}</li>
+				))}
+			</ul>
+		</div>
+	)}
+
+	{/* Social links */}
+	{profile.links.length > 0 && (
+		<nav class="profile-page__links" aria-label="Profile links">
+			{profile.links.map((link) => (
+				<a
+					class="profile-page__link"
+					data-glass="interactive quiet"
+					href={link.href}
+					rel={link.external ? linkRel : undefined}
+					target={link.external ? '_blank' : undefined}
+					data-link-id={link.id}
+				>
+					{link.icon && <Icon name={link.icon as IconName} size={18} />}
+					<span class="profile-page__link-label">{link.label}</span>
+					{link.handle && <span class="profile-page__link-handle mono">{link.handle}</span>}
+					<Icon name="arrow-right" size={14} />
+				</a>
+			))}
+		</nav>
+	)}
+
+	{/* Copy blocks (e.g. Discord) */}
+	{profile.copyBlocks && profile.copyBlocks.length > 0 && (
+		<div class="profile-page__copy-section">
+			{profile.copyBlocks.map((block) => (
+				<div class="profile-page__copy" data-glass="quiet">
+					<div>
+						<p class="mono profile-page__copy-label">{block.label}</p>
+						{block.subLabel && <p class="mono profile-page__copy-sublabel">{block.subLabel}</p>}
+						<p class="mono profile-page__copy-value" data-copy-value>{block.value}</p>
+					</div>
+					<button class="profile-page__copy-btn" type="button" data-copy-handle>
+						<span data-copy-text>Copy</span>
+					</button>
+				</div>
+			))}
+		</div>
+	)}
+</article>
+
+<style>
+	/* --- Card shell ------------------------------------------------------- */
+	.profile-page {
+		position: relative;
+		width: min(100%, 420px);
+		margin-inline: auto;
+		padding: 3.6rem 1.5rem 1.5rem;
+		border-radius: var(--radius-xl);
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		backdrop-filter:
+			blur(var(--glass-blur))
+			saturate(var(--glass-saturate))
+			brightness(var(--glass-brightness));
+		-webkit-backdrop-filter:
+			blur(var(--glass-blur))
+			saturate(var(--glass-saturate))
+			brightness(var(--glass-brightness));
+		box-shadow:
+			var(--glass-shadow),
+			inset 0 1px 1px 0 var(--glass-fresnel-top);
+		text-align: center;
+	}
+
+	html[data-theme='light'] .profile-page {
+		background: var(--glass-bg);
+		border-color: var(--glass-border);
+		box-shadow:
+			0 18px 44px -18px rgba(18, 90, 140, 0.28),
+			0 2px 8px rgba(25, 110, 160, 0.12),
+			inset 0 1px 2px 0 rgba(255, 255, 255, 0.95),
+			inset 0 -1px 1px 0 rgba(0, 40, 100, 0.05);
+	}
+
+	@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+		.profile-page {
+			background: var(--glass-bg-fallback);
+		}
+	}
+
+	/* --- Avatar ----------------------------------------------------------- */
+	.profile-page__avatar-wrap {
+		position: absolute;
+		top: -48px;
+		left: 50%;
+		transform: translateX(-50%);
+	}
+
+	.profile-page__avatar {
+		display: grid;
+		place-items: center;
+		inline-size: 96px;
+		block-size: 96px;
+		border-radius: 50%;
+		overflow: hidden;
+		background: var(--glass-bg-raised);
+		border: 2px solid var(--glass-border-strong);
+		box-shadow:
+			var(--glass-shadow-raised),
+			inset 0 2px 6px rgba(255, 255, 255, 0.35),
+			inset 0 -8px 18px -10px var(--glass-refraction);
+	}
+
+	.profile-page__avatar img {
+		inline-size: 100%;
+		block-size: 100%;
+		object-fit: cover;
+		border-radius: 50%;
+	}
+
+	/* --- Name ------------------------------------------------------------- */
+	.profile-page__name {
+		margin: 0;
+		font-family: var(--font-display);
+		font-size: var(--text-title);
+		font-weight: 650;
+		letter-spacing: var(--tracking-snug);
+		color: var(--text-strong);
+	}
+
+	/* --- Badges ----------------------------------------------------------- */
+	.profile-page__badges {
+		display: flex;
+		justify-content: center;
+		gap: 0.45rem;
+		margin: 0.8rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.profile-page__badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.28rem 0.6rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-micro);
+	}
+
+	.profile-page__badge-emoji {
+		font-size: 0.85em;
+		line-height: 1;
+	}
+
+	/* --- Counter ---------------------------------------------------------- */
+	.profile-page__counter {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.9rem 0 0;
+		padding: 0.35rem 0.85rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-small);
+	}
+
+	.profile-page__counter-emoji {
+		font-size: 1.1em;
+		line-height: 1;
+	}
+
+	.profile-page__counter-value {
+		font-family: var(--font-display);
+		font-weight: 600;
+		color: var(--text-strong);
+		letter-spacing: var(--tracking-snug);
+	}
+
+	.profile-page__counter-note {
+		color: var(--text-faint);
+		font-size: var(--text-micro);
+	}
+
+	/* --- Bio -------------------------------------------------------------- */
+	.profile-page__bio {
+		margin: 0.9rem 0 0;
+		font-size: var(--text-small);
+		line-height: var(--leading-snug);
+		color: var(--text-muted);
+	}
+
+	/* --- Extras ----------------------------------------------------------- */
+	.profile-page__extras {
+		margin: 0.8rem 0 0;
+		display: grid;
+		gap: 0.25rem;
+	}
+
+	.profile-page__extra {
+		margin: 0;
+		font-size: var(--text-small);
+		color: var(--text-muted);
+		line-height: var(--leading-snug);
+	}
+
+	/* --- Identities ------------------------------------------------------- */
+	.profile-page__identities {
+		display: flex;
+		justify-content: center;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0.8rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.profile-page__identity {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.22rem 0.62rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-small);
+		color: var(--text-muted);
+	}
+
+	/* --- Loves ------------------------------------------------------------ */
+	.profile-page__loves-section {
+		margin-top: 1rem;
+		text-align: left;
+	}
+
+	.profile-page__loves-label {
+		margin: 0 0 0.4rem;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+
+	.profile-page__loves {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.profile-page__love {
+		padding: 0.24rem 0.62rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		font-size: var(--text-small);
+		color: var(--text-muted);
+	}
+
+	/* --- Links ------------------------------------------------------------ */
+	.profile-page__links {
+		display: grid;
+		gap: 0.5rem;
+		margin-top: 1.1rem;
+	}
+
+	.profile-page__link {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.62rem 0.8rem;
+		border-radius: var(--radius-md);
+		color: var(--text);
+		text-decoration: none;
+		font-size: var(--text-small);
+	}
+
+	.profile-page__link-label {
+		font-weight: 600;
+	}
+
+	.profile-page__link-handle {
+		margin-left: auto;
+		font-size: var(--text-micro);
+		color: var(--text-dim);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 40%;
+	}
+
+	.profile-page__link .icon:last-child {
+		flex: none;
+		color: var(--text-faint);
+		transition: transform var(--dur-fast) var(--ease-out);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.profile-page__link:hover .icon:last-child {
+			transform: translateX(3px);
+		}
+	}
+
+	/* --- Copy blocks ------------------------------------------------------ */
+	.profile-page__copy-section {
+		display: grid;
+		gap: 0.5rem;
+		margin-top: 0.7rem;
+	}
+
+	.profile-page__copy {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.6rem 0.8rem;
+		border-radius: var(--radius-md);
+		text-align: left;
+	}
+
+	.profile-page__copy-label {
+		margin: 0;
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+
+	.profile-page__copy-sublabel {
+		margin: 0.1rem 0 0;
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+	}
+
+	.profile-page__copy-value {
+		margin: 0.1rem 0 0;
+		font-size: var(--text-small);
+		color: var(--text);
+	}
+
+	.profile-page__copy-btn {
+		flex: none;
+		padding: 0.42rem 0.85rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border-strong);
+		background: var(--glass-bg);
+		color: var(--text);
+		font-size: var(--text-small);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-out);
+	}
+
+	.profile-page__copy-btn:hover {
+		background: var(--glass-bg-raised);
+		transform: translateY(-1px);
+	}
+
+	.profile-page__copy-btn:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	/* --- Mobile adjustments ---------------------------------------------- */
+	@media (max-width: 480px) {
+		.profile-page {
+			padding-inline: 1rem;
+		}
+
+		.profile-page__link-handle {
+			display: none;
+		}
+	}
+
+	/* --- Reduced motion --------------------------------------------------- */
+	@media (prefers-reduced-motion: reduce) {
+		.profile-page__link .icon:last-child {
+			transition: none;
+			transform: none;
+		}
+
+		.profile-page__copy-btn {
+			transition: none;
+			transform: none;
+		}
+	}
+
+	/* --- Forced colors ---------------------------------------------------- */
+	@media (forced-colors: active) {
+		.profile-page {
+			border: 1px solid CanvasText;
+			background: Canvas;
+		}
+
+		.profile-page__avatar {
+			border: 2px solid CanvasText;
+		}
+	}
+</style>

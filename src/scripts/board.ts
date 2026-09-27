@@ -22,18 +22,29 @@
  *     respected); a live n/250 counter flips to an over-limit state and
  *     disables Send past BOARD_CONFIG.maxTextLength — the client half of the
  *     server's 422;
- *   - list view: a toggle in the control strip opens a plain, non-physics
- *     <ol> of the SAME messages already in memory (newest first, inert
- *     textContent rendering). It never fetches — syncListView() renders from
- *     `bodies`, which the existing cursor/pagination loaders fill;
+ *   - THE FULL LIST: the board's single non-physics view. One toggle opens a
+ *     scrim + sheet containing every message ever sent, newest first, walked
+ *     through the API's keyset cursor to exhaustion. This is also the ONLY
+ *     place message-level actions exist, and it renders them only when the
+ *     server said this visitor is an admin;
  *   - slider adjusts the visible count: raising it walks OLDER pages through
  *     the API's keyset cursor (bounded fetches, never full history in one
- *     request); lowering it trims; the archive button opens a dialog that
- *     walks the same cursor to exhaustion;
+ *     request); lowering it trims;
  *   - polls the newest page for new messages with conditional requests
  *     (If-None-Match / 304), and the poll timer itself is stopped while
  *     document.hidden and restarted on visibilitychange — no background
  *     requests at all;
+ *   - abuse telemetry: the FIRST load carries ?track=1, which is the one
+ *     request the server turns into a security event (and the one that
+ *     establishes the session cookie). Polls never carry it — logging every
+ *     read would write ~180 rows per visitor-hour and bury the posts that
+ *     actually matter. A device-details beacon follows the initial load, and
+ *     another follows every accepted post;
+ *   - moderation: for an admin only, each row in the full list carries a
+ *     Delete control that calls POST /api/admin/board. The endpoint is the
+ *     real enforcement — it rejects any caller without the admin session —
+ *     and this client simply does not build the control for anyone else, so
+ *     a visitor's payload contains no trace of the capability;
  *   - mobile keyboard: the visual viewport is measured and published as
  *     --kb-inset so the composer rides above the keyboard and the floating
  *     field never extends behind it (mounting only — the physics engine in
@@ -43,9 +54,57 @@
  *
  * Safety: server-validated content is rendered with textContent only; images
  * are data: URLs the server re-validated; nothing here trusts the payload.
+ *
+ * ---------------------------------------------------------------------------
+ * LIFECYCLE
+ * ---------------------------------------------------------------------------
+ * This module holds the site's only two genuinely long-lived resources, and it
+ * is worth being explicit about who owns them and when they run.
+ *
+ * Mount. initMessageBoard() is called once from boot.ts. A module-level
+ * `started` flag makes a second call a no-op, and a missing [data-board]
+ * element returns immediately, so the module is inert on every other page.
+ * Nothing here is mounted lazily or re-mounted on navigation.
+ *
+ * Resource 1 — the physics loop. One requestAnimationFrame chain, owned by
+ * `frame`. startLoop() refuses to start a second chain (`if (frame) return`),
+ * so the loop cannot be doubled by a stray call. Inside the callback, the
+ * first thing it does is re-arm itself, then bail on !isPageVisible(): the
+ * chain stays alive but does no work, which keeps the function pointer stable
+ * across a tab switch without leaving a busy loop burning frames in the
+ * background.
+ *
+ * Resource 2 — the poll timer. One setInterval, owned by `pollTimer`, with
+ * startPolling()/stopPolling() as the only mutators. pollNow() additionally
+ * skips while the full list is open, so the sheet's snapshot is never
+ * reshuffled out from under a reader.
+ *
+ * The gate. Both resources are governed by ONE document-level
+ * 'visibilitychange' listener, registered once near the top of this module:
+ * visible -> startLoop(), startPolling(), and an immediate catch-up pollNow()
+ * so anything posted while the tab was hidden appears on return; hidden ->
+ * stopLoop(), stopPolling(). This is the only place either resource is
+ * stopped, which is why the board makes no requests and runs no physics while
+ * backgrounded.
+ *
+ * The reduced-motion path is a different shape, not a slower one: `reduced` is
+ * read once at mount, and when it is true the loop is never started at all.
+ * Bodies are laid out once by staticLayout() and repainted on drag, pointer
+ * release and resize instead of per frame. The .board--static class marks it.
+ *
+ * Teardown: there is none, and that is deliberate for now. The board lives for
+ * the document, and every listener it registers is bound to an element that
+ * the document already owns. Note the asymmetry with interactions.ts, which
+ * does register disposers — that module was written with teardown in mind
+ * because it is the one most likely to be re-initialised. If the site ever
+ * gains client-side navigation, this module needs the same treatment: drop
+ * `started`, and add teardown for the loop, the poll timer, the
+ * visibilitychange listener, and the visualViewport resize/scroll pair.
+ * ---------------------------------------------------------------------------
  */
 import { BOARD_CONFIG } from '../config/board.config';
 import { clamp, isPageVisible, prefersReducedMotion } from './environment';
+import { reportDeviceData, sendSecurityEnrichment } from './device-fingerprint';
 import { stepBodies, staticLayout, type PhysicsBody, type PhysicsBounds } from './board-physics';
 
 type BoardMessage = {
@@ -70,16 +129,17 @@ export function initMessageBoard(): void {
 	const composer = root.querySelector<HTMLFormElement>('[data-board-composer]');
 	const slider = root.querySelector<HTMLInputElement>('[data-board-slider]');
 	const sliderValue = root.querySelector<HTMLElement>('[data-board-slider-value]');
-	const archiveButton = root.querySelector<HTMLButtonElement>('[data-board-archive-open]');
 	const status = root.querySelector<HTMLElement>('[data-board-status]');
-	if (!field || !composer || !slider || !sliderValue || !archiveButton || !status) return;
+	if (!field || !composer || !slider || !sliderValue || !status) return;
 	// Re-bind through the guard: hoisted/closure functions below capture these
 	// names, and control-flow narrowing does not reach into function bodies.
+	// Re-bind through the guard: hoisted/closure functions below capture these
+	// names, and control-flow narrowing does not reach into function bodies.
+	const rootEl: HTMLElement = root;
 	const fieldEl: HTMLUListElement = field;
 	const composerEl: HTMLFormElement = composer;
 	const sliderEl: HTMLInputElement = slider;
 	const sliderValueEl: HTMLElement = sliderValue;
-	const archiveButtonEl: HTMLButtonElement = archiveButton;
 	const statusEl: HTMLElement = status;
 
 	const bodies: Body[] = [];
@@ -118,8 +178,64 @@ export function initMessageBoard(): void {
 		root.style.setProperty('--kb-inset', `${hidden}px`);
 	};
 
+	/* Publish how much of the viewport the board's own chrome occupies at the
+	   bottom (--board-chrome), so the full list can stop above it.
+
+	   The number is MEASURED, not assumed, because the composer is not a fixed
+	   height: the textarea grows with what is typed, the control strip is
+	   absolutely positioned ABOVE the composer rather than inside it, and on
+	   narrow screens that strip wraps to two rows. A hardcoded clearance would
+	   be correct for exactly one of those states and wrong for the rest.
+
+	   Measuring the control strip — the topmost piece of the stack — gives the
+	   true top edge of everything the reader must not lose behind a panel.
+	   Re-measured on the same events that move it: resize, keyboard, and the
+	   composer growing as text is entered. */
+	const updateChromeInset = () => {
+		const strip = composerEl.querySelector<HTMLElement>('.board__composer-row--meta');
+		// The strip is the topmost element of the composer's stack; when it is
+		// not laid out yet (first paint, or display:none), fall back to the
+		// composer box itself.
+		const top = (strip ?? composerEl).getBoundingClientRect().top;
+		if (!Number.isFinite(top) || top <= 0) return;
+		root.style.setProperty('--board-chrome', `${Math.ceil(window.innerHeight - top)}px`);
+	};
+
+	/** Human-readable byte count, so a size refusal states a real number. */
+	const formatBytes = (bytes: number): string =>
+		bytes >= 1024 * 1024
+			? `${Math.round(bytes / (1024 * 1024))} MB`
+			: `${Math.round(bytes / 1024)} KB`;
+
 	const announce = (text: string) => {
 		statusEl.textContent = text;
+	};
+
+	/* --- moderation (admin only) -------------------------------------------- */
+
+	/* The server resolved this while rendering the page. It is the ONLY source
+	   of truth for whether controls exist — not a cookie read here, not a
+	   guess.
+
+	   The delete code itself is NOT in this file: it is a dynamic import
+	   (scripts/board-moderate.ts) that a non-admin never triggers, so it is
+	   never downloaded into their cache and never appears in a network tab.
+	   A plain `if (isAdmin)` would have left the code sitting in every
+	   visitor's bundle — inert, but shipped, and readable. See the module's
+	   own header for the full reasoning.
+
+	   The endpoint behind the control enforces independently: it rejects any
+	   caller without the admin session, so even a hand-built request from a
+	   non-admin (or a page left open across a logout) is refused. The flag
+	   decides who is SHOWN the control; that check decides who is ALLOWED it. */
+	const isAdmin = rootEl.dataset.boardAdmin === 'true';
+	type AttachDelete = typeof import('./board-moderate')['default'];
+	let attachDelete: AttachDelete | null = null;
+
+	const loadModeration = async (): Promise<AttachDelete | null> => {
+		if (!isAdmin) return null;
+		if (!attachDelete) attachDelete = (await import('./board-moderate')).default;
+		return attachDelete;
 	};
 
 	/* --- rendering ---------------------------------------------------------- */
@@ -189,6 +305,12 @@ probeGrab.appendChild(probeSpan);
 		span.className = 'board-msg__text';
 		span.textContent = msg.text; // never innerHTML: UGC stays inert
 		grab.appendChild(span);
+
+		// A bubble is VISUAL ONLY: the drag handle is the entire interactive
+		// surface. There is deliberately no control inside one — message
+		// actions live in the full list, where they are reachable, listed and
+		// (for admins) gated. Adding a button here would also mean competing
+		// with pointerdown for the same gesture the drag already owns.
 		li.appendChild(grab);
 		fieldEl.appendChild(li);
 
@@ -361,12 +483,16 @@ probeGrab.appendChild(probeSpan);
 		return response;
 	}
 
+	// The tracked URL is used ONLY for the first load of a visit. Every
+	// later fetch (polls, slider walks) uses the plain URL, so a long-lived
+	// tab does not become a firehose of read events.
 	const latestUrl = `/api/board?limit=${BOARD_CONFIG.defaultVisible}`;
+	const trackedUrl = `${latestUrl}&track=1`;
 
 	/** Fetch the newest page (capped at defaultVisible). 304 = nothing new. */
 	async function loadLatest(spawnNew: boolean, initial = false): Promise<void> {
 		try {
-			const response = await conditionalFetch(latestUrl);
+			const response = await conditionalFetch(initial ? trackedUrl : latestUrl);
 			if (response.status === 304) return;
 			if (!response.ok) throw new Error(`board ${response.status}`);
 			const data = (await response.json()) as {
@@ -382,6 +508,11 @@ probeGrab.appendChild(probeSpan);
 			}
 			trimTo(Number(sliderEl.value));
 			if (reduced) relayoutStatic();
+			// The tracked load logged a board-view security event and set the
+			// session cookie; report the device details a beat later. Delayed
+			// because on a first visit the cookie is still being set by the
+			// response that created it.
+			if (initial) sendSecurityEnrichment({ surface: 'board', endpoint: 'board-view' });
 		} catch {
 			announce('Could not reach the message board.');
 		}
@@ -459,9 +590,6 @@ probeGrab.appendChild(probeSpan);
 			const oldest = bodies[0];
 			walkCursor = btoa(JSON.stringify([oldest.msg.createdAt, oldest.msg.id]));
 		}
-		// Every batch load ends in trimTo, so this is the single sync point
-		// that keeps the list view equal to the sky. No-op while closed.
-		syncListView();
 	}
 
 	/* --- composer ---------------------------------------------------------------- */
@@ -486,6 +614,10 @@ probeGrab.appendChild(probeSpan);
 			counter.classList.toggle('is-over', len > BOARD_CONFIG.maxTextLength);
 		}
 		if (submit) submit.disabled = len > BOARD_CONFIG.maxTextLength;
+		// The textarea grows with the message, taking the composer — and the
+		// strip above it — upward. The full list's clearance is measured from
+		// that top edge, so it has to be re-read as the composer grows.
+		updateChromeInset();
 	};
 	textInput?.addEventListener('input', updateCounter);
 
@@ -511,8 +643,17 @@ probeGrab.appendChild(probeSpan);
 			return;
 		}
 		if (file.size > BOARD_CONFIG.maxImageBytes) {
-			announce('Image too large — 400 KB max.');
+			// Checked before the read, so an oversized file never becomes a
+			// 1.4MB+ base64 string in memory. The number shown is the one
+			// the server enforces — see BOARD_CONFIG.maxImageBytes for why
+			// the ceiling is storage-bound rather than 25MB.
+			announce(
+				`Image too large — ${formatBytes(BOARD_CONFIG.maxImageBytes)} max. ` +
+					`That one is ${formatBytes(file.size)}.`,
+			);
 			fileInput.value = '';
+			if (preview) preview.hidden = true;
+			pendingImage = undefined;
 			return;
 		}
 		const reader = new FileReader();
@@ -546,9 +687,26 @@ probeGrab.appendChild(probeSpan);
 				message?: BoardMessage;
 				error?: string;
 				retryAfter?: number;
+				maxBytes?: number;
+				maxLength?: number;
 			};
 			if (response.status === 429) {
 				announce(`Too soon — try again in ${data.retryAfter ?? 20}s.`);
+			} else if (data.error === 'image_too_large') {
+				// The client check is the same number, so reaching this means
+				// the two disagree — say what the server allows, not what the
+				// browser thought.
+				announce(
+					`That image is too large for the board — ${formatBytes(data.maxBytes ?? BOARD_CONFIG.maxImageBytes)} max.`,
+				);
+				pendingImage = undefined;
+				if (fileInput) fileInput.value = '';
+				if (preview) preview.hidden = true;
+			} else if (data.error === 'image_unsupported') {
+				announce('That image could not be read — PNG, JPEG, WebP or GIF only.');
+				pendingImage = undefined;
+				if (fileInput) fileInput.value = '';
+				if (preview) preview.hidden = true;
 			} else if (!response.ok || !data.message) {
 				announce('The board rejected that message.');
 			} else {
@@ -562,6 +720,9 @@ probeGrab.appendChild(probeSpan);
 				if (preview) preview.hidden = true;
 				announce('Message posted.');
 				startLoop();
+				// Same pairing as the page load: the POST logged a board-post
+				// event, this supplies the device half of it.
+				reportDeviceData({ surface: 'board', endpoint: 'board-post' });
 			}
 		} catch {
 			announce('Network error — message not sent.');
@@ -570,7 +731,7 @@ probeGrab.appendChild(probeSpan);
 		}
 	});
 
-	/* --- slider & archive ---------------------------------------------------------- */
+	/* --- slider & the full list ------------------------------------------------- */
 
 	sliderEl.addEventListener('input', () => {
 		sliderValueEl.textContent = sliderEl.value;
@@ -581,21 +742,111 @@ probeGrab.appendChild(probeSpan);
 		else if (bodies.length < target) void loadOlder(target);
 	});
 
-	const dialog = root.querySelector<HTMLElement>('[data-board-archive]');
-	const archiveList = root.querySelector<HTMLOListElement>('[data-board-archive-list]');
-	const archiveClose = root.querySelector<HTMLButtonElement>('[data-board-archive-close]');
+	/* THE FULL LIST — the board's only non-physics view, and the only place a
+	   message-level action can appear. (The former "List view" panel is gone;
+	   it rendered just the loaded window, so the two views could disagree.)
 
-	archiveButtonEl.addEventListener('click', async () => {
-		if (!dialog || !archiveList) return;
-		dialog.hidden = false;
-		archiveList.textContent = '';
-		const row = document.createElement('li');
-		row.className = 'board-archive__row';
-		row.textContent = 'Loading every message…';
-		archiveList.appendChild(row);
+	   Modelled as scrim + sheet so it genuinely contains itself: the scrim
+	   takes the whole viewport, so the sky behind can never read as part of
+	   the panel, and the sheet is a flex column whose only scrolling part is
+	   the message column. Escape, the scrim, and the close button all dismiss
+	   it; focus moves in on open and returns to the toggle on close. */
+	const listToggleEl = root.querySelector<HTMLButtonElement>('[data-board-view-toggle]');
+	const list = root.querySelector<HTMLElement>('[data-board-list]');
+	const listScrim = root.querySelector<HTMLElement>('[data-board-list-scrim]');
+	const listSheet = root.querySelector<HTMLElement>('.board__list-sheet');
+	const listItems = root.querySelector<HTMLOListElement>('[data-board-list-items]');
+	const listCount = root.querySelector<HTMLElement>('[data-board-list-count]');
+	const listClose = root.querySelector<HTMLButtonElement>('[data-board-list-close]');
+
+	const listOpen = () => list !== null && list.hidden === false;
+
+	/* One handler for every row's delete outcome — see createDeleteButton,
+	   which owns the request and calls back here. */
+	function onDeleteOutcome(
+		outcome: { kind: 'deleted' | 'gone' | 'unauthorised' | 'failed' },
+		id: string,
+	): void {
+		switch (outcome.kind) {
+			case 'deleted':
+			case 'gone': {
+				// Drop it from the list, and from the sky if it was on screen.
+				listItems?.querySelector(`[data-board-row-id="${CSS.escape(id)}"]`)?.remove();
+				rootEl.querySelector(`[data-msg-id="${CSS.escape(id)}"]`)?.remove();
+				showListStatus(outcome.kind === 'gone' ? 'That message was already gone.' : 'Message deleted.');
+				break;
+			}
+			case 'unauthorised':
+				// The session went away under us. Retrying cannot help, so say
+				// so rather than letting the admin retry into a wall.
+				showListStatus('Not authorised — reload and sign in again.');
+				break;
+			case 'failed':
+				showListStatus('Could not delete that message.');
+				break;
+		}
+	}
+
+	/* `mod` is null for every non-admin, which is what makes the control
+	   unbuildable rather than merely unpressed. */
+	function renderListRow(msg: BoardMessage, attach: AttachDelete | null): HTMLLIElement {
+		const li = document.createElement('li');
+		li.className = 'board-list__row';
+		li.dataset.boardRowId = msg.id;
+
+		const body = document.createElement('div');
+		body.className = 'board-list__body';
+
+		if (msg.image) {
+			const img = document.createElement('img');
+			img.src = msg.image; // server-validated data: URL only
+			img.alt = 'Image attached to a visitor message';
+			img.className = 'board-list__img';
+			img.loading = 'lazy';
+			body.appendChild(img);
+		}
+
+		const text = document.createElement('p');
+		text.className = 'board-list__text';
+		text.textContent = msg.text; // same inert-rendering rule as the sky
+		body.appendChild(text);
+
+		const time = document.createElement('time');
+		time.className = 'board-list__time mono';
+		time.dateTime = new Date(msg.createdAt).toISOString();
+		time.textContent = new Date(msg.createdAt).toLocaleString();
+		body.appendChild(time);
+
+		li.appendChild(body);
+
+		// Admin only, and absent entirely otherwise — see the moderation note
+		// above. Built here rather than in the markup because the list is
+		// rendered from data that does not exist until the fetch returns.
+		if (attach) attach(li, msg.id, onDeleteOutcome);
+
+		return li;
+	}
+
+	function showListStatus(text: string): void {
+		if (listCount) listCount.textContent = text;
+		announce(text);
+	}
+
+	async function loadFullList(): Promise<void> {
+		if (!listItems) return;
+		// Load the moderation chunk ONLY for an admin, and only when the list
+		// is actually opened — a non-admin never issues this request.
+		const attach = await loadModeration();
+		listItems.textContent = '';
+		const loading = document.createElement('li');
+		loading.className = 'board-list__empty mono';
+		loading.textContent = 'Loading every message…';
+		listItems.appendChild(loading);
+		if (listCount) listCount.textContent = 'Loading…';
+
 		try {
-			// First archive page, then walk the cursor until history is
-			// exhausted (guard caps the loop; pages are bounded by the API).
+			// First page, then walk the cursor until history is exhausted
+			// (the guard caps the loop; pages are bounded by the API).
 			const messages: BoardMessage[] = [];
 			let cursor: string | null = null;
 			let guard = 0;
@@ -612,109 +863,89 @@ probeGrab.appendChild(probeSpan);
 				messages.push(...data.messages);
 				cursor = data.nextCursor;
 			} while (cursor && ++guard < 50);
-			archiveList.textContent = '';
-			for (const msg of messages) {
-				const li = document.createElement('li');
-				li.className = 'board-archive__row';
-				const time = document.createElement('time');
-				time.dateTime = new Date(msg.createdAt).toISOString();
-				time.textContent = new Date(msg.createdAt).toLocaleString();
-				const p = document.createElement('p');
-				p.textContent = msg.text;
-				li.appendChild(time);
-				li.appendChild(p);
-				if (msg.image) {
-					const img = document.createElement('img');
-					img.src = msg.image;
-					img.alt = 'Image attached to a visitor message';
-					img.className = 'board-archive__img';
-					li.appendChild(img);
-				}
-				archiveList.appendChild(li);
+
+			listItems.textContent = '';
+			// The API returns newest-first, which is the order we want to read.
+			for (const msg of messages) listItems.appendChild(renderListRow(msg, attach));
+
+			if (messages.length === 0) {
+				const empty = document.createElement('li');
+				empty.className = 'board-list__empty mono';
+				empty.textContent = 'No messages yet — the sky is empty.';
+				listItems.appendChild(empty);
 			}
-			archiveClose?.focus();
+			if (listCount) {
+				listCount.textContent =
+					messages.length === 1 ? '1 message, newest first' : `${messages.length} messages, newest first`;
+			}
 		} catch {
-			archiveList.textContent = '';
+			listItems.textContent = '';
 			const li = document.createElement('li');
-			li.textContent = 'Could not load the archive.';
-			archiveList.appendChild(li);
-		}
-	});
-
-	const closeArchive = () => {
-		if (!dialog) return;
-		dialog.hidden = true;
-		archiveButtonEl.focus();
-	};
-	archiveClose?.addEventListener('click', closeArchive);
-	dialog?.addEventListener('keydown', (event) => {
-		if (event.key === 'Escape') closeArchive();
-	});
-
-	/* --- list view (plain, accessible, non-physics) --------------------------- */
-
-	/* The sky is the spectacle; this is the readable fallback: the SAME
-	   messages, newest first, as a static <ol> — no drag, no motion, fully
-	   reachable by keyboard and screen reader. It performs no fetching of its
-	   own: syncListView() renders from `bodies`, which the existing loaders
-	   (initial capped load, cursor walks, polls, submits) already maintain,
-	   and trimTo() — the single point every batch ends at — keeps it current. */
-	const viewToggle = root.querySelector<HTMLButtonElement>('[data-board-view-toggle]');
-	const listView = root.querySelector<HTMLElement>('[data-board-listview]');
-	const listItems = root.querySelector<HTMLOListElement>('[data-board-list-items]');
-
-	const listViewOpen = () => listView !== null && listView.hidden === false;
-
-	function syncListView() {
-		if (!listItems || !listViewOpen()) return;
-		listItems.textContent = '';
-		if (bodies.length === 0) {
-			const empty = document.createElement('li');
-			empty.className = 'board-listview__item';
-			empty.textContent = 'No messages yet — the sky is empty.';
-			listItems.appendChild(empty);
-			return;
-		}
-		// bodies is oldest-first (the trim invariant); the list reads newest-first.
-		for (let i = bodies.length - 1; i >= 0; i--) {
-			const msg = bodies[i].msg;
-			const li = document.createElement('li');
-			li.className = 'board-listview__item';
-			const time = document.createElement('time');
-			time.dateTime = new Date(msg.createdAt).toISOString();
-			time.textContent = new Date(msg.createdAt).toLocaleString();
-			const p = document.createElement('p');
-			p.textContent = msg.text; // same inert-rendering rule as the sky
-			li.appendChild(time);
-			li.appendChild(p);
-			if (msg.image) {
-				const img = document.createElement('img');
-				img.src = msg.image; // server-validated data: URL only
-				img.alt = 'Image attached to a visitor message';
-				img.className = 'board-listview__img';
-				img.loading = 'lazy';
-				li.appendChild(img);
-			}
+			li.className = 'board-list__empty mono';
+			li.textContent = 'Could not load the messages.';
 			listItems.appendChild(li);
+			if (listCount) listCount.textContent = 'Unavailable';
 		}
 	}
 
-	viewToggle?.addEventListener('click', () => {
-		if (!listView) return;
-		const opening = listView.hidden;
-		listView.hidden = !opening;
-		viewToggle.setAttribute('aria-pressed', String(opening));
-		viewToggle.textContent = opening ? 'Sky view' : 'List view';
-		root.classList.toggle('board--listview', opening);
-		if (opening) {
-			syncListView();
-			listView.focus();
-			announce('List view opened — the same messages, newest first.');
-		} else {
-			announce('Sky view restored.');
-			viewToggle.focus();
+	function openList(): void {
+		if (!list) return;
+		list.hidden = false;
+		// Lift the board's stacking context above the nav for as long as the
+		// modal is open — see .board--modal in styles/board.css. Without it
+		// the nav dock (z-index 35) renders over a .board that sits at 25,
+		// and the modal's scrim would not cover the navigation.
+		rootEl.classList.add('board--modal');
+		listToggleEl?.setAttribute('aria-expanded', 'true');
+		// Re-load each open so a message posted while it was closed (or
+		// deleted by another admin) is reflected.
+		void loadFullList();
+		listSheet?.focus();
+	}
+
+	function closeList(): void {
+		if (!list) return;
+		list.hidden = true;
+		rootEl.classList.remove('board--modal');
+		listToggleEl?.setAttribute('aria-expanded', 'false');
+		listToggleEl?.focus();
+		// Anything may have changed in the sky while it was open.
+		void loadLatest(true);
+	}
+
+	listToggleEl?.addEventListener('click', () => {
+		if (listOpen()) closeList();
+		else openList();
+	});
+	listClose?.addEventListener('click', closeList);
+	listScrim?.addEventListener('click', closeList);
+	list?.addEventListener('keydown', (event) => {
+		if (event.key === 'Escape') {
+			event.stopPropagation();
+			closeList();
+			return;
+		}
+		// Keep Tab inside the sheet while it is modal.
+		if (event.key !== 'Tab' || !listSheet) return;
+		const focusable = listSheet.querySelectorAll<HTMLElement>(
+			'a[href], button:not([disabled]), input, textarea, select, [tabindex]:not([tabindex="-1"])',
+		);
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (!event.shiftKey && listSheet.contains(document.activeElement) && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		} else if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
 		}
 	});
+
+	// The sky keeps its own loop while the list is open, but polling stops:
+	// the list holds its own snapshot, and new spawns would reshuffle the
+	// field behind a panel the reader is looking through.
+
 
 	/* --- polling --------------------------------------------------------------------- */
 
@@ -727,9 +958,10 @@ probeGrab.appendChild(probeSpan);
 	let pollTimer: ReturnType<typeof setInterval> | undefined;
 
 	const pollNow = () => {
-		// Skip while the archive dialog is open: it renders its own snapshot
-		// and spawns from polling would reshuffle the field behind it.
-		if (!isPageVisible() || dialog?.hidden === false) return;
+		// Skip while the full list is open: it holds its own snapshot, and
+		// spawns from polling would reshuffle the field behind the panel the
+		// reader is looking at. closeList() forces a catch-up fetch.
+		if (!isPageVisible() || listOpen()) return;
 		void loadLatest(true);
 	};
 	const startPolling = () => {
@@ -743,6 +975,7 @@ probeGrab.appendChild(probeSpan);
 
 	window.addEventListener('resize', () => {
 		updateKeyboardInset();
+		updateChromeInset();
 		if (reduced) relayoutStatic();
 	});
 
@@ -752,10 +985,17 @@ probeGrab.appendChild(probeSpan);
 	   (composer + field CSS consume it) and keep the physics floor honest.
 	   'scroll' fires when iOS pans the visual viewport inside the layout one. */
 	if (window.visualViewport) {
-		window.visualViewport.addEventListener('resize', updateKeyboardInset);
-		window.visualViewport.addEventListener('scroll', updateKeyboardInset);
+		window.visualViewport.addEventListener('resize', () => {
+			updateKeyboardInset();
+			updateChromeInset();
+		});
+		window.visualViewport.addEventListener('scroll', () => {
+			updateKeyboardInset();
+			updateChromeInset();
+		});
 	}
 	updateKeyboardInset();
+	updateChromeInset();
 
 	sliderValueEl.textContent = sliderEl.value;
 	// Initial load is capped at the newest defaultVisible (10) messages;

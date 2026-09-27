@@ -41,12 +41,34 @@ export type RateLimitResult = {
 
 let warnedMissingKv = false;
 
+/**
+ * Count one hit against a window and report whether the caller is allowed.
+ *
+ * `consume: false` is a read-only "peek": it answers "is this caller already
+ * over budget?" without spending any of the budget. Use it to throttle
+ * FAILURES only —
+ *
+ *   const gate = await rateLimit(kv, key, window, max);
+ *   if (!gate.allowed) return tooManyRequests();
+ *   if (!await checkPassword(...)) {
+ *       await rateLimit(kv, key, window, max); // this one costs
+ *       return unauthorized();
+ *   }
+ *   return ok();
+ *
+ * A limiter that also charges successful attempts punishes the legitimate
+ * user: ten correct logins in a window would lock the owner out of their own
+ * site, and the "fix" would be to raise the limit, which weakens the throttle
+ * against the thing it exists for.
+ */
 export async function rateLimit(
 	kv: KvRateLimitStore | undefined,
 	key: string,
 	windowMs: number,
 	maxHits: number,
+	options: { consume?: boolean } = {},
 ): Promise<RateLimitResult> {
+	const consume = options.consume !== false;
 	if (!kv || typeof kv.get !== 'function') {
 		if (!warnedMissingKv) {
 			warnedMissingKv = true;
@@ -76,6 +98,8 @@ export async function rateLimit(
 	}
 
 	if (count >= maxHits) return { allowed: false, retryAfter };
+
+	if (!consume) return { allowed: true, retryAfter: 0 };
 
 	try {
 		await kv.put(kvKey, String(count + 1), { expirationTtl: ttlSeconds });

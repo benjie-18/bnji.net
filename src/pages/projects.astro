@@ -40,13 +40,20 @@ const description = `Projects by ${SITE.author.name} — software, local AI infr
 						feature
 						span={index === 0 ? 12 : 6}
 						revealDelay={index * 90}
+						headingLevel="h2"
 					/>
 				))
 			}
 
 			{
 				rest.map((project, index) => (
-					<ProjectCard project={project} index={featured.length + index} span={6} revealDelay={index * 70} />
+					<ProjectCard
+						project={project}
+						index={featured.length + index}
+						span={6}
+						revealDelay={index * 70}
+						headingLevel="h2"
+					/>
 				))
 			}
 		</div>

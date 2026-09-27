@@ -1,0 +1,192 @@
+---
+/**
+ * /admin/login — credential exchange for the admin surface.
+ *
+ * Excluded from the '/admin' access rule (see the `exclude` list in
+ * access.config.ts) because it is the one admin path a visitor must be able
+ * to REACH before holding the credential. Everything else under /admin and
+ * /api/admin stays gated.
+ *
+ * The form posts the token to /api/admin/session, which verifies it in
+ * constant time and answers with a signed, HttpOnly, SameSite=Strict session
+ * cookie. The token itself is held in a module-scoped variable for the
+ * lifetime of the page and sent as a Bearer header on the dashboard's own
+ * API calls; it is never written to localStorage, sessionStorage or the DOM.
+ */
+import Layout from '../../layouts/Layout.astro';
+import { adminConfigured } from '../../server/admin';
+
+export const prerender = false;
+
+// Rendered server-side so the operator sees a real explanation instead of a
+// login form that can never work. `adminConfigured()` asks only whether a
+// credential row exists in D1 — it never reads or reveals a token.
+const configured = await adminConfigured();
+---
+
+<Layout
+	title="Admin sign in"
+	description="Sign in to the BNJI.NET admin dashboard."
+	noindex={true}
+>
+	<main class="admin-login" id="main">
+		<div class="admin-login__card">
+			<p class="admin-login__eyebrow mono">BNJI.NET</p>
+			<h1 class="admin-login__title">Admin</h1>
+
+			{
+				!configured ? (
+					<p class="admin-login__notice is-error" role="alert">
+						The admin surface is not configured. Apply{' '}
+						<code>migrations/0005_admin_credentials.sql</code> to <code>BOARD_DB</code>{' '}
+						so the credential row exists, and set <code>ACCESS_SECRET</code> so a session
+						can be signed. Until then every admin request is denied — the guard fails
+						closed, not open.
+					</p>
+				) : (
+					<form class="admin-login__form" data-admin-login novalidate>
+						<label class="admin-login__label" for="admin-token">Access token</label>
+						<input
+							class="admin-login__input"
+							id="admin-token"
+							name="token"
+							type="password"
+							autocomplete="current-password"
+							spellcheck={false}
+							required
+							data-admin-token
+						/>
+						<button class="admin-login__submit" type="submit" data-admin-submit>
+							Sign in
+						</button>
+						<p
+							class="admin-login__notice"
+							role="status"
+							aria-live="polite"
+							data-admin-login-status
+							hidden
+						/>
+					</form>
+				)
+			}
+
+			<p class="admin-login__hint">
+				The token is exchanged for an 8-hour session cookie. It is never stored in
+				the browser and never sent anywhere except this site.
+			</p>
+		</div>
+	</main>
+</Layout>
+
+<script>
+	import { startAdminLogin } from '../../scripts/admin';
+
+	startAdminLogin();
+</script>
+
+<style>
+	.admin-login {
+		min-block-size: 100dvh;
+		display: grid;
+		place-items: center;
+		padding: 2rem 1.25rem;
+	}
+
+	.admin-login__card {
+		inline-size: min(100%, 26rem);
+		padding: 2rem 1.75rem;
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		backdrop-filter: blur(18px);
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.admin-login__eyebrow {
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		color: var(--text-faint);
+		margin: 0;
+	}
+
+	.admin-login__title {
+		font-family: var(--font-display);
+		font-size: 1.6rem;
+		color: var(--text-strong);
+		margin: 0;
+	}
+
+	.admin-login__form {
+		display: grid;
+		gap: 0.6rem;
+		margin-block-start: 0.35rem;
+	}
+
+	.admin-login__label {
+		font-size: var(--text-micro);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--text-dim);
+	}
+
+	.admin-login__input {
+		font-family: var(--font-mono);
+		font-size: 0.95rem;
+		padding: 0.65rem 0.8rem;
+		color: var(--text);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-md);
+	}
+
+	.admin-login__input:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 1px;
+	}
+
+	.admin-login__submit {
+		padding: 0.65rem 1rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--accent-line);
+		background: var(--accent-soft);
+		color: var(--text-strong);
+		font-family: var(--font-mono);
+		font-size: var(--text-small);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: background-color var(--dur-fast) var(--ease-out);
+	}
+
+	.admin-login__submit:hover:not(:disabled) {
+		background: var(--glass-bg);
+	}
+
+	.admin-login__submit:disabled {
+		opacity: 0.6;
+		cursor: default;
+	}
+
+	.admin-login__notice {
+		margin: 0;
+		font-size: var(--text-small);
+		color: var(--text-dim);
+	}
+
+	.admin-login__notice.is-error {
+		color: var(--danger);
+	}
+
+	.admin-login__notice code {
+		font-family: var(--font-mono);
+		font-size: 0.85em;
+	}
+
+	.admin-login__hint {
+		margin: 0;
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+		line-height: 1.5;
+	}
+</style>
