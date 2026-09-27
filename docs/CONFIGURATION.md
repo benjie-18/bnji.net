@@ -73,7 +73,7 @@ irrelevant here.
 | `BOARD_CONFIG.provider` | PUBLIC | `src/config/board.config.ts` | `'d1' \| 'rest'` preference. **No in-memory production fallback**: an unconfigured store returns an honest `503 storage_unconfigured` instead of silently losing messages. |
 | `maxTextLength: 250` | PUBLIC | same | Enforced server-side in `/api/board` with **422 `text_too_long`** — long posts are rejected, never truncated. |
 | other limits (`maxImageBytes`, `allowedImageTypes`, `postCooldownSeconds`, `hourlyPostLimit`, `pollIntervalMs`, visible-count range) | PUBLIC | same | Abuse/size policy; the server re-validates everything. |
-| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | One-time setup: `npx wrangler d1 create bnji-board`, paste the printed `database_id` into `wrangler.json` (the committed placeholder is a nil UUID so `wrangler dev` works locally but a deploy fails loudly until replaced), then `npx wrangler d1 migrations apply BOARD_DB --remote`. Local dev: `--local` instead. Schema: the six files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
+| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | One-time setup: `npx wrangler d1 create bnji-board`, paste the printed `database_id` into `wrangler.json` (the committed placeholder is a nil UUID so `wrangler dev` works locally but a deploy fails loudly until replaced), then `npx wrangler d1 migrations apply bnji-board --remote`. Local dev: `npx wrangler d1 migrations apply bnji-board --local` instead. Schema: the seven files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
 | `BOARD_KV` KV binding | **INFRA** | `wrangler.json` | Shared rate limiting (see below). `npx wrangler kv namespace create BOARD_KV`, paste the id (same placeholder rule). |
 | `BOARD_REST_URL`, `BOARD_REST_TOKEN` | **SECRET** | Worker env | Optional external JSON API provider (`provider: 'rest'`). |
 
@@ -87,7 +87,7 @@ exact but adds deployment infra for no practical gain here. If KV is missing
 entirely, rate limiting **fails open** with a console warning — it is an abuse
 throttle, not authentication.
 
-### 5.1 D1 schema — six migrations, one database
+### 5.1 D1 schema — seven migrations, one database
 
 There is **one** D1 database (`bnji-board`, bound twice: see the note below). The
 migrations are cumulative and tracked by D1 in its own `d1_migrations` table, so
@@ -102,6 +102,7 @@ and is the normal way to move an existing database forward.
 | 0004 | `board_moderation.sql` | 4 columns on `board_messages` (`report_count`, `reported_at`, `status_note`, `moderated_at`), `board_reports`, 2 indexes. Makes the `status` column reachable from a real report flow. |
 | 0005 | `admin_credentials.sql` | `admin_credentials` (one row, `id = 1` enforced by CHECK). Holds `hex(sha256(token))` — the hashed admin token, rotated from the panel. |
 | 0006 | `board_paint.sql` | One versioned shared canvas snapshot plus a bounded set of recent publish IDs for safe retries. Independent of `board_messages`. |
+| 0007 | `paint_stickers_activity.sql` | Editable bounded sticker state plus a private Paint publish-summary trail (60-day retention, 5,000-row cap). |
 
 ⚠️ 0004 uses `ALTER TABLE … ADD COLUMN`, so it must run after 0001. The filename
 order D1 applies them in guarantees this — do not run the files by hand or
@@ -110,12 +111,13 @@ rename them.
 ⚠️ 0005 **seeds the admin credential with the token from the build request**,
 which is published. Run it, then rotate on first login (see below).
 
-The shared Paint snapshot (0006) currently uses the D1 `BOARD_DB` binding and
-is enabled only when `BOARD_CONFIG.provider` is `d1`. With the board's `rest`
-provider, Paint is visibly unavailable and its API returns
-`503 paint_requires_d1_board`; the external REST contract is not assumed to
-support canvas storage. See [`DATA.md`](./DATA.md) §10 for synchronization and
-storage bounds.
+The shared Paint state (0006/0007) uses the existing D1 `BOARD_DB` binding and
+is enabled only when `BOARD_CONFIG.provider` is `d1`. Migration 0007 adds
+bounded editable stickers and an admin-only publish-summary trail; it adds no
+binding or deployment infrastructure. With the board's `rest` provider, Paint
+remains visibly unavailable and its API returns `503 paint_requires_d1_board`;
+the external REST contract is not assumed to support canvas storage. See
+[`DATA.md`](./DATA.md) §10 for synchronization, audit privacy and size bounds.
 
 ### 5.2 `BOARD_DB` is bound twice — one of the two is a problem
 

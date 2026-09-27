@@ -63,15 +63,69 @@
 	background: var(--glass-bg-quiet);
 }
 
-.board-paint__tool[aria-pressed='true'] {
-	border-color: var(--accent-line);
-	background: var(--accent-soft);
-	color: var(--text-strong);
+.board-paint__tools {
+	position: relative;
+	isolation: isolate;
 }
 
-html[data-theme='light'] .board-paint__tool[aria-pressed='true'] {
-	border-color: var(--accent-strong);
-	background: var(--accent);
+.board-paint__tool {
+	position: relative;
+	z-index: 1;
+}
+
+.board-paint__tool-indicator {
+	--tool-lead: var(--dur-base);
+	--tool-trail: var(--dur-slow);
+	--tool-ease: var(--ease-spring);
+	position: absolute;
+	z-index: 0;
+	inset: var(--tool-t, var(--space-2)) var(--tool-r, 100%) var(--tool-b, var(--space-2)) var(--tool-l, var(--space-2));
+	border: var(--paint-border-width) solid var(--accent-line);
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-raised);
+	box-shadow: 0 0 18px -6px var(--accent-soft), inset 0 1px 1px var(--glass-fresnel-top);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.board-paint__tool-indicator[data-ready] {
+	opacity: 1;
+}
+
+.board-paint__tool-indicator[data-direction='forward'] {
+	transition:
+		right var(--tool-lead) var(--ease-out),
+		left var(--tool-trail) var(--tool-ease),
+		top var(--tool-lead) var(--ease-out),
+		bottom var(--tool-lead) var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+
+.board-paint__tool-indicator[data-direction='back'] {
+	transition:
+		left var(--tool-lead) var(--ease-out),
+		right var(--tool-trail) var(--tool-ease),
+		top var(--tool-lead) var(--ease-out),
+		bottom var(--tool-lead) var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+
+.board-paint__tool-indicator[data-instant] {
+	transition: none;
+}
+
+html[data-performance-mode='on'] .board-paint__tool-indicator {
+	--tool-trail: var(--dur-base);
+	--tool-ease: var(--ease-out);
+}
+
+html[data-reduced-effects='on'] .board-paint__tool-indicator {
+	transition: none;
+}
+
+.board-paint__tool[aria-pressed='true'] {
+	border-color: transparent;
+	background: transparent;
 	color: var(--text-strong);
 }
 
@@ -138,10 +192,17 @@ html[data-theme='light'] .board-paint__tool[aria-pressed='true'] {
 	outline-offset: var(--space-1);
 }
 
-.board-paint__instructions {
+.board-paint__instructions,
+.board-paint__privacy-note {
 	margin: 0;
 	color: var(--text-muted);
 	font-size: var(--text-small);
+	line-height: var(--paint-line-height);
+}
+
+.board-paint__privacy-note {
+	padding-inline-start: var(--space-3);
+	border-inline-start: var(--paint-outline-width) solid var(--accent-line);
 }
 
 .board-paint__surface {
@@ -157,14 +218,21 @@ html[data-theme='light'] .board-paint__tool[aria-pressed='true'] {
 	touch-action: none;
 }
 
-.board-paint__surface:fullscreen {
+.board-paint:fullscreen {
 	inline-size: 100%;
 	block-size: 100%;
 	max-block-size: 100%;
-	aspect-ratio: auto;
-	border: 0;
+	margin: 0;
+	padding: var(--space-4);
 	border-radius: 0;
-	background: var(--paint-canvas-paper);
+	box-sizing: border-box;
+	align-content: start;
+	overflow: auto;
+}
+
+.board-paint:fullscreen .board-paint__surface {
+	inline-size: min(100%, var(--content-width), var(--paint-canvas-max-inline));
+	max-block-size: 70dvh;
 }
 
 .board-paint__layer {
@@ -176,13 +244,18 @@ html[data-theme='light'] .board-paint__tool[aria-pressed='true'] {
 }
 
 .board-paint__base,
-.board-paint__local {
+.board-paint__local,
+.board-paint__stickers {
 	pointer-events: none;
 }
 
 .board-paint__input {
 	cursor: crosshair;
 	touch-action: none;
+}
+
+.board-paint[data-active-paint-tool='sticker'] .board-paint__input {
+	cursor: grab;
 }
 
 .board-paint__status {
@@ -201,6 +274,7 @@ html[data-theme='light'] .board-paint__tool[aria-pressed='true'] {
 .board-paint[data-paint-enabled='false'] .board-paint__actions,
 .board-paint[data-paint-enabled='false'] .board-paint__toolbar,
 .board-paint[data-paint-enabled='false'] .board-paint__instructions,
+.board-paint[data-paint-enabled='false'] .board-paint__privacy-note,
 .board-paint[data-paint-enabled='false'] .board-paint__surface,
 .board-paint[data-paint-enabled='false'] .board-paint__status {
 	display: none;
@@ -222,7 +296,8 @@ html[data-theme='light'] .board-paint__tool[aria-pressed='true'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.board-paint__tool {
+	.board-paint__tool,
+	.board-paint__tool-indicator {
 		transition: none;
 	}
 }

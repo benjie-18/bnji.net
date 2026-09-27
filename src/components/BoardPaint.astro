@@ -13,6 +13,7 @@ import { PAINT_CONFIG } from '../config/paint.config';
 
 <section
 	class="board-paint"
+	id="board-paint-workspace"
 	data-glass="raised"
 	data-board-paint
 	data-paint-enabled={BOARD_CONFIG.provider === 'd1' ? 'true' : 'false'}
@@ -31,7 +32,7 @@ import { PAINT_CONFIG } from '../config/paint.config';
 		<div class="board-paint__actions">
 			<button class="glass-button glass-button--sm" type="button" data-paint-undo disabled>Undo</button>
 			<button class="glass-button glass-button--sm" type="button" data-paint-export>Export PNG</button>
-			<button class="glass-button glass-button--sm" type="button" data-paint-fullscreen aria-pressed="false">
+			<button class="glass-button glass-button--sm" type="button" data-paint-fullscreen aria-pressed="false" aria-controls="board-paint-workspace">
 				Fullscreen
 			</button>
 			<button class="glass-button glass-button--primary" type="button" data-paint-sync>
@@ -41,12 +42,16 @@ import { PAINT_CONFIG } from '../config/paint.config';
 	</header>
 
 	<div class="board-paint__toolbar">
-		<div class="board-paint__tools" role="group" aria-label="Paint tools">
+		<div class="board-paint__tools" role="group" aria-label="Paint tools" data-paint-tools>
+			<span class="board-paint__tool-indicator" data-paint-tool-indicator aria-hidden="true"></span>
 			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="pen" aria-pressed="true">Pen</button>
 			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="eraser" aria-pressed="false">Eraser</button>
 			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="line" aria-pressed="false">Line</button>
 			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="rectangle" aria-pressed="false">Rectangle</button>
 			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="ellipse" aria-pressed="false">Ellipse</button>
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="spray" aria-pressed="false">Spray</button>
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="glow" aria-pressed="false">Glow</button>
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="sticker" aria-pressed="false">Sticker</button>
 			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="text" aria-pressed="false">Text</button>
 		</div>
 
@@ -65,6 +70,8 @@ import { PAINT_CONFIG } from '../config/paint.config';
 					))
 				}
 			</div>
+			<button class="glass-button glass-button--sm" type="button" data-paint-sticker-upload>Choose sticker image</button>
+			<input class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-paint-sticker-file />
 
 			<label class="board-paint__size" for="board-paint-size">
 				<span>Size</span>
@@ -82,6 +89,9 @@ import { PAINT_CONFIG } from '../config/paint.config';
 	<p class="board-paint__instructions" id="paint-instructions">
 		Choose a tool, then draw with a mouse, pen or touch. Undo removes your latest unsynced mark.
 	</p>
+	<p class="board-paint__privacy-note">
+		Edits stay local until you publish with Sync &amp; refresh. The admin activity log records only published summaries, not pointer paths or sticker images.
+	</p>
 
 	<div class="board-paint__surface" data-paint-surface>
 		<canvas
@@ -97,6 +107,13 @@ import { PAINT_CONFIG } from '../config/paint.config';
 			height={PAINT_CONFIG.height}
 			aria-hidden="true"
 			data-paint-local
+		/>
+		<canvas
+			class="board-paint__layer board-paint__stickers"
+			width={PAINT_CONFIG.width}
+			height={PAINT_CONFIG.height}
+			aria-hidden="true"
+			data-paint-stickers
 		/>
 		<canvas
 			class="board-paint__layer board-paint__input"

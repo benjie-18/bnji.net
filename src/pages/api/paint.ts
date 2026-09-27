@@ -29,12 +29,19 @@ type PaintD1 = {
 	batch(statements: PaintStatement[]): Promise<{ meta?: { changes?: number } }[]>;
 };
 
+type PaintSticker = { id: string; image: string; x: number; y: number; width: number; height: number };
 type PaintState = {
 	revision: number;
 	image: string | null;
+	stickers_json?: string | null;
 	updated_at: number;
 	last_request_id?: string | null;
 };
+
+type PaintActions = Record<string, number>;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ACTION_TYPES = ['pen', 'eraser', 'line', 'rectangle', 'ellipse', 'text', 'spray', 'glow', 'sticker-add', 'sticker-move', 'sticker-remove', 'draw'];
+const PAINT_SESSION_COOKIE = 'bnji_paint_session';
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
 	return new Response(JSON.stringify(data), {
@@ -56,8 +63,85 @@ function database(env: Record<string, unknown>): PaintD1 | null {
 
 async function currentState(db: PaintD1): Promise<PaintState | null> {
 	return db
-		.prepare('SELECT revision, image, updated_at, last_request_id FROM board_paint_state WHERE id = 1')
+		.prepare('SELECT revision, image, stickers_json, updated_at, last_request_id FROM board_paint_state WHERE id = 1')
 		.first<PaintState>();
+}
+
+function stickersFor(state: PaintState): PaintSticker[] {
+	try {
+		const value: unknown = JSON.parse(state.stickers_json ?? '[]');
+		return Array.isArray(value) ? value as PaintSticker[] : [];
+	} catch {
+		return [];
+	}
+}
+
+function paintSession(request: Request): { id: string; setCookie?: string } {
+	const cookies = request.headers.get('cookie')?.split(';') ?? [];
+	const value = cookies.map((cookie) => cookie.trim()).find((cookie) => cookie.startsWith(`${PAINT_SESSION_COOKIE}=`))?.slice(PAINT_SESSION_COOKIE.length + 1);
+	if (value && UUID_PATTERN.test(value)) return { id: value };
+	const id = crypto.randomUUID();
+	return { id, setCookie: `${PAINT_SESSION_COOKIE}=${id}; Path=/api/paint; Secure; HttpOnly; SameSite=Strict` };
+}
+
+function validateActions(value: unknown): PaintActions | null {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+	const actions: PaintActions = {};
+	let total = 0;
+	for (const [type, count] of Object.entries(value)) {
+		if (!ACTION_TYPES.includes(type) || !Number.isSafeInteger(count) || Number(count) < 0) return null;
+		total += Number(count);
+		if (total > PAINT_CONFIG.maxActionsPerPublish) return null;
+		if (Number(count) > 0) actions[type] = Number(count);
+	}
+	return total > 0 ? actions : null;
+}
+
+function validateStickers(value: unknown): value is PaintSticker[] {
+	if (!Array.isArray(value) || value.length > PAINT_CONFIG.maxStickerCount) return false;
+	const ids = new Set<string>();
+	let payloadChars = 2;
+	for (const item of value) {
+		if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+		const sticker = item as Partial<PaintSticker>;
+		if (
+			typeof sticker.id !== 'string' || !UUID_PATTERN.test(sticker.id) || ids.has(sticker.id) ||
+			typeof sticker.image !== 'string' || sticker.image.length > PAINT_CONFIG.maxStickerImageChars ||
+			!Number.isInteger(sticker.width) || !Number.isInteger(sticker.height) ||
+			Number(sticker.width) < 1 || Number(sticker.height) < 1 ||
+			Number(sticker.width) > PAINT_CONFIG.maxStickerWidth || Number(sticker.height) > PAINT_CONFIG.maxStickerHeight ||
+			!Number.isFinite(sticker.x) || !Number.isFinite(sticker.y) ||
+			Number(sticker.x) < 0 || Number(sticker.y) < 0 ||
+			Number(sticker.x) + Number(sticker.width) > PAINT_CONFIG.width ||
+			Number(sticker.y) + Number(sticker.height) > PAINT_CONFIG.height ||
+			!isPng(sticker.image, PAINT_CONFIG.maxStickerImageChars, undefined, undefined, PAINT_CONFIG.maxStickerWidth, PAINT_CONFIG.maxStickerHeight)
+		) return false;
+		const dimensions = pngDimensions(sticker.image);
+		if (dimensions.width !== sticker.width || dimensions.height !== sticker.height) return false;
+		ids.add(sticker.id);
+		payloadChars += JSON.stringify({ id: sticker.id, image: sticker.image, x: sticker.x, y: sticker.y, width: sticker.width, height: sticker.height }).length + 1;
+		if (payloadChars > PAINT_CONFIG.maxStickerPayloadChars) return false;
+	}
+	return true;
+}
+
+function stickerActionCounts(before: PaintSticker[], after: PaintSticker[]): PaintActions {
+	const oldById = new Map(before.map((sticker) => [sticker.id, sticker]));
+	const nextById = new Map(after.map((sticker) => [sticker.id, sticker]));
+	let added = 0;
+	let moved = 0;
+	let removed = 0;
+	for (const sticker of after) {
+		const old = oldById.get(sticker.id);
+		if (!old) added++;
+		else if (old.x !== sticker.x || old.y !== sticker.y) moved++;
+	}
+	for (const sticker of before) if (!nextById.has(sticker.id)) removed++;
+	return {
+		...(added ? { 'sticker-add': added } : {}),
+		...(moved ? { 'sticker-move': moved } : {}),
+		...(removed ? { 'sticker-remove': removed } : {}),
+	};
 }
 
 function etagFor(revision: number): string {
@@ -77,6 +161,7 @@ function stateResponse(state: PaintState, status = 200, extra: Record<string, st
 		{
 			revision: Number(state.revision),
 			image: state.image,
+			stickers: stickersFor(state),
 			updatedAt: Number(state.updated_at),
 		},
 		status,
@@ -140,12 +225,19 @@ function pngCrc(bytes: Uint8Array, start: number, end: number): number {
 	return (crc ^ 0xffffffff) >>> 0;
 }
 
-/** Validate a complete, chunk-checksummed PNG and its fixed logical dimensions. */
-function isCanvasPng(value: unknown): value is string {
+/** Validate a complete, chunk-checksummed PNG against bounded dimensions and size. */
+function isPng(
+	value: unknown,
+	maxChars: number,
+	expectedWidth?: number,
+	expectedHeight?: number,
+	maxWidth?: number,
+	maxHeight?: number,
+): value is string {
 	const prefix = 'data:image/png;base64,';
 	if (
 		typeof value !== 'string' ||
-		value.length > PAINT_CONFIG.maxImageChars ||
+		value.length > maxChars ||
 		!value.startsWith(prefix)
 	) {
 		return false;
@@ -184,7 +276,15 @@ function isCanvasPng(value: unknown): value is string {
 				const validFormat = bytes[dataOffset + 8] === 8 &&
 					(bytes[dataOffset + 9] === 2 || bytes[dataOffset + 9] === 6) &&
 					bytes[dataOffset + 10] === 0 && bytes[dataOffset + 11] === 0 && bytes[dataOffset + 12] === 0;
-				if (uint32(dataOffset) !== PAINT_CONFIG.width || uint32(dataOffset + 4) !== PAINT_CONFIG.height || !validFormat) return false;
+				const imageWidth = uint32(dataOffset);
+				const imageHeight = uint32(dataOffset + 4);
+				if (
+					!validFormat || imageWidth < 1 || imageHeight < 1 ||
+					(expectedWidth !== undefined && imageWidth !== expectedWidth) ||
+					(expectedHeight !== undefined && imageHeight !== expectedHeight) ||
+					(maxWidth !== undefined && imageWidth > maxWidth) ||
+					(maxHeight !== undefined && imageHeight > maxHeight)
+				) return false;
 				hasHeader = true;
 			} else if (type === 'IHDR') {
 				return false;
@@ -204,6 +304,13 @@ function isCanvasPng(value: unknown): value is string {
 	}
 }
 
+function pngDimensions(value: string): { width: number; height: number } {
+	const binary = atob(value.slice('data:image/png;base64,'.length));
+	const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+	const uint32 = (offset: number): number => bytes[offset] * 0x1000000 + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3];
+	return { width: uint32(16), height: uint32(20) };
+}
+
 export async function GET(context: APIContext): Promise<Response> {
 	if (BOARD_CONFIG.provider !== 'd1') return json({ error: 'paint_requires_d1_board' }, 503);
 	const db = database(await serverEnvironment());
@@ -212,14 +319,16 @@ export async function GET(context: APIContext): Promise<Response> {
 	try {
 		const state = await currentState(db);
 		if (!state) return json({ error: 'storage_unavailable' }, 503);
+		const session = paintSession(context.request);
+		const sessionHeaders: Record<string, string> = session.setCookie ? { 'set-cookie': session.setCookie } : {};
 		const etag = etagFor(Number(state.revision));
 		if (etagMatches(context.request.headers.get('if-none-match'), etag)) {
 			return new Response(null, {
 				status: 304,
-				headers: { etag, 'cache-control': 'no-store' },
+				headers: { etag, 'cache-control': 'no-store', ...sessionHeaders },
 			});
 		}
-		return stateResponse(state);
+		return stateResponse(state, 200, sessionHeaders);
 	} catch (error) {
 		console.error('[bnji] board paint read failed:', error);
 		return json({ error: 'storage_unavailable' }, 503);
@@ -251,16 +360,18 @@ export async function POST(context: APIContext): Promise<Response> {
 		revision?: unknown;
 		requestId?: unknown;
 		image?: unknown;
+		stickers?: unknown;
+		actions?: unknown;
 	};
 	if (
 		!Number.isSafeInteger(payload.revision) ||
 		Number(payload.revision) < 0 ||
 		typeof payload.requestId !== 'string' ||
-		!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.requestId)
+		!UUID_PATTERN.test(payload.requestId)
 	) {
 		return json({ error: 'invalid_request' }, 422);
 	}
-	if (!isCanvasPng(payload.image)) {
+	if (!isPng(payload.image, PAINT_CONFIG.maxImageChars, PAINT_CONFIG.width, PAINT_CONFIG.height)) {
 		return json(
 			{
 				error: typeof payload.image === 'string' && payload.image.length > PAINT_CONFIG.maxImageChars
@@ -271,6 +382,11 @@ export async function POST(context: APIContext): Promise<Response> {
 			422,
 		);
 	}
+	if (payload.stickers !== undefined && !validateStickers(payload.stickers)) {
+		return json({ error: 'invalid_stickers', maxStickerCount: PAINT_CONFIG.maxStickerCount }, 422);
+	}
+	const clientActions = payload.actions === undefined ? { draw: 1 } : validateActions(payload.actions);
+	if (!clientActions) return json({ error: 'invalid_actions' }, 422);
 
 	const expectedRevision = Number(payload.revision);
 	const requestId = payload.requestId;
@@ -295,17 +411,36 @@ export async function POST(context: APIContext): Promise<Response> {
 		}
 
 		const nextRevision = expectedRevision + 1;
+		const stickers = payload.stickers === undefined
+			? stickersFor(state)
+			: (payload.stickers as PaintSticker[]).map(({ id, image, x, y, width, height }) => ({ id, image, x, y, width, height }));
+		const stickersJson = JSON.stringify(stickers);
+		if (payload.image.length + stickersJson.length > PAINT_CONFIG.maxStorageChars) {
+			return json({ error: 'paint_storage_too_large' }, 422);
+		}
+		const actions: PaintActions = { ...clientActions };
+		delete actions['sticker-add'];
+		delete actions['sticker-move'];
+		delete actions['sticker-remove'];
+		Object.assign(actions, stickerActionCounts(stickersFor(state), stickers));
+		if (Object.values(actions).reduce((sum, count) => sum + count, 0) > PAINT_CONFIG.maxActionsPerPublish) {
+			return json({ error: 'invalid_actions' }, 422);
+		}
+		if (Object.keys(actions).length === 0) return json({ error: 'invalid_actions' }, 422);
+		const session = paintSession(context.request);
+		const sessionHeaders: Record<string, string> = session.setCookie ? { 'set-cookie': session.setCookie } : {};
+		const retentionCutoff = now - PAINT_CONFIG.activityRetentionDays * 86_400_000;
 		const results = await db.batch([
 			db
 				.prepare(
 					`UPDATE board_paint_state
-					 SET image = ?1, revision = revision + 1, updated_at = ?2, last_request_id = ?3
-					 WHERE id = 1 AND revision = ?4`,
+					 SET image = ?1, stickers_json = ?2, revision = revision + 1, updated_at = ?3, last_request_id = ?4
+					 WHERE id = 1 AND revision = ?5`,
 				)
-				.bind(payload.image, now, requestId, expectedRevision),
+				.bind(payload.image, stickersJson, now, requestId, expectedRevision),
 			db
 				.prepare(
-					`INSERT INTO board_paint_commits (request_id, revision, created_at)
+					`INSERT OR IGNORE INTO board_paint_commits (request_id, revision, created_at)
 					 SELECT ?1, ?2, ?3
 					 WHERE EXISTS (
 						 SELECT 1 FROM board_paint_state
@@ -313,6 +448,24 @@ export async function POST(context: APIContext): Promise<Response> {
 					 )`,
 				)
 				.bind(requestId, nextRevision, now),
+			db
+				.prepare(
+					`INSERT OR IGNORE INTO board_paint_activity (created_at, revision, visitor_id, actions_json)
+					 SELECT ?1, ?2, ?3, ?4
+					 WHERE EXISTS (
+						 SELECT 1 FROM board_paint_commits WHERE request_id = ?5 AND revision = ?2
+					 )`,
+				)
+				.bind(now, nextRevision, session.id, JSON.stringify(actions), requestId),
+			db.prepare('DELETE FROM board_paint_activity WHERE created_at < ?1').bind(retentionCutoff),
+			db
+				.prepare(
+					`DELETE FROM board_paint_activity
+					 WHERE id NOT IN (
+						 SELECT id FROM board_paint_activity ORDER BY created_at DESC, id DESC LIMIT ?1
+					 )`,
+				)
+				.bind(PAINT_CONFIG.maxActivityRows),
 			db
 				.prepare(
 					`DELETE FROM board_paint_commits
@@ -323,13 +476,16 @@ export async function POST(context: APIContext): Promise<Response> {
 				)
 				.bind(PAINT_CONFIG.retainedCommitIds),
 		]);
-
 		if ((results[0]?.meta?.changes ?? 0) === 0) {
 			const latest = await currentState(db);
 			return latest ? stateResponse(latest, 409, { 'x-paint-conflict': 'true' }) : json({ error: 'storage_unavailable' }, 503);
 		}
 
-		return json({ revision: nextRevision, updatedAt: now }, 200, { etag: etagFor(nextRevision) });
+		return json(
+			{ revision: nextRevision, updatedAt: now, stickers },
+			200,
+			{ etag: etagFor(nextRevision), ...sessionHeaders },
+		);
 	} catch (error) {
 		console.error('[bnji] board paint write failed:', error);
 		return json({ error: 'storage_unavailable' }, 503);

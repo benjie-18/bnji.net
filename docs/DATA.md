@@ -215,48 +215,64 @@ recovery procedure.
 
 ## 10. Shared Paint canvas
 
-The Paint area below `/board/` is a separate shared feature: it does not read,
-write, or modify `board_messages`. Its API is `/api/paint`; its state lives in
-`board_paint_state`, created by `migrations/0006_board_paint.sql` in the same
-`BOARD_DB` database.
+The Paint area below `/board/` is separate from `board_messages`. Its API is
+`/api/paint`; the singleton state lives in `board_paint_state` in `BOARD_DB`,
+created by migrations `0006_board_paint.sql` and
+`0007_paint_stickers_activity.sql`.
 
 ### Storage and size bounds
 
-- One singleton row stores the current PNG snapshot, revision number and update
-  time. Each accepted publish replaces that one snapshot; the database does
-  **not** accumulate every pointer event or an unbounded image history.
-- The logical canvas is **1200 × 750 pixels** (900,000 pixels, 8:5 aspect
-  ratio). CSS scales it to fit the page; Fullscreen enlarges the same surface,
-  and Export PNG downloads that resolution.
-- The API accepts only a PNG with those dimensions and caps the data URL at
-  **850,000 characters** (the whole streamed JSON request is capped at 860,000
-  bytes). Oversized drawings stay local and receive a clear error rather than
-  attempting a D1 write. Cloudflare D1's per-string/row ceiling is 2,000,000
-  bytes, so this leaves substantial row headroom [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
-- `board_paint_commits` holds at most the most recent **128** publish request
-  IDs. It makes retries safe if a response is lost, but does not retain artwork
-  history or user identifiers.
+- The singleton stores a 1200 × 750 PNG drawing layer, its revision and update
+  time, plus a JSON list of stable-ID stickers. It does not append pointer
+  events or an unbounded image history.
+- The drawing PNG is capped at 850,000 data-URL characters. Stickers are resized
+  client-side into a 60 × 39 pixel maximum box with aspect ratio preserved,
+  encoded as PNG, and limited server-side to 24 items, 18,000 characters each,
+  and 180,000 characters total. The combined drawing and sticker state is capped
+  at 1,050,000 characters; the streamed JSON request is capped at 1,100,000
+  bytes. The D1 per-string/row ceiling is 2,000,000 bytes, leaving row headroom
+  [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
+- `board_paint_commits` retains at most 128 recent request IDs for idempotent
+  retries. It is not an artwork or visitor history.
 
 ### Shared editing and concurrency
 
-The browser keeps strokes, erasing, shapes and text in a transparent local
-layer over the last shared snapshot. The **Sync & refresh** button composes the
-visible image and submits its base revision. If another visitor published
-first, the server returns the newer snapshot; the browser places the local
-layer over it and retries with the new revision. A conditional revision update
-prevents two simultaneous publishers from silently replacing each other, and
-D1's atomic `batch()` groups the snapshot update and retry record [D1 batch API](https://developers.cloudflare.com/d1/worker-api/d1-database/).
-Edits in the same pixels naturally resolve in publish order; the most recent
-stroke in an overlapping area appears on top. A 20-second conditional poll
-refreshes changed snapshots while the Paint section is visible; a manual Sync
-& refresh also fetches the newest state when there are no local marks.
+The browser keeps drawing operations and sticker changes local until **Sync &
+refresh** publishes them. The request carries its base revision. If another
+visitor publishes first, the server returns the newer drawing and sticker
+state; local drawing marks are rebased above that snapshot and sticker edits
+are replayed by stable ID. A conflicting move/removal of a sticker changed by
+another visitor is skipped and announced rather than silently replacing their
+newer version. Conditional revision updates and D1's atomic `batch()` preserve
+concurrent commits. A dropped-response retry reuses the identical request ID
+and payload, so it cannot duplicate an accepted publish. Polling remains a
+conditional 20-second refresh while the section is visible.
 
-The server stores no strokes, accounts, IPs or browser metadata in D1. Public
-publishes are rate limited to 30 per IP per hour using the board's existing KV
-throttle; the transient IP key is subject to the same KV retention rules in §4.
-Paint is currently available only when `BOARD_CONFIG.provider` is `d1`. If the
-message board is switched to `rest`, the component explains that Paint is
-unavailable, while `/api/paint` returns `503 paint_requires_d1_board`; it does
-not write to D1 behind the REST-backed board or assume an undocumented Paint
-contract on the external service. This explicit boundary prevents either mode
-from silently losing visitors' work.
+The drawing tools include pen, eraser, line, rectangle, ellipse, text, spray and
+glow. Stickers remain separate editable items over the drawing snapshot: they
+can be dragged or moved with arrow keys while selected, and removed with the
+eraser. Export includes both layers. Fullscreen covers the whole Paint workspace
+(including its controls), not only the canvas.
+
+### Published activity and privacy
+
+`board_paint_activity` is a separate **admin-only** activity trail, not the
+public security-events table. It records accepted publishes only: timestamp,
+revision, validated action-type counts and a random, opaque Paint session ID
+from a session cookie. It does not store accounts, IP addresses, pointer paths,
+sticker images, canvas contents or unpublished edits. The session ID groups
+requests within a browser session but does not identify a real person or an
+authenticated visitor. The trail is never returned by `/api/paint`; it is
+available only through the guarded admin Paint activity endpoint and has
+`cache-control: no-store`.
+
+Paint activity follows the existing 60-day retention policy and is capped at
+5,000 rows. Old rows are lazily purged on admin reads and on accepted publishes;
+new writes also trim the table to its row bound. Public publishes remain limited
+to 30 per IP per hour using the existing KV throttle; its transient IP key has
+the TTL described in §4 and is not copied into the activity table.
+
+Paint requires `BOARD_CONFIG.provider === 'd1'`. With the message board in
+`rest` mode, the existing visible unavailable state and API response
+`503 paint_requires_d1_board` remain in place; Paint never writes behind the
+external REST provider or assumes an undocumented contract.

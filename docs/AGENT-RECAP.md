@@ -30,7 +30,7 @@ remain readable with JS blocked (`html.js` guards in `animations.css`).
 | `/admin/login` | **SSR** | Token sign-in; login attempts are throttled per IP |
 | `/404` | prerendered | |
 | `/api/board` | **SSR** (`prerender = false`) | GET list (cursor pagination, weak ETag -> 304), POST create |
-| `/api/paint` | **SSR** (`prerender = false`) | Public versioned D1 snapshot; conditional publish + bounded PNG, ETag polling |
+| `/api/paint` | **SSR** (`prerender = false`) | Public versioned D1 snapshot, editable bounded stickers, conditional publish + idempotent retries, ETag polling; accepted summaries feed the guarded admin Paint activity endpoint |
 | `/api/dm` | **SSR** | POST -> Discord webhook / ntfy per config |
 | `/api/admin/*` | **SSR** | All behind the shared admin guard; see docs/ADMIN.md |
 | `/rss.xml` | endpoint | typed RSS |
@@ -47,7 +47,7 @@ wrangler.json           worker bnjibot; ASSETS->dist; D1 BOARD_DB (bnji-board, m
                         owner's commit on main. compat_date 2026-09-14, nodejs_compat.
 migrations/             0001 board_messages + idx_board_public, 0002 profiles,
                          0003 security_events, 0004 board_moderation,
-                         0005 admin_credentials, 0006 board_paint - applied in order
+                         0005 admin_credentials, 0006 board_paint, 0007 paint_stickers_activity - applied in order
 docs/CONFIGURATION.md   every owner-facing config knob incl. one-time infra setup
 docs/DATA.md            board data model, moderation states, rate-limit privacy rules
 docs/ADMIN.md           admin credential, sessions, stats, rotation

@@ -229,3 +229,7 @@ Without the migration or without `ACCESS_SECRET` the guard **fails closed** with
   `--dur-base`, its trailing edge on `--dur-slow` with `--ease-spring`. It
   follows the Settings store: performance mode drops the spring, reduced
   effects / OS reduced motion remove the travel.
+- The Security panel also shows the admin-only Paint activity trail: accepted
+  publish timestamps, revisions, action counts and an opaque ephemeral session
+  ID. It is not an account or person identifier; local drafts, pointer paths
+  and sticker images are never logged. Retention is 60 days, capped at 5,000.
