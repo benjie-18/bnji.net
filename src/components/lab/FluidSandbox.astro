@@ -1,0 +1,300 @@
+---
+/**
+ * Lab experiment — Fluid Sandbox.
+ *
+ * A FLIP/PIC liquid playground: pour liquid, draw solids, stir, drain, tilt
+ * gravity. The markup below is generated from src/components/lab/fluid/config.ts
+ * (tools, sliders, scenes, palette), so adding a slider or a colour is a
+ * config edit, not a template edit.
+ *
+ * Module map (all inside src/components/lab/fluid/):
+ *   config.ts      every tunable + UI definitions
+ *   solver.ts      the simulation (pure, no DOM)
+ *   scenes.ts      preset layouts
+ *   renderer.ts    WebGL2 metaball shading, Canvas 2D fallback
+ *   controller.ts  DOM wiring, pointer tools, lifecycle, destroy()
+ *
+ * Unlike Orbit Field the stage uses `touch-action: none`: drawing walls with
+ * a finger is the whole point here. The stage is a fixed-size box inside the
+ * page, so the page is still scrollable from anywhere outside it.
+ */
+import {
+	FLUID_DEFAULTS,
+	FLUID_PALETTE,
+	FLUID_SCENES,
+	FLUID_SLIDERS,
+	FLUID_TOOLS,
+} from './fluid/config';
+---
+
+<div class="fluid">
+	<div class="fluid__toolbar" role="toolbar" aria-label="Fluid tools">
+		<div class="fluid__group" role="group" aria-label="Tool">
+			{
+				FLUID_TOOLS.map((tool, index) => (
+					<button
+						class="glass-button glass-button--sm fluid__tool"
+						type="button"
+						data-fluid-tool={tool.id}
+						aria-pressed={tool.id === FLUID_DEFAULTS.tool ? 'true' : 'false'}
+						title={`${tool.label} (${index + 1})`}
+					>
+						{tool.label}
+					</button>
+				))
+			}
+		</div>
+
+		<div class="fluid__group fluid__swatches" role="group" aria-label="Liquid colour">
+			{
+				FLUID_PALETTE.map((color, index) => (
+					<button
+						class="fluid__swatch"
+						type="button"
+						data-fluid-color={index}
+						aria-pressed={index === FLUID_DEFAULTS.color ? 'true' : 'false'}
+						aria-label={color.label}
+						title={color.label}
+					/>
+				))
+			}
+			<button
+				class="fluid__swatch fluid__swatch--spectrum"
+				type="button"
+				data-fluid-color="-1"
+				aria-pressed="false"
+				aria-label="Spectrum (cycles colour while pouring)"
+				title="Spectrum"
+			/>
+		</div>
+	</div>
+
+	<div class="lab-stage fluid-stage" data-fluid-stage tabindex="0" aria-label="Fluid sandbox. Keys 1 to 5 pick a tool, space pauses, R resets.">
+		<canvas class="lab-canvas fluid-stage__canvas" data-fluid-canvas aria-hidden="true"></canvas>
+		<p class="lab-fallback" data-fluid-fallback hidden>
+			This experiment needs WebGL2 or a 2D canvas, which this browser did not provide.
+		</p>
+		<p class="lab-hint mono fluid-stage__hint" data-fluid-hint aria-live="polite">drag to pour liquid</p>
+	</div>
+
+	<div class="lab-controls">
+		{
+			FLUID_SLIDERS.map((spec) => (
+				<label class="lab-control">
+					<span class="lab-control__label">
+						{spec.label} <output data-fluid-out={spec.key}>{FLUID_DEFAULTS[spec.key]}</output>
+					</span>
+					<input
+						class="lab-range"
+						type="range"
+						min={spec.min}
+						max={spec.max}
+						step={spec.step}
+						value={FLUID_DEFAULTS[spec.key]}
+						data-fluid-in={spec.key}
+					/>
+				</label>
+			))
+		}
+
+		<label class="lab-control">
+			<span class="lab-control__label">Scene</span>
+			<select class="lab-select" data-fluid-scene>
+				{
+					FLUID_SCENES.map((scene) => (
+						<option value={scene.id} selected={scene.id === FLUID_DEFAULTS.scene}>
+							{scene.label}
+						</option>
+					))
+				}
+			</select>
+		</label>
+
+		<label class="lab-control">
+			<span class="lab-control__label">Quality</span>
+			<select class="lab-select" data-fluid-quality>
+				<option value="low">Low (fast)</option>
+				<option value="medium" selected>Medium</option>
+				<option value="high">High (detailed)</option>
+			</select>
+		</label>
+
+		<label class="lab-control fluid__check">
+			<input type="checkbox" data-fluid-mixing checked={FLUID_DEFAULTS.colorMixing} />
+			<span class="lab-control__label">Colours mix on contact</span>
+		</label>
+	</div>
+
+	<div class="fluid__actions">
+		<button class="glass-button glass-button--sm" type="button" data-fluid-action="play" aria-pressed="false">Pause</button>
+		<button class="glass-button glass-button--sm" type="button" data-fluid-action="reset">Reset scene</button>
+		<button class="glass-button glass-button--sm glass-button--quiet" type="button" data-fluid-action="clear-liquid">Clear liquid</button>
+		<button class="glass-button glass-button--sm glass-button--quiet" type="button" data-fluid-action="clear-solids">Clear solids</button>
+	</div>
+
+	<p class="lab-stats">
+		<span>fps <strong data-fluid-stat="fps">0</strong></span>
+		<span>particles <strong data-fluid-stat="particles">0</strong></span>
+		<span>sim ms <strong data-fluid-stat="sim">0</strong></span>
+	</p>
+</div>
+
+<script>
+	import { startFluidSandbox } from './fluid/controller';
+
+	const root = document.querySelector<HTMLElement>('[data-lab-experiment="fluid-sandbox"]');
+	if (root) {
+		const destroy = startFluidSandbox(root);
+		// Page swaps (if view transitions are ever enabled) tear it down cleanly.
+		document.addEventListener('astro:before-swap', destroy, { once: true });
+	}
+</script>
+
+<style>
+	.fluid {
+		display: grid;
+		gap: 0.9rem;
+	}
+
+	.fluid__toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.6rem 0.75rem;
+		border-radius: var(--radius-md);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+	}
+
+	.fluid__group {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.fluid__tool[aria-pressed='true'] {
+		border-color: var(--accent-line);
+		background: var(--accent-soft);
+		color: var(--text-strong);
+		box-shadow:
+			0 0 16px -6px var(--accent-soft),
+			inset 0 1px 1px var(--glass-fresnel-top);
+	}
+
+	.fluid__swatch {
+		--swatch: var(--swatch-dark, var(--accent));
+		inline-size: 1.7rem;
+		block-size: 1.7rem;
+		border-radius: 50%;
+		border: 2px solid var(--glass-border);
+		background:
+			radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.75), transparent 38%),
+			var(--swatch);
+		cursor: pointer;
+		transition:
+			transform var(--dur-fast) var(--ease-spring),
+			border-color var(--dur-fast) var(--ease-out),
+			box-shadow var(--dur-fast) var(--ease-out);
+	}
+
+	:global(html[data-theme='light']) .fluid__swatch {
+		--swatch: var(--swatch-light, var(--accent));
+	}
+
+	.fluid__swatch--spectrum {
+		background:
+			radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.75), transparent 38%),
+			conic-gradient(
+				hsl(340 100% 70%),
+				hsl(35 100% 66%),
+				hsl(90 100% 66%),
+				hsl(165 85% 60%),
+				hsl(210 100% 67%),
+				hsl(260 100% 75%),
+				hsl(340 100% 70%)
+			);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.fluid__swatch:hover {
+			transform: scale(1.1);
+		}
+	}
+
+	.fluid__swatch[aria-pressed='true'] {
+		border-color: var(--text-strong);
+		box-shadow: 0 0 0 3px var(--accent-soft);
+	}
+
+	.fluid__swatch:focus-visible,
+	.fluid-stage:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	/* The stage: night sky in dark mode, pale Aero glass in light mode. */
+	.fluid-stage {
+		aspect-ratio: 16 / 9;
+		touch-action: none;
+		cursor: crosshair;
+		background:
+			radial-gradient(120% 90% at 50% 0%, rgba(127, 212, 255, 0.1), transparent 65%),
+			linear-gradient(180deg, rgba(6, 12, 28, 0.92), rgba(3, 6, 16, 0.96));
+	}
+
+	:global(html[data-theme='light']) .fluid-stage {
+		background:
+			radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, 0.9), transparent 60%),
+			linear-gradient(180deg, rgba(222, 242, 255, 0.95), rgba(190, 226, 250, 0.9));
+	}
+
+	.fluid-stage[data-tool='push'] {
+		cursor: grab;
+	}
+
+	.fluid-stage[data-tool='push']:active {
+		cursor: grabbing;
+	}
+
+	.fluid-stage__canvas {
+		touch-action: none;
+	}
+
+	.fluid-stage__hint {
+		padding: 0.25rem 0.6rem;
+		border-radius: var(--radius-pill);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+	}
+
+	@media (max-width: 720px) {
+		.fluid-stage {
+			aspect-ratio: 4 / 3;
+		}
+	}
+
+	.fluid__check {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		align-self: end;
+		cursor: pointer;
+	}
+
+	.fluid__check input {
+		accent-color: var(--accent);
+		inline-size: 1rem;
+		block-size: 1rem;
+	}
+
+	.fluid__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+</style>

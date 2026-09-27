@@ -5,13 +5,10 @@
  * Short by design: a statement panel plus a mono fact sheet. It should say who
  * this is without turning into a résumé — the full version lives on /about/.
  */
-import Chip from './Chip.astro';
 import GlassPanel from './GlassPanel.astro';
 import SectionHeading from './SectionHeading.astro';
 import { SITE } from '../data/site';
 
-/** Glass identity chips. */
-const CHIPS = ['Lorem', 'Ipsum', 'Dolor', 'Sit'] as const;
 
 /** Mono fact sheet. Kept here because it is homepage copy, not shared data. */
 const FACTS = [
@@ -40,9 +37,6 @@ const FACTS = [
 					Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
 					tempor incididunt ut labore et dolore magna aliqua ut enim ad minim.
 				</p>
-				<ul class="about-chips" role="list">
-					{CHIPS.map((chip) => <li><Chip tone="accent">{chip}</Chip></li>)}
-				</ul>
 			</GlassPanel>
 
 			<GlassPanel reveal revealDelay={120} pad="md" variant="quiet" class="about-facts">

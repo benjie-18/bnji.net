@@ -23,7 +23,6 @@ const description = `Writing by ${SITE.author.name} — notes on Astro, local AI
 		titleId="page-title"
 		title="The blog"
 		description="Notes on what I build, what breaks, and what I learned from fixing it. Markdown in, prerendered pages out."
-		meta={[`${posts.length} posts`, 'RSS available', 'Markdown & MDX']}
 	/>
 
 	<div class="container blog-body">
@@ -41,11 +40,6 @@ const description = `Writing by ${SITE.author.name} — notes on Astro, local AI
 				))
 			}
 		</div>
-
-		<p class="blog-foot">
-			<span class="mono">Prefer a feed?</span>
-			<a href="/rss.xml" rel="alternate">Subscribe with RSS</a>
-		</p>
 	</div>
 </Layout>
 

@@ -29,10 +29,10 @@ const configured = await adminConfigured();
 	description="Sign in to the BNJI.NET admin dashboard."
 	noindex={true}
 >
-	<main class="admin-login" id="main">
-		<div class="admin-login__card">
-			<p class="admin-login__eyebrow mono">BNJI.NET</p>
-			<h1 class="admin-login__title">Admin</h1>
+	<div class="admin-login">
+		<div class="admin-login__card" data-glass="raised">
+			<p class="eyebrow">Operator console</p>
+			<h1 class="admin-login__title text-luminous">Admin</h1>
 
 			{
 				!configured ? (
@@ -56,7 +56,7 @@ const configured = await adminConfigured();
 							required
 							data-admin-token
 						/>
-						<button class="admin-login__submit" type="submit" data-admin-submit>
+						<button class="glass-button glass-button--primary admin-login__submit" data-glass="" type="submit" data-admin-submit>
 							Sign in
 						</button>
 						<p
@@ -75,7 +75,7 @@ const configured = await adminConfigured();
 				the browser and never sent anywhere except this site.
 			</p>
 		</div>
-	</main>
+	</div>
 </Layout>
 
 <script>
@@ -86,33 +86,25 @@ const configured = await adminConfigured();
 
 <style>
 	.admin-login {
-		min-block-size: 100dvh;
+		min-block-size: 70dvh;
 		display: grid;
 		place-items: center;
 		padding: 2rem 1.25rem;
 	}
 
 	.admin-login__card {
+		--parent-radius: var(--radius-lg);
 		inline-size: min(100%, 26rem);
 		padding: 2rem 1.75rem;
-		border-radius: var(--radius-lg);
-		border: 1px solid var(--glass-border);
-		background: var(--glass-bg);
-		backdrop-filter: blur(18px);
 		display: grid;
 		gap: 0.85rem;
 	}
 
-	.admin-login__eyebrow {
-		font-size: var(--text-micro);
-		letter-spacing: var(--tracking-mono);
-		color: var(--text-faint);
-		margin: 0;
-	}
-
 	.admin-login__title {
 		font-family: var(--font-display);
-		font-size: 1.6rem;
+		font-size: var(--text-title);
+		font-weight: 300;
+		padding-block-end: 0.1em;
 		color: var(--text-strong);
 		margin: 0;
 	}
@@ -127,7 +119,7 @@ const configured = await adminConfigured();
 		font-size: var(--text-micro);
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: var(--text-dim);
+		color: var(--text-muted);
 	}
 
 	.admin-login__input {
@@ -146,21 +138,7 @@ const configured = await adminConfigured();
 	}
 
 	.admin-login__submit {
-		padding: 0.65rem 1rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--accent-line);
-		background: var(--accent-soft);
-		color: var(--text-strong);
-		font-family: var(--font-mono);
-		font-size: var(--text-small);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		cursor: pointer;
-		transition: background-color var(--dur-fast) var(--ease-out);
-	}
-
-	.admin-login__submit:hover:not(:disabled) {
-		background: var(--glass-bg);
+		justify-self: start;
 	}
 
 	.admin-login__submit:disabled {
@@ -185,8 +163,12 @@ const configured = await adminConfigured();
 
 	.admin-login__hint {
 		margin: 0;
-		font-size: var(--text-micro);
-		color: var(--text-faint);
+		padding: 0.65rem 0.85rem;
+		border-radius: var(--radius-sm);
+		background: var(--glass-bg-quiet);
+		border: 1px solid var(--glass-border);
+		font-size: var(--text-small);
+		color: var(--text-muted);
 		line-height: 1.5;
 	}
 </style>

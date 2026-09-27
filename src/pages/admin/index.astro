@@ -19,6 +19,11 @@
  *   Config     every public config value, plus binding/secret presence
  */
 import Layout from '../../layouts/Layout.astro';
+// Global (not scoped) on purpose: most admin markup is built by
+// admin-dashboard.ts at runtime, and Astro's scoped styles never reach
+// elements created after render — the old moderation buttons and config
+// cards rendered unstyled because of exactly that.
+import '../../styles/admin.css';
 
 // NOT PRERENDERED. This line is the entire access control for the page.
 //
@@ -38,20 +43,21 @@ export const prerender = false;
 	description="BNJI.NET operator console."
 	noindex={true}
 >
-	<main class="admin" id="main" data-admin>
-		<header class="admin__header">
+	<div class="admin" data-admin>
+		<header class="admin__header" data-glass="raised">
 			<div>
-				<p class="admin__eyebrow mono">BNJI.NET</p>
-				<h1 class="admin__title">Admin</h1>
+				<p class="eyebrow">Operator console</p>
+				<h1 class="admin__title text-luminous">Admin</h1>
 			</div>
 			<div class="admin__header-actions">
 				<span class="admin__status" data-admin-status role="status" aria-live="polite" />
-				<button class="admin__button" type="button" data-admin-refresh>Refresh</button>
-				<button class="admin__button" type="button" data-admin-logout>Sign out</button>
+				<button class="glass-button glass-button--sm" data-glass="" type="button" data-admin-refresh>Refresh</button>
+				<button class="glass-button glass-button--sm glass-button--quiet" data-glass="" type="button" data-admin-logout>Sign out</button>
 			</div>
 		</header>
 
-		<nav class="admin__tabs" aria-label="Admin sections">
+		<nav class="admin__tabs" aria-label="Admin sections" data-glass="raised" data-admin-tabs>
+			<span class="admin__tab-indicator" aria-hidden="true" data-tab-indicator></span>
 			<button class="admin__tab" type="button" data-tab="stats" aria-selected="true">
 				Statistics
 			</button>
@@ -81,37 +87,53 @@ export const prerender = false;
 				feature uses, so it cannot disagree with what visitors see.
 			</p>
 
-			<div data-stats-root>
-				<h2 class="admin__h2">Traffic</h2>
-				<div data-stats-traffic />
-				<div data-stats-traffic-list />
+			<div class="admin__cards" data-stats-root>
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">Traffic</h2>
+					<div data-stats-traffic />
+					<div class="admin__stack" data-stats-traffic-list />
+				</div>
 
-				<h2 class="admin__h2">Engagement</h2>
-				<div data-stats-engagement />
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">Engagement</h2>
+					<div class="admin__stack" data-stats-engagement />
+				</div>
 
-				<h2 class="admin__h2">Message board</h2>
-				<div data-stats-board />
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">Message board</h2>
+					<div data-stats-board />
+				</div>
 
-				<h2 class="admin__h2">Security</h2>
-				<div data-stats-security />
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">Security</h2>
+					<div data-stats-security />
+				</div>
 			</div>
 		</section>
 
 		<!-- Overview -->
 		<section class="admin__panel" data-panel="overview" hidden>
-			<h2 class="admin__h2">Security events</h2>
-			<div data-overview-security />
+			<div class="admin__cards">
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">Security events</h2>
+					<div data-overview-security />
+				</div>
 
-			<h2 class="admin__h2">Message board</h2>
-			<div data-overview-board />
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">Message board</h2>
+					<div data-overview-board />
+				</div>
 
-			<h2 class="admin__h2">Environment</h2>
-			<div data-overview-env />
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">Environment</h2>
+					<div data-overview-env />
+				</div>
+			</div>
 		</section>
 
 		<!-- Security log -->
 		<section class="admin__panel" data-panel="security" hidden>
-			<form class="admin__filters" data-security-filters>
+			<form class="admin__filters" data-glass data-security-filters>
 				<label>
 					<span>Surface</span>
 					<select name="surface" data-filter-surface>
@@ -137,17 +159,17 @@ export const prerender = false;
 					<span>Rows</span>
 					<input name="limit" type="number" min="1" max="500" value="50" data-filter-limit />
 				</label>
-				<button class="admin__button" type="submit">Apply</button>
+				<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
 			</form>
 			<p class="admin__hint">
 				Filter by device fingerprint to see everything one device did, across every surface.
 			</p>
-			<div data-security-table />
+			<div class="admin__table-wrap" data-glass data-security-table />
 		</section>
 
 		<!-- Board moderation -->
 		<section class="admin__panel" data-panel="board" hidden>
-			<form class="admin__filters" data-board-filters>
+			<form class="admin__filters" data-glass data-board-filters>
 				<label>
 					<span>Status</span>
 					<select name="status" data-board-status>
@@ -166,13 +188,14 @@ export const prerender = false;
 					<span>Search text</span>
 					<input name="search" type="text" placeholder="message text" data-board-search />
 				</label>
-				<button class="admin__button" type="submit">Apply</button>
+				<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
 			</form>
-			<div data-board-table />
+			<div class="admin__table-wrap" data-glass data-board-table />
 		</section>
 
 		<!-- Settings: the access token -->
 		<section class="admin__panel" data-panel="settings" hidden>
+			<div class="admin__card admin__card--narrow" data-glass>
 			<h2 class="admin__h2">Access token</h2>
 			<p class="admin__hint" data-token-state>
 				The token is stored as a SHA-256 hash. It cannot be read back, by
@@ -223,9 +246,10 @@ export const prerender = false;
 					your first login.
 				</p>
 
-				<button class="admin__button" type="submit" data-token-submit>Change token</button>
+				<button class="glass-button glass-button--primary" data-glass="" type="submit" data-token-submit>Change token</button>
 			</form>
 			<p class="admin__error" role="alert" data-token-error hidden />
+			</div>
 		</section>
 
 		<!-- Configuration -->
@@ -235,9 +259,9 @@ export const prerender = false;
 				drift from actual behaviour. Secrets are reported as present or absent only —
 				never returned.
 			</p>
-			<div data-config-groups />
+			<div class="admin__cards" data-config-groups />
 		</section>
-	</main>
+	</div>
 </Layout>
 
 <script>
@@ -245,345 +269,3 @@ export const prerender = false;
 
 	startAdminDashboard();
 </script>
-
-<style>
-	.admin {
-		min-block-size: 100dvh;
-		padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem);
-		max-inline-size: 90rem;
-		margin-inline: auto;
-		display: grid;
-		gap: 1.25rem;
-		align-content: start;
-	}
-
-	.admin__header {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 1rem;
-		align-items: end;
-		justify-content: space-between;
-	}
-
-	.admin__eyebrow {
-		margin: 0;
-		font-size: var(--text-micro);
-		letter-spacing: var(--tracking-mono);
-		color: var(--text-faint);
-	}
-
-	.admin__title {
-		margin: 0.1rem 0 0;
-		font-family: var(--font-display);
-		font-size: clamp(1.5rem, 4vw, 2rem);
-		color: var(--text-strong);
-	}
-
-	.admin__header-actions {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-		flex-wrap: wrap;
-	}
-
-	.admin__status {
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		color: var(--text-dim);
-	}
-
-	.admin__button {
-		padding: 0.45rem 0.85rem;
-		border-radius: var(--radius-pill);
-		border: 1px solid var(--glass-border);
-		background: var(--glass-bg-quiet);
-		color: var(--text-muted);
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		cursor: pointer;
-		transition:
-			color var(--dur-fast) var(--ease-out),
-			border-color var(--dur-fast) var(--ease-out);
-	}
-
-	.admin__button:hover {
-		color: var(--text-strong);
-		border-color: var(--glass-border-strong);
-	}
-
-	.admin__tabs {
-		display: flex;
-		gap: 0.4rem;
-		flex-wrap: wrap;
-		border-bottom: 1px solid var(--glass-border);
-		padding-block-end: 0.5rem;
-	}
-
-	.admin__tab {
-		padding: 0.45rem 0.9rem;
-		border-radius: var(--radius-pill);
-		border: 1px solid transparent;
-		background: transparent;
-		color: var(--text-dim);
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		cursor: pointer;
-	}
-
-	.admin__tab[aria-selected='true'] {
-		color: var(--text-strong);
-		border-color: var(--glass-border-strong);
-		background: var(--glass-bg-quiet);
-	}
-
-	.admin__error {
-		margin: 0;
-		padding: 0.7rem 0.9rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--danger-line);
-		background: var(--danger-soft);
-		color: var(--danger);
-		font-size: var(--text-small);
-	}
-
-	.admin__panel {
-		display: grid;
-		gap: 1rem;
-		min-inline-size: 0;
-	}
-
-	.admin__h2 {
-		margin: 0.5rem 0 0;
-		font-family: var(--font-display);
-		font-size: 1.05rem;
-		color: var(--text-strong);
-	}
-
-	.admin__filters {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.75rem;
-		align-items: end;
-	}
-
-	.admin__filters label {
-		display: grid;
-		gap: 0.25rem;
-		font-size: var(--text-micro);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--text-dim);
-	}
-
-	.admin__filters input,
-	.admin__filters select {
-		font-family: var(--font-mono);
-		font-size: 0.82rem;
-		padding: 0.4rem 0.55rem;
-		color: var(--text);
-		background: var(--glass-bg-quiet);
-		border: 1px solid var(--glass-border);
-		border-radius: var(--radius-sm);
-		min-inline-size: 9rem;
-	}
-
-	.admin__check {
-		display: flex !important;
-		flex-direction: row;
-		align-items: center;
-		gap: 0.4rem;
-		text-transform: none !important;
-		letter-spacing: 0 !important;
-		font-size: var(--text-small) !important;
-	}
-
-	.admin__hint {
-		margin: 0;
-		font-size: var(--text-micro);
-		color: var(--text-faint);
-		line-height: 1.5;
-	}
-
-	/* Token change form. Stacks the three fields vertically rather than
-	   reusing .admin__filters' single wrapping row: these are filled in
-	   sequence (current → new → confirm), so side-by-side inputs would read
-	   as parallel and invite the wrong one being filled twice. */
-	.admin__form {
-		display: grid;
-		gap: 0.85rem;
-		justify-items: start;
-		max-inline-size: 28rem;
-		margin-block: 0.5rem 1rem;
-	}
-
-	.admin__field {
-		display: grid;
-		gap: 0.25rem;
-		inline-size: 100%;
-		font-size: var(--text-micro);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--text-dim);
-	}
-
-	.admin__field input {
-		font-family: var(--font-mono);
-		font-size: 0.82rem;
-		padding: 0.5rem 0.6rem;
-		color: var(--text);
-		background: var(--glass-bg-quiet);
-		border: 1px solid var(--glass-border);
-		border-radius: var(--radius-sm);
-		inline-size: 100%;
-	}
-
-	.admin__field input:focus-visible {
-		outline: 2px solid var(--accent-strong);
-		outline-offset: 1px;
-	}
-
-	.admin__field input[disabled],
-	.admin__button[disabled] {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.admin__form code {
-		font-family: var(--font-mono);
-		font-size: 0.95em;
-	}
-
-	.admin__empty {
-		margin: 0;
-		padding: 0.8rem;
-		font-size: var(--text-small);
-		color: var(--text-dim);
-	}
-
-	:global(.admin__table) {
-		inline-size: 100%;
-		border-collapse: collapse;
-		font-size: var(--text-small);
-		display: block;
-		overflow-x: auto;
-	}
-
-	:global(.admin__table th) {
-		text-align: start;
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--text-dim);
-		padding: 0.45rem 0.6rem;
-		border-block-end: 1px solid var(--glass-border);
-		white-space: nowrap;
-	}
-
-	:global(.admin__table td) {
-		padding: 0.45rem 0.6rem;
-		border-block-end: 1px solid var(--glass-border-quiet, var(--glass-border));
-		color: var(--text-muted);
-		vertical-align: top;
-	}
-
-	:global(.admin__table td.is-mono) {
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		white-space: nowrap;
-	}
-
-	:global(.admin__table tr:hover td) {
-		background: var(--glass-bg-quiet);
-	}
-
-	:global(.admin__facts) {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-		gap: 0.5rem 1rem;
-		margin: 0;
-	}
-
-	:global(.admin__facts dt) {
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--text-dim);
-	}
-
-	:global(.admin__facts dd) {
-		margin: 0;
-		font-size: 1.1rem;
-		font-family: var(--font-display);
-		color: var(--text-strong);
-	}
-
-	.admin__config-group {
-		border: 1px solid var(--glass-border);
-		border-radius: var(--radius-md);
-		padding: 0.85rem 1rem;
-		background: var(--glass-bg-quiet);
-	}
-
-	.admin__config-group h3 {
-		margin: 0 0 0.15rem;
-		font-size: 0.95rem;
-		color: var(--text-strong);
-	}
-
-	.admin__config-source {
-		margin: 0 0 0.6rem;
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		color: var(--text-faint);
-	}
-
-	.admin__config-summary {
-		margin: 0 0 0.6rem;
-		font-size: var(--text-small);
-		color: var(--text-dim);
-	}
-
-	.admin__actions {
-		display: flex;
-		gap: 0.35rem;
-		flex-wrap: wrap;
-	}
-
-	.admin__action {
-		padding: 0.2rem 0.5rem;
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--glass-border);
-		background: transparent;
-		color: var(--text-dim);
-		cursor: pointer;
-	}
-
-	.admin__action:hover:not(:disabled) {
-		color: var(--text-strong);
-		border-color: var(--glass-border-strong);
-	}
-
-	.admin__action:disabled {
-		opacity: 0.45;
-		cursor: default;
-	}
-
-	.admin__note {
-		inline-size: 8rem;
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		padding: 0.2rem 0.35rem;
-		color: var(--text);
-		background: var(--glass-bg);
-		border: 1px solid var(--glass-border);
-		border-radius: var(--radius-sm);
-	}
-</style>

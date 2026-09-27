@@ -216,6 +216,7 @@ concern: the credential and the sessions derived from it.
 | Posts | `src/content/blog/*.md` | Drop-in workflow; schema in `src/content.config.ts` (markdown only — MDX was removed with its workflow). |
 | Post helpers | `src/data/blog.ts` | The only read path for collections. |
 | Lab experiments | `src/data/lab.ts` + `src/components/lab/*` + the static map in `src/pages/lab.astro` | Add a game = component + data entry + one map line. |
+| Fluid Sandbox tuning | `src/components/lab/fluid/config.ts` | Defaults, slider ranges, tools, scenes list, palette, quality tiers, solver + render constants. The UI is generated from it. Scenes live in `fluid/scenes.ts`. |
 
 ## 9. Deployment — INFRA (do not change casually)
 

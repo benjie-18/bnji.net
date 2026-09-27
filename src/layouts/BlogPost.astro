@@ -7,7 +7,6 @@
  * still the route's job: src/pages/blog/[...slug].astro passes <Content /> into
  * the default slot.
  */
-import Chip from '../components/Chip.astro';
 import FormattedDate from '../components/FormattedDate.astro';
 import GlassButton from '../components/GlassButton.astro';
 import Icon from '../components/Icon.astro';
@@ -23,7 +22,7 @@ interface Props {
 }
 
 const { post, previous, next } = Astro.props;
-const { title, description, pubDate, updatedDate, heroImage, tags } = post.data;
+const { title, description, pubDate, updatedDate, heroImage } = post.data;
 const minutes = getReadingTime(post);
 const permalink = postUrl(post);
 ---
@@ -61,17 +60,6 @@ const permalink = postUrl(post);
 				}
 			</p>
 
-			{
-				tags && tags.length > 0 && (
-					<ul class="entry__tags" role="list" data-load style="--load-delay: 560ms">
-						{tags.map((tag: string) => (
-							<li>
-								<Chip tone="accent">{tag}</Chip>
-							</li>
-						))}
-					</ul>
-				)
-			}
 		</header>
 
 		{

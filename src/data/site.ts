@@ -72,7 +72,6 @@ export const SITE = {
 export const SOCIAL_LINKS: SocialLink[] = [
 	{ label: 'GitHub', href: SITE.github, handle: SITE.githubHandle, rel: 'me' },
 	{ label: 'Email', href: `mailto:${SITE.email}`, handle: SITE.email },
-	{ label: 'RSS', href: '/rss.xml', handle: 'feed' },
 ];
 
 /** Resolve any path against the canonical origin (used for OG/canonical tags). */
