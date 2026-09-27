@@ -40,7 +40,8 @@ export type LabComponentKey =
 	| 'IsoProgress'
 	| 'CursorTrails'
 	| 'VoxelMap'
-	| 'GlassMinesweeper';
+	| 'GlassMinesweeper'
+	| 'FluidSandbox';
 
 export type Experiment = {
 	slug: string;
@@ -55,6 +56,16 @@ export type Experiment = {
 };
 
 export const EXPERIMENTS: Experiment[] = [
+	{
+		slug: 'fluid-sandbox',
+		title: 'Fluid Sandbox',
+		description:
+			'A FLIP/PIC liquid simulation in a glass box. Pour liquid, draw walls, stir and drain it, tilt gravity, and tune viscosity, cohesion, speed and colour — the liquid levels itself, splashes, foams at speed and blends where colours meet.',
+		tags: ['physics', 'simulation', 'interactive'],
+		status: 'live',
+		component: 'FluidSandbox',
+		question: 'How convincing can a real pressure-solved liquid feel inside a web page?',
+	},
 	{
 		slug: 'piano-bars',
 		title: '3D Piano Bars',
