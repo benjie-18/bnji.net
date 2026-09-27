@@ -3,9 +3,10 @@
 This is the owner-facing runbook. It answers one question: *after I pull, what
 do I have to do?*
 
-The short version: **if you already have the D1 database and KV namespace from
-the first deploy, there is nothing to create. You run one migration command and
-one secret command.** No new database, no new table to create by hand.
+For the shared Paint canvas, the short version is: **if you already have the
+D1 database, apply the new migration.** No new database, bucket, secret or
+binding is required. The migration command is safe to re-run; D1 applies only
+what is missing.
 
 ---
 
@@ -13,7 +14,7 @@ one secret command.** No new database, no new table to create by hand.
 
 | Area | Change | You must act? |
 | --- | --- | --- |
-| D1 schema | Four new migrations applied to the **existing** `bnji-board` database | **Yes** — run `migrations apply` |
+| D1 schema | Paint adds `0006_board_paint.sql` to the existing `bnji-board` schema | **Yes** — run `migrations apply` |
 | KV namespace | Unchanged | No |
 | D1 binding | Unchanged | No |
 | Admin credential | New `admin_credentials` table, seeded by migration 0005 | **Yes** — rotate the token |
@@ -42,7 +43,7 @@ migrations have run in its own `d1_migrations` table, so this command applies
 npx wrangler d1 migrations apply BOARD_DB --remote
 ```
 
-Expected output — the four new files, and not `0001`:
+Expected output — any unapplied migrations, including `0006_board_paint.sql`; on a database already current before Paint, the only new entry is `0006_board_paint.sql`:
 
 ```
 ┌──────────────────────────────┐
@@ -52,6 +53,7 @@ Expected output — the four new files, and not `0001`:
 │ 0003_security_events.sql     │
 │ 0004_board_moderation.sql    │
 │ 0005_admin_credentials.sql   │
+│ 0006_board_paint.sql         │
 └──────────────────────────────┘
 ```
 
@@ -77,9 +79,12 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `security_events` | Abuse detection | IP, user agent, referrer, coarse geo, device data. **Admin-only, 60-day retention, never in any public response** |
 | `board_reports` | Board report flow | `(message_id, reporter_key)` primary key, so one visitor cannot inflate a report count |
 | `admin_credentials` | `/admin` sign-in | Exactly one row, `id = 1`. Stores only `hex(sha256(token))` |
+| `board_paint_state` | `/board/` shared Paint canvas | One bounded PNG snapshot and revision |
+| `board_paint_commits` | Paint publish retries | At most 128 recent request IDs for idempotency |
 
-Plus four new columns on the existing `board_messages`: `report_count`,
-`reported_at`, `status_note`, `moderated_at`.
+Migration `0004` added four columns to the existing `board_messages`:
+`report_count`, `reported_at`, `status_note`, `moderated_at`. Migration `0006`
+adds the two Paint tables above; it does not modify messages.
 
 No existing board messages are modified. Existing rows get `report_count = 0`
 and NULLs for the other three, which is correct — they have never been

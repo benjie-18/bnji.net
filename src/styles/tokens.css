@@ -69,6 +69,36 @@
 	--danger-soft: rgba(255, 154, 139, 0.08);
 	--danger-line: rgba(255, 154, 139, 0.35);
 
+	/* Shared paint palette: stable ink colours on the canvas's white paper. */
+	--paint-canvas-paper: #ffffff;
+	--paint-ink-charcoal: #1f2933;
+	--paint-ink-red: #d14343;
+	--paint-ink-orange: #df6b1e;
+	--paint-ink-yellow: #d7a80f;
+	--paint-ink-green: #2f855a;
+	--paint-ink-teal: #168a8a;
+	--paint-ink-blue: #2864c5;
+	--paint-ink-violet: #7652b2;
+	--paint-ink-pink: #c94b83;
+	--paint-section-margin: clamp(2rem, 6vh, 4rem) auto clamp(4rem, 10vh, 7rem);
+	--paint-section-padding: clamp(1rem, 3vw, 1.75rem);
+	--paint-section-gap: var(--space-4);
+	--paint-control-gap: var(--space-2);
+	--paint-toolbar-gap: var(--space-3);
+	--paint-swatch-size: var(--space-6);
+	--paint-border-width: 1px;
+	--paint-outline-width: 2px;
+	--paint-canvas-aspect: 8 / 5;
+	--paint-canvas-max-inline: 112svh;
+	--paint-canvas-max-block: 70svh;
+	--paint-size-range-width: clamp(5rem, 15vw, 9rem);
+	--paint-size-output-width: 3.2rem;
+	--paint-text-width: min(14rem, 45vw);
+	--paint-text-min-width: 6rem;
+	--paint-disabled-opacity: 0.55;
+	--paint-line-height: 1.55;
+	--paint-swatch-shadow: 0 1px 3px var(--glass-shadow-contact);
+
 	/* --- Liquid Glass 2027 Optical System (Dark) --------------------------- */
 	/* Adaptive luminance: glass_L = 0.58 * backdrop_L + 34
 	   Backdrop L ≈ 6% -> glass_L ≈ 37.5% -> base fill ~ rgba(255, 255, 255, 0.045) */

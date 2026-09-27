@@ -272,12 +272,47 @@ export function initMusicPlayer(): void {
 		}
 	};
 
-	playButton.addEventListener('click', () => {
+	const handlePlayButton = () => {
 		userActed = true;
 		const state = root.dataset.state;
 		if (state === 'playing' || state === 'loading') pause();
 		else attempt(true);
-	});
+	};
+	playButton.addEventListener('click', handlePlayButton);
+
+	/* --- first real input also gets one play attempt ------------------------ */
+	// Browsers do not let a page force audible autoplay. Reuse the visitor's
+	// first trusted input as a genuine activation instead, without cancelling
+	// or replacing its normal click/scroll/touch/keyboard behaviour. Listen to
+	// the input gestures that cause scrolling (wheel, touch, scrollbar/pointer,
+	// keyboard) rather than `scroll` itself, which can fire during restoration.
+	const firstInputEvents = ['pointerdown', 'touchstart', 'wheel', 'keydown', 'click'] as const;
+	const removeFirstInputListeners = () => {
+		for (const type of firstInputEvents) window.removeEventListener(type, onFirstInput, true);
+	};
+	const onFirstInput = (event: Event) => {
+		if (!event.isTrusted) return;
+		removeFirstInputListeners();
+
+		// If the visitor's first input is the player button itself, its real
+		// click handler below is already the one play action. A disabled button
+		// cannot receive that click, so let a loading attempt use this gesture.
+		if (event.composedPath().includes(playButton)) {
+			if (playButton.disabled && root.dataset.state === 'loading') {
+				userActed = true;
+				attempt(true);
+			}
+			return;
+		}
+
+		// This is a play action, not a toggle: never pause music that already
+		// started on its own. The original input continues untouched.
+		userActed = true;
+		if (root.dataset.state !== 'playing') attempt(true);
+	};
+	for (const type of firstInputEvents) {
+		window.addEventListener(type, onFirstInput, { capture: true, passive: true });
+	}
 
 	// The pill's mute button writes to the store; the subscription
 	// (applyAudio) echoes it onto the button and the transport. One loop, one

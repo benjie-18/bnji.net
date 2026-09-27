@@ -1,0 +1,235 @@
+/* Shared whiteboard, loaded only on /board/. */
+.board-paint {
+	--parent-radius: var(--radius-xl);
+	--parent-pad: var(--space-5);
+	inline-size: min(var(--content-width), calc(100% - 2 * var(--gutter)));
+	margin: var(--paint-section-margin);
+	padding: var(--paint-section-padding);
+	display: grid;
+	gap: var(--paint-section-gap);
+}
+
+.board-paint__header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--space-4);
+}
+
+.board-paint__header > div:first-child {
+	min-inline-size: 0;
+}
+
+.board-paint__title {
+	margin: 0;
+	color: var(--text-strong);
+	font-family: var(--font-display);
+	font-size: var(--text-title);
+}
+
+.board-paint__intro {
+	max-inline-size: 60ch;
+	margin: var(--space-1) 0 0;
+	color: var(--text-muted);
+	font-size: var(--text-small);
+	line-height: var(--paint-line-height);
+}
+
+.board-paint__actions,
+.board-paint__tools,
+.board-paint__options,
+.board-paint__palette {
+	display: flex;
+	align-items: center;
+	gap: var(--paint-control-gap);
+	flex-wrap: wrap;
+}
+
+.board-paint__actions {
+	justify-content: flex-end;
+	flex: 0 1 auto;
+}
+
+.board-paint__toolbar {
+	display: grid;
+	gap: var(--paint-toolbar-gap);
+}
+
+.board-paint__tools,
+.board-paint__options {
+	padding: var(--space-2);
+	border: var(--paint-border-width) solid var(--glass-border);
+	border-radius: var(--radius-md);
+	background: var(--glass-bg-quiet);
+}
+
+.board-paint__tool[aria-pressed='true'] {
+	border-color: var(--accent-line);
+	background: var(--accent-soft);
+	color: var(--text-strong);
+}
+
+html[data-theme='light'] .board-paint__tool[aria-pressed='true'] {
+	border-color: var(--accent-strong);
+	background: var(--accent);
+	color: var(--text-strong);
+}
+
+.board-paint__swatch {
+	inline-size: var(--paint-swatch-size);
+	block-size: var(--paint-swatch-size);
+	padding: 0;
+	border: var(--paint-outline-width) solid var(--glass-border-strong);
+	border-radius: var(--radius-pill);
+	background: var(--paint-swatch);
+	cursor: pointer;
+	box-shadow: var(--paint-swatch-shadow);
+}
+
+.board-paint__swatch[aria-pressed='true'] {
+	outline: var(--paint-outline-width) solid var(--accent-strong);
+	outline-offset: var(--space-1);
+}
+
+.board-paint__swatch:focus-visible,
+.board-paint__input:focus-visible {
+	outline: var(--paint-outline-width) solid var(--accent-strong);
+	outline-offset: var(--space-1);
+}
+
+.board-paint__size,
+.board-paint__text {
+	display: flex;
+	align-items: center;
+	gap: var(--paint-control-gap);
+	color: var(--text-muted);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+}
+
+.board-paint__size input {
+	inline-size: var(--paint-size-range-width);
+	accent-color: var(--accent);
+}
+
+.board-paint__size output {
+	min-inline-size: var(--paint-size-output-width);
+	color: var(--text-strong);
+	font-variant-numeric: tabular-nums;
+}
+
+.board-paint__text input {
+	inline-size: var(--paint-text-width);
+	min-inline-size: var(--paint-text-min-width);
+	padding: var(--space-1) var(--paint-control-gap);
+	border: var(--paint-border-width) solid var(--glass-border-strong);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg);
+	color: var(--text);
+	font: inherit;
+	letter-spacing: normal;
+	text-transform: none;
+}
+
+.board-paint__text input:focus-visible {
+	outline: var(--paint-outline-width) solid var(--accent-strong);
+	outline-offset: var(--space-1);
+}
+
+.board-paint__instructions {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--text-small);
+}
+
+.board-paint__surface {
+	position: relative;
+	inline-size: min(100%, var(--content-width), var(--paint-canvas-max-inline));
+	aspect-ratio: var(--paint-canvas-aspect);
+	margin-inline: auto;
+	overflow: hidden;
+	border: var(--paint-border-width) solid var(--glass-border-strong);
+	border-radius: var(--radius-lg);
+	background: var(--paint-canvas-paper);
+	box-shadow: var(--glass-shadow);
+	touch-action: none;
+}
+
+.board-paint__surface:fullscreen {
+	inline-size: 100%;
+	block-size: 100%;
+	max-block-size: 100%;
+	aspect-ratio: auto;
+	border: 0;
+	border-radius: 0;
+	background: var(--paint-canvas-paper);
+}
+
+.board-paint__layer {
+	position: absolute;
+	inset: 0;
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+}
+
+.board-paint__base,
+.board-paint__local {
+	pointer-events: none;
+}
+
+.board-paint__input {
+	cursor: crosshair;
+	touch-action: none;
+}
+
+.board-paint__status {
+	min-block-size: 1.4em;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+}
+
+.board-paint__actions .glass-button[disabled] {
+	opacity: var(--paint-disabled-opacity);
+	cursor: not-allowed;
+}
+
+.board-paint[data-paint-enabled='false'] .board-paint__actions,
+.board-paint[data-paint-enabled='false'] .board-paint__toolbar,
+.board-paint[data-paint-enabled='false'] .board-paint__instructions,
+.board-paint[data-paint-enabled='false'] .board-paint__surface,
+.board-paint[data-paint-enabled='false'] .board-paint__status {
+	display: none;
+}
+
+@media (max-width: 760px) {
+	.board-paint__header {
+		flex-direction: column;
+	}
+
+	.board-paint__actions {
+		justify-content: flex-start;
+	}
+
+	.board-paint__surface {
+		inline-size: 100%;
+		max-block-size: var(--paint-canvas-max-block);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.board-paint__tool {
+		transition: none;
+	}
+}
+
+@media (forced-colors: active) {
+	.board-paint__swatch[aria-pressed='true'],
+	.board-paint__input:focus-visible {
+		outline-color: Highlight;
+	}
+}

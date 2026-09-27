@@ -1,0 +1,122 @@
+---
+/**
+ * BoardPaint — one shared drawing surface, independent of board messages.
+ *
+ * The canvas is a fixed-size logical surface rendered responsively in the page.
+ * Local edits stay in a transparent layer until Sync & refresh publishes them;
+ * version checks then merge them over any newer shared snapshot.
+ */
+import '../styles/paint.css';
+import { BOARD_CONFIG } from '../config/board.config';
+import { PAINT_CONFIG } from '../config/paint.config';
+---
+
+<section
+	class="board-paint"
+	data-glass="raised"
+	data-board-paint
+	data-paint-enabled={BOARD_CONFIG.provider === 'd1' ? 'true' : 'false'}
+	aria-labelledby="board-paint-title"
+>
+	<header class="board-paint__header">
+		<div>
+			<p class="eyebrow">BOARD / CANVAS</p>
+			<h2 class="board-paint__title" id="board-paint-title">Paint together</h2>
+			<p class="board-paint__intro">
+				{BOARD_CONFIG.provider === 'd1'
+					? 'A shared canvas for everyone. Your strokes stay private until you sync; newer drawings are merged when you publish.'
+					: 'Paint is unavailable while the message board uses its external REST backend.'}
+			</p>
+		</div>
+		<div class="board-paint__actions">
+			<button class="glass-button glass-button--sm" type="button" data-paint-undo disabled>Undo</button>
+			<button class="glass-button glass-button--sm" type="button" data-paint-export>Export PNG</button>
+			<button class="glass-button glass-button--sm" type="button" data-paint-fullscreen aria-pressed="false">
+				Fullscreen
+			</button>
+			<button class="glass-button glass-button--primary" type="button" data-paint-sync>
+				Sync &amp; refresh
+			</button>
+		</div>
+	</header>
+
+	<div class="board-paint__toolbar">
+		<div class="board-paint__tools" role="group" aria-label="Paint tools">
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="pen" aria-pressed="true">Pen</button>
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="eraser" aria-pressed="false">Eraser</button>
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="line" aria-pressed="false">Line</button>
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="rectangle" aria-pressed="false">Rectangle</button>
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="ellipse" aria-pressed="false">Ellipse</button>
+			<button class="glass-button glass-button--sm board-paint__tool" type="button" data-paint-tool="text" aria-pressed="false">Text</button>
+		</div>
+
+		<div class="board-paint__options">
+			<div class="board-paint__palette" role="group" aria-label="Pen colour">
+				{
+					PAINT_CONFIG.palette.map((color, index) => (
+						<button
+							class="board-paint__swatch"
+							type="button"
+							style={`--paint-swatch: ${color.token}`}
+							data-paint-color={color.token}
+							aria-label={color.name}
+							aria-pressed={index === 0 ? 'true' : 'false'}
+						/>
+					))
+				}
+			</div>
+
+			<label class="board-paint__size" for="board-paint-size">
+				<span>Size</span>
+				<input id="board-paint-size" type="range" min="2" max="36" value="8" data-paint-size />
+				<output data-paint-size-output for="board-paint-size">8 px</output>
+			</label>
+
+			<label class="board-paint__text" data-paint-text-wrap hidden>
+				<span>Text</span>
+				<input type="text" maxlength="80" value="Hello!" data-paint-text aria-label="Text to place on the canvas" />
+			</label>
+		</div>
+	</div>
+
+	<p class="board-paint__instructions" id="paint-instructions">
+		Choose a tool, then draw with a mouse, pen or touch. Undo removes your latest unsynced mark.
+	</p>
+
+	<div class="board-paint__surface" data-paint-surface>
+		<canvas
+			class="board-paint__layer board-paint__base"
+			width={PAINT_CONFIG.width}
+			height={PAINT_CONFIG.height}
+			aria-hidden="true"
+			data-paint-base
+		/>
+		<canvas
+			class="board-paint__layer board-paint__local"
+			width={PAINT_CONFIG.width}
+			height={PAINT_CONFIG.height}
+			aria-hidden="true"
+			data-paint-local
+		/>
+		<canvas
+			class="board-paint__layer board-paint__input"
+			width={PAINT_CONFIG.width}
+			height={PAINT_CONFIG.height}
+			aria-label="Shared white drawing canvas. Use the selected tool with a mouse, pen or touch."
+			aria-describedby="paint-instructions"
+			tabindex="0"
+			data-paint-input
+		>
+			Your browser does not support the shared paint canvas.
+		</canvas>
+	</div>
+
+	<p class="board-paint__status mono" data-paint-status role="status" aria-live="polite">
+		Loading shared canvas…
+	</p>
+</section>
+
+<script>
+	import { initBoardPaint } from '../scripts/board-paint';
+	initBoardPaint();
+</script>
