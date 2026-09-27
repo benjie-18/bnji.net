@@ -112,7 +112,7 @@ export function teardownInteractions(): void {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A small, restrained halo that trails the pointer. It is one composited
+ * A small, restrained halo centred on the pointer. It is one composited
  * element moved with translate3d — no filters, no repaints of the page.
  * The rAF loop only runs while the pointer is moving or still settling.
  */
@@ -147,8 +147,10 @@ export function initCursorGlow(): void {
 	let frame = 0;
 
 	const settle = () => {
-		// Frame-rate independent smoothing: ~0.22 per 60fps frame.
-		const t = 0.22;
+		// Pinned to the pointer (t = 1). The old 0.22 smoothing made the halo
+		// trail behind the cursor, so it never looked centred while moving.
+		// The loop is kept for the fade in/out and the pressed scale.
+		const t = 1;
 		currentX += (targetX - currentX) * t;
 		currentY += (targetY - currentY) * t;
 

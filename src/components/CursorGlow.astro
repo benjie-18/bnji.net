@@ -36,7 +36,7 @@
 		border-radius: 50%;
 		/* Dark: neat pointer aura with luminous core and soft diffraction ring */
 		background:
-			radial-gradient(circle at 40% 36%, rgba(255, 255, 255, 0.4), transparent 28%),
+			radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.4), transparent 28%),
 			radial-gradient(circle, var(--cursor-core) 0%, var(--cursor-mid) 40%, var(--cursor-rim) 72%, transparent 100%);
 		box-shadow: 0 0 16px var(--cursor-mid, rgba(127, 212, 255, 0.35));
 		transition: opacity var(--dur-base) var(--ease-out);
@@ -46,7 +46,7 @@
 	/* Light: subtle water lens aura englobing the pointer */
 	:global(html[data-theme='light']) .cursor-glow {
 		background:
-			radial-gradient(circle at 38% 34%, rgba(255, 255, 255, 0.75), transparent 32%),
+			radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.75), transparent 32%),
 			radial-gradient(circle, var(--cursor-core) 0%, var(--cursor-mid) 42%, var(--cursor-rim) 75%, transparent 100%);
 		box-shadow: 0 0 14px rgba(0, 180, 240, 0.32);
 		mix-blend-mode: normal;
