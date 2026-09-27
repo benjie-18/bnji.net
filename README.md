@@ -74,8 +74,9 @@ npm run deploy     # publish to Cloudflare Workers
   volume living in the Settings overlay; four swappable sources (YouTube,
   Spotify, direct file, or none) configured in `src/config/music.config.ts`,
   each with its own honest control surface. Autoplay is attempted on load;
-  when the browser refuses, the pill shows a clear tap-to-play affordance
-  instead of working around the block.
+  if the load-time attempt is blocked, the first trusted page input triggers
+  one additional attempt for file/YouTube without cancelling the visitor's
+  action. A tap-to-play fallback remains; Spotify uses its embedded controls.
 - **Profile card** — link-in-bio card (avatar orb, badges, bio, chips, link
   rows, copy-handle block) modelled on ayo.so profile cards, placeholder copy.
 - **Public message board** (`/board/`, linked from the nav — no longer a
@@ -86,7 +87,11 @@ npm run deploy     # publish to Cloudflare Workers
   dialog; polling that pauses while the tab is hidden and revalidates with
   ETags; server-side validation, sanitization, rate limits; D1-backed
   persistence with cursor pagination + moderation statuses (or external REST
-  store) via `/api/board`; KV-shared rate limiting.
+  store) via `/api/board`; KV-shared rate limiting. A separate shared paint
+  canvas (available in D1 board mode) sits below it, with pens, erasing,
+  shapes, text, conflict-safe sync, live refresh, fullscreen and PNG export.
+  REST board mode clearly marks Paint unavailable rather than sending canvas
+  writes to an unsupported backend.
 - **Private messages** — contact form delivered server-side through a Discord
   webhook or ntfy push; credentials live only in Worker secrets.
 - **The Lab** — 16 runnable experiments and small games across 13 components

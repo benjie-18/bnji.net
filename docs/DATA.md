@@ -77,7 +77,7 @@ recorded anywhere.
   `windowIndex = floor(now / windowMs)`. Scopes in use: `board:post:<ip>`
   (20 s window, max 1), `board:hour:<ip>` (1 h, max `hourlyPostLimit` = 20),
   `dm:post:<ip>` (window from `DM_INTEGRATION.cooldownSeconds`, max 1),
-  `dm:hour:<ip>` (1 h, max 10).
+  `dm:hour:<ip>` (1 h, max 10), and `board-paint:<ip>` (1 h, max 30 publishes).
 - **Value:** the integer hit count for that window. Nothing else.
 - **`clientKey`** is the Cloudflare `connectingIp`; when absent (e.g. local
   dev) it falls back to the literal `unknown`, which pools all such clients
@@ -212,3 +212,51 @@ recovery procedure.
   (`bnji_ps`, `src/config/session.config.ts`), not by an identity. The
   `session_key` is discarded with the cookie and is not correlatable across
   sessions.
+
+## 10. Shared Paint canvas
+
+The Paint area below `/board/` is a separate shared feature: it does not read,
+write, or modify `board_messages`. Its API is `/api/paint`; its state lives in
+`board_paint_state`, created by `migrations/0006_board_paint.sql` in the same
+`BOARD_DB` database.
+
+### Storage and size bounds
+
+- One singleton row stores the current PNG snapshot, revision number and update
+  time. Each accepted publish replaces that one snapshot; the database does
+  **not** accumulate every pointer event or an unbounded image history.
+- The logical canvas is **1200 × 750 pixels** (900,000 pixels, 8:5 aspect
+  ratio). CSS scales it to fit the page; Fullscreen enlarges the same surface,
+  and Export PNG downloads that resolution.
+- The API accepts only a PNG with those dimensions and caps the data URL at
+  **850,000 characters** (the whole streamed JSON request is capped at 860,000
+  bytes). Oversized drawings stay local and receive a clear error rather than
+  attempting a D1 write. Cloudflare D1's per-string/row ceiling is 2,000,000
+  bytes, so this leaves substantial row headroom [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
+- `board_paint_commits` holds at most the most recent **128** publish request
+  IDs. It makes retries safe if a response is lost, but does not retain artwork
+  history or user identifiers.
+
+### Shared editing and concurrency
+
+The browser keeps strokes, erasing, shapes and text in a transparent local
+layer over the last shared snapshot. The **Sync & refresh** button composes the
+visible image and submits its base revision. If another visitor published
+first, the server returns the newer snapshot; the browser places the local
+layer over it and retries with the new revision. A conditional revision update
+prevents two simultaneous publishers from silently replacing each other, and
+D1's atomic `batch()` groups the snapshot update and retry record [D1 batch API](https://developers.cloudflare.com/d1/worker-api/d1-database/).
+Edits in the same pixels naturally resolve in publish order; the most recent
+stroke in an overlapping area appears on top. A 20-second conditional poll
+refreshes changed snapshots while the Paint section is visible; a manual Sync
+& refresh also fetches the newest state when there are no local marks.
+
+The server stores no strokes, accounts, IPs or browser metadata in D1. Public
+publishes are rate limited to 30 per IP per hour using the board's existing KV
+throttle; the transient IP key is subject to the same KV retention rules in §4.
+Paint is currently available only when `BOARD_CONFIG.provider` is `d1`. If the
+message board is switched to `rest`, the component explains that Paint is
+unavailable, while `/api/paint` returns `503 paint_requires_d1_board`; it does
+not write to D1 behind the REST-backed board or assume an undocumented Paint
+contract on the external service. This explicit boundary prevents either mode
+from silently losing visitors' work.

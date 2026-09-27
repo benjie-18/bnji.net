@@ -30,6 +30,7 @@ remain readable with JS blocked (`html.js` guards in `animations.css`).
 | `/admin/login` | **SSR** | Token sign-in; login attempts are throttled per IP |
 | `/404` | prerendered | |
 | `/api/board` | **SSR** (`prerender = false`) | GET list (cursor pagination, weak ETag -> 304), POST create |
+| `/api/paint` | **SSR** (`prerender = false`) | Public versioned D1 snapshot; conditional publish + bounded PNG, ETag polling |
 | `/api/dm` | **SSR** | POST -> Discord webhook / ntfy per config |
 | `/api/admin/*` | **SSR** | All behind the shared admin guard; see docs/ADMIN.md |
 | `/rss.xml` | endpoint | typed RSS |
@@ -46,13 +47,13 @@ wrangler.json           worker bnjibot; ASSETS->dist; D1 BOARD_DB (bnji-board, m
                         owner's commit on main. compat_date 2026-09-14, nodejs_compat.
 migrations/             0001 board_messages + idx_board_public, 0002 profiles,
                          0003 security_events, 0004 board_moderation,
-                         0005 admin_credentials - applied in order
+                         0005 admin_credentials, 0006 board_paint - applied in order
 docs/CONFIGURATION.md   every owner-facing config knob incl. one-time infra setup
 docs/DATA.md            board data model, moderation states, rate-limit privacy rules
 docs/ADMIN.md           admin credential, sessions, stats, rotation
 docs/PROFILES.md        profile counters, click tracking, privacy posture
 AGENTS.md               hard rules for agents (read first)
-src/config/             public config values (music, dm integrations, board policy,
+src/config/             public config values (music, dm integrations, board/paint policy,
                         ACCESS_RULES, THEME_CONFIG, INTRO_CONFIG); index.ts re-exports
 src/data/               ALL content as typed data: site, navigation (PRIMARY_NAV groups,
                         FUTURE_NAV, FOOTER_NAV), projects, interests, ai-stack, network
@@ -61,14 +62,14 @@ src/components/         Astro components; primitives (GlassPanel, GlassButton, I
                         SectionHeading, PageHeader, BrandMark), scene layers (AeroSky,
                         Starfield, CursorGlow), chrome (Header, Footer, BaseHead),
                         features (MusicPlayer, SettingsOverlay, MessageBoard,
-                        DirectMessage, ProfileCard), lab/ experiments
+                        BoardPaint, DirectMessage, ProfileCard), lab/ experiments
 src/layouts/            Layout.astro (shell + single boot script), BlogPost.astro
 src/scripts/            client runtime (see section 5)
 src/server/             server-only: env.ts, access.ts, ratelimit.ts, admin.ts,
                           board-store.ts, profile-store.ts, security-store.ts,
                           security-helpers.ts
 src/styles/             tokens.css (every design value), global, glass, aero, animations,
-                        board, lab, settings
+                        board, paint (board only), lab, settings
 src/middleware.ts       ACCESS_RULES enforcement on SSR routes
 ```
 
@@ -117,15 +118,17 @@ the page that has one.
 Modules: `starfield.ts` (canvas engine), `interactions.ts` (cursor glow, background
 parallax, glass tracking, magnetic buttons, nav), `scroll.ts` (reveals/parallax),
 `intro.ts` (homepage scroll intro, component-scoped), `music.ts` (player logic),
-`board.ts` (board client: fetch, ETag revalidation, optimistic UI), `board-physics.ts`,
+`board.ts` (board client: fetch, ETag revalidation, optimistic UI),
+`board-paint.ts` (shared canvas snapshots, optimistic merge), `board-physics.ts`,
 `profile.ts` (view beacon, reactions, click tracking), `device-fingerprint.ts`,
 `theme.ts`, `settings.ts`, `settings-overlay.ts`, `liquid-glass.ts`, `environment.ts`.
 Admin-only: `admin.ts`, `admin-dashboard.ts`, `board-moderate.ts` — imported by the
 admin pages, never by the shared shell.
 
 Music player: pill UI (`MusicPlayer.astro`), providers `'none'|'youtube'|'spotify'|'file'`
-from `MUSIC_SOURCE` (`src/config/music.config.ts`, shipped as `none`). Autoplay is handled
-honestly (browser gesture requirements respected; no fake "playing" state).
+from `MUSIC_SOURCE` (`src/config/music.config.ts`, shipped as `none`). A blocked load-time
+attempt gets one retry for file/YouTube on the first trusted page input (without cancelling
+it); browser policy is still respected and there is no fake "playing" state.
 
 ## 6. Theme & visual system
 

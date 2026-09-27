@@ -39,9 +39,9 @@ only), where it lives, and how to replace it safely.
 | `MUSIC_SOURCE.spotify.id` / `.type` | same | Spotify track/album/playlist id. The embed mounts VISIBLE above the pill on play (Spotify exposes no transport API — the embed's own UI is the control surface and its internal play button is the blocked-autoplay affordance). Volume/mute are disabled for this provider. |
 | `MUSIC_SOURCE.file.url` / `.title` | same | Direct audio URL (same-origin or CORS-enabled). Full transport + loading/error states; blocked autoplay detected precisely via `NotAllowedError`. |
 | `MUSIC_SOURCE.defaultVolume` | same | 0..1 — SEEDS the settings store's `volume`; the live value is the store's (Settings overlay → Audio → Volume). |
-| Autoplay policy | `src/scripts/music.ts` | Playback is attempted on page load for every configured provider. Browser refusals are never worked around: file/YouTube fall into `data-state="blocked"` (pulsing play button, "Tap to play"); Spotify shows its own play button inside the embed. Muted autoplay (store `muted: true`) is generally allowed and usually succeeds. |
+| Autoplay policy | `src/scripts/music.ts` | Playback is attempted on page load. If it is blocked, the first trusted page input (pointer/touch, wheel/scroll gesture, keyboard, or click) triggers one additional attempt for the controllable file/YouTube providers while its original action continues. The listener then removes itself. Browsers can still refuse it—particularly for scroll-only gestures. Spotify exposes no transport API, so its own embedded play button remains the control. File/YouTube retain the `data-state="blocked"` play control as a fallback. Muted autoplay is generally allowed. |
 
-Autoplay is impossible by construction: nothing plays or loads before a click.
+This is a best-effort use of the visitor's first real input, not a browser-policy bypass. The first input is never cancelled or replayed; subsequent use of the player controls works normally.
 
 ## 4. Private direct messages (Discord / desktop notification) — provider PUBLIC, credentials SECRET
 
@@ -73,7 +73,7 @@ irrelevant here.
 | `BOARD_CONFIG.provider` | PUBLIC | `src/config/board.config.ts` | `'d1' \| 'rest'` preference. **No in-memory production fallback**: an unconfigured store returns an honest `503 storage_unconfigured` instead of silently losing messages. |
 | `maxTextLength: 250` | PUBLIC | same | Enforced server-side in `/api/board` with **422 `text_too_long`** — long posts are rejected, never truncated. |
 | other limits (`maxImageBytes`, `allowedImageTypes`, `postCooldownSeconds`, `hourlyPostLimit`, `pollIntervalMs`, visible-count range) | PUBLIC | same | Abuse/size policy; the server re-validates everything. |
-| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | One-time setup: `npx wrangler d1 create bnji-board`, paste the printed `database_id` into `wrangler.json` (the committed placeholder is a nil UUID so `wrangler dev` works locally but a deploy fails loudly until replaced), then `npx wrangler d1 migrations apply BOARD_DB --remote`. Local dev: `--local` instead. Schema: the five files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
+| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | One-time setup: `npx wrangler d1 create bnji-board`, paste the printed `database_id` into `wrangler.json` (the committed placeholder is a nil UUID so `wrangler dev` works locally but a deploy fails loudly until replaced), then `npx wrangler d1 migrations apply BOARD_DB --remote`. Local dev: `--local` instead. Schema: the six files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
 | `BOARD_KV` KV binding | **INFRA** | `wrangler.json` | Shared rate limiting (see below). `npx wrangler kv namespace create BOARD_KV`, paste the id (same placeholder rule). |
 | `BOARD_REST_URL`, `BOARD_REST_TOKEN` | **SECRET** | Worker env | Optional external JSON API provider (`provider: 'rest'`). |
 
@@ -87,7 +87,7 @@ exact but adds deployment infra for no practical gain here. If KV is missing
 entirely, rate limiting **fails open** with a console warning — it is an abuse
 throttle, not authentication.
 
-### 5.1 D1 schema — five migrations, one database
+### 5.1 D1 schema — six migrations, one database
 
 There is **one** D1 database (`bnji-board`, bound twice: see the note below). The
 migrations are cumulative and tracked by D1 in its own `d1_migrations` table, so
@@ -101,6 +101,7 @@ and is the normal way to move an existing database forward.
 | 0003 | `security_events.sql` | `security_events` + 4 indexes. Abuse telemetry, 60-day retention, admin-only, never public. |
 | 0004 | `board_moderation.sql` | 4 columns on `board_messages` (`report_count`, `reported_at`, `status_note`, `moderated_at`), `board_reports`, 2 indexes. Makes the `status` column reachable from a real report flow. |
 | 0005 | `admin_credentials.sql` | `admin_credentials` (one row, `id = 1` enforced by CHECK). Holds `hex(sha256(token))` — the hashed admin token, rotated from the panel. |
+| 0006 | `board_paint.sql` | One versioned shared canvas snapshot plus a bounded set of recent publish IDs for safe retries. Independent of `board_messages`. |
 
 ⚠️ 0004 uses `ALTER TABLE … ADD COLUMN`, so it must run after 0001. The filename
 order D1 applies them in guarantees this — do not run the files by hand or
@@ -108,6 +109,13 @@ rename them.
 
 ⚠️ 0005 **seeds the admin credential with the token from the build request**,
 which is published. Run it, then rotate on first login (see below).
+
+The shared Paint snapshot (0006) currently uses the D1 `BOARD_DB` binding and
+is enabled only when `BOARD_CONFIG.provider` is `d1`. With the board's `rest`
+provider, Paint is visibly unavailable and its API returns
+`503 paint_requires_d1_board`; the external REST contract is not assumed to
+support canvas storage. See [`DATA.md`](./DATA.md) §10 for synchronization and
+storage bounds.
 
 ### 5.2 `BOARD_DB` is bound twice — one of the two is a problem
 
@@ -217,6 +225,7 @@ concern: the credential and the sessions derived from it.
 | Post helpers | `src/data/blog.ts` | The only read path for collections. |
 | Lab experiments | `src/data/lab.ts` + `src/components/lab/*` + the static map in `src/pages/lab.astro` | Add a game = component + data entry + one map line. |
 | Fluid Sandbox tuning | `src/components/lab/fluid/config.ts` | Defaults, slider ranges, tools, scenes list, palette, quality tiers, solver + render constants. The UI is generated from it. Scenes live in `fluid/scenes.ts`. |
+| Shared board paint | `src/config/paint.config.ts` | Logical canvas size, PNG/request caps, polling and publish limits. The current D1 snapshot is independent from message rows; see [`DATA.md`](./DATA.md) §10. |
 
 ## 9. Deployment — INFRA (do not change casually)
 

@@ -24,12 +24,13 @@
  *                          wav, same-origin or CORS-enabled). Full transport:
  *                          play/pause, volume, mute, loading and error states.
  *
- * Autoplay: ATTEMPTED on page load, never forced. When the browser refuses
- * (the usual case for audible audio), the pill shows its tap-to-play
- * affordance (data-state="blocked") — or, for Spotify, the embed's own play
- * button does. The refusal is never worked around. Volume/mute preferences
- * live in the settings store (scripts/settings.ts), not here; defaultVolume
- * only seeds it.
+ * Autoplay: ATTEMPTED on page load. If blocked, the first trusted page input
+ * triggers one more attempt for file/YouTube without cancelling that input.
+ * This is not a policy bypass: a browser may still refuse (notably for
+ * scroll-only input). Spotify exposes no transport API, so its embed's own
+ * play button remains the control. The pill's tap-to-play affordance remains
+ * for file/YouTube. Volume/mute preferences live in the settings store
+ * (scripts/settings.ts), not here; defaultVolume only seeds it.
  *
  * PUBLIC vs SECRET: all values here are PUBLIC identifiers (they end up in
  * shipped HTML/JS). Never put API keys or private URLs in this file.
