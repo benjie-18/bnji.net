@@ -10,6 +10,7 @@ import GlassPanel from '../components/GlassPanel.astro';
 import ProfileCard from '../components/ProfileCard.astro';
 import PageHeader from '../components/PageHeader.astro';
 import SectionHeading from '../components/SectionHeading.astro';
+import Icon from '../components/Icon.astro';
 import { SITE } from '../data/site';
 import Layout from '../layouts/Layout.astro';
 
@@ -58,6 +59,16 @@ const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SIT
 			<section class="section section--tight" aria-labelledby="card-title">
 				<h2 id="card-title" class="sr-only">Profile card</h2>
 				<ProfileCard />
+				<div class="profile-cta">
+					<a class="profile-cta__link" href="/gizlyy/" data-glass="interactive quiet">
+						<Icon name="link" size={16} />
+						<span class="profile-cta__text">
+							<strong>Full social profile</strong>
+							<span class="profile-cta__desc">Links, games, music, reactions and more</span>
+						</span>
+						<Icon name="arrow-right" size={14} />
+					</a>
+				</div>
 			</section>
 			<section class="section section--tight" aria-labelledby="story-title">
 				<SectionHeading
@@ -126,6 +137,59 @@ const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SIT
 
 	.about-body .prose {
 		font-size: 1.02rem;
+	}
+
+	/* --- Profile CTA ----------------------------------------------------- */
+	.profile-cta {
+		margin-top: 1.25rem;
+		display: flex;
+		justify-content: center;
+	}
+
+	.profile-cta__link {
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
+		padding: 0.65rem 1rem;
+		border-radius: var(--radius-lg);
+		color: var(--text);
+		text-decoration: none;
+		font-size: var(--text-small);
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-out);
+	}
+
+	.profile-cta__link:hover {
+		transform: translateY(-1px);
+	}
+
+	.profile-cta__text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+
+	.profile-cta__text strong {
+		font-weight: 600;
+	}
+
+	.profile-cta__desc {
+		font-size: var(--text-micro);
+		color: var(--text-dim);
+	}
+
+	.profile-cta__link .icon:last-child {
+		flex: none;
+		color: var(--text-faint);
+		transition: transform var(--dur-fast) var(--ease-out);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.profile-cta__link:hover .icon:last-child {
+			transform: translateX(3px);
+		}
 	}
 
 	.principles {

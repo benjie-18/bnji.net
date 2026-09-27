@@ -69,6 +69,7 @@ export const PRIMARY_NAV: NavEntry[] = [
 		slug: 'me',
 		items: [
 			{ label: 'About', href: '/about/', description: 'What this site is' },
+			{ label: 'Profile', href: '/gizlyy/', description: 'Personal social profile' },
 			{ label: 'Blog', href: '/blog/', description: 'Notes and placeholder writing' },
 			{ label: 'Contact', href: '/contact/', description: 'Leave a message' },
 		],
@@ -104,5 +105,6 @@ export const FOOTER_NAV: NavItem[] = [
 	{ label: 'Projects', href: '/projects/' },
 	{ label: 'Lab', href: '/lab/' },
 	{ label: 'Board', href: '/board/' },
+	{ label: 'Profile', href: '/gizlyy/' },
 	{ label: 'Contact', href: '/contact/' },
 ];
