@@ -83,7 +83,7 @@ const queue = tracks.map((track, index) => ({
 			data-music-next
 			aria-label="Skip to next song"
 			title="Skip to next song"
-			disabled={trackCount < 2}
+			disabled={trackCount === 0}
 		>
 			<Icon name="skip-forward" size={14} />
 		</button>
@@ -125,7 +125,10 @@ const queue = tracks.map((track, index) => ({
 		<svg class="music-player__note-icon" viewBox="0 0 24 24" aria-hidden="true">
 			<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6Z" fill="currentColor" />
 		</svg>
-		<span class="music-player__dot-badge" aria-hidden="true"></span>
+		<svg class="music-player__progress-ring" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+			<circle class="music-player__progress-ring-track" cx="18" cy="18" r="16" />
+			<circle class="music-player__progress-ring-fill" cx="18" cy="18" r="16" />
+		</svg>
 	</button>
 
 	<section
@@ -337,55 +340,45 @@ const queue = tracks.map((track, index) => ({
 		transition: transform var(--dur-fast) var(--ease-spring), color var(--dur-fast) var(--ease-out);
 	}
 
-	/* Dot badge on the music-toggle button */
-	.music-player__dot-badge {
+	/* Circular progress ring around the music-toggle button.
+	   The fill is driven by --music-progress (0..1), which scripts/music.ts sets
+	   alongside the playlist's linear progress bar. In collapsed mode the toggle
+	   fills the whole badge, so the ring reads as progress around the player
+	   itself; expanded, it stays on the toggle where it is always visible. */
+	.music-player__progress-ring {
 		position: absolute;
-		top: var(--space-1);
-		right: var(--space-1);
-		inline-size: 5px;
-		block-size: 5px;
-		border-radius: 50%;
-		background: var(--text-dim);
+		inset: -3px;
+		inline-size: calc(100% + 6px);
+		block-size: calc(100% + 6px);
+		transform: rotate(-90deg);
 		pointer-events: none;
-		transition: background-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 	}
-	.music-player[data-state='playing'] .music-player__dot-badge {
-		background: var(--accent);
-		box-shadow: 0 0 6px var(--accent);
-		animation: music-dot-pulse 2.6s var(--ease-soft) infinite;
+	.music-player__progress-ring-track,
+	.music-player__progress-ring-fill {
+		fill: none;
+		stroke-width: 2;
+	}
+	.music-player__progress-ring-track {
+		stroke: var(--glass-border-strong);
+		opacity: 0.5;
+	}
+	.music-player__progress-ring-fill {
+		stroke: var(--accent);
+		stroke-linecap: round;
+		stroke-dasharray: 100.5;
+		stroke-dashoffset: calc(100.5 * (1 - var(--music-progress, 0)));
+		transition: stroke-dashoffset var(--dur-fast) linear;
 	}
 	.music-player[data-state='playing'] .music-player__note-icon {
 		color: var(--accent-strong);
 	}
-	.music-player[data-state='loading'] .music-player__dot-badge {
-		background: var(--accent);
-		animation: music-dot-blink 0.9s linear infinite;
+	.music-player[data-state='blocked'] .music-player__progress-ring-fill,
+	.music-player[data-state='error'] .music-player__progress-ring-fill {
+		stroke: var(--signal-soon);
 	}
-	.music-player[data-state='blocked'] .music-player__dot-badge,
-	.music-player[data-state='error'] .music-player__dot-badge {
-		background: var(--signal-soon);
-	}
-	.music-player[data-state='disabled'] .music-player__dot-badge {
-		opacity: 0.4;
-	}
-
-	@keyframes music-dot-pulse {
-		0%,
-		100% {
-			box-shadow: 0 0 0 0 rgba(122, 196, 255, 0.45);
-		}
-		50% {
-			box-shadow: 0 0 0 4px rgba(122, 196, 255, 0);
-		}
-	}
-	@keyframes music-dot-blink {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.3;
-		}
+	.music-player[data-state='disabled'] .music-player__progress-ring,
+	.music-player[data-provider='spotify'] .music-player__progress-ring {
+		opacity: 0.3;
 	}
 
 	/* Icon + spinner state machine */
@@ -768,12 +761,12 @@ const queue = tracks.map((track, index) => ({
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.music-player__dot-badge,
 		.music-player[data-state='blocked'] .music-player__btn[data-music-play],
 		.music-player[data-state='loading'] .music-player__spinner {
 			animation: none;
 		}
-		.music-player__progress > span {
+		.music-player__progress > span,
+		.music-player__progress-ring-fill {
 			transition: none;
 		}
 	}

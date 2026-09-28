@@ -109,12 +109,12 @@ function validateStickers(value: unknown): value is PaintSticker[] {
 			typeof sticker.image !== 'string' || sticker.image.length > PAINT_CONFIG.maxStickerImageChars ||
 			!Number.isInteger(sticker.width) || !Number.isInteger(sticker.height) ||
 			Number(sticker.width) < 1 || Number(sticker.height) < 1 ||
-			Number(sticker.width) > PAINT_CONFIG.maxStickerWidth || Number(sticker.height) > PAINT_CONFIG.maxStickerHeight ||
+			Number(sticker.width) > PAINT_CONFIG.maxStickerResizeWidth || Number(sticker.height) > PAINT_CONFIG.maxStickerResizeHeight ||
 			!Number.isFinite(sticker.x) || !Number.isFinite(sticker.y) ||
 			Number(sticker.x) < 0 || Number(sticker.y) < 0 ||
 			Number(sticker.x) + Number(sticker.width) > PAINT_CONFIG.width ||
 			Number(sticker.y) + Number(sticker.height) > PAINT_CONFIG.height ||
-			!isPng(sticker.image, PAINT_CONFIG.maxStickerImageChars, undefined, undefined, PAINT_CONFIG.maxStickerWidth, PAINT_CONFIG.maxStickerHeight)
+			!isPng(sticker.image, PAINT_CONFIG.maxStickerImageChars, undefined, undefined, PAINT_CONFIG.maxStickerResizeWidth, PAINT_CONFIG.maxStickerResizeHeight)
 		) return false;
 		const dimensions = pngDimensions(sticker.image);
 		if (dimensions.width !== sticker.width || dimensions.height !== sticker.height) return false;

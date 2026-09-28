@@ -226,9 +226,11 @@ created by migrations `0006_board_paint.sql` and
   time, plus a JSON list of stable-ID stickers. It does not append pointer
   events or an unbounded image history.
 - The drawing PNG is capped at 850,000 data-URL characters. Stickers are resized
-  client-side into a 60 × 39 pixel maximum box with aspect ratio preserved,
+  client-side into a 60 × 39 pixel maximum import box with aspect ratio preserved,
   encoded as PNG, and limited server-side to 24 items, 18,000 characters each,
-  and 180,000 characters total. Because `validateStickers()` requires a stored
+  and 180,000 characters total. A sticker may then be resized up to a 240 × 156
+  pixel ceiling (4x the import box in each axis), which the server enforces as
+  the stored-size limit. Because `validateStickers()` requires a stored
   PNG's own pixel dimensions to match the sticker's width and height, a resize
   is not a rectangle-only change: the bitmap is re-encoded at the new size from
   the upload-time original, so repeated resizes never compound resampling. The combined drawing and sticker state is capped

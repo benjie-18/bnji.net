@@ -39,7 +39,7 @@ import {
 	type StickerOperation,
 } from '../src/scripts/paint-stickers.ts';
 
-/** A 1200 × 750 canvas with the server's 60 × 39 sticker ceiling. */
+/** A 1200 × 750 canvas with the server's 240 × 156 sticker resize ceiling. */
 const BOUNDS = stickerResizeBounds(1200, 750);
 
 const sticker = (over: Partial<PaintSticker> = {}): PaintSticker => ({
@@ -220,7 +220,10 @@ test('every corner keeps its opposite corner pinned', () => {
 });
 
 test('a proportional resize stays proportional, including through the caps', () => {
-	const target = sticker();
+	// Centred with room to spare in every direction: the 240x156 ceiling is
+	// what stops the growth, not a canvas edge. (A sticker near the top-left
+	// corner cannot grow north-west past x=0/y=0 however large the ceiling.)
+	const target = sticker({ x: 400, y: 300 });
 	for (const corner of ['nw', 'ne', 'se', 'sw'] as ResizeCorner[]) {
 		// Each corner grows outward, into the canvas.
 		const next = resizeSticker(target, { corner, pointer: outward(corner), bounds: BOUNDS });

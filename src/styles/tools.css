@@ -363,7 +363,7 @@
 }
 
 @media (max-width: 30rem) {
-	/* Four buttons side by side do not fit a small phone; stack them at full
+	/* Three buttons side by side do not fit a small phone; stack them at full
 	   width so the hit targets stay large. This file is a plain stylesheet, so
 	   the selector needs no :global() wrapper. */
 	.tool__actions {
@@ -429,7 +429,7 @@
 
 @media (min-width: 48rem) {
 	.tools-notes__grid {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
 	}
 }
 

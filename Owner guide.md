@@ -347,9 +347,9 @@ A “coming soon” entry does not create a page. To make a new destination live
 
 ### The browser tools on `/tools/`
 
-`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries two
-tools, and both run entirely in the visitor's browser: there is no API route, no
-upload and no storage behind either one, so "nothing is uploaded" is a property
+`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries one
+tool, and it runs entirely in the visitor's browser: there is no API route, no
+upload and no storage behind it, so "nothing is uploaded" is a property
 of the code rather than a promise.
 
 - **Image Converter & Optimizer** — converts between PNG, JPEG and WebP, resizes
@@ -360,14 +360,10 @@ of the code rather than a promise.
   JPEG has no transparency, and a canvas conversion does not carry EXIF or other
   metadata into the new file. Quality applies to JPEG and WebP only; the PNG
   slider is disabled with the reason shown rather than hidden.
-- **JSON Formatter & Validator** — formats, minifies, copies and clears. A failed
-  parse leaves the text exactly as it was and reports the line and column. It
-  does **not** talk to a schema service, does **not** convert YAML/CSV/XML, and
-  stores nothing.
 
 Formats, accepted input types and limits live in **`src/config/tools.config.ts`**;
-behaviour lives in `src/scripts/tools-image.ts` and `src/scripts/tools-json.ts`,
-started from `src/scripts/boot.ts`. To add a third tool, add a component under
+behaviour lives in `src/scripts/tools-image.ts`,
+started from `src/scripts/boot.ts`. To add a second tool, add a component under
 `src/components/tools/` plus one init module and one line in `boot.ts` — the page
 itself only composes them.
 

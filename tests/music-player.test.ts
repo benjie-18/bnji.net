@@ -61,10 +61,20 @@ const YOUTUBE_TRACK: MusicTrack = {
 	publishedAt: '2024-05-01',
 };
 
-/** Boot the player against a given `/api/playlist` payload. */
-async function boot(tracks: MusicTrack[], options: { youtubeApi?: boolean } = {}): Promise<Dom> {
+/**
+ * Boot the player against a given `/api/playlist` payload.
+ *
+ * Autoplay lives on `/gizlyy` only, so the fixture boots there by default —
+ * every test below that expects playback to start on its own depends on it.
+ * Pass `pathname: '/'` to assert the silent-boot behaviour instead.
+ */
+async function boot(
+	tracks: MusicTrack[],
+	options: { youtubeApi?: boolean; pathname?: string } = {},
+): Promise<Dom> {
 	const dom = installTestDom({
 		responses: [{ initialized: true, count: tracks.length, tracks }],
+		pathname: options.pathname ?? '/gizlyy',
 	});
 	if (options.youtubeApi !== false) dom.installYouTubeApi();
 	const { music } = await modules();
@@ -117,7 +127,10 @@ test('volume and mute reach the IFrame player, live and on ready', async () => {
 	// The settings store notifies through `window`, so the DOM has to be
 	// installed before the first change — exactly as it is for a visitor.
 	const { music, settings } = await modules();
-	const dom = installTestDom({ responses: [{ initialized: true, count: 1, tracks: [YOUTUBE_TRACK] }] });
+	const dom = installTestDom({
+		responses: [{ initialized: true, count: 1, tracks: [YOUTUBE_TRACK] }],
+		pathname: '/gizlyy',
+	});
 	dom.installYouTubeApi();
 	settings.setSetting('volume', 0.4);
 	settings.setSetting('muted', true);
@@ -151,7 +164,10 @@ test('volume and mute reach the IFrame player, live and on ready', async () => {
 });
 
 test('a blocked autoplay attempt is a state, and the first real input retries', async () => {
-	const dom = installTestDom({ responses: [{ initialized: true, count: 1, tracks: [FILE_TRACK] }] });
+	const dom = installTestDom({
+		responses: [{ initialized: true, count: 1, tracks: [FILE_TRACK] }],
+		pathname: '/gizlyy',
+	});
 	dom.installYouTubeApi();
 	dom.rejectNextAudioPlay('NotAllowedError');
 	const { music } = await modules();
@@ -186,6 +202,77 @@ test('the end of a file track advances to the next one', async () => {
 	assert.equal(dom.lastAudio()?.playCalls, 1);
 	// The finished element is released rather than left holding the old source.
 	assert.equal(dom.audioRegistry[0]?.src, '');
+});
+
+/* --- autoplay scope ------------------------------------------------------- */
+
+test('off /gizlyy the player boots silent: selected, but not playing', async () => {
+	const dom = await boot([FILE_TRACK], { pathname: '/' });
+
+	assert.equal(dom.audioRegistry.length, 0, 'no audio element may be created before play');
+	assert.equal(dom.dataset.state, 'idle');
+	assert.equal(dom.text('[data-music-current-title]'), 'the feeling');
+	assert.equal(dom.disabled('[data-music-play]'), false, 'play stays available');
+	assert.equal(dom.disabled('[data-music-next]'), false, 'skip stays available');
+
+	// The first-input retry is autoplay by another name, so it must not fire
+	// here either: the input belongs to the page.
+	dom.outsideInput();
+	await dom.settle(12);
+	assert.equal(dom.audioRegistry.length, 0, 'a first input must not start playback off /gizlyy');
+	assert.equal(dom.dataset.state, 'idle');
+
+	// An explicit press of play still starts the selected track.
+	dom.click('[data-music-play]');
+	await dom.settle(12);
+	assert.equal(dom.lastAudio()?.src, '/music/the feeling.mp3');
+	assert.equal(dom.dataset.state, 'playing');
+});
+
+test('a /gizlyy/ trailing slash autoplays like the bare path', async () => {
+	const dom = await boot([FILE_TRACK], { pathname: '/gizlyy/' });
+	assert.equal(dom.lastAudio()?.src, '/music/the feeling.mp3');
+	assert.equal(dom.dataset.state, 'playing');
+});
+
+/* --- skip ----------------------------------------------------------------- */
+
+test('skip starts the next song immediately and wraps to the beginning', async () => {
+	const second = { ...FILE_TRACK, id: 'file-2', title: 'second', url: '/music/two.mp3' };
+	const dom = await boot([FILE_TRACK, second]);
+
+	// From the first track, skip plays the second one — it never just selects.
+	dom.click('[data-music-next]');
+	await dom.settle(12);
+	assert.equal(dom.text('[data-music-current-title]'), 'second');
+	assert.equal(dom.lastAudio()?.src, '/music/two.mp3');
+	assert.equal(dom.lastAudio()?.playCalls, 1);
+	assert.equal(dom.dataset.state, 'playing');
+
+	// At the end of the queue the button stays live and wraps to the start.
+	assert.equal(dom.disabled('[data-music-next]'), false, 'skip must stay enabled on the last track');
+	dom.click('[data-music-next]');
+	await dom.settle(12);
+	assert.equal(dom.text('[data-music-current-title]'), 'the feeling');
+	assert.equal(dom.lastAudio()?.src, '/music/the feeling.mp3');
+	assert.equal(dom.lastAudio()?.playCalls, 1);
+	assert.equal(dom.dataset.state, 'playing');
+});
+
+test('skip on a single-track queue restarts that track from the beginning', async () => {
+	const dom = await boot([FILE_TRACK]);
+	assert.equal(dom.disabled('[data-music-next]'), false, 'skip must stay enabled with one track');
+
+	dom.click('[data-music-next]');
+	await dom.settle(12);
+
+	// A restart builds a fresh audio element, which starts at 0 by
+	// construction; the old one is released rather than left behind.
+	assert.equal(dom.audioRegistry.length, 2);
+	assert.equal(dom.audioRegistry[0]?.src, '');
+	assert.equal(dom.lastAudio()?.src, '/music/the feeling.mp3');
+	assert.equal(dom.lastAudio()?.playCalls, 1);
+	assert.equal(dom.dataset.state, 'playing');
 });
 
 /* --- youtube -------------------------------------------------------------- */
@@ -240,7 +327,10 @@ test('the end of a YouTube video advances to the next track', async () => {
 });
 
 test('an unreachable YouTube API is an error state the operator can read', async () => {
-	const dom = installTestDom({ responses: [{ initialized: true, count: 1, tracks: [YOUTUBE_TRACK] }] });
+	const dom = installTestDom({
+		responses: [{ initialized: true, count: 1, tracks: [YOUTUBE_TRACK] }],
+		pathname: '/gizlyy',
+	});
 	// No window.YT: the player has to load the script, and the script fails.
 	const { music } = await modules();
 	music.initMusicPlayer();
@@ -474,7 +564,10 @@ test('an empty saved playlist stays empty and points at the admin panel', async 
 });
 
 test('a failing playlist read leaves the prerendered queue in place', async () => {
-	const dom = installTestDom({ responses: [{ error: 'storage_unconfigured', status: 503 }] });
+	const dom = installTestDom({
+		responses: [{ error: 'storage_unconfigured', status: 503 }],
+		pathname: '/gizlyy',
+	});
 	dom.installYouTubeApi();
 	const { music } = await modules();
 	music.initMusicPlayer();
@@ -489,7 +582,7 @@ test('a failing playlist read leaves the prerendered queue in place', async () =
 });
 
 test('a malformed playlist response is ignored rather than half-applied', async () => {
-	const dom = installTestDom({ responses: ['this is not json'] });
+	const dom = installTestDom({ responses: ['this is not json'], pathname: '/gizlyy' });
 	dom.installYouTubeApi();
 	const { music } = await modules();
 	music.initMusicPlayer();
@@ -517,7 +610,7 @@ test('entries that are not tracks are dropped from the saved playlist', async ()
 });
 
 test('a hung playlist request does not hold the player hostage', async () => {
-	const dom = installTestDom({ responses: [new Error('aborted')] });
+	const dom = installTestDom({ responses: [new Error('aborted')], pathname: '/gizlyy' });
 	dom.installYouTubeApi();
 	const { music } = await modules();
 	music.initMusicPlayer();
