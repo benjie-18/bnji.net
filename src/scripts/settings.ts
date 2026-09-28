@@ -35,8 +35,8 @@
  * Wiring status: every field drives real behaviour.
  *   theme          → scripts/theme.ts (data-theme, theme-color meta)
  *   introEnabled   → scripts/intro.ts + html[data-intro] (pre-paint)
- *   volume/muted   → scripts/music.ts (player transport, two-way with the
- *                    player's own slider/mute button)
+ *   volume/muted   → scripts/music.ts (shared file/YouTube transport; the
+ *                    Settings overlay is the preference control surface)
  *   uiScale        → --ui-scale on <html> (pre-paint + runtime); global.css
  *                    multiplies the root font-size, so the rem-based scale
  *                    tokens move the whole layout

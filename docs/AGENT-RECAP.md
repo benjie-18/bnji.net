@@ -125,10 +125,12 @@ parallax, glass tracking, magnetic buttons, nav), `scroll.ts` (reveals/parallax)
 Admin-only: `admin.ts`, `admin-dashboard.ts`, `board-moderate.ts` — imported by the
 admin pages, never by the shared shell.
 
-Music player: pill UI (`MusicPlayer.astro`), providers `'none'|'youtube'|'spotify'|'file'`
-from `MUSIC_SOURCE` (`src/config/music.config.ts`, shipped as `none`). A blocked load-time
-attempt gets one retry for file/YouTube on the first trusted page input (without cancelling
-it); browser policy is still respected and there is no fake "playing" state.
+Music player: pill UI + playlist popover (`MusicPlayer.astro`), ordered `MUSIC_SOURCE.tracks`
+from `src/config/music.config.ts`. File and YouTube tracks expose progress/end events and
+advance sequentially; Spotify stays an honest embed with manual Skip only (the supported
+Spotify embed contract does not expose music-track progress/end to this player). Volume/mute
+stay in Settings → Audio. A blocked load-time attempt
+gets one retry for controllable tracks on the first trusted page input (without cancelling it).
 
 ## 6. Theme & visual system
 

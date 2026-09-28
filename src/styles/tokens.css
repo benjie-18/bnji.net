@@ -299,6 +299,19 @@
 	/* Anchor targets must clear the floating nav. */
 	--scroll-pad: calc(var(--nav-height) + var(--nav-offset) + 16px);
 
+	/* --- Music player ----------------------------------------------------- */
+	--music-player-control-size: 1.75rem;
+	--music-player-toggle-size: 2.375rem;
+	--music-player-icon-size: 0.8125rem;
+	--music-player-note-size: 0.875rem;
+	--music-player-status-max-width: 14rem;
+	--music-player-expanded-offset: 2.75rem;
+	--music-playlist-width: 24rem;
+	--music-playlist-max-block: 70svh;
+	--music-progress-height: 0.25rem;
+	--music-youtube-frame-size: 12.5rem;
+	--music-spotify-embed-height: 5rem;
+
 	/* --- Motion ----------------------------------------------------------- */
 	/* Hierarchy: background drifts (very slow), display type eases (slow),
 	   sections reveal (moderate), cards subtle, buttons immediate. */
@@ -335,6 +348,8 @@
 	--z-content: 2;
 	--z-board: 25;
 	--z-player: 28;
+	--z-player-embed: 0;
+	--z-player-popover: 1;
 	--z-nav: 35;
 	--z-cursor: 40;
 	--z-skip: 50;
@@ -436,6 +451,13 @@
 		--glass-saturate: 140%;
 		--glass-spot: 130px;
 		--nav-height: 54px;
+		--music-player-status-max-width: 8rem;
+	}
+}
+
+@media (max-width: 560px) {
+	:root {
+		--music-player-status-max-width: 5.5rem;
 	}
 }
 
