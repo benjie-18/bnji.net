@@ -15,7 +15,7 @@ export type BlogPost = CollectionEntry<'blog'>;
 
 /** Route for a post. Always trailing-slashed to match the prerendered directory. */
 export function postUrl(post: BlogPost): string {
-	return `/blog/${post.id}/`;
+	return `/blog/${encodeURIComponent(post.id)}/`;
 }
 
 /** Newest first. */
