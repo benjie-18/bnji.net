@@ -2,6 +2,11 @@
 /**
  * /about/ — profile overview and a link to the full social profile.
  *
+ * HIDDEN FOR NOW: redundant with the /gizlyy/ profile. It is out of the
+ * navigation (src/data/navigation.ts) and out of the sitemap + noindexed,
+ * but the route itself is left intact so bringing it back is a two-line
+ * change (uncomment the nav entry, drop noindex + the sitemap filter).
+ *
  * Copy lives here rather than in data/ because it is prose specific to one page;
  * anything reused (name, location, tagline, socials) comes from data/site.ts.
  */
@@ -15,7 +20,7 @@ const title = `About ${SITE.author.name}`;
 const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SITE.author.location}. ${SITE.author.tagline}`;
 ---
 
-<Layout title="About" description={description}>
+<Layout title="About" description={description} noindex={true}>
 	<PageHeader
 		index="01"
 		label="IDENTITY"

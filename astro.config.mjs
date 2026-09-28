@@ -34,7 +34,11 @@ export default defineConfig({
 			// Being unreachable is not the same as being unlisted, and the
 			// dashboard has no business in a public index. The page also sets
 			// noindex; this is the second, load-bearing half of that.
-			filter: (page) => !page.includes('/admin'),
+			//
+			// /about is hidden for now (redundant with /gizlyy/): it is out of
+			// the nav and noindexed, and a sitemap entry would be a third,
+			// load-bearing leak. Drop the '/about' clause to unhide it.
+			filter: (page) => !page.includes('/admin') && !page.includes('/about'),
 		}),
 	],
 	adapter: cloudflare({

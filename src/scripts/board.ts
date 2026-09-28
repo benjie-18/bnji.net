@@ -326,9 +326,13 @@ probeGrab.appendChild(probeSpan);
 			msg,
 			w: width,
 			h: height,
-			// Collision radius stays one number (the physics engine is
-			// untouched): the bounding circle of the content-sized box.
-			r: Math.max(width, height) / 2,
+			// Per-axis extents: the physics engine models the body as the
+			// pill the bubble actually is (see pillRadius in
+			// board-physics.ts), so the hitbox is exactly w x h — the old
+			// bounding circle made wide bubbles repel vertically at their
+			// width, leaving visible gaps between stacked bubbles.
+			rx: width / 2,
+			ry: height / 2,
 			x: spawnAtComposer
 				? b.width / 2 + (Math.random() - 0.5) * 90
 				: b.width / 2 + (Math.random() - 0.5) * 160,
