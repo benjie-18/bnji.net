@@ -6,9 +6,10 @@
  *   1. an in-flow spacer (INTRO_CONFIG.scrollHeights viewports tall) that
  *      gives the sequence its scroll distance, pushing the real homepage
  *      below it; and
- *   2. a fixed white layer with a single blue glowing star that zooms and
- *      rotates with scroll progress until its energy fills the viewport and
- *      cross-fades into the site (scripts/intro.ts owns the maths).
+ *   2. a fixed theme-aware layer (black in dark mode, white in light mode)
+ *      with a single blue glowing star that zooms and rotates with scroll
+ *      progress until its energy fills the viewport and cross-fades into the
+ *      site (scripts/intro.ts owns the maths).
  *
  * Never a trap:
  *   - html[data-intro="off"] (set pre-paint from the settings store for
@@ -89,7 +90,7 @@ import { INTRO_CONFIG } from '../config/access.config';
 		inset: 0;
 		z-index: var(--z-intro);
 		pointer-events: auto;
-		background: #ffffff;
+		background: var(--intro-layer-bg);
 		will-change: opacity;
 	}
 	html:not(.js) .intro-layer,

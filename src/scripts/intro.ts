@@ -6,10 +6,11 @@
  *
  *   p = scrollY / (spacerHeight - viewportHeight)
  *
- *   - white field with a single blue glowing star;
+ *   - theme-aware field (black in dark mode, white in light mode) with a
+ *     single blue glowing star;
  *   - the star scales (ease-in curve) and rotates smoothly with p, growing
  *     until its energy field fills the viewport;
- *   - in the last 14% the white field and the star cross-fade into the real
+ *   - in the last 14% the field and the star cross-fade into the real
  *     homepage (layer opacity → 0, then hidden so it costs nothing);
  *   - scrolling back up scrubs the sequence in reverse — it is a lens on the
  *     scroll position, never a trap.

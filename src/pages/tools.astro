@@ -1,26 +1,25 @@
 ---
 /**
- * /tools/ — two browser tools, both fully local.
+ * /tools/ — one browser tool, fully local.
  *
  * Each tool is its own component under src/components/tools/ and its behaviour is
  * a module under src/scripts/ started from boot(). The page itself only
- * composes them, so a third tool is one component plus one nav entry — no page
+ * composes them, so a second tool is one component plus one nav entry — no page
  * rewrite.
  *
  * Privacy is a structural property here, not a promise: there is no API route,
- * no fetch and no form post behind either tool, so "nothing is uploaded" is
+ * no fetch and no form post behind the tool, so "nothing is uploaded" is
  * checkable in the diff.
  */
 import GlassPanel from '../components/GlassPanel.astro';
 import PageHeader from '../components/PageHeader.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import ImageConverter from '../components/tools/ImageConverter.astro';
-import JsonFormatter from '../components/tools/JsonFormatter.astro';
 import { SITE } from '../data/site';
 import Layout from '../layouts/Layout.astro';
 import '../styles/tools.css';
 
-const description = `Two tools that run entirely in the browser by ${SITE.author.name}: an image converter and optimizer for PNG, JPEG and WebP, and a JSON formatter and validator. Nothing is uploaded.`;
+const description = `A tool that runs entirely in the browser by ${SITE.author.name}: an image converter and optimizer for PNG, JPEG and WebP. Nothing is uploaded.`;
 ---
 
 <Layout title="Tools" description={description}>
@@ -29,20 +28,19 @@ const description = `Two tools that run entirely in the browser by ${SITE.author
 		label="TOOLS"
 		titleId="page-title"
 		title="Tools that run in your browser"
-		description="Both tools decode, transform and encode locally. No file leaves this tab, there is no upload step, and nothing is stored — close the page and the work is gone."
-		meta={['2 tools', 'No upload', 'No account']}
+		description="The tool decodes, transforms and encodes locally. No file leaves this tab, there is no upload step, and nothing is stored — close the page and the work is gone."
+		meta={['1 tool', 'No upload', 'No account']}
 	/>
 
 	<div class="container tools-body">
 		<ImageConverter />
-		<JsonFormatter />
 
 		<section class="tools-notes" aria-labelledby="tools-notes-title">
 			<SectionHeading
-				index="03"
+				index="02"
 				label="LIMITS"
 				titleId="tools-notes-title"
-				title="What these tools do not do"
+				title="What this tool does not do"
 				description="Said plainly, so nobody waits for a feature that is not there."
 			/>
 
@@ -57,17 +55,9 @@ const description = `Two tools that run entirely in the browser by ${SITE.author
 					</p>
 				</GlassPanel>
 				<GlassPanel variant="quiet" radius="md" pad="md" reveal revealDelay={70}>
-					<h3 class="tools-notes__title">JSON tool</h3>
+					<h3 class="tools-notes__title">Requirements</h3>
 					<p class="tools-notes__text">
-						Formats, minifies and validates JSON in the browser. It does not query schemas or APIs, does
-						not convert YAML, CSV or XML, and does not save anything — the text lives in the editor until
-						you clear it or leave the page.
-					</p>
-				</GlassPanel>
-				<GlassPanel variant="quiet" radius="md" pad="md" reveal revealDelay={140}>
-					<h3 class="tools-notes__title">Both tools</h3>
-					<p class="tools-notes__text">
-						Need a current browser with canvas and the Clipboard API. Large files are refused with the
+						Needs a current browser with canvas support. Large files are refused with the
 						limit stated rather than silently truncated, and a format the browser cannot encode is
 						reported instead of quietly substituted.
 					</p>

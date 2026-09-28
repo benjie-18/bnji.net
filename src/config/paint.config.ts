@@ -9,8 +9,16 @@ export const PAINT_CONFIG = {
 	height: 750,
 	maxImageChars: 850_000,
 	maxStickerCount: 24,
+	/** Import box: a new sticker is fitted inside this, aspect kept. */
 	maxStickerWidth: 60,
 	maxStickerHeight: 39,
+	/**
+	 * Resize ceiling: 4x the import box in each axis. A sticker starts at its
+	 * import size and can be shrunk to nothing or grown up to this — the
+	 * server enforces it as the stored-size limit, so the two agree.
+	 */
+	maxStickerResizeWidth: 240,
+	maxStickerResizeHeight: 156,
 	maxStickerImageChars: 18_000,
 	maxStickerSourceBytes: 8_000_000,
 	maxStickerSourcePixels: 40_000_000,

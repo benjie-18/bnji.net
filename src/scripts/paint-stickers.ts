@@ -384,12 +384,19 @@ export function resizeSticker(sticker: StickerRect, options: ResizeOptions): Sti
 	};
 }
 
-/** The server's sticker limits as a `ResizeBounds`, for the live canvas size. */
+/**
+ * The server's sticker limits as a `ResizeBounds`, for the live canvas size.
+ *
+ * This is the RESIZE ceiling (4x the import box), not the import box itself:
+ * a sticker arrives fitted inside 60x39 and may then grow up to 240x156. The
+ * server enforces the same ceiling on stored stickers, so a size reached here
+ * is a size that publishes.
+ */
 export function stickerResizeBounds(canvasWidth: number, canvasHeight: number): ResizeBounds {
 	return {
 		width: canvasWidth,
 		height: canvasHeight,
-		maxWidth: PAINT_CONFIG.maxStickerWidth,
-		maxHeight: PAINT_CONFIG.maxStickerHeight,
+		maxWidth: PAINT_CONFIG.maxStickerResizeWidth,
+		maxHeight: PAINT_CONFIG.maxStickerResizeHeight,
 	};
 }

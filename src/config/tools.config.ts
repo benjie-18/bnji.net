@@ -1,9 +1,9 @@
 /**
- * BNJI.NET — public configuration for the browser tools on /tools/.
+ * BNJI.NET — public configuration for the browser tool on /tools/.
  *
- * Both tools run entirely inside the visitor's tab. No image, no JSON and no
+ * The tool runs entirely inside the visitor's tab. No image and no
  * file byte is ever uploaded, stored, proxied or logged: there is no API route
- * behind either tool, which is the whole privacy posture. Every limit below is
+ * behind the tool, which is the whole privacy posture. Every limit below is
  * therefore a *client-side guard* — it exists to stop one enormous file from
  * wedging a tab, not to meter an upload.
  *
@@ -94,11 +94,4 @@ export const TOOL_IMAGE_CONFIG = {
 	quality: { min: 30, max: 100, step: 1, default: 82 },
 	/** Hard ceiling on one edge, so a typo cannot ask for a 99999px canvas. */
 	maxDimension: 20_000,
-} as const;
-
-export const TOOL_JSON_CONFIG = {
-	/** Refuse before parsing; parsing a runaway paste should not hang the tab. */
-	maxCharacters: 1_000_000,
-	/** Indent used by Format, in spaces. */
-	indent: 2,
 } as const;

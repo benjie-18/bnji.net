@@ -28,6 +28,9 @@
 	   purple gradient. */
 	--bg: #020204;
 	--bg-void: #000000;
+	/* The intro sequence's full-viewport field: black in the dark theme so the
+	   opening star reads as a night-sky arrival, white in the light theme. */
+	--intro-layer-bg: #000000;
 	/* Atmospheric lighting: cool blues plus the expanded pink/violet/magenta
 	   nebula band. Alphas stay low; this is lighting, not wallpaper. */
 	--aurora-1: rgba(64, 132, 226, 0.085);
@@ -371,6 +374,7 @@
 
 	--bg: #dff3fc;
 	--bg-void: #9fd6ef;
+	--intro-layer-bg: #ffffff;
 	--aurora-1: rgba(255, 255, 255, 0.65); /* sun bloom, top left */
 	--aurora-2: rgba(64, 200, 255, 0.35); /* aqua light, right */
 	--aurora-3: rgba(96, 226, 160, 0.28); /* fresh green, low */

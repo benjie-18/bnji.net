@@ -226,6 +226,10 @@ export function initMusicPlayer(): void {
 	// state that another player instance or a test might read.
 	let tracks: MusicTrack[] = [...MUSIC_SOURCE.tracks];
 	const isBoard = window.location.pathname.startsWith('/board');
+	// Autoplay lives on /gizlyy only. Everywhere else the player boots ready
+	// but silent — the visitor presses play. The trailing slash is stripped so
+	// /gizlyy and /gizlyy/ agree.
+	const isAutoplayPage = (): boolean => window.location.pathname.replace(/\/$/, '') === '/gizlyy';
 	let currentIndex = -1;
 	let currentTrack: MusicTrack | null = null;
 	// The Spotify embed is a real iframe the player owns, so it needs the same
@@ -253,7 +257,10 @@ export function initMusicPlayer(): void {
 
 	const trackIndexFromButton = (button: HTMLButtonElement): number =>
 		Number.parseInt(button.dataset.musicTrackIndex ?? '-1', 10);
-	const canAdvance = (): boolean => currentIndex >= 0 && currentIndex < tracks.length - 1;
+	// Skip is always available while a track is selected: at the end of the
+	// queue it wraps to the beginning (and a single-track queue restarts),
+	// so the button is never disabled for having nowhere to go.
+	const canSkip = (): boolean => currentIndex >= 0 && tracks.length > 0;
 	const isCurrentRequest = (request: number, index: number): boolean =>
 		!destroyed && request === playbackRequest && index === currentIndex;
 
@@ -264,7 +271,7 @@ export function initMusicPlayer(): void {
 			if (isCurrent) button.setAttribute('aria-current', 'true');
 			else button.removeAttribute('aria-current');
 		}
-		nextButton.disabled = !canAdvance();
+		nextButton.disabled = !canSkip();
 	};
 
 	const setCurrentTrackDetails = (track: MusicTrack | null) => {
@@ -297,6 +304,12 @@ export function initMusicPlayer(): void {
 		const durationText = duration > 0 ? formatMusicTime(duration) : '—:—';
 
 		progressFill.style.transform = `scaleX(${ratio})`;
+		// The circular ring around the toggle button reads the same ratio: one
+		// progress value, two presentations (linear bar in the playlist,
+		// circle on the pill). Spotify never reaches here — its progress mode
+		// hides the region and selectTrack resets to 0 — so the ring simply
+		// stays empty for it.
+		playerRoot.style.setProperty('--music-progress', ratio.toFixed(3));
 		progressBar.setAttribute('aria-valuenow', String(percent));
 		progressBar.setAttribute(
 			'aria-valuetext',
@@ -390,7 +403,7 @@ export function initMusicPlayer(): void {
 		stateAnnouncement.textContent = currentTrack ? `${stateLabel}: ${currentTrack.title}` : stateLabel;
 		playButton.setAttribute('aria-label', state === 'playing' || state === 'loading' ? 'Pause music' : 'Play music');
 		playButton.disabled = tracks.length === 0;
-		nextButton.disabled = !canAdvance();
+		nextButton.disabled = !canSkip();
 		syncProgressLoop();
 	};
 
@@ -696,7 +709,7 @@ export function initMusicPlayer(): void {
 		}
 	}
 
-	async function playYouTubeTrack(track: MusicTrack, index: number, request: number) {
+	async function playYouTubeTrack(track: MusicTrack, index: number, request: number, restart = false) {
 		const videoId = parseYouTubeVideoId(track.url);
 		if (!videoId) {
 			setState('error', 'That is not a valid YouTube video link');
@@ -712,7 +725,9 @@ export function initMusicPlayer(): void {
 				youtubeVideoId = videoId;
 				player.loadVideoById(videoId);
 			} else {
-				if (player.getPlayerState?.() === 0) player.seekTo?.(0, true);
+				// A restart rewinds even mid-play; otherwise only a finished video
+				// is rewound before playing again.
+				if (restart || player.getPlayerState?.() === 0) player.seekTo?.(0, true);
 				player.playVideo();
 			}
 
@@ -732,7 +747,7 @@ export function initMusicPlayer(): void {
 		}
 	}
 
-	function playSpotifyTrack(track: MusicTrack, index: number, request: number) {
+	function playSpotifyTrack(track: MusicTrack, index: number, request: number, restart = false) {
 		if (!isCurrentRequest(request, index)) return;
 		const target = parseSpotifyTarget(track.url);
 		if (!target) {
@@ -744,17 +759,21 @@ export function initMusicPlayer(): void {
 		}
 
 		const targetKey = `${target.type}:${target.id}`;
-		if (!spotifyFrame || spotifyTargetKey !== targetKey) mountSpotifyFrame(target, track);
+		// A restart remounts even the same target: reloading the frame is the
+		// only way to take the embed back to the beginning.
+		if (restart || !spotifyFrame || spotifyTargetKey !== targetKey) mountSpotifyFrame(target, track);
 		setState('playing', 'Spotify embed');
 	}
 
-	async function selectTrack(index: number): Promise<void> {
+	async function selectTrack(index: number, restart = false): Promise<void> {
 		if (index < 0 || index >= tracks.length) return;
-		if (index === currentIndex && playerRoot.dataset.state === 'playing') return;
+		if (!restart && index === currentIndex && playerRoot.dataset.state === 'playing') return;
 
 		const track = tracks[index];
 		const request = ++playbackRequest;
-		const canReuseAudio = track.provider === 'file' && audio !== null && audioTrackIndex === index;
+		// A restart never reuses the audio element: a fresh element starts at
+		// 0, which is exactly what "restart from the beginning" means.
+		const canReuseAudio = !restart && track.provider === 'file' && audio !== null && audioTrackIndex === index;
 		currentIndex = index;
 		currentTrack = track;
 		youtubeRequest = track.provider === 'youtube' ? request : 0;
@@ -773,8 +792,8 @@ export function initMusicPlayer(): void {
 		if (!canReuseAudio) releaseAudio();
 
 		setState('loading');
-		if (track.provider === 'youtube') await playYouTubeTrack(track, index, request);
-		else if (track.provider === 'spotify') playSpotifyTrack(track, index, request);
+		if (track.provider === 'youtube') await playYouTubeTrack(track, index, request, restart);
+		else if (track.provider === 'spotify') playSpotifyTrack(track, index, request, restart);
 		else await playFileTrack(track, index, request);
 	}
 
@@ -824,8 +843,13 @@ export function initMusicPlayer(): void {
 	nextButton.addEventListener(
 		'click',
 		() => {
-			if (!canAdvance()) return;
-			void selectTrack(currentIndex + 1);
+			if (!canSkip()) return;
+			// Skip always starts the next song immediately — selectTrack plays,
+			// it never just selects. At the end of the queue it wraps to the
+			// beginning; a single-track queue restarts its one track.
+			const nextIndex = (currentIndex + 1) % tracks.length;
+			if (nextIndex === currentIndex) void selectTrack(currentIndex, true);
+			else void selectTrack(nextIndex);
 		},
 		{ signal },
 	);
@@ -908,6 +932,10 @@ export function initMusicPlayer(): void {
 		removeFirstInputListeners();
 		// The player's own buttons perform their own gesture-aware action.
 		if (event.composedPath().includes(root)) return;
+		// The first-input retry is autoplay by another name, so it follows the
+		// same rule: /gizlyy only. Elsewhere the first input belongs to the
+		// page, and playback waits for an explicit press of play.
+		if (!isAutoplayPage()) return;
 		if (playerRoot.dataset.state !== 'playing' && playerRoot.dataset.state !== 'loading') attemptCurrentTrack();
 	};
 	for (const type of firstInputEvents) {
@@ -1102,8 +1130,15 @@ export function initMusicPlayer(): void {
 		updateTrackButtons();
 		setCurrentTrackDetails(currentTrack);
 		setProgressMode(currentTrack);
+		updateProgress(0, 0);
 		applyAudioSettings();
-		attemptCurrentTrack();
+		if (isAutoplayPage()) {
+			attemptCurrentTrack();
+			return;
+		}
+		// Everywhere else the queue is selected but silent: the first track is
+		// current, the ring and bar sit at zero, and playback waits for play.
+		setState('idle');
 	};
 
 	// Resolve the saved playlist before starting playback. The prerendered

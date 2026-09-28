@@ -318,6 +318,8 @@ export function initBoardPaint(): void {
 			if (bitmap.width * bitmap.height > PAINT_CONFIG.maxStickerSourcePixels) {
 				throw new Error('That image has too many pixels to process safely.');
 			}
+			// The IMPORT box (60x39). Growing past it — up to the 240x156 resize
+			// ceiling — happens through the corner handles, not here.
 			const scale = Math.min(1, PAINT_CONFIG.maxStickerWidth / bitmap.width, PAINT_CONFIG.maxStickerHeight / bitmap.height);
 			const stickerWidth = Math.max(1, Math.round(bitmap.width * scale));
 			const stickerHeight = Math.max(1, Math.round(bitmap.height * scale));
