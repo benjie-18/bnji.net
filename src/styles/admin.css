@@ -536,3 +536,36 @@ html[data-theme='light'] .admin .admin__action[aria-current='true'] {
 	font-size: var(--text-micro);
 	padding: 0.4rem 0.55rem;
 }
+
+/* --- Music playlist ----------------------------------------------------- */
+
+/* The draft form is a card whose fields read better in two columns than in one
+   long stack; it collapses to one column like every other panel here. The
+   heading, hints, error line and button row span the full grid so they stay
+   readable at any width. */
+.admin__playlist-draft {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+	gap: 0.85rem;
+	align-items: start;
+}
+
+.admin__playlist-draft > .admin__h2,
+.admin__playlist-draft > .admin__hint,
+.admin__playlist-draft > .admin__error,
+.admin__playlist-draft > .admin__actions {
+	grid-column: 1 / -1;
+}
+
+/* Provider and link are context the operator chose by pasting a URL, not
+   fields to type into, so they are visually quieter than the editable ones. */
+.admin__playlist-draft .admin__field input[readonly] {
+	color: var(--text-muted);
+}
+
+/* The arrow controls are glyphs, so they need a fixed width to stay square
+   next to the "Remove" capsule. */
+.admin__action--icon {
+	min-inline-size: 2.2rem;
+	text-align: center;
+}

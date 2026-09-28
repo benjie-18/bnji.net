@@ -10,7 +10,14 @@
  * Volume and mute are shared with the Settings overlay through settings.ts.
  * The compact player itself owns play/pause, next and playlist controls.
  */
-import { getMusicTrackMetadata, MUSIC_PROVIDER_URLS, MUSIC_SOURCE, type MusicTrack } from '../config/music.config';
+import {
+	getMusicTrackDateLabel,
+	getMusicTrackMetadata,
+	musicTrackAriaLabel,
+	MUSIC_PROVIDER_URLS,
+	MUSIC_SOURCE,
+	type MusicTrack,
+} from '../config/music.config';
 import { getSettings, subscribeSettings } from './settings';
 
 export type MusicState =
@@ -103,6 +110,25 @@ export function parseSpotifyTarget(value: string): SpotifyTarget | null {
 	}
 }
 
+/**
+ * Is this value a playable track?
+ *
+ * A structural check rather than a cast: the value crossed a network boundary
+ * and a malformed entry must not become a player that silently fails on a
+ * track it cannot describe. `provider` is checked against the closed set
+ * because every branch below switches on it.
+ */
+export function isMusicTrack(value: unknown): value is MusicTrack {
+	if (!value || typeof value !== 'object') return false;
+	const track = value as Partial<MusicTrack>;
+	return (
+		typeof track.id === 'string' &&
+		typeof track.title === 'string' &&
+		typeof track.url === 'string' &&
+		(track.provider === 'file' || track.provider === 'youtube' || track.provider === 'spotify')
+	);
+}
+
 /** Format a media time without showing NaN/Infinity in the UI. */
 export function formatMusicTime(seconds: number): string {
 	if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -142,7 +168,10 @@ export function initMusicPlayer(): void {
 	const progressNote = playerRoot.querySelector<HTMLElement>('[data-music-progress-note]');
 	const elapsedTime = playerRoot.querySelector<HTMLElement>('[data-music-elapsed]');
 	const durationTime = playerRoot.querySelector<HTMLElement>('[data-music-duration]');
-	const trackButtons = Array.from(playerRoot.querySelectorAll<HTMLButtonElement>('[data-music-track-index]'));
+	// Reassigned by renderTrackList(): the prerendered <ol> is replaced when the
+	// saved playlist arrives from /api/playlist, so this cannot stay const.
+	let trackButtons = Array.from(playerRoot.querySelectorAll<HTMLButtonElement>('[data-music-track-index]'));
+	const queueCount = playerRoot.querySelector<HTMLElement>('[data-music-queue-count]');
 	const toggleButton = playerRoot.querySelector<HTMLButtonElement>('[data-music-toggle]');
 
 	if (
@@ -174,7 +203,11 @@ export function initMusicPlayer(): void {
 	started = true;
 	const controller = new AbortController();
 	const { signal } = controller;
-	const tracks = MUSIC_SOURCE.tracks;
+	// Starts as the static config (the seed and the no-D1 fallback) and is
+	// replaced by the saved playlist before playback begins. A copy, never the
+	// config array itself: reassigning `tracks` must not mutate shared module
+	// state that another player instance or a test might read.
+	let tracks: MusicTrack[] = [...MUSIC_SOURCE.tracks];
 	const isBoard = window.location.pathname.startsWith('/board');
 	let currentIndex = -1;
 	let currentTrack: MusicTrack | null = null;
@@ -214,16 +247,20 @@ export function initMusicPlayer(): void {
 
 	const setCurrentTrackDetails = (track: MusicTrack | null) => {
 		const title = track?.title.trim() || (tracks.length ? 'Music off' : 'No songs configured');
-		const { artist, album, publishedAt } = getMusicTrackMetadata(track);
-		const metadata = [artist, album, publishedAt ? `Published ${publishedAt}` : ''].filter(Boolean);
+		const { artist, album } = getMusicTrackMetadata(track);
+		// One definition of the date line, shared with the prerendered markup:
+		// a YouTube upload date says "Published", a Spotify release date says
+		// "Released", and neither is ever printed as the other.
+		const dateLabel = getMusicTrackDateLabel(track);
+		const metadata = [artist, album, dateLabel].filter(Boolean);
 
 		currentTitle.textContent = title;
 		currentArtist.textContent = artist;
 		currentArtist.hidden = !artist;
 		currentAlbum.textContent = album;
 		currentAlbum.hidden = !album;
-		currentDate.textContent = publishedAt ? `Published ${publishedAt}` : '';
-		currentDate.hidden = !publishedAt;
+		currentDate.textContent = dateLabel;
+		currentDate.hidden = !dateLabel;
 		statusTitle.textContent = title;
 		statusMeta.textContent = metadata.join(' · ');
 		statusMeta.hidden = metadata.length === 0;
@@ -815,20 +852,196 @@ export function initMusicPlayer(): void {
 	};
 	activeCleanup = cleanup;
 
-	if (tracks.length === 0) {
-		setCurrentTrackDetails(null);
-		setProgressMode(null);
-		setState('disabled', 'No music configured.');
-		return;
-	}
+	/* --- the saved playlist -------------------------------------------------- */
 
-	currentIndex = 0;
-	currentTrack = tracks[0];
-	updateTrackButtons();
-	setCurrentTrackDetails(currentTrack);
-	setProgressMode(currentTrack);
-	applyAudioSettings();
-	attemptCurrentTrack();
+	/**
+	 * Rebuild the queue list from `tracks`.
+	 *
+	 * The prerendered markup is built from the static config at deploy time;
+	 * this is the same markup built at runtime from the playlist the server
+	 * actually holds. Both use `musicTrackAriaLabel()` and
+	 * `getMusicTrackDateLabel()` from the config, so a track's accessible name
+	 * and its date line cannot differ between the two paths.
+	 *
+	 * Everything is created with createElement/textContent: a title is a
+	 * provider-returned string, and a string that is never markup cannot be
+	 * markup that executes.
+	 */
+	const renderTrackList = (): void => {
+		playlistPanel.querySelector<HTMLElement>('[data-music-track-list]')?.remove();
+		playlistPanel.querySelector<HTMLElement>('.music-player__empty')?.remove();
+		if (queueCount) queueCount.textContent = String(tracks.length);
+
+		if (tracks.length === 0) {
+			// An empty saved playlist is a real state, not an error: the
+			// operator removed every item. Say that, rather than pointing at
+			// a config file that no longer drives the queue.
+			const empty = document.createElement('p');
+			empty.className = 'music-player__empty';
+			empty.textContent = 'The playlist is empty. Add songs from the admin playlist panel.';
+			playlistPanel.appendChild(empty);
+			trackButtons = [];
+			return;
+		}
+
+		const list = document.createElement('ol');
+		list.className = 'music-player__track-list';
+		list.dataset.musicTrackList = '';
+		tracks.forEach((track, index) => {
+			const item = document.createElement('li');
+
+			const button = document.createElement('button');
+			button.className = 'music-player__track';
+			button.type = 'button';
+			button.dataset.musicTrackIndex = String(index);
+			button.dataset.provider = track.provider;
+			button.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
+			button.setAttribute('aria-label', musicTrackAriaLabel(track));
+
+			const number = document.createElement('span');
+			number.className = 'music-player__track-number mono';
+			number.setAttribute('aria-hidden', 'true');
+			number.textContent = String(index + 1).padStart(2, '0');
+
+			const copy = document.createElement('span');
+			copy.className = 'music-player__track-copy';
+
+			const title = document.createElement('span');
+			title.className = 'music-player__track-title';
+			title.textContent = track.title;
+			copy.appendChild(title);
+
+			const { artist, album } = getMusicTrackMetadata(track);
+			if (artist) {
+				const artistLine = document.createElement('span');
+				artistLine.className = 'music-player__track-meta';
+				artistLine.textContent = artist;
+				copy.appendChild(artistLine);
+			}
+			if (album) {
+				const albumLine = document.createElement('span');
+				albumLine.className = 'music-player__track-meta music-player__track-meta--album';
+				albumLine.textContent = album;
+				copy.appendChild(albumLine);
+			}
+			const dateLabel = getMusicTrackDateLabel(track);
+			if (dateLabel) {
+				const dateLine = document.createElement('span');
+				dateLine.className = 'music-player__track-meta music-player__track-meta--date';
+				dateLine.textContent = dateLabel;
+				copy.appendChild(dateLine);
+			}
+
+			const provider = document.createElement('span');
+			provider.className = 'music-player__provider mono';
+			provider.textContent = track.provider;
+
+			// appendChild, not append(): the Workers-types DOM lib declares
+			// append() with an unrelated overload set, so a Node argument does
+			// not resolve. Every other builder in this file uses appendChild.
+			button.appendChild(number);
+			button.appendChild(copy);
+			button.appendChild(provider);
+			item.appendChild(button);
+			list.appendChild(item);
+		});
+		playlistPanel.appendChild(list);
+
+		trackButtons = Array.from(list.querySelectorAll<HTMLButtonElement>('[data-music-track-index]'));
+		for (const button of trackButtons) {
+			button.addEventListener('click', () => void selectTrack(trackIndexFromButton(button)), { signal });
+		}
+	};
+
+	/**
+	 * Swap in the playlist the server returned.
+	 *
+	 * Whatever the static list had selected is dropped first: the saved queue
+	 * may not contain that track, and an index that outlived its playlist is
+	 * how a player ends up playing the wrong song. `releaseAudio()` and the
+	 * frame teardown also stop anything already in flight, because the
+	 * previous selection's media is no longer in the queue.
+	 */
+	const applyPlaylist = (next: MusicTrack[]): void => {
+		tracks = next;
+		currentIndex = -1;
+		currentTrack = null;
+		playbackRequest += 1;
+		releaseAudio();
+		clearSpotifyFrame();
+		if (youtubePlayer) {
+			try {
+				youtubePlayer.pauseVideo();
+			} catch {}
+		}
+
+		renderTrackList();
+		playerRoot.dataset.trackCount = String(tracks.length);
+		playerRoot.dataset.provider = tracks[0]?.provider ?? 'none';
+		updateTrackButtons();
+	};
+
+	/**
+	 * The saved playlist, or null when the static config stands.
+	 *
+	 * null covers three honest cases, all of which mean "play what the page
+	 * shipped with": the store is not initialised yet (nothing to swap in),
+	 * D1 is unconfigured or the query failed, or the response is not the shape
+	 * this player understands. It deliberately does NOT cover an empty array —
+	 * that is a real answer and is passed straight through.
+	 */
+	const loadSavedPlaylist = async (): Promise<MusicTrack[] | null> => {
+		// A hung request must not hold the player hostage: four seconds is
+		// longer than a healthy D1 read and shorter than an operator's patience.
+		const timeout = new AbortController();
+		const timer = window.setTimeout(() => timeout.abort(), 4000);
+		try {
+			const response = await fetch('/api/playlist', {
+				headers: { accept: 'application/json' },
+				credentials: 'same-origin',
+				signal: timeout.signal,
+			});
+			if (!response.ok) return null;
+			const data: unknown = await response.json();
+			if (!data || typeof data !== 'object') return null;
+			const payload = data as { initialized?: unknown; tracks?: unknown };
+			if (payload.initialized !== true || !Array.isArray(payload.tracks)) return null;
+			return payload.tracks.filter(isMusicTrack);
+		} catch {
+			return null;
+		} finally {
+			window.clearTimeout(timer);
+		}
+	};
+
+	const start = (): void => {
+		if (tracks.length === 0) {
+			setCurrentTrackDetails(null);
+			setProgressMode(null);
+			setState('disabled', 'No music configured.');
+			return;
+		}
+
+		currentIndex = 0;
+		currentTrack = tracks[0] ?? null;
+		updateTrackButtons();
+		setCurrentTrackDetails(currentTrack);
+		setProgressMode(currentTrack);
+		applyAudioSettings();
+		attemptCurrentTrack();
+	};
+
+	// Resolve the saved playlist before starting playback. The prerendered
+	// markup is the seed and the fallback; this is the swap. A failure here is
+	// not fatal by design — `loadSavedPlaylist()` returns null and `start()`
+	// runs against the static queue, so a database hiccup costs the operator a
+	// playlist edit, not the visitor their music.
+	void (async () => {
+		const saved = await loadSavedPlaylist();
+		if (destroyed) return;
+		if (saved) applyPlaylist(saved);
+		start();
+	})();
 }
 
 /** Stop media, polling and listeners if the shell is ever torn down. */

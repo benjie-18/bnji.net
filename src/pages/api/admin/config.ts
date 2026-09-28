@@ -22,7 +22,7 @@ import { BOARD_CONFIG } from '../../../config/board.config';
 import { PROFILE_CONFIG, ALLOWED_REACTIONS } from '../../../config/profile.config';
 import { SESSION_CONFIG } from '../../../config/session.config';
 import { DM_INTEGRATION } from '../../../config/integrations.config';
-import { MUSIC_SOURCE } from '../../../config/music.config';
+import { MUSIC_LOOKUP, MUSIC_PLAYLIST, MUSIC_SOURCE } from '../../../config/music.config';
 import { ACCESS_RULES, THEME_CONFIG, INTRO_CONFIG } from '../../../config/access.config';
 import { SITE } from '../../../data/site';
 import { getProfileBySlug, PROFILES } from '../../../data/profiles';
@@ -74,6 +74,12 @@ export async function GET(context: APIContext): Promise<Response> {
 		'NTFY_URL',
 		'BOARD_REST_URL',
 		'BOARD_REST_TOKEN',
+		// Music metadata lookup. Presence only: the values never leave the
+		// environment, so this reports whether the importer can use the Web
+		// API and the Data API, not what they are.
+		'SPOTIFY_CLIENT_ID',
+		'SPOTIFY_CLIENT_SECRET',
+		'YOUTUBE_API_KEY',
 	]) {
 		secretPresence[name] = Boolean(env[name]);
 	}
@@ -129,8 +135,23 @@ export async function GET(context: APIContext): Promise<Response> {
 			{
 				id: 'music',
 				source: 'src/config/music.config.ts',
-				summary: 'Ordered background music playlist and public source links.',
+				summary:
+					'Ordered background music playlist. This array is the seed and the offline fallback; the playlist itself lives in D1 (music_playlist_items) and is edited from /admin → Playlist.',
 				values: { ...MUSIC_SOURCE },
+			},
+			{
+				id: 'music-playlist',
+				source: 'src/config/music.config.ts',
+				summary: 'Admin-managed playlist limits and which metadata lookups are attempted.',
+				values: {
+					maxItems: MUSIC_PLAYLIST.maxItems,
+					maxTitleLength: MUSIC_PLAYLIST.maxTitleLength,
+					maxArtistLength: MUSIC_PLAYLIST.maxArtistLength,
+					maxAlbumLength: MUSIC_PLAYLIST.maxAlbumLength,
+					maxUrlLength: MUSIC_PLAYLIST.maxUrlLength,
+					lookupTimeoutMs: MUSIC_PLAYLIST.lookupTimeoutMs,
+					lookups: MUSIC_LOOKUP,
+				},
 			},
 			{
 				id: 'theme',

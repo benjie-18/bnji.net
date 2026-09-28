@@ -25,6 +25,13 @@ export default defineConfig({
 			ACCESS_TOKEN: envField.string({ context: "server", access: "secret", optional: true }),
 			ACCESS_PASSWORD_SHA: envField.string({ context: "server", access: "secret", optional: true }),
 			ACCESS_SECRET: envField.string({ context: "server", access: "secret", optional: true }),
+			// Music playlist metadata lookup. Both are OPTIONAL: the importer
+			// falls back to public oEmbed and then to manual entry, so the
+			// feature works with none of them configured. Server-context
+			// secrets — never inlined into a client bundle.
+			SPOTIFY_CLIENT_ID: envField.string({ context: "server", access: "secret", optional: true }),
+			SPOTIFY_CLIENT_SECRET: envField.string({ context: "server", access: "secret", optional: true }),
+			YOUTUBE_API_KEY: envField.string({ context: "server", access: "secret", optional: true }),
 		},
 	},
 	integrations: [

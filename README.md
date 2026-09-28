@@ -70,10 +70,10 @@ npm run deploy     # publish to Cloudflare Workers
   field, blue star zooming/rotating until its energy fills the viewport);
   enable/disable comes from the settings store, reduced motion always
   bypasses it.
-- **Background music** — a small status-dot pill (play/pause + mute) with the
-  volume living in the Settings overlay; four swappable sources (YouTube,
-  Spotify, direct file, or none) configured in `src/config/music.config.ts`,
-  each with its own honest control surface. Autoplay is attempted on load;
+- **Background music** — a small status-dot pill (play/pause + mute + playlist)
+  with the volume living in the Settings overlay; an ordered queue of YouTube,
+  Spotify and direct-file tracks, editable from `/admin` → *Playlist* and seeded
+  from `src/config/music.config.ts`, each with its own honest control surface. Autoplay is attempted on load;
   if the load-time attempt is blocked, the first trusted page input triggers
   one additional attempt for file/YouTube without cancelling the visitor's
   action. A tap-to-play fallback remains; Spotify uses its embedded controls.

@@ -216,6 +216,15 @@ Without the migration or without `ACCESS_SECRET` the guard **fails closed** with
 `503 admin_not_configured` rather than serving. Then sign in at `/admin` and
 **change the seeded token immediately**.
 
+The playlist panel needs the same migration — `0008_music_playlist.sql` adds
+`music_playlist_items` and `music_playlist_state` to the existing `BOARD_DB`
+binding. There is no second database and no in-memory fallback: with no binding
+every playlist route answers `503 storage_unconfigured` rather than pretending a
+playlist was saved or, worse, that it was emptied. The optional provider
+credentials (`YOUTUBE_API_KEY`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`)
+are looked up lazily and only improve the importer's autofill — without them it
+falls back to public oEmbed and manual entry, so the panel is never blocked.
+
 ---
 
 ## 7. Panel UI
@@ -233,3 +242,41 @@ Without the migration or without `ACCESS_SECRET` the guard **fails closed** with
   publish timestamps, revisions, action counts and an opaque ephemeral session
   ID. It is not an account or person identifier; local drafts, pointer paths
   and sticker images are never logged. Retention is 60 days, capped at 5,000.
+
+---
+
+## 8. The playlist panel
+
+`/admin` → *Playlist* edits the live queue that `GET /api/playlist` serves to
+the player. `MUSIC_SOURCE.tracks` is the seed and the offline fallback, never
+the live queue: the stored playlist is copied in from it exactly once, and after
+that only this panel changes what plays.
+
+- **Every mutation checks the credential itself** and answers `503` — not
+  `401` — when no credential row exists or no D1 binding is present. A panel
+  that cannot write must not look like a panel that wrote nothing.
+- **Nothing is silently dropped.** A partial `reorder` list returns `409`
+  together with the full stored order, so a stale panel recovers without a
+  second request; duplicates and unknown ids are `409` too. The error
+  vocabulary is a closed set (`invalid_json`, `invalid_link`,
+  `title_required`, `playlist_full`, `invalid_id`, `not_found`,
+  `invalid_order`, `invalid_direction`, `query_failed`,
+  `storage_unconfigured`) and the panel renders the reason.
+- **Links are normalised server-side**, never stored as pasted: canonical
+  YouTube links become `https://youtube.com/watch?v=…` and `http://` /
+  `youtu.be` inputs are accepted and rewritten; Spotify query strings (`?si=`)
+  are stripped. Only single Spotify tracks are accepted — albums and playlists
+  are refused with a reason rather than embedded as something the player cannot
+  advance from.
+- **The date field is provider-dependent.** `musicDateField()` maps
+  youtube → `publishedAt` and spotify → `releaseDate`; the panel relabels the
+  input and its hint per provider so a YouTube upload date is never typed into
+  the Spotify release-date field. `sourceId` is stored for re-resolution;
+  `durationSeconds` stays display-only and is never persisted.
+- **The panel never touches dashboard DOM.** `startAdminPlaylist(root, host)`
+  returns actions and receives exactly two writers (`say`, `fail`), the same
+  contract the rest of the dashboard uses.
+
+`npm test` covers the store (seed-once, dense positions, the UNIQUE
+constraint), link normalisation, the provider lookups and every route's
+refusal, against real SQLite through a D1-shaped adapter.

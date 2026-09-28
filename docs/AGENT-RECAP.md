@@ -125,11 +125,16 @@ parallax, glass tracking, magnetic buttons, nav), `scroll.ts` (reveals/parallax)
 Admin-only: `admin.ts`, `admin-dashboard.ts`, `board-moderate.ts` — imported by the
 admin pages, never by the shared shell.
 
-Music player: pill UI + playlist popover (`MusicPlayer.astro`), ordered `MUSIC_SOURCE.tracks`
-from `src/config/music.config.ts`. File and YouTube tracks expose progress/end events and
-advance sequentially; Spotify stays an honest embed with manual Skip only (the supported
-Spotify embed contract does not expose music-track progress/end to this player). Volume/mute
-stay in Settings → Audio. A blocked load-time attempt
+Music player: pill UI + playlist popover (`MusicPlayer.astro`) over the ordered queue served by
+`GET /api/playlist`. `MUSIC_SOURCE.tracks` in `src/config/music.config.ts` is the SEED and the
+offline fallback, never the live queue: the stored playlist (`music_playlist_items` /
+`music_playlist_state`, D1 `BOARD_DB`) is copied in from it once and is then edited from
+`/admin` → *Playlist*. An empty stored playlist stays empty. File and YouTube tracks expose
+progress/end events and advance sequentially; Spotify stays an honest embed with manual Skip
+only (the supported Spotify embed contract does not expose music-track progress/end to this
+player). Volume/mute stay in Settings → Audio. The prerendered markup and the runtime rebuild
+share `musicTrackAriaLabel()` / `getMusicTrackDateLabel()`, so the announced and rendered
+queue cannot drift. A blocked load-time attempt
 gets one retry for controllable tracks on the first trusted page input (without cancelling it).
 
 ## 6. Theme & visual system
