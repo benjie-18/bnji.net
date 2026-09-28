@@ -156,6 +156,14 @@ const minutes = getReadingTime(post);
 		text-decoration: none;
 	}
 
+	/* The positioned glass panel is the containing block, not the title. */
+	.stretched-link::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+	}
+
 	.post__title a:hover {
 		color: var(--accent-strong);
 	}
