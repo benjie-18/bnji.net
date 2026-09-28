@@ -5,6 +5,7 @@
 	inline-size: min(var(--content-width), calc(100% - 2 * var(--gutter)));
 	margin: var(--paint-section-margin);
 	padding: var(--paint-section-padding);
+	border: 1px solid var(--glass-border);
 	display: grid;
 	gap: var(--paint-section-gap);
 }

@@ -49,11 +49,7 @@ const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · l
 
 			<div class="hero-rule" data-load style="--load-delay: 560ms" aria-hidden="true"></div>
 
-			<p class="hero-byline" data-load style="--load-delay: 650ms">
-				<span class="hero-byline__name">{SITE.author.name}</span>
-				<span class="hero-byline__sep" aria-hidden="true">/</span>
-				<span class="hero-byline__role">{SITE.author.tagline}</span>
-			</p>
+			{/* The placeholder identity line is intentionally omitted from the hero. */}
 
 			<div class="hero-actions actions-stack" data-load style="--load-delay: 850ms">
 				<GlassButton href="/projects/" variant="primary" size="lg" magnetic icon="arrow-right">
@@ -133,7 +129,7 @@ const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · l
 		font-size: var(--text-hero);
 		font-weight: 200;
 		letter-spacing: var(--tracking-tight);
-		line-height: 0.86;
+		line-height: 1;
 		margin: 0;
 	}
 

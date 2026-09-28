@@ -163,7 +163,12 @@ export function initMessageBoard(): void {
 
 	const bounds = (): PhysicsBounds => {
 		const vp = visibleViewport();
-		return { width: vp.width, height: vp.height, ceiling: 76, floor: vp.height - 150 };
+		const mobile = vp.width < 900;
+		// On desktop the nav pill is a real obstacle in the visual layer: leave
+		// the full top field available so bubbles can rise beside it and rebound
+		// at the viewport edge. Mobile keeps the safe header clearance because
+		// its expanded navigation occupies the whole top band.
+		return { width: vp.width, height: vp.height, ceiling: mobile ? 76 : 8, floor: vp.height - 150 };
 	};
 
 	/* Publish the keyboard overlap for CSS (--kb-inset): how much of the
