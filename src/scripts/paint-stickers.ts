@@ -400,3 +400,44 @@ export function stickerResizeBounds(canvasWidth: number, canvasHeight: number): 
 		maxHeight: PAINT_CONFIG.maxStickerResizeHeight,
 	};
 }
+
+/**
+ * Quantize RGBA pixel data in-place to reduce entropy for PNG compression.
+ *
+ * When stickers are resized larger, canvas scaling introduces tens of thousands of
+ * subtle color gradations and dirty transparent fringes. Quantizing color channels
+ * to fewer bits and snapping boundary alpha values allows deflate compression in
+ * `canvas.toDataURL('image/png')` to pack the image under `PAINT_CONFIG.maxStickerImageChars`,
+ * allowing visitors to resize stickers freely up to the maximum bounds.
+ */
+export function quantizePixelData(
+	data: Uint8ClampedArray | Uint8Array,
+	bits: number,
+	alphaThreshold = 6,
+): void {
+	const clampedBits = Math.max(1, Math.min(8, Math.round(bits)));
+	if (clampedBits === 8 && alphaThreshold <= 0) return;
+	const mask = (0xff << (8 - clampedBits)) & 0xff;
+	const round = 1 << (7 - clampedBits);
+	for (let i = 0; i < data.length; i += 4) {
+		const a = data[i + 3]!;
+		if (a <= alphaThreshold) {
+			data[i] = 0;
+			data[i + 1] = 0;
+			data[i + 2] = 0;
+			data[i + 3] = 0;
+			continue;
+		}
+		if (a >= 255 - alphaThreshold) {
+			data[i + 3] = 255;
+		} else if (clampedBits < 8) {
+			data[i + 3] = Math.min(255, (a + round) & mask);
+		}
+		if (clampedBits < 8) {
+			data[i] = Math.min(255, (data[i]! + round) & mask);
+			data[i + 1] = Math.min(255, (data[i + 1]! + round) & mask);
+			data[i + 2] = Math.min(255, (data[i + 2]! + round) & mask);
+		}
+	}
+}
+

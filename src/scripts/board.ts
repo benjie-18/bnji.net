@@ -115,7 +115,7 @@ type BoardMessage = {
 	createdAt: number;
 };
 
-type Body = PhysicsBody & { el: HTMLElement; msg: BoardMessage; w: number; h: number };
+type Body = PhysicsBody & { el: HTMLElement; msg: BoardMessage; w: number; h: number; lastTransform?: string };
 
 let started = false;
 
@@ -133,8 +133,6 @@ export function initMessageBoard(): void {
 	if (!field || !composer || !slider || !sliderValue || !status) return;
 	// Re-bind through the guard: hoisted/closure functions below capture these
 	// names, and control-flow narrowing does not reach into function bodies.
-	// Re-bind through the guard: hoisted/closure functions below capture these
-	// names, and control-flow narrowing does not reach into function bodies.
 	const rootEl: HTMLElement = root;
 	const fieldEl: HTMLUListElement = field;
 	const composerEl: HTMLFormElement = composer;
@@ -146,6 +144,7 @@ export function initMessageBoard(): void {
 	const reduced = prefersReducedMotion();
 	let frame = 0;
 	let lastTime = 0;
+	let isBoardVisible = true;
 	let dragging: Body | null = null;
 
 	/* Visible viewport: when a virtual keyboard is open the layout viewport
@@ -161,14 +160,22 @@ export function initMessageBoard(): void {
 		};
 	};
 
+	let cachedBounds: PhysicsBounds | null = null;
+	const invalidateBounds = () => {
+		cachedBounds = null;
+	};
+
 	const bounds = (): PhysicsBounds => {
-		const vp = visibleViewport();
-		const mobile = vp.width < 900;
-		// On desktop the nav pill is a real obstacle in the visual layer: leave
-		// the full top field available so bubbles can rise beside it and rebound
-		// at the viewport edge. Mobile keeps the safe header clearance because
-		// its expanded navigation occupies the whole top band.
-		return { width: vp.width, height: vp.height, ceiling: mobile ? 76 : 8, floor: vp.height - 150 };
+		if (!cachedBounds) {
+			const vp = visibleViewport();
+			const mobile = vp.width < 900;
+			// On desktop the nav pill is a real obstacle in the visual layer: leave
+			// the full top field available so bubbles can rise beside it and rebound
+			// at the viewport edge. Mobile keeps the safe header clearance because
+			// its expanded navigation occupies the whole top band.
+			cachedBounds = { width: vp.width, height: vp.height, ceiling: mobile ? 76 : 8, floor: vp.height - 150 };
+		}
+		return cachedBounds;
 	};
 
 	/* Publish the keyboard overlap for CSS (--kb-inset): how much of the
@@ -256,6 +263,8 @@ export function initMessageBoard(): void {
 	const MAX_W = 260;
 	const MIN_H = 72;
 
+	const sizeCache = new Map<string, { w: number; h: number }>();
+
 	const probe = document.createElement('li');
 	probe.className = 'board-msg';
 	probe.setAttribute('aria-hidden', 'true');
@@ -268,11 +277,13 @@ export function initMessageBoard(): void {
 	const probeSpan = document.createElement('span');
 	probeSpan.className = 'board-msg__text';
 	probeGrab.appendChild(probeImg);
-probeGrab.appendChild(probeSpan);
+	probeGrab.appendChild(probeSpan);
 	probe.appendChild(probeGrab);
 	fieldEl.appendChild(probe);
 
 	const sizeFor = (msg: BoardMessage): { w: number; h: number } => {
+		const cached = sizeCache.get(msg.id);
+		if (cached) return cached;
 		probeSpan.textContent = msg.text;
 		probeImg.style.display = msg.image ? '' : 'none';
 		probeGrab.style.width = 'max-content';
@@ -280,7 +291,9 @@ probeGrab.appendChild(probeSpan);
 		const w = Math.round(clamp(natural, MIN_W, MAX_W));
 		probeGrab.style.width = `${w}px`;
 		const h = Math.max(MIN_H, probeGrab.offsetHeight);
-		return { w, h };
+		const size = { w, h };
+		sizeCache.set(msg.id, size);
+		return size;
 	};
 
 	function createElement(msg: BoardMessage, spawnAtComposer: boolean): Body {
@@ -351,16 +364,20 @@ probeGrab.appendChild(probeSpan);
 
 	const paint = (body: Body) => {
 		// Center the (no longer square) element on its physics position.
-		body.el.style.transform = `translate3d(${(body.x - body.w / 2).toFixed(1)}px, ${(
+		const transform = `translate3d(${(body.x - body.w / 2).toFixed(1)}px, ${(
 			body.y - body.h / 2
 		).toFixed(1)}px, 0)`;
+		if (body.lastTransform !== transform) {
+			body.lastTransform = transform;
+			body.el.style.transform = transform;
+		}
 	};
 
 	/* --- loop ---------------------------------------------------------------- */
 
 	function loop(now: number) {
 		frame = requestAnimationFrame(loop);
-		if (!isPageVisible()) return;
+		if (!isPageVisible() || !isBoardVisible) return;
 		const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0.016;
 		lastTime = now;
 		stepBodies(bodies, dt, bounds());
@@ -368,7 +385,7 @@ probeGrab.appendChild(probeSpan);
 	}
 
 	const startLoop = () => {
-		if (reduced || frame) return;
+		if (reduced || frame || !isBoardVisible) return;
 		lastTime = 0;
 		frame = requestAnimationFrame(loop);
 	};
@@ -383,7 +400,7 @@ probeGrab.appendChild(probeSpan);
 	};
 
 	document.addEventListener('visibilitychange', () => {
-		if (isPageVisible()) {
+		if (isPageVisible() && isBoardVisible) {
 			startLoop();
 			startPolling();
 			// Catch up on anything posted while the tab was hidden.
@@ -393,6 +410,23 @@ probeGrab.appendChild(probeSpan);
 			stopPolling();
 		}
 	});
+
+	if (typeof IntersectionObserver !== 'undefined') {
+		const boardObserver = new IntersectionObserver((entries) => {
+			for (const entry of entries) {
+				isBoardVisible = entry.isIntersecting;
+				if (isBoardVisible && isPageVisible()) {
+					startLoop();
+					startPolling();
+					pollNow();
+				} else {
+					stopLoop();
+					stopPolling();
+				}
+			}
+		});
+		boardObserver.observe(rootEl);
+	}
 
 	/* --- drag & keyboard move ------------------------------------------------- */
 
@@ -874,8 +908,10 @@ probeGrab.appendChild(probeSpan);
 			} while (cursor && ++guard < 50);
 
 			listItems.textContent = '';
+			const fragment = document.createDocumentFragment();
 			// The API returns newest-first, which is the order we want to read.
-			for (const msg of messages) listItems.appendChild(renderListRow(msg, attach));
+			for (const msg of messages) fragment.appendChild(renderListRow(msg, attach));
+			listItems.appendChild(fragment);
 
 			if (messages.length === 0) {
 				const empty = document.createElement('li');
@@ -970,7 +1006,7 @@ probeGrab.appendChild(probeSpan);
 		// Skip while the full list is open: it holds its own snapshot, and
 		// spawns from polling would reshuffle the field behind the panel the
 		// reader is looking at. closeList() forces a catch-up fetch.
-		if (!isPageVisible() || listOpen()) return;
+		if (!isPageVisible() || !isBoardVisible || listOpen()) return;
 		void loadLatest(true);
 	};
 	const startPolling = () => {
@@ -983,6 +1019,8 @@ probeGrab.appendChild(probeSpan);
 	};
 
 	window.addEventListener('resize', () => {
+		invalidateBounds();
+		sizeCache.clear();
 		updateKeyboardInset();
 		updateChromeInset();
 		if (reduced) relayoutStatic();
@@ -995,10 +1033,12 @@ probeGrab.appendChild(probeSpan);
 	   'scroll' fires when iOS pans the visual viewport inside the layout one. */
 	if (window.visualViewport) {
 		window.visualViewport.addEventListener('resize', () => {
+			invalidateBounds();
 			updateKeyboardInset();
 			updateChromeInset();
 		});
 		window.visualViewport.addEventListener('scroll', () => {
+			invalidateBounds();
 			updateKeyboardInset();
 			updateChromeInset();
 		});

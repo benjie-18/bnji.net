@@ -195,13 +195,20 @@ function encodeCanvas(canvas: HTMLCanvasElement, mime: string, quality?: number)
  * complaining — so the only reliable test is to encode one pixel and look at
  * what came back.
  */
+const encodeSupportCache = new Map<ToolImageFormat, boolean>();
+
 function canEncodeFormat(format: ToolImageFormat): boolean {
 	if (typeof document === 'undefined') return false;
+	const cached = encodeSupportCache.get(format);
+	if (cached !== undefined) return cached;
 	try {
 		const canvas = document.createElement('canvas');
 		if (typeof canvas.toDataURL !== 'function') return false;
-		return mimeFromDataUrl(canvas.toDataURL(IMAGE_MIME[format])) === IMAGE_MIME[format];
+		const supported = mimeFromDataUrl(canvas.toDataURL(IMAGE_MIME[format])) === IMAGE_MIME[format];
+		encodeSupportCache.set(format, supported);
+		return supported;
 	} catch {
+		encodeSupportCache.set(format, false);
 		return false;
 	}
 }
@@ -475,6 +482,8 @@ export function initImageConverter(): void {
 			canvas.height = plan?.height ?? active.height;
 			const context = canvas.getContext('2d');
 			if (!context) throw new Error('this browser refused a 2D canvas');
+			context.imageSmoothingEnabled = true;
+			context.imageSmoothingQuality = 'high';
 			// JPEG has no alpha channel, so a transparent bitmap is flattened
 			// against the canvas's transparent default and reads as black. That
 			// is what a real JPEG conversion looks like, and the format hint
@@ -699,6 +708,7 @@ export function initImageConverter(): void {
  * page's content without a reload.
  */
 export function destroyImageConverter(): void {
+	encodeSupportCache.clear();
 	const release = teardown;
 	teardown = null;
 	started = false;

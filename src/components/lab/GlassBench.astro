@@ -422,6 +422,10 @@
 		});
 
 		// Backdrop switcher buttons
+		let isBenchActive = true;
+		let startMotion = () => {};
+		let stopMotion = () => {};
+
 		root.querySelectorAll<HTMLButtonElement>('[data-bench-set-bg]').forEach((btn) => {
 			btn.addEventListener('click', () => {
 				root.querySelectorAll('[data-bench-set-bg]').forEach((b) => b.classList.remove('is-active'));
@@ -429,6 +433,8 @@
 				const bg = btn.dataset.benchSetBg ?? 'checkerboard';
 				state.bg = bg;
 				backdrop.dataset.benchBackdrop = bg;
+				if (bg === 'motion') startMotion();
+				else stopMotion();
 			});
 		});
 
@@ -483,12 +489,16 @@
 			let angle = 0;
 
 			function drawMotion() {
-				if (!ctx || backdrop?.dataset.benchBackdrop !== 'motion') {
-					animFrame = requestAnimationFrame(drawMotion);
+				animFrame = 0;
+				if (!ctx || !isBenchActive || document.hidden || backdrop?.dataset.benchBackdrop !== 'motion') {
 					return;
 				}
-				const w = (canvas.width = canvas.clientWidth);
-				const h = (canvas.height = canvas.clientHeight);
+				if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+					canvas.width = canvas.clientWidth;
+					canvas.height = canvas.clientHeight;
+				}
+				const w = canvas.width;
+				const h = canvas.height;
 
 				ctx.fillStyle = '#060d1f';
 				ctx.fillRect(0, 0, w, h);
@@ -512,7 +522,21 @@
 				animFrame = requestAnimationFrame(drawMotion);
 			}
 
-			animFrame = requestAnimationFrame(drawMotion);
+			startMotion = () => {
+				if (animFrame || !isBenchActive || document.hidden || backdrop?.dataset.benchBackdrop !== 'motion') return;
+				animFrame = requestAnimationFrame(drawMotion);
+			};
+
+			stopMotion = () => {
+				if (animFrame) {
+					cancelAnimationFrame(animFrame);
+					animFrame = 0;
+				}
+			};
+
+			if (backdrop?.dataset.benchBackdrop === 'motion') {
+				startMotion();
+			}
 		}
 
 		// Smooth Fluid Hover Travel & 3D Micro-Flex Physics
@@ -530,10 +554,9 @@
 		let curLiftZ = 0;
 
 		let hoverAnimId = 0;
-		let isBenchActive = true;
 
 		const updateHoverTravel = () => {
-			if (!isBenchActive) return;
+			if (!isBenchActive || document.hidden) return;
 			const damping = 0.12;
 			curTiltX += (targetTiltX - curTiltX) * damping;
 			curTiltY += (targetTiltY - curTiltY) * damping;
@@ -585,17 +608,34 @@
 		});
 		themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-		// Observer to pause animation loop when offscreen
+		// Observer to pause animation loops when offscreen
 		const obs = new IntersectionObserver((entries) => {
 			for (const entry of entries) {
 				isBenchActive = entry.isIntersecting;
 				if (entry.isIntersecting) {
 					cancelAnimationFrame(hoverAnimId);
 					hoverAnimId = requestAnimationFrame(updateHoverTravel);
+					startMotion();
+				} else {
+					cancelAnimationFrame(hoverAnimId);
+					hoverAnimId = 0;
+					stopMotion();
 				}
 			}
 		});
 		obs.observe(root);
+
+		document.addEventListener('visibilitychange', () => {
+			if (!document.hidden && isBenchActive) {
+				cancelAnimationFrame(hoverAnimId);
+				hoverAnimId = requestAnimationFrame(updateHoverTravel);
+				startMotion();
+			} else if (document.hidden) {
+				cancelAnimationFrame(hoverAnimId);
+				hoverAnimId = 0;
+				stopMotion();
+			}
+		});
 
 		apply();
 	}
