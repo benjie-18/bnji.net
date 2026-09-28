@@ -16,6 +16,7 @@
  *   Overview   security totals + board totals at a glance
  *   Security   the security_events log, filterable by surface / IP / device
  *   Board      message moderation, including hidden and deleted rows
+ *   Playlist   the music queue: import a provider link, edit the draft, reorder
  *   Config     every public config value, plus binding/secret presence
  */
 import Layout from '../../layouts/Layout.astro';
@@ -66,6 +67,9 @@ export const prerender = false;
 			</button>
 			<button class="admin__tab" type="button" data-tab="board" aria-selected="false">
 				Message board
+			</button>
+			<button class="admin__tab" type="button" data-tab="playlist" aria-selected="false">
+				Playlist
 			</button>
 			<button class="admin__tab" type="button" data-tab="security" aria-selected="false">
 				Security log
@@ -198,6 +202,108 @@ export const prerender = false;
 				<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
 			</form>
 			<div class="admin__table-wrap" data-glass data-board-table />
+		</section>
+
+		<!-- Music playlist: import a provider link, edit the draft, reorder -->
+		<section class="admin__panel" data-panel="playlist" hidden>
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">Add a track</h2>
+				<p class="admin__hint">
+					Paste one YouTube video link. Metadata is resolved server-side and every
+					field stays editable before saving; a valid link plus a title is enough,
+					and artist, album and the publication date are optional. If the lookup
+					fails or comes back incomplete, the same form is there to fill in by hand.
+				</p>
+				<form class="admin__form" data-playlist-import>
+					<!--
+						type="text", not type="url": the browser's own "please enter a URL"
+						tooltip cannot say WHY a link was refused, and the server replies with
+						the specific reason (insecure scheme, wrong host, a malformed path, a
+						bad video id). inputmode keeps the URL keyboard on mobile.
+					-->
+					<label class="admin__field">
+						<span>YouTube video URL</span>
+					<input
+						type="text"
+						name="url"
+						required
+						inputmode="url"
+						autocomplete="off"
+						spellcheck="false"
+						placeholder="https://youtube.com/watch?v=… or https://youtu.be/…"
+						data-playlist-url
+					/>
+					</label>
+					<div class="admin__actions">
+						<button class="glass-button glass-button--primary" data-glass="" type="submit" data-playlist-resolve>
+							Resolve metadata
+						</button>
+					</div>
+				</form>
+				<p class="admin__hint" data-playlist-lookup hidden></p>
+			</div>
+
+			<form class="admin__card admin__playlist-draft" data-glass data-playlist-draft hidden>
+				<h2 class="admin__h2">Review before saving</h2>
+				<p class="admin__hint" data-playlist-draft-note></p>
+
+				<label class="admin__field">
+					<span>Provider</span>
+					<input type="text" data-playlist-draft-provider readonly />
+				</label>
+
+				<label class="admin__field">
+					<span>Link (normalised from the provider id)</span>
+					<input type="text" data-playlist-draft-url readonly />
+				</label>
+
+				<label class="admin__field">
+					<span>Title (required)</span>
+					<input type="text" required maxlength="200" data-playlist-draft-title />
+				</label>
+
+				<label class="admin__field">
+					<span>Artist (optional)</span>
+					<input type="text" maxlength="120" data-playlist-draft-artist />
+				</label>
+
+				<label class="admin__field">
+					<span>Album (optional)</span>
+					<input type="text" maxlength="160" data-playlist-draft-album />
+				</label>
+
+				<label class="admin__field">
+					<span data-playlist-date-label>Date (optional)</span>
+					<input
+						type="text"
+						inputmode="numeric"
+						placeholder="YYYY-MM-DD"
+						maxlength="10"
+						data-playlist-draft-date
+					/>
+				</label>
+				<p class="admin__hint" data-playlist-date-hint></p>
+
+				<p class="admin__error" role="alert" data-playlist-error hidden></p>
+
+				<div class="admin__actions">
+					<button class="glass-button glass-button--primary" data-glass="" type="submit" data-playlist-save>
+						Save to playlist
+					</button>
+					<button class="glass-button glass-button--quiet" data-glass="" type="button" data-playlist-discard>
+						Discard draft
+					</button>
+				</div>
+			</form>
+
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">Playlist order</h2>
+				<p class="admin__hint">
+					Order is playback order. An empty playlist stays empty: nothing is restored
+					automatically after the last item is removed.
+				</p>
+				<div class="admin__table-wrap" data-playlist-table></div>
+			</div>
 		</section>
 
 		<!-- Settings: the access token -->

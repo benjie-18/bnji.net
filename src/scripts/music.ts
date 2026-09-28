@@ -1,16 +1,30 @@
 /**
  * BNJI.NET — ordered background-music playlist runtime.
  *
- * File and YouTube tracks expose transport, progress and end events, so they
- * advance in playlist order and drive the progress display. Spotify remains a
- * visible official music embed; its documented iFrame API is for podcast
- * controls and does not guarantee music-track progress/end events, so this
- * player leaves those controls to Spotify rather than inventing state.
+ * Two providers, both with a real transport behind them:
+ *   file     — the built-in <audio> element, from the config array.
+ *   youtube  — the IFrame API, which reports progress and end events.
+ * Both advance in playlist order and drive the progress display, so there is
+ * no provider in the queue whose state this player has to guess at.
+ *
+ * YouTube is the only provider the admin panel can add. There is no upload, no
+ * file picker and no tag parsing anywhere in this module: a `file` track is
+ * authored in src/config/music.config.ts and nothing else.
  *
  * Volume and mute are shared with the Settings overlay through settings.ts.
- * The compact player itself owns play/pause, next and playlist controls.
+ * The compact player itself owns play/pause, next and playlist controls; there
+ * is deliberately no seek slider (the progress bar is read-only) and no volume
+ * slider on the pill, so neither provider is asked to support a control it
+ * does not have.
  */
-import { getMusicTrackMetadata, MUSIC_PROVIDER_URLS, MUSIC_SOURCE, type MusicTrack } from '../config/music.config';
+import {
+	getMusicTrackDateLabel,
+	getMusicTrackMetadata,
+	musicTrackAriaLabel,
+	MUSIC_PROVIDER_URLS,
+	MUSIC_SOURCE,
+	type MusicTrack,
+} from '../config/music.config';
 import { getSettings, subscribeSettings } from './settings';
 
 export type MusicState =
@@ -23,8 +37,6 @@ export type MusicState =
 	| 'disabled';
 
 type PlayerRoot = HTMLElement & { dataset: DOMStringMap & { state?: MusicState } };
-type SpotifyType = 'track' | 'album' | 'playlist';
-type SpotifyTarget = { type: SpotifyType; id: string };
 
 type YtPlayer = {
 	playVideo: () => void;
@@ -50,11 +62,22 @@ type YtWindow = Window & {
 	onYouTubeIframeAPIReady?: () => void;
 };
 
+type SpotifyType = 'track' | 'album' | 'playlist';
+type SpotifyTarget = { type: SpotifyType; id: string };
+
 let started = false;
 let activeCleanup: (() => void) | null = null;
 let youtubeApiPromise: Promise<YtApi> | null = null;
 
-/** Accept a video ID or common YouTube URL shapes from the owner config. */
+/**
+ * Accept a bare video ID or any of the YouTube URL shapes the importer and the
+ * owner config can produce.
+ *
+ * This is the CLIENT parser, so it is deliberately more permissive about hosts
+ * than the server one: it has to cope with whatever a pasted link already in
+ * the config looks like, and it never causes a request — the server-side
+ * allowlist in src/server/music-links.ts is what gates what gets stored.
+ */
 export function parseYouTubeVideoId(value: string): string | null {
 	const input = value.trim();
 	if (/^[\w-]{11}$/.test(input)) return input;
@@ -103,6 +126,25 @@ export function parseSpotifyTarget(value: string): SpotifyTarget | null {
 	}
 }
 
+/**
+ * Is this value a playable track?
+ *
+ * A structural check rather than a cast: the value crossed a network boundary
+ * and a malformed entry must not become a player that silently fails on a
+ * track it cannot describe. `provider` is checked against the closed set
+ * because every branch below switches on it.
+ */
+export function isMusicTrack(value: unknown): value is MusicTrack {
+	if (!value || typeof value !== 'object') return false;
+	const track = value as Partial<MusicTrack>;
+	return (
+		typeof track.id === 'string' &&
+		typeof track.title === 'string' &&
+		typeof track.url === 'string' &&
+		(track.provider === 'file' || track.provider === 'youtube' || track.provider === 'spotify')
+	);
+}
+
 /** Format a media time without showing NaN/Infinity in the UI. */
 export function formatMusicTime(seconds: number): string {
 	if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -142,7 +184,10 @@ export function initMusicPlayer(): void {
 	const progressNote = playerRoot.querySelector<HTMLElement>('[data-music-progress-note]');
 	const elapsedTime = playerRoot.querySelector<HTMLElement>('[data-music-elapsed]');
 	const durationTime = playerRoot.querySelector<HTMLElement>('[data-music-duration]');
-	const trackButtons = Array.from(playerRoot.querySelectorAll<HTMLButtonElement>('[data-music-track-index]'));
+	// Reassigned by renderTrackList(): the prerendered <ol> is replaced when the
+	// saved playlist arrives from /api/playlist, so this cannot stay const.
+	let trackButtons = Array.from(playerRoot.querySelectorAll<HTMLButtonElement>('[data-music-track-index]'));
+	const queueCount = playerRoot.querySelector<HTMLElement>('[data-music-queue-count]');
 	const toggleButton = playerRoot.querySelector<HTMLButtonElement>('[data-music-toggle]');
 
 	if (
@@ -171,13 +216,23 @@ export function initMusicPlayer(): void {
 	}
 
 	const playerYoutubeHost = youtubeHost;
+	const playerSpotifyHost = spotifyHost;
 	started = true;
 	const controller = new AbortController();
 	const { signal } = controller;
-	const tracks = MUSIC_SOURCE.tracks;
+	// Starts as the static config (the seed and the no-D1 fallback) and is
+	// replaced by the saved playlist before playback begins. A copy, never the
+	// config array itself: reassigning `tracks` must not mutate shared module
+	// state that another player instance or a test might read.
+	let tracks: MusicTrack[] = [...MUSIC_SOURCE.tracks];
 	const isBoard = window.location.pathname.startsWith('/board');
 	let currentIndex = -1;
 	let currentTrack: MusicTrack | null = null;
+	// The Spotify embed is a real iframe the player owns, so it needs the same
+	// explicit lifecycle as the YouTube player: mounted on demand, and removed
+	// the moment the queue moves to a track that is not this one.
+	let spotifyFrame: HTMLIFrameElement | null = null;
+	let spotifyTargetKey: string | null = null;
 	let playbackRequest = 0;
 	let destroyed = false;
 	let isCollapsed = false;
@@ -189,8 +244,8 @@ export function initMusicPlayer(): void {
 	let youtubeReady: Promise<YtPlayer> | null = null;
 	let youtubeVideoId: string | null = null;
 	let youtubeRequest = 0;
-	let spotifyFrame: HTMLIFrameElement | null = null;
-	let spotifyTargetKey: string | null = null;
+	/** The one-shot autoplay probe. Cleared on every teardown, never left to fire. */
+	let youtubeProbe: number | null = null;
 	let progressFrame: number | null = null;
 	let lastProgressPaint = 0;
 	let playlistIntersecting = !('IntersectionObserver' in window);
@@ -214,16 +269,20 @@ export function initMusicPlayer(): void {
 
 	const setCurrentTrackDetails = (track: MusicTrack | null) => {
 		const title = track?.title.trim() || (tracks.length ? 'Music off' : 'No songs configured');
-		const { artist, album, publishedAt } = getMusicTrackMetadata(track);
-		const metadata = [artist, album, publishedAt ? `Published ${publishedAt}` : ''].filter(Boolean);
+		const { artist, album } = getMusicTrackMetadata(track);
+		// One definition of the date line, shared with the prerendered markup:
+		// a YouTube upload date says "Published", and that is the only date
+		// this playlist carries.
+		const dateLabel = getMusicTrackDateLabel(track);
+		const metadata = [artist, album, dateLabel].filter(Boolean);
 
 		currentTitle.textContent = title;
 		currentArtist.textContent = artist;
 		currentArtist.hidden = !artist;
 		currentAlbum.textContent = album;
 		currentAlbum.hidden = !album;
-		currentDate.textContent = publishedAt ? `Published ${publishedAt}` : '';
-		currentDate.hidden = !publishedAt;
+		currentDate.textContent = dateLabel;
+		currentDate.hidden = !dateLabel;
 		statusTitle.textContent = title;
 		statusMeta.textContent = metadata.join(' · ');
 		statusMeta.hidden = metadata.length === 0;
@@ -267,6 +326,10 @@ export function initMusicPlayer(): void {
 			return;
 		}
 
+		// Spotify's iFrame API is documented for podcast controls and does not
+		// provide a supported progress or end contract for music tracks, so the
+		// region is hidden rather than driven by a guess. Skip still works,
+		// because advancing is this player's own decision and not an event.
 		if (track.provider === 'spotify') {
 			progressRegion.hidden = true;
 			progressNote.textContent =
@@ -276,6 +339,13 @@ export function initMusicPlayer(): void {
 		}
 
 		progressRegion.hidden = false;
+		// Cleared as well as hidden. Leaving the previous provider's copy in a
+		// hidden node is invisible today, but it is a live trap: any later
+		// branch that reveals the note without writing its own text would
+		// announce Spotify's explanation over a file track. The `!track` and
+		// Spotify branches above both set their own text; this one owns none,
+		// so it owns emptying.
+		progressNote.textContent = '';
 		progressNote.hidden = true;
 	};
 
@@ -314,6 +384,9 @@ export function initMusicPlayer(): void {
 	const setState = (state: MusicState, message?: string) => {
 		playerRoot.dataset.state = state;
 		const stateLabel = message ?? defaultStatus(state);
+		// A custom message is a LABEL, not a sentence: it is composed with
+		// ": <title>" below, so a trailing full stop would be read out as
+		// "unavailable dot" before the title. Keep them stop-less.
 		stateAnnouncement.textContent = currentTrack ? `${stateLabel}: ${currentTrack.title}` : stateLabel;
 		playButton.setAttribute('aria-label', state === 'playing' || state === 'loading' ? 'Pause music' : 'Play music');
 		playButton.disabled = tracks.length === 0;
@@ -378,7 +451,6 @@ export function initMusicPlayer(): void {
 				/* The iframe may be between states; a later settings change reapplies it. */
 			}
 		}
-		// Spotify is controlled by its own embed; there is no volume API.
 	};
 	const unsubscribeSettings = subscribeSettings(applyAudioSettings);
 
@@ -397,7 +469,20 @@ export function initMusicPlayer(): void {
 		spotifyFrame?.remove();
 		spotifyFrame = null;
 		spotifyTargetKey = null;
-		spotifyHost.setAttribute('aria-hidden', 'true');
+		playerSpotifyHost.setAttribute('aria-hidden', 'true');
+	};
+
+	const mountSpotifyFrame = (target: SpotifyTarget, track: MusicTrack): HTMLIFrameElement => {
+		clearSpotifyFrame();
+		const frame = document.createElement('iframe');
+		frame.title = `Spotify player: ${track.title}`;
+		frame.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
+		frame.src = `${MUSIC_PROVIDER_URLS.spotify.embedBase}/${target.type}/${encodeURIComponent(target.id)}?utm_source=generator&theme=0`;
+		playerSpotifyHost.appendChild(frame);
+		playerSpotifyHost.setAttribute('aria-hidden', 'false');
+		spotifyFrame = frame;
+		spotifyTargetKey = `${target.type}:${target.id}`;
+		return frame;
 	};
 
 	const getAudioForTrack = (track: MusicTrack, index: number, request: number): HTMLAudioElement => {
@@ -438,24 +523,11 @@ export function initMusicPlayer(): void {
 			if (isActiveElement()) void advanceAfterEnd(index);
 		});
 		element.addEventListener('error', () => {
-			if (isActiveElement()) setState('error', 'Could not load this audio file.');
+			if (isActiveElement()) setState('error', 'Could not load this audio file');
 		});
 
 		applyAudioSettings();
 		return element;
-	};
-
-	const mountSpotifyFrame = (target: SpotifyTarget, track: MusicTrack): HTMLIFrameElement => {
-		clearSpotifyFrame();
-		const frame = document.createElement('iframe');
-		frame.title = `Spotify player: ${track.title}`;
-		frame.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
-		frame.src = `${MUSIC_PROVIDER_URLS.spotify.embedBase}/${target.type}/${encodeURIComponent(target.id)}?utm_source=generator&theme=0`;
-		spotifyHost.appendChild(frame);
-		spotifyHost.setAttribute('aria-hidden', 'false');
-		spotifyFrame = frame;
-		spotifyTargetKey = `${target.type}:${target.id}`;
-		return frame;
 	};
 
 	const advanceAfterEnd = async (endedIndex: number) => {
@@ -464,7 +536,7 @@ export function initMusicPlayer(): void {
 		if (nextIndex < tracks.length) {
 			await selectTrack(nextIndex);
 		} else {
-			setState('paused', 'Playlist finished.');
+			setState('paused', 'Playlist finished');
 		}
 	};
 
@@ -510,7 +582,9 @@ export function initMusicPlayer(): void {
 					timedOut = true;
 					try {
 						playerInstance?.destroy();
-					} catch {}
+					} catch {
+						/* Best effort: a half-built or already-gone player can refuse, and nothing here depends on it. */
+					}
 					reject(new Error('YouTube player timed out'));
 				}, 15000);
 				try {
@@ -525,7 +599,9 @@ export function initMusicPlayer(): void {
 								if (timedOut || destroyed) {
 									try {
 										event.target.destroy();
-									} catch {}
+									} catch {
+										/* Best effort: a half-built or already-gone player can refuse, and nothing here depends on it. */
+									}
 									reject(new Error('YouTube player is no longer active'));
 									return;
 								}
@@ -541,16 +617,17 @@ export function initMusicPlayer(): void {
 									window.clearTimeout(readyTimer);
 									try {
 										playerInstance?.destroy();
-									} catch {}
+									} catch {
+										/* Best effort: a half-built or already-gone player can refuse, and nothing here depends on it. */
+									}
 									reject(new Error('YouTube playback unavailable'));
 								} else if (currentTrack?.provider === 'youtube') {
-									setState('error', 'YouTube video unavailable.');
+									setState('error', 'YouTube video unavailable');
 								}
 							},
 						},
 					});
 					playerInstance = player;
-					void player;
 				} catch (error) {
 					window.clearTimeout(readyTimer);
 					reject(error instanceof Error ? error : new Error('YouTube player initialization failed'));
@@ -567,9 +644,38 @@ export function initMusicPlayer(): void {
 		return player;
 	}
 
+	/**
+	 * Drop the current YouTube player so the next track builds a fresh one.
+	 *
+	 * `loadVideoById` is the right call for a queue of YouTube videos, and
+	 * ensureYouTubePlayer uses it. What it cannot do is undo the *previous*
+	 * video's listeners, timers and buffered state — and an instance that has
+	 * already fired `onError` for an unavailable or unembeddable video stays in
+	 * that state forever. Destroying is also the only honest cleanup for the
+	 * `destroy()` path below, where an orphaned iframe would keep playing audio
+	 * after the shell is gone.
+	 */
+	const releaseYouTubePlayer = () => {
+		if (youtubeProbe !== null) {
+			window.clearTimeout(youtubeProbe);
+			youtubeProbe = null;
+		}
+		const previous = youtubePlayer;
+		youtubePlayer = null;
+		youtubeReady = null;
+		youtubeVideoId = null;
+		youtubeRequest = 0;
+		if (!previous) return;
+		try {
+			previous.destroy();
+		} catch {
+			/* Best effort: a half-built or already-gone player can refuse, and nothing here depends on it. */
+		}
+	};
+
 	async function playFileTrack(track: MusicTrack, index: number, request: number) {
 		if (!track.url.trim()) {
-			setState('error', 'No audio URL configured.');
+			setState('error', 'No audio URL configured');
 			return;
 		}
 
@@ -586,14 +692,14 @@ export function initMusicPlayer(): void {
 			if (!isCurrentRequest(request, index)) return;
 			const name = (error as { name?: string } | null)?.name;
 			if (name === 'NotAllowedError') setState('blocked');
-			else setState('error', 'Playback failed.');
+			else setState('error', 'Playback failed');
 		}
 	}
 
 	async function playYouTubeTrack(track: MusicTrack, index: number, request: number) {
 		const videoId = parseYouTubeVideoId(track.url);
 		if (!videoId) {
-			setState('error', 'That is not a valid YouTube video link.');
+			setState('error', 'That is not a valid YouTube video link');
 			return;
 		}
 
@@ -612,13 +718,17 @@ export function initMusicPlayer(): void {
 
 			// The IFrame API has no autoplay-refused event. Probe once, without
 			// claiming playback until the player reports playing/buffering.
-			window.setTimeout(() => {
+			// The timer is tracked so a track change (or destroy()) cancels it
+			// instead of letting it fire against a player that is gone.
+			if (youtubeProbe !== null) window.clearTimeout(youtubeProbe);
+			youtubeProbe = window.setTimeout(() => {
+				youtubeProbe = null;
 				if (!isCurrentRequest(request, index) || playerRoot.dataset.state === 'playing') return;
 				const state = player.getPlayerState?.() ?? -1;
 				if (state !== 1 && state !== 3) setState('blocked');
 			}, 1600);
 		} catch {
-			if (isCurrentRequest(request, index)) setState('error', 'Could not load the YouTube player.');
+			if (isCurrentRequest(request, index)) setState('error', 'Could not load the YouTube player');
 		}
 	}
 
@@ -626,7 +736,10 @@ export function initMusicPlayer(): void {
 		if (!isCurrentRequest(request, index)) return;
 		const target = parseSpotifyTarget(track.url);
 		if (!target) {
-			setState('error', 'That is not a valid Spotify link.');
+			// Stop-less, like every other custom message: setState() composes
+			// this with ": <title>", so a trailing full stop is read out as
+			// "link dot" before the title. See the note in setState().
+			setState('error', 'That is not a valid Spotify link');
 			return;
 		}
 
@@ -651,19 +764,18 @@ export function initMusicPlayer(): void {
 		updateProgress(0, 0);
 		updateTrackButtons();
 
-		if (!canReuseAudio) releaseAudio();
-		if (track.provider !== 'youtube' && youtubePlayer) {
-			try {
-				youtubePlayer.pauseVideo();
-			} catch {}
-		}
+		// Leaving YouTube means leaving it for good: pausing the iframe would
+		// keep its listeners, its buffered audio and any error state alive for
+		// a track that is no longer in view. Destroy it, so a `file` track is
+		// the only thing making sound and the next YouTube track starts clean.
+		if (track.provider !== 'youtube') releaseYouTubePlayer();
 		if (track.provider !== 'spotify') clearSpotifyFrame();
+		if (!canReuseAudio) releaseAudio();
 
 		setState('loading');
-		if (track.provider === 'file') await playFileTrack(track, index, request);
-		else if (track.provider === 'youtube') await playYouTubeTrack(track, index, request);
-		else playSpotifyTrack(track, index, request);
-
+		if (track.provider === 'youtube') await playYouTubeTrack(track, index, request);
+		else if (track.provider === 'spotify') playSpotifyTrack(track, index, request);
+		else await playFileTrack(track, index, request);
 	}
 
 	const attemptCurrentTrack = () => {
@@ -673,18 +785,31 @@ export function initMusicPlayer(): void {
 	const pauseCurrentTrack = () => {
 		if (!currentTrack) return;
 		playbackRequest += 1; // make any unresolved play() / API attempt stale
-		if (currentTrack.provider === 'file') {
-			audio?.pause();
-			setState('paused');
-		} else if (currentTrack.provider === 'youtube') {
+		if (currentTrack.provider === 'youtube') {
 			try {
 				youtubePlayer?.pauseVideo();
-			} catch {}
-			setState('paused');
-		} else {
+			} catch {
+				/* Best effort: a half-built or already-gone player can refuse, and nothing here depends on it. */
+			}
+		} else if (currentTrack.provider === 'spotify') {
+			// A pause button has to pause. There is no documented API to pause
+			// the music embed — the iFrame API is specified for podcast controls,
+			// and reaching for an undocumented postMessage verb is exactly the
+			// invented state the rest of this module refuses to have. Removing
+			// the frame is the only lever that reliably stops the audio.
+			//
+			// The cost is stated rather than hidden: unmounting loses the
+			// embed's position, so resuming restarts the track from the
+			// beginning instead of continuing. That is a worse pause than a
+			// real transport offers, and it is still better than a button that
+			// reports "paused" while the music keeps playing. The visitor who
+			// wants a true pause can use the embed's own controls, which is
+			// what the note in setProgressMode points at.
 			clearSpotifyFrame();
-			setState('paused');
+		} else {
+			audio?.pause();
 		}
+		setState('paused');
 	};
 
 	playButton.addEventListener(
@@ -798,15 +923,7 @@ export function initMusicPlayer(): void {
 		intersectionObserver?.disconnect();
 		stopProgressLoop();
 		releaseAudio();
-		clearSpotifyFrame();
-		if (youtubePlayer) {
-			try {
-				youtubePlayer.destroy();
-			} catch {}
-		}
-		youtubePlayer = null;
-		youtubeReady = null;
-		youtubeVideoId = null;
+		releaseYouTubePlayer();
 		playerYoutubeHost.replaceChildren();
 		playlistPanel.hidden = true;
 		playerRoot.dataset.playlistOpen = 'false';
@@ -815,20 +932,191 @@ export function initMusicPlayer(): void {
 	};
 	activeCleanup = cleanup;
 
-	if (tracks.length === 0) {
-		setCurrentTrackDetails(null);
-		setProgressMode(null);
-		setState('disabled', 'No music configured.');
-		return;
-	}
+	/* --- the saved playlist -------------------------------------------------- */
 
-	currentIndex = 0;
-	currentTrack = tracks[0];
-	updateTrackButtons();
-	setCurrentTrackDetails(currentTrack);
-	setProgressMode(currentTrack);
-	applyAudioSettings();
-	attemptCurrentTrack();
+	/**
+	 * Rebuild the queue list from `tracks`.
+	 *
+	 * The prerendered markup is built from the static config at deploy time;
+	 * this is the same markup built at runtime from the playlist the server
+	 * actually holds. Both use `musicTrackAriaLabel()` and
+	 * `getMusicTrackDateLabel()` from the config, so a track's accessible name
+	 * and its date line cannot differ between the two paths.
+	 *
+	 * Everything is created with createElement/textContent: a title is a
+	 * provider-returned string, and a string that is never markup cannot be
+	 * markup that executes.
+	 */
+	const renderTrackList = (): void => {
+		playlistPanel.querySelector<HTMLElement>('[data-music-track-list]')?.remove();
+		playlistPanel.querySelector<HTMLElement>('.music-player__empty')?.remove();
+		if (queueCount) queueCount.textContent = String(tracks.length);
+
+		if (tracks.length === 0) {
+			// An empty saved playlist is a real state, not an error: the
+			// operator removed every item. Say that, rather than pointing at
+			// a config file that no longer drives the queue.
+			const empty = document.createElement('p');
+			empty.className = 'music-player__empty';
+			empty.textContent = 'The playlist is empty. Add songs from the admin playlist panel.';
+			playlistPanel.appendChild(empty);
+			trackButtons = [];
+			return;
+		}
+
+		const list = document.createElement('ol');
+		list.className = 'music-player__track-list';
+		list.dataset.musicTrackList = '';
+		tracks.forEach((track, index) => {
+			const item = document.createElement('li');
+
+			const button = document.createElement('button');
+			button.className = 'music-player__track';
+			button.type = 'button';
+			button.dataset.musicTrackIndex = String(index);
+			button.dataset.provider = track.provider;
+			button.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
+			button.setAttribute('aria-label', musicTrackAriaLabel(track));
+
+			const number = document.createElement('span');
+			number.className = 'music-player__track-number mono';
+			number.setAttribute('aria-hidden', 'true');
+			number.textContent = String(index + 1).padStart(2, '0');
+
+			const copy = document.createElement('span');
+			copy.className = 'music-player__track-copy';
+
+			const title = document.createElement('span');
+			title.className = 'music-player__track-title';
+			title.textContent = track.title;
+			copy.appendChild(title);
+
+			const { artist, album } = getMusicTrackMetadata(track);
+			if (artist) {
+				const artistLine = document.createElement('span');
+				artistLine.className = 'music-player__track-meta';
+				artistLine.textContent = artist;
+				copy.appendChild(artistLine);
+			}
+			if (album) {
+				const albumLine = document.createElement('span');
+				albumLine.className = 'music-player__track-meta music-player__track-meta--album';
+				albumLine.textContent = album;
+				copy.appendChild(albumLine);
+			}
+			const dateLabel = getMusicTrackDateLabel(track);
+			if (dateLabel) {
+				const dateLine = document.createElement('span');
+				dateLine.className = 'music-player__track-meta music-player__track-meta--date';
+				dateLine.textContent = dateLabel;
+				copy.appendChild(dateLine);
+			}
+
+			const provider = document.createElement('span');
+			provider.className = 'music-player__provider mono';
+			provider.textContent = track.provider;
+
+			// appendChild, not append(): the Workers-types DOM lib declares
+			// append() with an unrelated overload set, so a Node argument does
+			// not resolve. Every other builder in this file uses appendChild.
+			button.appendChild(number);
+			button.appendChild(copy);
+			button.appendChild(provider);
+			item.appendChild(button);
+			list.appendChild(item);
+		});
+		playlistPanel.appendChild(list);
+
+		trackButtons = Array.from(list.querySelectorAll<HTMLButtonElement>('[data-music-track-index]'));
+		for (const button of trackButtons) {
+			button.addEventListener('click', () => void selectTrack(trackIndexFromButton(button)), { signal });
+		}
+	};
+
+	/**
+	 * Swap in the playlist the server returned.
+	 *
+	 * Whatever the static list had selected is dropped first: the saved queue
+	 * may not contain that track, and an index that outlived its playlist is
+	 * how a player ends up playing the wrong song. `releaseAudio()` and the
+	 * frame teardown also stop anything already in flight, because the
+	 * previous selection's media is no longer in the queue.
+	 */
+	const applyPlaylist = (next: MusicTrack[]): void => {
+		tracks = next;
+		currentIndex = -1;
+		currentTrack = null;
+		playbackRequest += 1;
+		releaseAudio();
+		releaseYouTubePlayer();
+
+		renderTrackList();
+		playerRoot.dataset.trackCount = String(tracks.length);
+		playerRoot.dataset.provider = tracks[0]?.provider ?? 'none';
+		updateTrackButtons();
+	};
+
+	/**
+	 * The saved playlist, or null when the static config stands.
+	 *
+	 * null covers three honest cases, all of which mean "play what the page
+	 * shipped with": the store is not initialised yet (nothing to swap in),
+	 * D1 is unconfigured or the query failed, or the response is not the shape
+	 * this player understands. It deliberately does NOT cover an empty array —
+	 * that is a real answer and is passed straight through.
+	 */
+	const loadSavedPlaylist = async (): Promise<MusicTrack[] | null> => {
+		// A hung request must not hold the player hostage: four seconds is
+		// longer than a healthy D1 read and shorter than an operator's patience.
+		const timeout = new AbortController();
+		const timer = window.setTimeout(() => timeout.abort(), 4000);
+		try {
+			const response = await fetch('/api/playlist', {
+				headers: { accept: 'application/json' },
+				credentials: 'same-origin',
+				signal: timeout.signal,
+			});
+			if (!response.ok) return null;
+			const data: unknown = await response.json();
+			if (!data || typeof data !== 'object') return null;
+			const payload = data as { initialized?: unknown; tracks?: unknown };
+			if (payload.initialized !== true || !Array.isArray(payload.tracks)) return null;
+			return payload.tracks.filter(isMusicTrack);
+		} catch {
+			return null;
+		} finally {
+			window.clearTimeout(timer);
+		}
+	};
+
+	const start = (): void => {
+		if (tracks.length === 0) {
+			setCurrentTrackDetails(null);
+			setProgressMode(null);
+			setState('disabled', 'No music configured');
+			return;
+		}
+
+		currentIndex = 0;
+		currentTrack = tracks[0] ?? null;
+		updateTrackButtons();
+		setCurrentTrackDetails(currentTrack);
+		setProgressMode(currentTrack);
+		applyAudioSettings();
+		attemptCurrentTrack();
+	};
+
+	// Resolve the saved playlist before starting playback. The prerendered
+	// markup is the seed and the fallback; this is the swap. A failure here is
+	// not fatal by design — `loadSavedPlaylist()` returns null and `start()`
+	// runs against the static queue, so a database hiccup costs the operator a
+	// playlist edit, not the visitor their music.
+	void (async () => {
+		const saved = await loadSavedPlaylist();
+		if (destroyed) return;
+		if (saved) applyPlaylist(saved);
+		start();
+	})();
 }
 
 /** Stop media, polling and listeners if the shell is ever torn down. */
@@ -916,8 +1204,4 @@ function loadYouTubeApi(): Promise<YtApi> {
 		throw error;
 	});
 	return youtubeApiPromise;
-}
-
-function parseSpotifyTargetForEmbed(value: string): SpotifyTarget | null {
-	return parseSpotifyTarget(value);
 }

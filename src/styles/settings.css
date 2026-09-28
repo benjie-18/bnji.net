@@ -6,10 +6,21 @@
    Layout.astro — but the cascade stays component-scoped by convention).
 
    The panel's glass comes from data-glass="raised" (styles/glass.css):
-   token-driven, correct in both themes, no hand-rolled backdrop-filter in
-   this file. The backdrop is a plain dim — deliberately NOT another blurred
-   surface, because it sits under a glass panel and double-blur costs fill
-   rate for no visible gain.
+   token-driven and correct in both themes. This file also blurs in two more
+   places, and both predate the token work:
+
+     - .settings-backdrop, a plain dim with a light blur. Deliberately light:
+       it sits UNDER a glass panel, so a second heavy blur there would cost fill
+       rate for no visible gain.
+     - .settings-overlay, a denser blur than the default variant, because the
+       panel needs a firmer foundation to stay readable over busy pages.
+
+   Both spell out their blur values instead of reading var(--glass-blur). That
+   is a gap, not a decision — the AGENTS.md rule is that every blur comes from
+   the glass system, and these are the only two in the tree that do not. They
+   are left alone here because changing them is a visual change to a surface
+   that is already shipped, and this session's scope was the code entry, not a
+   re-tune of the panel's glass.
 
    Mobile-safe by the same contract as the board panels: svh/dvh sizing and
    env(safe-area-inset-*) padding, so the overlay fits the small viewport and
@@ -293,6 +304,69 @@ html[data-theme='light'] .settings-segment__option input:checked + span {
 
 .settings-segment__option:hover span {
 	color: var(--text-strong);
+}
+
+/* --- Secret codes & admin link -------------------------------------------- */
+/* Two controls that hold no store field: a placeholder code field whose
+   dispatch lives in scripts/settings-codes.ts, and a plain link to /admin/.
+   Both use only tokens, and neither animates, so reduced motion has nothing
+   extra to neutralise here. */
+
+/* The code row stacks: the label and its hint take the full width so the
+   masked field and its submit button get a usable line of their own. */
+.settings-row--stack {
+	display: grid;
+	justify-items: start;
+	gap: 0.5rem;
+}
+
+.settings-code__input {
+	inline-size: clamp(8rem, 42vw, 11rem);
+	min-inline-size: 0;
+	padding: 0.35rem 0.6rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-clear);
+	color: var(--text-strong);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: 0.14em;
+}
+
+.settings-code__input::placeholder {
+	color: var(--text-dim);
+	letter-spacing: 0.14em;
+}
+
+.settings-code__input:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+/* The status line. Fixed minimum height so the row below never shifts when a
+   message replaces the idle hint, and never taller than one line of micro
+   text — a message must stay short enough to read at a glance. */
+.settings-code__status {
+	margin: 0;
+	min-block-size: 1.6em;
+	font-size: var(--text-micro);
+	letter-spacing: 0.03em;
+	line-height: 1.6;
+	color: var(--text-dim);
+}
+
+/* The Admin link is a real anchor; `flex: none` keeps the capsule from being
+   squeezed by a long row label on a narrow viewport. */
+.settings-group .glass-button--sm {
+	flex: none;
+}
+
+@media (forced-colors: active) {
+	.settings-code__input {
+		border: 1px solid CanvasText;
+		background: Canvas;
+		color: CanvasText;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {

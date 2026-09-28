@@ -61,6 +61,7 @@ export const PRIMARY_NAV: NavEntry[] = [
 		items: [
 			{ label: 'Projects', href: '/projects/', description: 'Selected work and placeholders' },
 			{ label: 'Lab', href: '/lab/', description: 'Interactive experiments' },
+			{ label: 'Tools', href: '/tools/', description: 'Image and JSON tools that run locally' },
 		],
 	},
 	{ label: 'Board', href: '/board/', description: 'The public message board' },

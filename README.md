@@ -45,6 +45,7 @@ npm run dev        # local dev server with HMR
 npm run build      # static build into dist/
 npm run preview    # build + wrangler dev (Worker-accurate preview)
 npm run check      # build + tsc + wrangler deploy --dry-run
+npm test           # the behaviour suite in tests/ (node:test, no browser needed)
 npm run deploy     # publish to Cloudflare Workers
 ```
 
@@ -70,13 +71,17 @@ npm run deploy     # publish to Cloudflare Workers
   field, blue star zooming/rotating until its energy fills the viewport);
   enable/disable comes from the settings store, reduced motion always
   bypasses it.
-- **Background music** — a small status-dot pill (play/pause + mute) with the
-  volume living in the Settings overlay; four swappable sources (YouTube,
-  Spotify, direct file, or none) configured in `src/config/music.config.ts`,
-  each with its own honest control surface. Autoplay is attempted on load;
-  if the load-time attempt is blocked, the first trusted page input triggers
-  one additional attempt for file/YouTube without cancelling the visitor's
-  action. A tap-to-play fallback remains; Spotify uses its embedded controls.
+- **Background music** — a small status-dot pill (play/pause + mute + playlist)
+  with the volume living in the Settings overlay; an ordered queue of YouTube,
+  Spotify and direct-file tracks, editable from `/admin` → *Playlist* and
+  seeded from `src/config/music.config.ts`. Autoplay is attempted on load; if
+  the load-time attempt is blocked, the first trusted page input triggers one
+  additional attempt without cancelling the visitor's action, and a tap-to-play
+  fallback remains. File and YouTube tracks expose a real transport, so the
+  queue always shows progress and advances on its own; a Spotify track is an
+  embed with no supported music-track progress or end event, so the progress
+  region is hidden with a note saying why and its own controls take over —
+  Skip still works.
 - **Profile card** — link-in-bio card (avatar orb, badges, bio, chips, link
   rows, copy-handle block) modelled on ayo.so profile cards, placeholder copy.
 - **Public message board** (`/board/`, linked from the nav — no longer a
@@ -101,6 +106,17 @@ npm run deploy     # publish to Cloudflare Workers
   `requestAnimationFrame` loop pause via `IntersectionObserver` when scrolled
   away and on `visibilitychange` when the tab is hidden; the rest are driven by
   user events and have no loop to pause.
+- **Browser tools** (`/tools/`, linked from the Projects dropdown) — two tools
+  that never send anything anywhere, because there is no API route behind
+  either of them. *Image Converter & Optimizer* decodes, resizes and re-encodes
+  PNG, JPEG and WebP locally: aspect-ratio-preserving resize, a quality slider
+  that is disabled (with the reason shown) for PNG, input/output previews with
+  real byte deltas, and a clear error instead of a silent format substitution
+  when a browser cannot encode the requested format. *JSON Formatter &
+  Validator* formats, minifies, copies and clears, keeps the input untouched
+  when a parse fails, and reports the line and column of the failure in every
+  browser (V8 omits the offset for several common errors, so the offset is
+  derived from the text). Limits live in `src/config/tools.config.ts`.
 - **Admin panel** (`/admin`, gated) — one shared access token stored as a
   SHA-256 hash in D1 and rotated from the panel itself; a site-wide statistics
   dashboard built only from data the app already records; board moderation;
@@ -124,20 +140,24 @@ docs/PROFILES.md       the profile page: counters, click tracking, privacy postu
 docs/AGENT-RECAP.md    architecture recap and the invariants to preserve
 docs/DEPLOY.md         owner runbook: migrations, secrets, deploy, verification
 migrations/            D1 schema, applied in order (board, profiles, telemetry,
-                       moderation, admin credential)
+                       moderation, admin credential, music playlist)
+tests/                 behaviour suite: node:test + a DOM shim, so the controllers,
+                       stores and pure geometry run without a browser
 src/
-  config/       music, dm integration, board policy, access rules, theme, intro
-  components/   glass primitives, sections, lab experiments, board, player…
+  config/       music, dm integration, board policy, access rules, theme, intro,
+                browser tools (formats + limits)
+  components/   glass primitives, sections, lab experiments, tools, board, player…
   data/         typed site content (site, navigation, projects, lab, blog…)
   layouts/      Layout (shell) and BlogPost (article chrome)
   middleware.ts route-guard enforcement for ACCESS_RULES
   pages/        routes + API boundaries (board, dm, profile analytics, security
                 enrichment, admin/*)
   scripts/      settings store + overlay, theme, starfield, interactions,
-                scroll, board physics, music, intro, profile, admin…
+                scroll, board physics, music, intro, profile, admin, tools…
   server/       board/profile/security stores, rate limiter, access primitives,
                 the admin guard, env access
-  styles/       tokens, glass, aero, animations, global, lab, board, settings
+  styles/       tokens, glass, aero, animations, global, lab, board, settings,
+                tools
 public/         fonts, favicon, og-cover, manifest, post hero images
 scripts/        verify-access.mjs — build-time protected-route check
 ```

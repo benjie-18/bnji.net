@@ -1,10 +1,11 @@
 /**
  * BNJI.NET — admin dashboard behaviour.
  *
- * Four tabs over three endpoints:
+ * Five tabs over five endpoints:
  *   /api/admin/config    every public config value + binding/secret presence
  *   /api/admin/security  the security_events log, filterable
  *   /api/admin/board     messages with moderation state + moderation actions
+ *   /api/admin/playlist  the music queue: list, add, reorder, remove
  *
  * The page arrives with no data. The token is held in memory by admin.ts and
  * attached to each call; the session cookie rides along automatically. A 401
@@ -16,8 +17,9 @@
  * — both attacker-influenceable, neither ever treated as markup.
  */
 import { adminFetch, coalesce, formatTime, renderFacts, renderTable } from './admin';
+import { startAdminPlaylist } from './admin-playlist';
 
-type TabName = 'stats' | 'overview' | 'board' | 'security' | 'settings' | 'config';
+type TabName = 'stats' | 'overview' | 'board' | 'playlist' | 'security' | 'settings' | 'config';
 
 type PaintActivity = {
 	id: number;
@@ -859,8 +861,14 @@ export function startAdminDashboard(): void {
 			if (active === 'overview') return loadOverview();
 			if (active === 'security') return loadSecurity();
 			if (active === 'board') return loadBoard();
+			if (active === 'playlist') return playlist.load();
 			return loadConfig();
 		});
+
+	// The playlist panel owns its own forms; the dashboard only supplies the
+	// shared status/error lines so every panel reports through one place, and
+	// gets back the loader it needs when the tab is switched to.
+	const playlist = startAdminPlaylist(root, { say, fail });
 
 	root.querySelector('[data-admin-refresh]')?.addEventListener('click', () => {
 		void refresh();

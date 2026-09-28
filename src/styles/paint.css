@@ -259,6 +259,28 @@ html[data-reduced-effects='on'] .board-paint__tool-indicator {
 	cursor: grab;
 }
 
+/*
+ * Sticker resize cursors. The script mirrors which corner handle is under the
+ * pointer onto the root element, so the cursor vocabulary stays in CSS rather
+ * than being assigned one style at a time. The diagonal directions match the
+ * corner each handle sits on.
+ */
+.board-paint[data-sticker-cursor='nwse'] .board-paint__input {
+	cursor: nwse-resize;
+}
+
+.board-paint[data-sticker-cursor='nesw'] .board-paint__input {
+	cursor: nesw-resize;
+}
+
+.board-paint[data-sticker-cursor='grab'] .board-paint__input {
+	cursor: grab;
+}
+
+.board-paint[data-sticker-cursor='grabbing'] .board-paint__input {
+	cursor: grabbing;
+}
+
 .board-paint__status {
 	min-block-size: 1.4em;
 	margin: 0;

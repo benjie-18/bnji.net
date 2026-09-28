@@ -14,6 +14,19 @@
  *                performance mode, cursor effects, star/particle density;
  *   Audio      — mute, volume.
  *
+ * Two controls deliberately hold NO store field, because they are not
+ * preferences:
+ *   Secret codes — a masked field for codes that unlock future UI effects.
+ *                  It changes nothing today: there is no registry entry, so
+ *                  every code answers "not enabled yet". It lives here so the
+ *                  field is finished while the effects land; the dispatch is in
+ *                  scripts/settings-codes.ts, which is also where the security
+ *                  caveats belong. A code is NOT a login and is NOT stored —
+ *                  it is cleared the moment it is submitted and again on close.
+ *   Admin        — a real link to /admin/ (the admin route). It performs no
+ *                  client-side check of its own: the server decides whether a
+ *                  visitor may stay, and sends everyone else to /admin/login.
+ *
  * Every control drives real behaviour (the store's header comment maps each
  * field to its consumer). The hint text under each label says exactly what
  * the setting does — no control pretends to do more than it does.
@@ -165,7 +178,7 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-muted">
 				Mute audio
-				<span class="settings-row__hint">mutes file/YouTube tracks; Spotify embeds control their own audio</span>
+				<span class="settings-row__hint">mutes every track in the playlist — the pill has no mute button of its own</span>
 			</label>
 			<input id="settings-muted" type="checkbox" class="settings-switch" data-setting="muted" />
 		</div>
@@ -173,7 +186,7 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-volume">
 				Volume
-				<span class="settings-row__hint">the player's level for file/YouTube sources — the pill has no slider, this is it (Spotify embeds control their own audio)</span>
+				<span class="settings-row__hint">the player's level for every track — the pill has no slider, this is it</span>
 			</label>
 			<span class="settings-row__control">
 				<input
@@ -186,6 +199,59 @@ import '../styles/settings.css';
 				/>
 				<output class="mono" data-setting-output="volume">60%</output>
 			</span>
+		</div>
+	</fieldset>
+
+	<!--
+		Secret codes. Raw markup rather than the GlassButton component on
+		purpose: GlassButton only forwards the props it declares, so a raw
+		`glass-button` element is how a control carries a `data-settings-*`
+		hook at all (the same reason the lab's tool buttons are raw).
+	-->
+	<fieldset class="settings-group">
+		<legend class="settings-group__title mono">Secret codes</legend>
+
+		<div class="settings-row settings-row--stack">
+			<label class="settings-row__label" for="settings-code">
+				Code
+				<span class="settings-row__hint">
+					for effects that are not wired up yet — nothing is stored, and a code is not a login
+				</span>
+			</label>
+			<span class="settings-row__control">
+				<input
+					id="settings-code"
+					class="settings-code__input"
+					type="password"
+					autocomplete="off"
+					spellcheck="false"
+					placeholder="••••••"
+					aria-describedby="settings-code-status"
+					data-settings-code
+				/>
+				<button class="glass-button glass-button--sm" type="button" data-glass="" data-settings-code-submit>
+					Submit
+				</button>
+			</span>
+		</div>
+
+		<p class="settings-code__status mono" id="settings-code-status" role="status" aria-live="polite" data-settings-code-status>
+			Type a code and submit it.
+		</p>
+	</fieldset>
+
+	<!-- Admin: a real link to the real route. No client-side check of its own. -->
+	<fieldset class="settings-group">
+		<legend class="settings-group__title mono">Admin</legend>
+
+		<div class="settings-row">
+			<span class="settings-row__label">
+				Admin panel
+				<span class="settings-row__hint">opens /admin/ — the server asks for the token there</span>
+			</span>
+			<a class="glass-button glass-button--sm" href="/admin/" data-glass="">
+				Admin
+			</a>
 		</div>
 	</fieldset>
 </section>

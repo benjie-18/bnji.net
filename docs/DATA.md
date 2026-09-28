@@ -228,7 +228,10 @@ created by migrations `0006_board_paint.sql` and
 - The drawing PNG is capped at 850,000 data-URL characters. Stickers are resized
   client-side into a 60 × 39 pixel maximum box with aspect ratio preserved,
   encoded as PNG, and limited server-side to 24 items, 18,000 characters each,
-  and 180,000 characters total. The combined drawing and sticker state is capped
+  and 180,000 characters total. Because `validateStickers()` requires a stored
+  PNG's own pixel dimensions to match the sticker's width and height, a resize
+  is not a rectangle-only change: the bitmap is re-encoded at the new size from
+  the upload-time original, so repeated resizes never compound resampling. The combined drawing and sticker state is capped
   at 1,050,000 characters; the streamed JSON request is capped at 1,100,000
   bytes. The D1 per-string/row ceiling is 2,000,000 bytes, leaving row headroom
   [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
@@ -241,9 +244,10 @@ The browser keeps drawing operations and sticker changes local until **Sync &
 refresh** publishes them. The request carries its base revision. If another
 visitor publishes first, the server returns the newer drawing and sticker
 state; local drawing marks are rebased above that snapshot and sticker edits
-are replayed by stable ID. A conflicting move/removal of a sticker changed by
-another visitor is skipped and announced rather than silently replacing their
-newer version. Conditional revision updates and D1's atomic `batch()` preserve
+are replayed by stable ID. A conflicting move/removal/resize of a sticker
+changed by another visitor is skipped and announced rather than silently
+replacing their newer version. A resize records the pre-drag rectangle and the
+new bitmap, so undoing it restores the previous size without a second lookup. Conditional revision updates and D1's atomic `batch()` preserve
 concurrent commits. A dropped-response retry reuses the identical request ID
 and payload, so it cannot duplicate an accepted publish. Polling remains a
 conditional 20-second refresh while the section is visible.
@@ -251,7 +255,13 @@ conditional 20-second refresh while the section is visible.
 The drawing tools include pen, eraser, line, rectangle, ellipse, text, spray and
 glow. Stickers remain separate editable items over the drawing snapshot: they
 can be dragged or moved with arrow keys while selected, and removed with the
-eraser. Export includes both layers. Fullscreen covers the whole Paint workspace
+eraser. A selected sticker also shows four corner handles; dragging one resizes
+it with the opposite corner as a fixed anchor, and the aspect ratio stays locked
+unless Shift is held. Alt with an arrow key resizes from the keyboard (Ctrl or
+Cmd frees the ratio), which keeps the whole interaction reachable without a
+pointer. Handles and the selection outline are drawn on the preview layer, which
+is cleared on every gesture and is never published or exported. Export includes
+both layers. Fullscreen covers the whole Paint workspace
 (including its controls), not only the canvas.
 
 ### Published activity and privacy

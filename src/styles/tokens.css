@@ -310,6 +310,8 @@
 	--music-playlist-max-block: 70svh;
 	--music-progress-height: 0.25rem;
 	--music-youtube-frame-size: 12.5rem;
+	/* The Spotify embed is visible (unlike the hidden YouTube player), so it
+	   needs a real height and the playlist has to clear it. */
 	--music-spotify-embed-height: 5rem;
 
 	/* --- Motion ----------------------------------------------------------- */
@@ -348,7 +350,6 @@
 	--z-content: 2;
 	--z-board: 25;
 	--z-player: 28;
-	--z-player-embed: 0;
 	--z-player-popover: 1;
 	--z-nav: 35;
 	--z-cursor: 40;

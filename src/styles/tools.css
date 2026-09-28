@@ -1,0 +1,486 @@
+/**
+ * /tools/ — shared page and control styling.
+ *
+ * Everything here reads tokens (styles/tokens.css): colours, spacing, radii,
+ * focus ring, durations. No new hex values, no hand-rolled blur — the panels
+ * are GlassPanel and the buttons are GlassButton, so the glass language stays
+ * in one place.
+ *
+ * Layout is mobile-first: one column on a phone, a source/controls split from
+ * ~64rem up. Nothing here depends on `html.js`, so the page is fully laid out
+ * before any script runs.
+ */
+
+/* --- page shell ---------------------------------------------------------- */
+
+.tools-body {
+	display: grid;
+	gap: clamp(2rem, 5vw, 3.5rem);
+	padding-block-end: clamp(3rem, 8vh, 6rem);
+}
+
+/* --- one tool ------------------------------------------------------------ */
+
+.tool {
+	display: grid;
+	gap: var(--space-5);
+}
+
+.tool__head {
+	display: grid;
+	gap: var(--space-3);
+	justify-items: start;
+}
+
+.tool__title {
+	margin: 0;
+	font-size: var(--text-title);
+	font-weight: 250;
+	letter-spacing: var(--tracking-snug);
+	line-height: 1.1;
+	color: var(--text-strong);
+	/* Long compound names ("Image Converter & Optimizer") must wrap rather than
+	   overflow a narrow phone. */
+	overflow-wrap: anywhere;
+}
+
+.tool__lead {
+	max-width: 68ch;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--text-small);
+	line-height: 1.6;
+}
+
+.tool__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.tool__body {
+	display: grid;
+	gap: var(--space-5);
+	margin-block-start: var(--space-2);
+}
+
+.tool__pane,
+.tool__controls {
+	display: grid;
+	gap: var(--space-4);
+	align-content: start;
+}
+
+@media (min-width: 64rem) {
+	/* Source on the left, options on the right, everything else full width. */
+	.tool__body {
+		grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+		align-items: start;
+	}
+
+	.tool__actions,
+	.tool__status,
+	.tool__error,
+	.tool__results,
+	.tool__note {
+		grid-column: 1 / -1;
+	}
+}
+
+/* --- labels, hints, values ---------------------------------------------- */
+
+.tool__label {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	font-family: var(--font-body);
+	font-size: var(--text-small);
+	font-weight: 600;
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--text-strong);
+}
+
+.tool__sub-label {
+	font-size: var(--text-micro);
+	color: var(--text-muted);
+}
+
+.tool__value {
+	font-size: var(--text-micro);
+	color: var(--accent-strong);
+}
+
+.tool__hint {
+	margin: 0;
+	max-width: 68ch;
+	font-size: var(--text-small);
+	line-height: 1.55;
+	color: var(--text-muted);
+	/* The hint text carries the "what this does not support" copy, so it has
+	   to stay readable at phone widths. */
+	overflow-wrap: anywhere;
+}
+
+.tool__note {
+	margin: 0;
+	max-width: 78ch;
+	font-size: var(--text-small);
+	line-height: 1.55;
+	color: var(--text-muted);
+	border-inline-start: 2px solid var(--glass-border-strong);
+	padding-inline-start: var(--space-3);
+}
+
+/* --- status + errors ----------------------------------------------------- */
+
+.tool__status {
+	margin: 0;
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.tool__status[data-busy='true'] {
+	color: var(--accent-strong);
+}
+
+.tool__error {
+	margin: 0;
+	max-width: 78ch;
+	font-size: var(--text-small);
+	line-height: 1.55;
+	color: var(--signal-soon);
+	border: 1px solid var(--glass-border-strong);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-quiet);
+	padding: var(--space-3) var(--space-4);
+}
+
+/* --- drop target --------------------------------------------------------- */
+
+/*
+ * The label is the drop zone, mirroring the board's attachment control: the
+ * <input> covers it transparently, so pointer, keyboard and drag all reach the
+ * same element and there is exactly one control to label.
+ */
+.tool-drop {
+	position: relative;
+	display: grid;
+	place-items: center;
+	gap: var(--space-2);
+	min-block-size: 7.5rem;
+	padding: var(--space-5);
+	border: 1px dashed var(--glass-border-strong);
+	border-radius: var(--radius-md);
+	background: var(--glass-bg-clear);
+	color: var(--text-muted);
+	text-align: center;
+	cursor: pointer;
+	transition:
+		border-color var(--dur-fast) var(--ease-soft),
+		background-color var(--dur-fast) var(--ease-soft);
+}
+
+.tool-drop:hover,
+.tool-drop[data-drag-over='true'] {
+	border-color: var(--accent-line);
+	background: var(--accent-soft);
+	color: var(--text-strong);
+}
+
+.tool-drop:focus-within {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 3px;
+}
+
+.tool-drop__input {
+	position: absolute;
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	opacity: 0;
+	cursor: pointer;
+}
+
+.tool-drop__prompt {
+	font-size: var(--text-small);
+	line-height: 1.5;
+}
+
+/* --- controls ------------------------------------------------------------ */
+
+.tool__field {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	border: 0;
+	min-inline-size: 0;
+}
+
+.tool__select,
+.tool__number,
+.tool__editor {
+	inline-size: 100%;
+	min-inline-size: 0;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-clear);
+	color: var(--text-strong);
+	font-family: var(--font-mono);
+	font-size: var(--text-small);
+	padding: var(--space-3);
+}
+
+.tool__select {
+	/* The long option labels carry the format trade-off, so they must not be
+	   clipped by the field. */
+	min-inline-size: 0;
+	text-overflow: ellipsis;
+}
+
+.tool__select:disabled,
+.tool__number:disabled {
+	color: var(--text-dim);
+	cursor: not-allowed;
+}
+
+.tool__number {
+	max-inline-size: 10rem;
+}
+
+.tool__resize {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+}
+
+.tool__dimension {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.tool__check {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	font-size: var(--text-small);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.tool__check input {
+	inline-size: 1.1rem;
+	block-size: 1.1rem;
+	accent-color: var(--accent-strong);
+}
+
+/* Range: same construction as the Lab's sliders so the two pages feel alike. */
+.tool__range {
+	-webkit-appearance: none;
+	appearance: none;
+	inline-size: 100%;
+	block-size: 22px;
+	background: transparent;
+	cursor: pointer;
+}
+
+.tool__range::-webkit-slider-runnable-track {
+	block-size: 4px;
+	border-radius: var(--radius-pill);
+	background: var(--glass-border-strong);
+}
+
+.tool__range::-moz-range-track {
+	block-size: 4px;
+	border-radius: var(--radius-pill);
+	background: var(--glass-border-strong);
+}
+
+.tool__range::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	inline-size: 15px;
+	block-size: 15px;
+	margin-block-start: -5.5px;
+	border-radius: 50%;
+	background: var(--text-strong);
+	border: 2px solid var(--accent-strong);
+}
+
+.tool__range::-moz-range-thumb {
+	inline-size: 15px;
+	block-size: 15px;
+	border-radius: 50%;
+	background: var(--text-strong);
+	border: 2px solid var(--accent-strong);
+}
+
+.tool__range:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 4px;
+}
+
+.tool__range:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+/* --- editor -------------------------------------------------------------- */
+
+.tool__editor {
+	min-block-size: 14rem;
+	resize: vertical;
+	line-height: 1.6;
+	tab-size: 2;
+	/* A JSON document is read line by line, so lines stay lines and long ones
+	   scroll instead of re-wrapping into a different shape. */
+	white-space: pre;
+	overflow-wrap: normal;
+	overflow-x: auto;
+}
+
+.tool__editor::placeholder {
+	color: var(--text-dim);
+}
+
+/* --- actions ------------------------------------------------------------- */
+
+.tool__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+}
+
+@media (max-width: 30rem) {
+	/* Four buttons side by side do not fit a small phone; stack them at full
+	   width so the hit targets stay large. This file is a plain stylesheet, so
+	   the selector needs no :global() wrapper. */
+	.tool__actions {
+		display: grid;
+		grid-template-columns: 1fr;
+	}
+
+	.tool__actions .glass-button {
+		inline-size: 100%;
+		justify-content: center;
+	}
+}
+
+/* --- previews + results -------------------------------------------------- */
+
+.tool__results {
+	display: grid;
+}
+
+.tool__preview {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	min-inline-size: 0;
+}
+
+.tool__preview-img {
+	inline-size: 100%;
+	max-block-size: 18rem;
+	object-fit: contain;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	/* A checkerboard, not a solid fill: a converted PNG's transparency has to
+	   be visible for "JPEG turns it black" to mean anything. */
+	background-color: var(--glass-bg-clear);
+	background-image: repeating-conic-gradient(
+		var(--glass-border) 0% 25%,
+		transparent 0% 50%
+	);
+	background-size: 16px 16px;
+}
+
+.tool__preview-meta {
+	margin: 0;
+	font-size: var(--text-micro);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	overflow-wrap: anywhere;
+}
+
+/* --- trailing limits section -------------------------------------------- */
+
+.tools-notes {
+	display: grid;
+	gap: var(--space-5);
+}
+
+.tools-notes__grid {
+	display: grid;
+	gap: var(--grid-gap);
+}
+
+@media (min-width: 48rem) {
+	.tools-notes__grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+.tools-notes__title {
+	margin: 0 0 var(--space-2);
+	font-size: var(--text-body);
+	font-weight: 600;
+	letter-spacing: var(--tracking-snug);
+	color: var(--text-strong);
+}
+
+.tools-notes__text {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: 1.6;
+	color: var(--text-muted);
+}
+
+/* --- environments ------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+	/* The only transition on this page is the drop zone's colour change; a
+	   visitor who asked for less motion gets the state change, not the fade. */
+	.tool-drop {
+		transition: none;
+	}
+}
+
+@media (forced-colors: active) {
+	/* Glass, checkerboards and tinted error panels all collapse to the system
+	   palette, so the structure has to come from borders instead. */
+	.tool-drop,
+	.tool__select,
+	.tool__number,
+	.tool__editor,
+	.tool__preview-img,
+	.tool__error {
+		border: 1px solid CanvasText;
+		background: Canvas;
+	}
+
+	.tool__preview-img {
+		background-image: none;
+	}
+
+	.tool__error {
+		color: CanvasText;
+	}
+
+	.tool__status,
+	.tool__preview-meta {
+		color: CanvasText;
+	}
+}
