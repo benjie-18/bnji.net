@@ -25,15 +25,15 @@ export type SocialLink = {
 
 export const SITE = {
 	/** Wordmark shown in the nav, hero, footer and 404. */
-	name: 'BNJI',
+	name: 'benji',
 	/** Full name used in metadata. */
 	fullName: 'BNJI.NET',
 	/** Default <title> when a page does not supply one. */
-	title: 'BNJI — Lorem Ipsum Dolor',
+	title: 'BNJI',
 	/** Suffix appended to per-page titles, e.g. "Lab · BNJI". */
 	titleSuffix: 'BNJI',
 	description:
-		'BNJI.NET is a digital hub — lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore.',
+		'bnji.net is my personnal web hub for my projects.',
 	/** Canonical production origin. bnji.net is served by a Cloudflare Worker. */
 	url: 'https://bnji.net',
 	locale: 'en',
@@ -51,10 +51,10 @@ export const SITE = {
 	 * this one place so metadata, JSON-LD and the footer stay consistent.
 	 */
 	author: {
-		name: 'Lorem Ipsum',
-		role: 'Dolor sit amet',
-		tagline: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
-		location: 'Lorem Ipsum',
+		name: 'Benjamin',
+		role: 'Founder',
+		tagline: '',
+		location: 'QC, CA',
 	},
 	/**
 	 * PLACEHOLDER — swap for a real mailbox. It lives here (and only here) so
@@ -62,8 +62,8 @@ export const SITE = {
 	 */
 	email: 'hello@bnji.net',
 	/** PLACEHOLDER profile URL — replace with a real public profile if desired. */
-	github: 'https://github.com/lorem-ipsum',
-	githubHandle: 'lorem-ipsum',
+	github: 'https://github.com/benjie-18',
+	githubHandle: 'benjie-18',
 	/** Year rendered in the footer copyright line. */
 	foundedYear: 2026,
 } as const;

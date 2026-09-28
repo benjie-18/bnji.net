@@ -58,10 +58,10 @@ export type MusicSourceConfig = {
 
 export const MUSIC_SOURCE: MusicSourceConfig = {
 	// ▼▼▼ CONFIGURE HERE ▼▼▼
-	provider: 'none',
+	provider: 'file',
 	youtube: { videoId: '' },
 	spotify: { id: '', type: 'track' },
-	file: { url: '', title: '' },
+	file: { url: '/music/the feeling.mp3', title: 'the feeling' },
 	// ▲▲▲ CONFIGURE HERE ▲▲▲
 	defaultVolume: 0.6,
 };
