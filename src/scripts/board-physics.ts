@@ -7,6 +7,14 @@
  *     composer toward the accumulated stack at the top;
  *   - soft collisions: pairwise position correction + damped impulse, so
  *     elements jostle and settle instead of overlapping or exploding;
+ *   - collision shape: each body is a PILL (capsule) matching the bubble's
+ *     actual CSS shape (border-radius: 999px around the content-sized box).
+ *     The test is exact along both axes — a bubble keeps neighbours out by
+ *     its own width and its own height, nothing more — and an honest
+ *     approximation on diagonals. The old single-radius model used the
+ *     bounding circle of the box (max(w, h) / 2), which made wide bubbles
+ *     collide vertically at their WIDTH: stacked bubbles left a gap as big
+ *     as w - h between their visible edges;
  *   - dragged bodies are kinematic: infinite mass during a drag, but still
  *     push everything else around them (the brief's requirement);
  *   - walls and a ceiling band: the stack accumulates under the nav instead of
@@ -24,8 +32,10 @@ export type PhysicsBody = {
 	y: number;
 	vx: number;
 	vy: number;
-	/** Collision radius in px. */
-	r: number;
+	/** Half the content box width — horizontal collision extent (px). */
+	rx: number;
+	/** Half the content box height — vertical collision extent (px). */
+	ry: number;
 	/** True while a pointer or the keyboard is moving this body directly. */
 	kinematic: boolean;
 };
@@ -54,6 +64,22 @@ export const PHYSICS_DEFAULTS: PhysicsOptions = {
 	restitution: 0.35,
 };
 
+/**
+ * How far a pill extends along the unit direction (nx, ny).
+ *
+ * The bubble is a pill: the Minkowski sum of its long axis (a segment of
+ * half-length |rx - ry|) and an end-cap disc of radius min(rx, ry). The
+ * support of that shape in any direction is the axis projection plus the cap
+ * radius, which is EXACT — and it collapses to the plain radius when
+ * rx === ry (the dark theme's round star orbs). Because the extent is taken
+ * along the line joining two bodies' centres, vertical neighbours separate
+ * by exactly h/2 + h/2 and side-by-side neighbours by w/2 + w/2.
+ */
+function pillRadius(rx: number, ry: number, nx: number, ny: number): number {
+	if (rx >= ry) return (rx - ry) * Math.abs(nx) + ry;
+	return (ry - rx) * Math.abs(ny) + rx;
+}
+
 export function stepBodies(
 	bodies: PhysicsBody[],
 	dt: number,
@@ -80,13 +106,24 @@ export function stepBodies(
 			const b = bodies[j];
 			const dx = b.x - a.x;
 			const dy = b.y - a.y;
-			const minDist = a.r + b.r;
 			const distSq = dx * dx + dy * dy;
-			if (distSq >= minDist * minDist || distSq === 0) continue;
 
-			const dist = Math.sqrt(distSq);
-			const nx = dx / dist;
-			const ny = dy / dist;
+			// Coincident centres: any push-out direction is as good as
+			// another, but the normal still has to be a unit vector.
+			let nx = 0;
+			let ny = 1;
+			let dist = 0;
+			if (distSq > 0) {
+				dist = Math.sqrt(distSq);
+				nx = dx / dist;
+				ny = dy / dist;
+			}
+
+			// Collision extent along the line of centres (exact for circles
+			// and parallel pills; a fair soft-body estimate at angles).
+			const minDist = pillRadius(a.rx, a.ry, nx, ny) + pillRadius(b.rx, b.ry, nx, ny);
+			if (distSq >= minDist * minDist) continue;
+
 			const overlap = minDist - dist;
 
 			// Position correction: kinematic bodies move nothing themselves.
@@ -118,25 +155,25 @@ export function stepBodies(
 	/* Walls, ceiling stack band, composer floor. */
 	for (const body of bodies) {
 		if (body.kinematic) {
-			body.x = Math.min(Math.max(body.x, body.r), bounds.width - body.r);
-			body.y = Math.min(Math.max(body.y, bounds.ceiling + body.r), bounds.floor - body.r);
+			body.x = Math.min(Math.max(body.x, body.rx), bounds.width - body.rx);
+			body.y = Math.min(Math.max(body.y, bounds.ceiling + body.ry), bounds.floor - body.ry);
 			continue;
 		}
-		if (body.x < body.r) {
-			body.x = body.r;
+		if (body.x < body.rx) {
+			body.x = body.rx;
 			body.vx = Math.abs(body.vx) * 0.5;
-		} else if (body.x > bounds.width - body.r) {
-			body.x = bounds.width - body.r;
+		} else if (body.x > bounds.width - body.rx) {
+			body.x = bounds.width - body.rx;
 			body.vx = -Math.abs(body.vx) * 0.5;
 		}
-		if (body.y < bounds.ceiling + body.r) {
+		if (body.y < bounds.ceiling + body.ry) {
 			// Settle into the stack: kill most vertical speed, let collisions
 			// spread the pile sideways.
-			body.y = bounds.ceiling + body.r;
+			body.y = bounds.ceiling + body.ry;
 			body.vy = Math.abs(body.vy) * 0.12;
 			body.vx += (Math.random() - 0.5) * 6;
-		} else if (body.y > bounds.floor - body.r) {
-			body.y = bounds.floor - body.r;
+		} else if (body.y > bounds.floor - body.ry) {
+			body.y = bounds.floor - body.ry;
 			body.vy = -Math.abs(body.vy) * 0.4;
 		}
 	}
@@ -149,12 +186,19 @@ export function staticLayout(
 ): void {
 	const columns = Math.max(2, Math.floor(bounds.width / 190));
 	const cell = bounds.width / columns;
-	bodies.forEach((body, i) => {
-		const col = i % columns;
-		const row = Math.floor(i / columns);
-		body.x = cell * col + cell / 2;
-		body.y = bounds.ceiling + body.r + 12 + row * (body.r * 2 + 18);
-		body.vx = 0;
-		body.vy = 0;
-	});
+	let top = bounds.ceiling + 12;
+	for (let i = 0; i < bodies.length; i += columns) {
+		const row = bodies.slice(i, i + columns);
+		// A row occupies the tallest member's height, so a short bubble in
+		// one row cannot sink into the next one.
+		const halfH = Math.max(...row.map((body) => body.ry));
+		for (let c = 0; c < row.length; c++) {
+			const body = row[c];
+			body.x = cell * (i % columns + c) + cell / 2;
+			body.y = top + halfH;
+			body.vx = 0;
+			body.vy = 0;
+		}
+		top += halfH * 2 + 18;
+	}
 }

@@ -68,7 +68,10 @@ export const PRIMARY_NAV: NavEntry[] = [
 		label: 'Me',
 		slug: 'me',
 		items: [
-			{ label: 'About', href: '/about/', description: 'What this site is' },
+			// Hidden for now — /about/ is redundant with the /gizlyy/ profile.
+			// The page itself still exists (noindexed, out of the sitemap);
+			// re-add this entry to put the link back.
+			// { label: 'About', href: '/about/', description: 'What this site is' },
 			{ label: 'Profile', href: '/gizlyy/', description: 'Personal social profile' },
 			{ label: 'Blog', href: '/blog/', description: 'Notes and placeholder writing' },
 			{ label: 'Contact', href: '/contact/', description: 'Leave a message' },

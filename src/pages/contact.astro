@@ -18,13 +18,11 @@ const CHANNELS = [
 	{
 		icon: 'mail' as const,
 		title: 'Email',
-		body: 'Best for anything with a deadline, a project idea, or a question that needs more than one sentence.',
 		link: SOCIAL_LINKS.find((item) => item.label === 'Email'),
 	},
 	{
 		icon: 'github' as const,
 		title: 'GitHub',
-		body: 'Best for code: an issue on a repository, a pull request, or a bug you found on this site.',
 		link: SOCIAL_LINKS.find((item) => item.label === 'GitHub'),
 	},
 ];
@@ -39,7 +37,6 @@ const CHANNELS = [
 		label="CONTACT"
 		titleId="page-title"
 		title="Leave a message"
-		description="One inbox and one placeholder profile here — the public board for everyone lives on its own page."
 	/>
 
 	<div class="container contact-body">
@@ -51,7 +48,6 @@ const CHANNELS = [
 							<Icon name={channel.icon} size={18} />
 						</span>
 						<h2 class="channel__title">{channel.title}</h2>
-						<p class="channel__body">{channel.body}</p>
 						{channel.link ? (
 							<a class="channel__link" href={channel.link.href} rel={channel.link.rel ?? 'noopener noreferrer'}>
 								{channel.link.handle ?? channel.link.label}
@@ -112,12 +108,6 @@ const CHANNELS = [
 		font-size: 1.1rem;
 		font-weight: 450;
 		letter-spacing: var(--tracking-snug);
-	}
-
-	.channel__body {
-		color: var(--text-muted);
-		font-size: 0.92rem;
-		line-height: 1.6;
 	}
 
 	.channel__link {
