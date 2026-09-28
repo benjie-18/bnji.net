@@ -138,7 +138,135 @@ To add a second profile, create a typed data file under `src/data/profiles/`, re
 
 ## 5. Add or change background music
 
-Edit **`src/config/music.config.ts`**. Add songs to `MUSIC_SOURCE.tracks`; the array order is playback order. Each entry needs a unique `id`, `title`, `provider`, and `url`. For example:
+The playlist lives in the database, and the place you edit it is the admin panel. Two things are involved and they do different jobs:
+
+- **`/admin` → Playlist** — the playlist visitors actually hear. Add, edit, reorder, and remove tracks here.
+- **`src/config/music.config.ts`** — the `MUSIC_SOURCE.tracks` array. It is copied into the database the first time the playlist is read, and it is what the site falls back to if the database is briefly unavailable. Once the database has been seeded, editing this file does **not** change the live playlist; use the admin panel.
+
+`defaultVolume` in the same config still sets the starting volume, and visitors can change volume and mute in **Settings → Audio**.
+
+### First-time setup, in order
+
+Everything below runs from the repository root. Do them once, in this order.
+
+1. **Get a YouTube Data API key.** In Google Cloud Console, create (or reuse) a project, enable the **YouTube Data API v3**, and create an API key under *APIs & Services → Credentials*.
+2. **Restrict the key before you use it.** Set the API restriction to **YouTube Data API v3** only, so the key is useless to anyone who obtains it for anything else. A YouTube Data API key cannot be restricted by HTTP referrer, because the requests are made by the Worker, not by a browser — that is expected, and it is why the API restriction is the one that matters here.
+3. **Apply the database migration.** The playlist needs `migrations/0008_music_playlist.sql`:
+
+   ```powershell
+   npx wrangler d1 migrations apply bnji-board --remote
+   ```
+
+   Until this has run, every playlist route answers `503 storage_unconfigured` rather than pretending a playlist was saved.
+4. **Put the key in the deployed environment** (never in the repository):
+
+   ```powershell
+   npx wrangler secret put YOUTUBE_API_KEY
+   ```
+
+   Wrangler prompts for the value. It is read on the server only, is never sent to a browser, and never appears in a page or a response.
+5. **Deploy** with the usual command in *Deploying the site*.
+6. **Check it locally before relying on it.** Create a git-ignored `.dev.vars` at the repository root with the key and a local session secret, then:
+
+   ```powershell
+   npm run build
+   npx wrangler d1 migrations apply bnji-board --local
+   npx wrangler dev --local --port 8788
+   ```
+
+   `.dev.vars` looks like this, with your own values:
+
+   ```
+   YOUTUBE_API_KEY=
+   ACCESS_SECRET=
+   ```
+
+   `ACCESS_SECRET` is what lets you sign in to `/admin` locally; it is unrelated to the YouTube key. `--local` matters: the project has a second, remote D1 binding, so without it you would be pointing at production data.
+
+You can stop after step 3 if you do not want autofill. Without the key the playlist still works and you type the metadata yourself.
+
+### The whole job, in order
+
+This is the full loop for one video, end to end.
+
+1. Sign in to `/admin` and open the **Playlist** tab.
+2. In **Add a track**, paste one link into the link field and choose **Resolve metadata**.
+3. The panel fills in what it can and shows the provider it recognised. Every field stays editable. Only the title is required; artist, album, and date are optional.
+4. Correct anything the lookup got wrong, or fill in the blanks if it came back empty.
+5. Choose **Save to playlist**. The track is appended to the end of the playlist.
+6. Use **Move up** / **Move down** in the **Playlist order** table to put it where you want it. Each change saves immediately.
+7. Open the site itself and press play on the pill. The video plays in place, the progress bar fills, and the queue advances to the next item on its own.
+8. If a video turns out to be wrong, **Remove** it from the same table. Removing every track leaves the playlist empty on purpose; the site does not quietly restore the old list.
+
+The rest of this section explains each step in more detail.
+
+One link type is accepted, and only over `https://`:
+
+- **YouTube video** — `youtube.com/watch?v=…`, `youtu.be/…`, Shorts, live, and embed links.
+
+Anything else — a different site, an `http://` link, a YouTube playlist or channel link, a malformed URL — is refused with a short message and nothing is saved. There is no upload and no file picker here. To use your own audio file, add it with the config file described below, which is a developer change.
+
+### When the lookup comes back empty or incomplete
+
+The lookup is a convenience, not a requirement. If it fails, is switched off, or returns only part of the answer, the same form stays open with whatever it found and you type the rest yourself. A valid link plus a title is enough to save. The panel never invents metadata and never blocks a save because a lookup failed.
+
+Three things can make a lookup come back thin, and all three are recoverable:
+
+- **No key set.** The Data API step is skipped and the panel says so. The public link preview still runs, so you usually get a title.
+- **The key is revoked, wrong, or over its daily quota.** YouTube answers `403`, which the panel reports as a failed lookup rather than an error page. The link preview still runs, and if that fails too you get a blank manual form.
+- **The video is private, deleted, or the network is down.** Same outcome: a manual form, never a failed save.
+
+The panel reports which step produced which answer, so a quota problem looks different from a missing key rather than both just reading “no metadata”.
+
+### Reorder and remove
+
+The **Playlist order** table lists the stored order, newest at the bottom. Each row has **Move up** and **Move down** buttons that are disabled at the ends, and **Remove**. Every change is saved immediately and is still there after a reload. While a row's own request is in flight that row's buttons are disabled, so it cannot be moved or removed twice.
+
+Removing every track leaves the playlist empty on purpose — that is a decision, not a state the site repairs. The old default list is not restored. To bring music back, add tracks again. Until the very first save, the table instead says the playlist has not been seeded yet and that the first save seeds it from the configured playlist; that is the only moment the config array is copied in.
+
+### The one date
+
+A video has exactly one date worth storing: the day it was uploaded. The panel labels it **Publication date** and the player's playlist shows it as "Published …". A track with no date simply shows no date line, and a partial date such as `2019-11` is accepted.
+
+### Optional music-service keys
+
+None of these are required. Without them the playlist still works: the panel tries YouTube's public link preview, and anything that preview cannot supply you type by hand.
+
+- **`YOUTUBE_API_KEY`** — a YouTube Data API key. With it set, the panel fills in title, channel name, and publication date. Without it, the link preview supplies the title and the channel name, which the panel offers as a suggested artist.
+
+Set it for local Wrangler runs in **`.dev.vars`** at the repository root. That file is git-ignored; never commit it:
+
+```
+YOUTUBE_API_KEY=
+```
+
+Set it for production, from the repository root:
+
+```powershell
+npx wrangler secret put YOUTUBE_API_KEY
+```
+
+These values are read on the server only. They are never sent to a browser and never appear in a page, a response, or the repository. Local `.dev.vars` also needs `ACCESS_SECRET` so you can sign in to `/admin` locally. `ACCESS_TOKEN` and `ACCESS_PASSWORD_SHA` are not used by this database-backed admin panel.
+
+### Limits in force
+
+The limits are enforced on the server rather than by the form: up to 100 tracks, 200 characters for a title, 120 for artist, 160 for album, 500 for a link, and 10 for a date. A field that is too long is trimmed and a date that is not a date is dropped, so a save is rarely refused for length alone. Adding a 101st track is refused with a message asking you to remove one first. Each metadata lookup is capped at 6 seconds, so a slow service leaves you the manual form instead of a hanging page.
+
+### Local runs
+
+Worker-backed routes such as the playlist need the Wrangler runtime, not the plain Astro dev server:
+
+```powershell
+npm run build
+npx wrangler d1 migrations apply bnji-board --local
+npx wrangler dev --local --port 8788
+```
+
+`--local` matters: the project has a second, remote D1 binding, so without it you would be pointing at production data.
+
+### Adding your own audio file
+
+Edit **`src/config/music.config.ts`** and add songs to `MUSIC_SOURCE.tracks`; the array order is playback order. Each entry needs a unique `id`, a `title`, a `provider`, and a `url`. For example:
 
 ```ts
 {
@@ -147,20 +275,29 @@ Edit **`src/config/music.config.ts`**. Add songs to `MUSIC_SOURCE.tracks`; the a
   artist: 'Artist',       // optional
   album: 'Album',         // optional
   publishedAt: '2026-01-01', // optional; include only when known
-  provider: 'youtube',
-  url: 'https://youtu.be/VIDEO_ID',
+  provider: 'file',
+  url: '/music/ambient.mp3',
 }
 ```
 
 Supported providers:
 
-- **`file`**: put an audio file in `public/music/` and use its root-relative path, such as `/music/ambient.mp3`. Same-origin or CORS-enabled audio URLs also work.
-- **`youtube`**: paste a YouTube video link. The player accepts watch, `youtu.be`, Shorts, live, and embed URLs.
-- **`spotify`**: paste an `open.spotify.com` track, album, or playlist link. Spotify uses its own embedded controls; site-level progress and automatic advance are not available for music tracks, but the playlist’s Skip button still works.
+- **`file`**: put an audio file in `public/music/` and use its root-relative path, such as `/music/ambient.mp3`. Same-origin or CORS-enabled audio URLs also work. This provider is kept for the audio files that ship with the site; it cannot be added from the panel.
+- **`youtube`**: paste a YouTube video link. The player accepts watch, `youtu.be`, Shorts, live, and embed URLs. Both providers give site-level progress and automatic advance to the next track.
 
-The player pill shows the selected song title. Non-empty artist, album, and `publishedAt` metadata appears in smaller text; fields that are missing or blank are hidden for that song. Metadata is entered in this config and is not fetched automatically. Reorder songs by moving their entries in the array. Set `tracks: []` to disable music.
+Anything the playlist cannot play is not something the panel will accept in the first place, so a stored item always has a working transport.
 
-`defaultVolume` is from `0` to `1` and sets the initial volume preference. Visitors can change volume and mute in **Settings → Audio**. The player attempts autoplay, but browsers may block it; visitors may need to press play. The `/admin` panel does not currently edit the playlist or accept audio uploads.
+The player pill shows the selected song title. Non-empty artist, album, and date metadata appears in smaller text; fields that are missing or blank are hidden for that song. To switch music off entirely, empty the playlist in the admin panel — that is what visitors see. The `tracks: []` array in the config only decides what a never-seeded database starts from.
+
+### What this player does not have
+
+There is no **previous track** button: the pill has play/pause and skip-forward only, and the queue wraps by starting again from the top when it reaches the end.
+
+There is no **seek bar**. The progress display is a read-only indicator, so a visitor cannot drag to a point in a video, and they cannot scrub inside the YouTube embed either — the embed is deliberately loaded with its own controls off, so the pill is the only control surface.
+
+There is no **mute button or volume slider on the pill**. Both live in **Settings → Audio**, and they apply to every track in the playlist rather than to one song.
+
+A video's **channel name is not always its artist**. When the title and channel come from the YouTube Data API, the panel labels the channel as a *suggestion* you can edit, because who uploaded a video is not always who made the music.
 
 Music URLs and source IDs in this file are public. Never put a music-service password or API key here.
 
@@ -208,6 +345,32 @@ A “coming soon” entry does not create a page. To make a new destination live
 3. Add it to the appropriate main or footer navigation list.
 4. Run the checks and verify the page locally.
 
+### The browser tools on `/tools/`
+
+`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries two
+tools, and both run entirely in the visitor's browser: there is no API route, no
+upload and no storage behind either one, so "nothing is uploaded" is a property
+of the code rather than a promise.
+
+- **Image Converter & Optimizer** — converts between PNG, JPEG and WebP, resizes
+  while keeping the aspect ratio, and shows the real file-size change. It reads
+  only raster images the browser can decode (PNG, JPEG, WebP, GIF, BMP, AVIF) and
+  refuses anything else by name. It does **not** remove backgrounds, does **not**
+  compress arbitrary files, and does **not** convert PDFs, documents or audio.
+  JPEG has no transparency, and a canvas conversion does not carry EXIF or other
+  metadata into the new file. Quality applies to JPEG and WebP only; the PNG
+  slider is disabled with the reason shown rather than hidden.
+- **JSON Formatter & Validator** — formats, minifies, copies and clears. A failed
+  parse leaves the text exactly as it was and reports the line and column. It
+  does **not** talk to a schema service, does **not** convert YAML/CSV/XML, and
+  stores nothing.
+
+Formats, accepted input types and limits live in **`src/config/tools.config.ts`**;
+behaviour lives in `src/scripts/tools-image.ts` and `src/scripts/tools-json.ts`,
+started from `src/scripts/boot.ts`. To add a third tool, add a component under
+`src/components/tools/` plus one init module and one line in `boot.ts` — the page
+itself only composes them.
+
 ## 9. Change the site’s appearance and visitor settings
 
 - **Colors, glass, and visual tokens:** `src/styles/tokens.css`
@@ -215,6 +378,11 @@ A “coming soon” entry does not create a page. To make a new destination live
 - **Per-visitor settings:** the Settings panel on the website
 
 The Settings panel stores a visitor’s preferences in that visitor’s browser. Their theme, volume, and effects choices are not the same thing as the site-wide defaults. The intro has a global configuration switch, and reduced-motion preferences are respected.
+
+Two controls in that panel are deliberately not preferences and are not stored anywhere:
+
+- **Secret codes** is a masked field with a submit button and a status line. No code does anything yet, so it answers "Code effects aren’t enabled yet." for every entry. A typed code is wiped the moment it is submitted and again when the panel closes, and it is never written to storage, cookies, the URL or the console. Future effects are added in one place — the typed `CODE_HANDLERS` registry in `src/scripts/settings-codes.ts` — and must stay limited to harmless on-screen effects. Anything that runs in a visitor’s browser can be read by that visitor, so a client-side code is not a secret and is not access control; anything that needs a real secret is checked by the server instead.
+- **Admin** is an ordinary link to `/admin/`. It does not log anyone in and performs no check of its own — the server still sends anyone without a session to `/admin/login`, exactly as it always has.
 
 To replace site artwork, update the relevant file under `public/` and preserve the path referenced by the site. Common assets include `public/favicon.svg`, `public/apple-touch-icon.png`, and `public/og-cover.png`.
 
@@ -287,7 +455,7 @@ npx wrangler secret put ACCESS_SECRET
 
 The current database seed token is not a safe long-term credential. Sign in using the authorized handover credential, then immediately rotate it in **`/admin` → Settings → Access token**. Do not copy the token into the repository or into this guide. `ACCESS_TOKEN` is not the credential used by this DB-backed admin panel.
 
-The admin area includes statistics, board moderation, security events, and the Paint activity trail. Paint activity contains summaries of accepted published changes: timestamps, revisions, action counts, and an opaque ephemeral visitor/session ID. That ID does not identify a person. Local drafts, pointer paths, sticker images, and canvas artwork are not included. The log is admin-only, retained for 60 days, and capped at 5,000 rows.
+The admin area includes statistics, the background music playlist, board moderation, security events, and the Paint activity trail. The music playlist is described in section 5. Paint activity contains summaries of accepted published changes: timestamps, revisions, action counts, and an opaque ephemeral visitor/session ID. That ID does not identify a person. Local drafts, pointer paths, sticker images, and canvas artwork are not included. The log is admin-only, retained for 60 days, and capped at 5,000 rows.
 
 The security-event log is separate and contains request/security information such as IP address and user-agent data. It is admin-only and has its own retention policy. Review `docs/DATA.md` and `docs/PROFILES.md` for the detailed data and privacy descriptions.
 
@@ -341,7 +509,7 @@ Use manual deployment only when you intend to deploy directly through Wrangler. 
 - Site-wide identity and metadata: `src/data/site.ts`
 - Profile content: `src/data/profiles/gizlyy.ts`
 - Profile image: `public/profiles/gizlyy/`
-- Music provider and source: `src/config/music.config.ts`
+- Music provider, seed playlist, and fallback: `src/config/music.config.ts` (the live playlist is edited in `/admin` → Playlist; see section 5)
 - Homepage projects: `src/data/projects.ts`
 - Homepage interests: `src/data/interests.ts`
 - AI pipeline copy: `src/data/ai-stack.ts`

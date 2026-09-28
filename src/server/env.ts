@@ -4,7 +4,7 @@
  * Secrets and bindings arrive through two sanctioned channels:
  *   1. `astro:env/server` getSecret() for string secrets declared in the
  *      env schema in astro.config.mjs (DISCORD_WEBHOOK_URL, NTFY_URL,
- *      BOARD_REST_URL/TOKEN, ACCESS_*);
+ *      BOARD_REST_URL/TOKEN, ACCESS_*, SPOTIFY_CLIENT_*, YOUTUBE_API_KEY);
  *   2. the Workers `env` object (cloudflare:workers) for bindings such as a
  *      BOARD_KV namespace. That import is dynamic and @vite-ignore'd so the
  *      Node prerender bundle keeps it as a runtime expression: on workerd it
@@ -28,6 +28,17 @@ export function secretEnv(): ServerEnv {
 		ACCESS_TOKEN: getSecret('ACCESS_TOKEN'),
 		ACCESS_PASSWORD_SHA: getSecret('ACCESS_PASSWORD_SHA'),
 		ACCESS_SECRET: getSecret('ACCESS_SECRET'),
+		// Provider metadata lookups. Read here and used only inside
+		// src/server/music-metadata.ts; no route ever serialises a value.
+		//
+		// Both providers are optional by design: with no credentials at all the
+		// importer falls back to each provider's public oEmbed endpoint and then
+		// to manual entry, so a playlist still works before anyone configures
+		// anything. SPOTIFY_CLIENT_* is a Client Credentials pair, which is
+		// server-only: the token it buys never leaves the Worker.
+		SPOTIFY_CLIENT_ID: getSecret('SPOTIFY_CLIENT_ID'),
+		SPOTIFY_CLIENT_SECRET: getSecret('SPOTIFY_CLIENT_SECRET'),
+		YOUTUBE_API_KEY: getSecret('YOUTUBE_API_KEY'),
 	};
 }
 

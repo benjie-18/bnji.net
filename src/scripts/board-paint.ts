@@ -8,17 +8,47 @@
  * storing an ever-growing log of every pointer event.
  */
 import { PAINT_CONFIG } from '../config/paint.config';
+import {
+	applyStickerOperations,
+	cornerAt,
+	displayScale,
+	handleCentres,
+	handleSize,
+	resizeSticker,
+	stickerAt,
+	rebaseStickerOperations as rebaseStickerQueue,
+	summarizeStickerActions,
+	stickerResizeBounds,
+	type PaintSticker,
+	type Point,
+	type ResizeCorner,
+	type StickerOperation,
+	type StickerRect,
+} from './paint-stickers';
 
-type Point = { x: number; y: number };
-type PaintSticker = { id: string; image: string; x: number; y: number; width: number; height: number };
 type DrawingOperation =
 	| { kind: 'stroke'; tool: 'pen' | 'eraser' | 'spray' | 'glow'; points: Point[]; color: string; size: number; seed?: number }
 	| { kind: 'shape'; shape: 'line' | 'rectangle' | 'ellipse'; start: Point; end: Point; color: string; size: number }
 	| { kind: 'text'; point: Point; text: string; color: string; size: number };
-type PaintOperation = DrawingOperation
-	| { kind: 'sticker-add'; sticker: PaintSticker }
-	| { kind: 'sticker-move'; id: string; beforeX: number; beforeY: number; x: number; y: number }
-	| { kind: 'sticker-remove'; id: string; beforeX: number; beforeY: number };
+type PaintOperation = DrawingOperation | StickerOperation;
+
+/**
+ * A resize in flight: the rectangle the sticker had when the visitor grabbed a
+ * corner, plus the rectangle being dragged out of it.
+ */
+type ActiveStickerResize = {
+	pointerId: number;
+	id: string;
+	corner: ResizeCorner;
+	beforeX: number;
+	beforeY: number;
+	beforeWidth: number;
+	beforeHeight: number;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+};
 
 type SharedState = { revision: number; image: string | null; stickers?: PaintSticker[]; updatedAt: number };
 type PendingRequest = { revision: number; requestId: string; image: string; stickers: PaintSticker[]; actions: Record<string, number> };
@@ -83,13 +113,28 @@ export function initBoardPaint(): void {
 	const toolButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-paint-tool]'));
 	const colorButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-paint-color]'));
 	const paper = getComputedStyle(root).getPropertyValue('--paint-canvas-paper').trim() || '#ffffff';
+	// Selection chrome borrows the accent, which is already themed for both the
+	// dark and light palettes, rather than inventing a colour of its own.
+	let selectionColor = getComputedStyle(root).getPropertyValue('--accent-strong').trim();
 	const width = PAINT_CONFIG.width;
 	const height = PAINT_CONFIG.height;
 	const pendingOperations: PaintOperation[] = [];
 	const stickerImages = new Map<string, HTMLImageElement>();
+	/**
+	 * The upload-time bitmap for each sticker.
+	 *
+	 * The render cache above is reused for the live drag preview, which means
+	 * drawing a resized sticker through it is fine - but re-ENCODING from it
+	 * would resample an already-resampled image, so a shrink-then-grow would
+	 * come back blurred. Masters are therefore kept separately and never
+	 * overwritten, and every resize is re-encoded from the original.
+	 */
+	const stickerMasters = new Map<string, HTMLImageElement>();
+	const stickerBounds = stickerResizeBounds(width, height);
 
 	let sharedStickers: PaintSticker[] = [];
 	let activeStickerDrag: ActiveStickerDrag | null = null;
+	let activeStickerResize: ActiveStickerResize | null = null;
 	let selectedStickerId: string | null = null;
 	let erasingPointerId: number | null = null;
 	let revision = 0;
@@ -139,28 +184,36 @@ export function initBoardPaint(): void {
 		for (const button of toolButtons) button.setAttribute('aria-pressed', String(button.dataset.paintTool === tool));
 		textWrap.hidden = tool !== 'text';
 		placeToolIndicator();
+		// Handles belong to the sticker tool, so leaving it must clear them.
+		renderOverlay();
 	};
 
 	if (toolGroup && typeof ResizeObserver !== 'undefined') {
 		new ResizeObserver(() => placeToolIndicator(true)).observe(toolGroup);
 	}
-	window.addEventListener('resize', () => placeToolIndicator(true), { passive: true });
-	window.addEventListener('bnji:settingschange', () => placeToolIndicator(true));
+	// The handles are sized in CSS pixels, so they have to be redrawn when the
+	// canvas itself changes size.
+	window.addEventListener('resize', () => {
+		placeToolIndicator(true);
+		renderOverlay();
+	}, { passive: true });
+	window.addEventListener('bnji:settingschange', () => {
+		placeToolIndicator(true);
+		selectionColor = getComputedStyle(root).getPropertyValue('--accent-strong').trim();
+		renderOverlay();
+	});
 
 	const updateUndo = (): void => {
 		undoButton.disabled = pendingOperations.length === 0 || syncing;
 	};
 
 	const summarizeActions = (): Record<string, number> => {
-		const actions: Record<string, number> = {};
+		// A sticker action name IS its operation kind, so the module that owns
+		// the sticker model owns that half too — one definition, tested there.
+		const actions = summarizeStickerActions(stickerOperations());
 		for (const operation of pendingOperations) {
-			const action = operation.kind === 'stroke'
-				? operation.tool
-				: operation.kind === 'shape'
-					? operation.shape
-					: operation.kind === 'text'
-						? 'text'
-						: operation.kind;
+			if (isStickerOperation(operation)) continue;
+			const action = operation.kind === 'stroke' ? operation.tool : operation.kind === 'shape' ? operation.shape : 'text';
 			actions[action] = (actions[action] ?? 0) + 1;
 		}
 		return actions;
@@ -169,50 +222,92 @@ export function initBoardPaint(): void {
 	const clearPreview = (): void => previewContext.clearRect(0, 0, width, height);
 	const isStickerOperation = (operation: PaintOperation): operation is Exclude<PaintOperation, DrawingOperation> => operation.kind.startsWith('sticker-');
 
-	const effectiveStickers = (): PaintSticker[] => {
-		const stickers = sharedStickers.map((sticker) => ({ ...sticker }));
-		for (const operation of pendingOperations) {
-			if (!isStickerOperation(operation)) continue;
-			if (operation.kind === 'sticker-add') {
-				if (!stickers.some((sticker) => sticker.id === operation.sticker.id)) stickers.push({ ...operation.sticker });
-			} else {
-				const index = stickers.findIndex((sticker) => sticker.id === operation.id);
-				if (index < 0) continue;
-				const sticker = stickers[index];
-				if (sticker.x !== operation.beforeX || sticker.y !== operation.beforeY) continue;
-				if (operation.kind === 'sticker-move') {
-					stickers[index] = { ...sticker, x: operation.x, y: operation.y };
-				} else {
-					stickers.splice(index, 1);
-				}
-			}
+	/** The sticker operations in the queue, with the drawing ones dropped. */
+	const stickerOperations = (): StickerOperation[] => pendingOperations.filter(isStickerOperation);
+
+	const effectiveStickers = (): PaintSticker[] => applyStickerOperations(sharedStickers, stickerOperations());
+
+	/** Where a sticker is drawn right now, including an in-flight gesture. */
+	const liveRect = (sticker: PaintSticker): StickerRect => {
+		if (activeStickerResize?.id === sticker.id) {
+			return { x: activeStickerResize.x, y: activeStickerResize.y, width: activeStickerResize.width, height: activeStickerResize.height };
 		}
-		return stickers;
+		if (activeStickerDrag?.id === sticker.id) {
+			return { ...sticker, x: activeStickerDrag.x, y: activeStickerDrag.y };
+		}
+		return sticker;
 	};
 
-	const stickerAt = (point: Point): PaintSticker | undefined =>
-		effectiveStickers().slice().reverse().find((sticker) =>
-			point.x >= sticker.x && point.x <= sticker.x + sticker.width &&
-			point.y >= sticker.y && point.y <= sticker.y + sticker.height,
-		);
+	/** Keep the upload-time bitmap for a sticker that is still around. */
+	const rememberStickerMaster = (sticker: PaintSticker): void => {
+		if (stickerMasters.has(sticker.id)) return;
+		const master = new Image();
+		master.onload = renderStickerLayer;
+		master.src = sticker.image;
+		stickerMasters.set(sticker.id, master);
+	};
 
+	/** Forget masters for stickers that are gone from the canvas and the queue. */
+	const pruneStickerMasters = (): void => {
+		if (stickerMasters.size <= PAINT_CONFIG.maxStickerCount) return;
+		const live = new Set(effectiveStickers().map((sticker) => sticker.id));
+		for (const operation of stickerOperations()) {
+			live.add(operation.kind === 'sticker-add' ? operation.sticker.id : operation.id);
+		}
+		for (const id of Array.from(stickerMasters.keys())) if (!live.has(id)) stickerMasters.delete(id);
+	};
+
+	/**
+	 * Re-encode a sticker at a new size.
+	 *
+	 * The server requires the stored PNG's real pixel dimensions to match the
+	 * sticker's width and height, so a resize is not a rectangle-only change:
+	 * without this, every publish after a resize would be rejected.
+	 */
+	const encodeStickerAt = (id: string, nextWidth: number, nextHeight: number): string | null => {
+		const master = stickerMasters.get(id);
+		if (!master || !master.complete || master.naturalWidth === 0) return null;
+		const canvas = document.createElement('canvas');
+		canvas.width = nextWidth;
+		canvas.height = nextHeight;
+		const context = canvas.getContext('2d');
+		if (!context) return null;
+		context.imageSmoothingEnabled = true;
+		context.imageSmoothingQuality = 'high';
+		context.drawImage(master, 0, 0, nextWidth, nextHeight);
+		return canvas.toDataURL('image/png');
+	};
+
+	/**
+	 * Redraw the stickers, and the chrome that describes them.
+	 *
+	 * The two live on different layers — the stickers are published and
+	 * exported, the chrome never is — so a sticker that moves, resizes or
+	 * disappears has to be followed by both. Redrawing only the sticker layer
+	 * is how the selection outline ends up hovering over where the sticker
+	 * used to be, which is what this used to do after a drag.
+	 */
 	const renderStickerLayer = (): void => {
 		stickerContext.clearRect(0, 0, width, height);
 		for (const original of effectiveStickers()) {
-			const sticker = activeStickerDrag?.id === original.id
-				? { ...original, x: activeStickerDrag.x, y: activeStickerDrag.y }
-				: original;
-			let bitmap = stickerImages.get(sticker.id);
-			if (!bitmap || bitmap.src !== sticker.image) {
+			const rect = liveRect(original);
+			rememberStickerMaster(original);
+			let bitmap = stickerImages.get(original.id);
+			if (!bitmap || bitmap.src !== original.image) {
 				bitmap = new Image();
-				stickerImages.set(sticker.id, bitmap);
+				stickerImages.set(original.id, bitmap);
 				bitmap.onload = renderStickerLayer;
-				bitmap.src = sticker.image;
+				bitmap.src = original.image;
 			}
 			if (bitmap.complete && bitmap.naturalWidth > 0) {
-				stickerContext.drawImage(bitmap, sticker.x, sticker.y, sticker.width, sticker.height);
+				// The stored bitmap is drawn at the live size, so a resize is
+				// previewed by the browser's own scaler and only the committed
+				// result is ever re-encoded.
+				stickerContext.drawImage(bitmap, rect.x, rect.y, rect.width, rect.height);
 			}
 		}
+		pruneStickerMasters();
+		renderOverlay();
 	};
 
 	const compressSticker = async (file: File): Promise<PaintSticker> => {
@@ -248,44 +343,9 @@ export function initBoardPaint(): void {
 	};
 
 	const rebaseStickerOperations = (): boolean => {
-		const working = sharedStickers.map((sticker) => ({ ...sticker }));
-		const kept: PaintOperation[] = [];
-		let conflicts = 0;
-		for (const operation of pendingOperations) {
-			if (!isStickerOperation(operation)) {
-				kept.push(operation);
-				continue;
-			}
-			if (operation.kind === 'sticker-add') {
-				const existing = working.find((sticker) => sticker.id === operation.sticker.id);
-				if (existing) {
-					if (existing.image !== operation.sticker.image) conflicts++;
-					continue;
-				}
-				working.push({ ...operation.sticker });
-				kept.push(operation);
-				continue;
-			}
-			const index = working.findIndex((sticker) => sticker.id === operation.id);
-			if (operation.kind === 'sticker-remove' && index < 0) continue;
-			if (index < 0) {
-				conflicts++;
-				continue;
-			}
-			const sticker = working[index];
-			if (sticker.x !== operation.beforeX || sticker.y !== operation.beforeY) {
-				if (!(operation.kind === 'sticker-move' && sticker.x === operation.x && sticker.y === operation.y)) conflicts++;
-				continue;
-			}
-			if (operation.kind === 'sticker-move') {
-				working[index] = { ...sticker, x: operation.x, y: operation.y };
-				kept.push(operation);
-			} else {
-				working.splice(index, 1);
-				kept.push(operation);
-			}
-		}
-		pendingOperations.splice(0, pendingOperations.length, ...kept);
+		const rebased = rebaseStickerQueue(sharedStickers, stickerOperations());
+		const conflicts = rebased.conflicts;
+		pendingOperations.splice(0, pendingOperations.length, ...rebased.operations);
 		if (conflicts > 0) {
 			updateUndo();
 			announce(`${conflicts} local sticker change${conflicts === 1 ? '' : 's'} conflicted with a newer shared edit and were skipped; the other visitor's version was kept.`);
@@ -395,8 +455,21 @@ export function initBoardPaint(): void {
 		localContext.clearRect(0, 0, width, height);
 		for (const operation of pendingOperations) drawOperation(localContext, operation);
 		renderStickerLayer();
-		clearPreview();
 		updateUndo();
+	};
+
+	/**
+	 * Everything transient on the preview layer: the stroke in progress, and
+	 * the selection chrome for the selected sticker.
+	 *
+	 * This layer is the only safe home for the chrome. The sticker layer is
+	 * flattened into the published bitmap and the exported PNG, and the local
+	 * layer carries real edits - so handles drawn there would end up published.
+	 */
+	const renderOverlay = (): void => {
+		clearPreview();
+		drawActivePreview();
+		drawSelectionChrome();
 	};
 
 	const getPoint = (event: PointerEvent): Point => {
@@ -407,8 +480,70 @@ export function initBoardPaint(): void {
 		};
 	};
 
+	/** The canvas as laid out now, relative to the 1200 x 750 logical grid. */
+	const canvasScale = (): number => displayScale(inputCanvas.getBoundingClientRect().width, width);
+
+	const selectedSticker = (): PaintSticker | undefined =>
+		effectiveStickers().find((sticker) => sticker.id === selectedStickerId);
+
+	/**
+	 * Selection chrome: an outline and four corner handles.
+	 *
+	 * Only drawn while the sticker tool is active, so the canvas does not look
+	 * like something that can be grabbed while the visitor is drawing.
+	 */
+	const drawSelectionChrome = (): void => {
+		if (activeTool !== 'sticker' || activeDrawing) return;
+		const selected = selectedSticker();
+		if (!selected) return;
+		const rect = liveRect(selected);
+		const scale = canvasScale();
+		const size = handleSize(rect, scale);
+
+		previewContext.save();
+		// A hairline stays a hairline on a 4K display instead of vanishing.
+		previewContext.lineWidth = Math.max(1 / scale, 0.5);
+		previewContext.strokeStyle = selectionColor;
+		previewContext.fillStyle = selectionColor;
+		previewContext.strokeRect(rect.x, rect.y, rect.width, rect.height);
+		for (const centre of Object.values(handleCentres(rect))) {
+			previewContext.fillRect(centre.x - size / 2, centre.y - size / 2, size, size);
+		}
+		previewContext.restore();
+	};
+
+	/** Which corner handle, if any, is under the pointer right now. */
+	const cornerUnderPointer = (point: Point): ResizeCorner | null => {
+		const selected = selectedSticker();
+		if (!selected) return null;
+		return cornerAt(point, liveRect(selected), canvasScale());
+	};
+
+	/**
+	 * A pointer over a handle or a sticker should look grabbable. The cursor is
+	 * mirrored onto the root element so the rules can live in the stylesheet
+	 * rather than being set one style at a time from script.
+	 */
+	const setStickerCursor = (cursor: string): void => {
+		if (root.dataset.stickerCursor === cursor) return;
+		if (cursor) root.dataset.stickerCursor = cursor;
+		else delete root.dataset.stickerCursor;
+	};
+
+	const updateStickerCursor = (point: Point): void => {
+		if (activeTool !== 'sticker' || activeDrawing) {
+			setStickerCursor('');
+			return;
+		}
+		const corner = cornerUnderPointer(point);
+		if (corner) {
+			setStickerCursor(corner === 'nw' || corner === 'se' ? 'nwse' : 'nesw');
+			return;
+		}
+		setStickerCursor(stickerAt(effectiveStickers(), point) ? 'grab' : '');
+	};
+
 	const drawActivePreview = (): void => {
-		clearPreview();
 		if (!activeDrawing) return;
 		const { tool, start, current, points, color, size } = activeDrawing;
 		if (tool === 'pen' || tool === 'eraser' || tool === 'spray' || tool === 'glow') {
@@ -528,7 +663,7 @@ export function initBoardPaint(): void {
 
 	const syncAndRefresh = async (): Promise<void> => {
 		if (syncing) return;
-		if (activeDrawing || activeStickerDrag || erasingPointerId !== null || stickerProcessing) {
+		if (activeDrawing || activeStickerDrag || activeStickerResize || erasingPointerId !== null || stickerProcessing) {
 			announce('Finish the current drawing or sticker edit before publishing.');
 			return;
 		}
@@ -634,16 +769,114 @@ export function initBoardPaint(): void {
 	};
 
 	const removeStickerAt = (point: Point): boolean => {
-		const sticker = stickerAt(point);
+		const sticker = stickerAt(effectiveStickers(), point);
 		if (!sticker) return false;
 		pendingOperations.push({ kind: 'sticker-remove', id: sticker.id, beforeX: sticker.x, beforeY: sticker.y });
+		// Dropping the selected sticker must also drop its handles.
+		if (selectedStickerId === sticker.id) selectedStickerId = null;
 		renderStickerLayer();
 		updateUndo();
 		announce('Sticker erased locally. Sync & refresh to share the change.');
 		return true;
 	};
 
+	/**
+	 * Commit a finished resize.
+	 *
+	 * The bitmap is re-encoded from the sticker's upload-time master, because
+	 * the server checks that the stored PNG's own pixel dimensions match the
+	 * sticker's width and height. If it cannot be encoded - or the result would
+	 * be too large to store - the operation is simply not queued, and the
+	 * sticker falls back to the size the server has.
+	 */
+	const commitStickerResize = (resize: ActiveStickerResize): void => {
+		if (resize.width === resize.beforeWidth && resize.height === resize.beforeHeight) return;
+		const image = encodeStickerAt(resize.id, resize.width, resize.height);
+		if (!image) {
+			announce('That sticker could not be resized, so it kept its current size.');
+			return;
+		}
+		if (image.length > PAINT_CONFIG.maxStickerImageChars) {
+			announce('That size made the sticker too detailed to store, so it kept its current size.');
+			return;
+		}
+		const next: PaintSticker = { id: resize.id, image, x: resize.x, y: resize.y, width: resize.width, height: resize.height };
+		const stickers = effectiveStickers().map((sticker) => (sticker.id === resize.id ? next : sticker));
+		if (JSON.stringify(stickers).length > PAINT_CONFIG.maxStickerPayloadChars) {
+			announce('The shared sticker storage is full, so this resize was not kept.');
+			return;
+		}
+		pendingOperations.push({
+			kind: 'sticker-resize',
+			id: resize.id,
+			beforeX: resize.beforeX,
+			beforeY: resize.beforeY,
+			beforeWidth: resize.beforeWidth,
+			beforeHeight: resize.beforeHeight,
+			x: resize.x,
+			y: resize.y,
+			width: resize.width,
+			height: resize.height,
+			image,
+		});
+		updateUndo();
+		announce(`Sticker resized to ${resize.width} × ${resize.height} locally. Sync & refresh to publish.`);
+	};
+
+	/**
+	 * Resize the selected sticker from the keyboard.
+	 *
+	 * The axis the visitor touched leads and the other follows the ratio, so
+	 * the result is always a size that exists rather than a free rectangle.
+	 * The position is held still: a keyboard resize should not move anything.
+	 */
+	const resizeSelectedWithKeyboard = (selected: PaintSticker, direction: Point, freeRatio: boolean): void => {
+		const ratio = selected.width / selected.height;
+		let nextWidth = selected.width + direction.x;
+		let nextHeight = selected.height + direction.y;
+		if (!freeRatio) {
+			if (direction.x !== 0) nextHeight = Math.round(nextWidth / ratio);
+			else nextWidth = Math.round(nextHeight * ratio);
+		}
+		nextWidth = Math.max(1, Math.min(stickerBounds.maxWidth, nextWidth));
+		nextHeight = Math.max(1, Math.min(stickerBounds.maxHeight, nextHeight));
+		if (nextWidth === selected.width && nextHeight === selected.height) return;
+
+		const image = encodeStickerAt(selected.id, nextWidth, nextHeight);
+		if (!image || image.length > PAINT_CONFIG.maxStickerImageChars) {
+			announce('That size could not be stored for this sticker.');
+			return;
+		}
+		const x = Math.max(0, Math.min(width - nextWidth, selected.x));
+		const y = Math.max(0, Math.min(height - nextHeight, selected.y));
+		pendingOperations.push({
+			kind: 'sticker-resize',
+			id: selected.id,
+			beforeX: selected.x,
+			beforeY: selected.y,
+			beforeWidth: selected.width,
+			beforeHeight: selected.height,
+			x,
+			y,
+			width: nextWidth,
+			height: nextHeight,
+			image,
+		});
+		renderStickerLayer();
+		updateUndo();
+		announce(`Sticker resized to ${nextWidth} × ${nextHeight} locally. Sync & refresh to publish.`);
+	};
+
 	const finishDrawing = (event: PointerEvent): void => {
+		if (activeStickerResize?.pointerId === event.pointerId) {
+			const resize = activeStickerResize;
+			activeStickerResize = null;
+			setStickerCursor('');
+			commitStickerResize(resize);
+			renderStickerLayer();
+			renderOverlay();
+			return;
+		}
 		if (activeStickerDrag?.pointerId === event.pointerId) {
 			const drag = activeStickerDrag;
 			activeStickerDrag = null;
@@ -663,7 +896,7 @@ export function initBoardPaint(): void {
 		const drawing = activeDrawing;
 		const end = getPoint(event);
 		activeDrawing = null;
-		clearPreview();
+		renderOverlay();
 
 		let operation: DrawingOperation;
 		if (drawing.tool === 'pen' || drawing.tool === 'eraser' || drawing.tool === 'spray' || drawing.tool === 'glow') {
@@ -700,8 +933,40 @@ export function initBoardPaint(): void {
 		const point = getPoint(event);
 
 		if (activeTool === 'sticker') {
-			const sticker = stickerAt(point);
+			const stickers = effectiveStickers();
+
+			// A corner of the selected sticker is checked FIRST, and against the
+			// sticker itself rather than the stack: handles sit on top of their
+			// own sticker, and a handle on the selected sticker must win even if
+			// another sticker happens to overlap it.
+			const selected = stickers.find((sticker) => sticker.id === selectedStickerId);
+			const corner = selected ? cornerAt(point, liveRect(selected), canvasScale()) : null;
+			if (selected && corner) {
+				const rect = liveRect(selected);
+				activeStickerResize = {
+					pointerId: event.pointerId,
+					id: selected.id,
+					corner,
+					beforeX: rect.x,
+					beforeY: rect.y,
+					beforeWidth: rect.width,
+					beforeHeight: rect.height,
+					...rect,
+				};
+				inputCanvas.setPointerCapture(event.pointerId);
+				setStickerCursor('grabbing');
+				renderStickerLayer();
+				return;
+			}
+
+			const sticker = stickerAt(stickers, point);
 			if (!sticker) {
+				// Clicking bare canvas drops the selection, so the handles stop
+				// hovering over the canvas for the rest of the session.
+				if (selectedStickerId !== null) {
+					selectedStickerId = null;
+					renderOverlay();
+				}
 				announce('Choose a sticker image, then drag it into place.');
 				return;
 			}
@@ -718,10 +983,11 @@ export function initBoardPaint(): void {
 			};
 			inputCanvas.setPointerCapture(event.pointerId);
 			renderStickerLayer();
+			renderOverlay();
 			return;
 		}
 
-		if (activeTool === 'eraser' && stickerAt(point)) {
+		if (activeTool === 'eraser' && stickerAt(effectiveStickers(), point)) {
 			erasingPointerId = event.pointerId;
 			inputCanvas.setPointerCapture(event.pointerId);
 			removeStickerAt(point);
@@ -756,8 +1022,44 @@ export function initBoardPaint(): void {
 		drawActivePreview();
 	});
 
+	inputCanvas.addEventListener('pointerleave', () => {
+		// A captured pointer keeps reporting moves while the gesture runs, so
+		// leaving the canvas mid-drag must not reset the cursor underneath it.
+		if (activeDrawing || activeStickerDrag || activeStickerResize || erasingPointerId !== null) return;
+		setStickerCursor('');
+	});
+
 	inputCanvas.addEventListener('pointermove', (event) => {
 		const point = getPoint(event);
+
+		if (activeStickerResize?.pointerId === event.pointerId) {
+			// Every frame is recomputed from the rectangle the drag started
+			// from, never from the previous frame's result, so rounding cannot
+			// accumulate into a drift over a long drag.
+			const next = resizeSticker(
+				{
+					x: activeStickerResize.beforeX,
+					y: activeStickerResize.beforeY,
+					width: activeStickerResize.beforeWidth,
+					height: activeStickerResize.beforeHeight,
+				},
+				{
+					corner: activeStickerResize.corner,
+					pointer: point,
+					// Shift is read live: the lock is on by default and holding
+					// Shift releases it for as long as it is held.
+					lockRatio: !event.shiftKey,
+					bounds: stickerBounds,
+				},
+			);
+			activeStickerResize.x = next.x;
+			activeStickerResize.y = next.y;
+			activeStickerResize.width = next.width;
+			activeStickerResize.height = next.height;
+			renderStickerLayer();
+			return;
+		}
+
 		if (activeStickerDrag?.pointerId === event.pointerId) {
 			const sticker = effectiveStickers().find((item) => item.id === activeStickerDrag?.id);
 			if (sticker && activeStickerDrag) {
@@ -771,6 +1073,7 @@ export function initBoardPaint(): void {
 			removeStickerAt(point);
 			return;
 		}
+		updateStickerCursor(point);
 		if (!activeDrawing || activeDrawing.pointerId !== event.pointerId) return;
 		if (activeDrawing.tool === 'eraser') removeStickerAt(point);
 		activeDrawing.current = point;
@@ -790,9 +1093,16 @@ export function initBoardPaint(): void {
 			renderStickerLayer();
 		}
 		if (erasingPointerId === event.pointerId) erasingPointerId = null;
+		if (activeStickerResize?.pointerId === event.pointerId) {
+			// A cancelled resize is dropped rather than committed: the sticker
+			// simply returns to the size the server has.
+			activeStickerResize = null;
+			setStickerCursor('');
+			renderStickerLayer();
+		}
 		if (!activeDrawing || activeDrawing.pointerId !== event.pointerId) return;
 		activeDrawing = null;
-		clearPreview();
+		renderOverlay();
 	});
 
 	for (const button of toolButtons) {
@@ -824,10 +1134,12 @@ export function initBoardPaint(): void {
 				return;
 			}
 			pendingOperations.push({ kind: 'sticker-add', sticker });
+			// Selecting it straight away shows its handles, so the next drag can
+			// resize it without a click first.
 			selectedStickerId = sticker.id;
 			renderStickerLayer();
 			updateUndo();
-			announce('Sticker added locally. Drag it into place; Sync & refresh to publish it.');
+			announce('Sticker added locally. Drag a corner to resize it; Sync & refresh to publish.');
 		}).catch((error: unknown) => {
 			announce(error instanceof Error ? error.message : 'Could not process that sticker image.');
 		}).finally(() => {
@@ -856,6 +1168,17 @@ export function initBoardPaint(): void {
 		};
 		const direction = directions[event.key];
 		if (!direction || activeTool !== 'sticker') return;
+
+		// Alt + arrow resizes. Proportional by default, exactly like the corner
+		// drag; Ctrl or Cmd releases the ratio for the cases where a deliberate
+		// squash is the point. Shift keeps its existing "bigger step" meaning
+		// rather than borrowing the pointer's "release the ratio" one.
+		if (event.altKey) {
+			event.preventDefault();
+			resizeSelectedWithKeyboard(selected, direction, event.ctrlKey || event.metaKey);
+			return;
+		}
+
 		event.preventDefault();
 		const step = event.shiftKey ? 10 : 1;
 		const x = Math.max(0, Math.min(width - selected.width, selected.x + direction.x * step));

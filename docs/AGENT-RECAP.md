@@ -23,6 +23,7 @@ remain readable with JS blocked (`html.js` guards in `animations.css`).
 |---|---|---|
 | `/` | prerendered | Home: Hero + preview sections + ProfileCard |
 | `/about`, `/projects`, `/contact`, `/lab` | prerendered | Lab hosts runnable experiments |
+| `/tools` | prerendered | Two local browser tools (image converter, JSON formatter); no API route behind either |
 | `/blog`, `/blog/[...slug]` | prerendered | Uses `BlogPost.astro` layout for posts |
 | `/board/` | **SSR** (`prerender = false`) | Message board UI; note trailing slash in links. SSR because it reads the store for the first paint |
 | `/gizlyy/` | **SSR** (`prerender = false`) | Profile page; view stats and reactions come from D1. A failed read renders an em dash, never a zero |
@@ -62,7 +63,8 @@ src/components/         Astro components; primitives (GlassPanel, GlassButton, I
                         SectionHeading, PageHeader, BrandMark), scene layers (AeroSky,
                         Starfield, CursorGlow), chrome (Header, Footer, BaseHead),
                         features (MusicPlayer, SettingsOverlay, MessageBoard,
-                        BoardPaint, DirectMessage, ProfileCard), lab/ experiments
+                        BoardPaint, DirectMessage, ProfileCard), lab/ experiments,
+                        tools/ (image converter, JSON formatter)
 src/layouts/            Layout.astro (shell + single boot script), BlogPost.astro
 src/scripts/            client runtime (see section 5)
 src/server/             server-only: env.ts, access.ts, ratelimit.ts, admin.ts,
@@ -109,12 +111,15 @@ src/middleware.ts       ACCESS_RULES enforcement on SSR routes
 Order (each `init()` idempotent, individually try/caught via `start()`):
 **settings -> theme -> liquid-glass -> settings-overlay -> music-player -> starfield ->
 cursor-glow -> background-parallax -> glass-tracking -> magnetic -> nav-toggle ->
-nav-dropdowns -> nav-scroll-state -> reveal -> parallax.**
+nav-dropdowns -> nav-scroll-state -> reveal -> parallax -> image-converter ->
+json-formatter.**
 Lab experiments import engines directly and never go through `boot()`.
 The opening sequence is the exception to "everything goes through `boot()`":
 `IntroSequence.astro` calls `initIntro()` itself, so it only ever initialises on
 the page that has one.
 
+The two `/tools/` inits (`tools-image.ts`, `tools-json.ts`) are no-ops on every
+other page — each bails unless its `[data-…]` subtree is in the document.
 Modules: `starfield.ts` (canvas engine), `interactions.ts` (cursor glow, background
 parallax, glass tracking, magnetic buttons, nav), `scroll.ts` (reveals/parallax),
 `intro.ts` (homepage scroll intro, component-scoped), `music.ts` (player logic),
@@ -125,11 +130,20 @@ parallax, glass tracking, magnetic buttons, nav), `scroll.ts` (reveals/parallax)
 Admin-only: `admin.ts`, `admin-dashboard.ts`, `board-moderate.ts` — imported by the
 admin pages, never by the shared shell.
 
-Music player: pill UI + playlist popover (`MusicPlayer.astro`), ordered `MUSIC_SOURCE.tracks`
-from `src/config/music.config.ts`. File and YouTube tracks expose progress/end events and
-advance sequentially; Spotify stays an honest embed with manual Skip only (the supported
-Spotify embed contract does not expose music-track progress/end to this player). Volume/mute
-stay in Settings → Audio. A blocked load-time attempt
+Music player: pill UI + playlist popover (`MusicPlayer.astro`) over the ordered queue served by
+`GET /api/playlist`. `MUSIC_SOURCE.tracks` in `src/config/music.config.ts` is the SEED and the
+offline fallback, never the live queue: the stored playlist (`music_playlist_items` /
+`music_playlist_state`, D1 `BOARD_DB`) is copied in from it once and is then edited from
+`/admin` → *Playlist*. An empty stored playlist stays empty. File and YouTube tracks expose
+progress/end events and advance sequentially, so the pill's progress bar is always meaningful for
+them. Spotify is the third provider and the deliberate exception: its embed contract exposes no
+music-track progress or end event, so the progress region is hidden with a note saying why, the
+embed's own controls take over, and Skip still works because advancing is the player's own
+decision. Spotify tracks are seeded by hand from the config — the admin panel imports YouTube
+links only, enforced by `IMPORTABLE_PROVIDER` in `src/server/music-links.ts`. Volume/mute stay in
+Settings → Audio. The prerendered markup and the runtime rebuild
+share `musicTrackAriaLabel()` / `getMusicTrackDateLabel()`, so the announced and rendered
+queue cannot drift. A blocked load-time attempt
 gets one retry for controllable tracks on the first trusted page input (without cancelling it).
 
 ## 6. Theme & visual system
@@ -141,7 +155,7 @@ gets one retry for controllable tracks on the first trusted page input (without 
   tokens. Light-theme contrast fixes exist for `.text-luminous`, `.footer-word`, Header surfaces.
 - `glass.css` (panels/buttons; advanced vs flat per `data-advanced-glass`), `animations.css`
   (all motion; respects prefers-reduced-motion), `board.css`, `lab.css` (imported only by
-  /lab), `settings.css`, `global.css`.
+  /lab), `settings.css`, `tools.css` (imported only by /tools), `global.css`.
 - `Icon.astro` is the single icon component (globe/rss added this session).
   `manifest.webmanifest` must stay valid JSON (was previously broken).
 

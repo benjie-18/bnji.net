@@ -22,8 +22,10 @@
  * are 0..1 in the store, 0..100 on the input; uiScale is 80..130 in both).
  */
 import { getSettings, setSetting, subscribeSettings, type Settings } from './settings';
+import { CODE_IDLE_MESSAGE, submitCode } from './settings-codes';
 
 let overlayStarted = false;
+let unsubscribeSettings: (() => void) | null = null;
 
 type RangeSpec = { scale: number; format: (v: number) => string };
 
@@ -50,6 +52,53 @@ export function initSettingsOverlay(): void {
 		overlay.querySelectorAll<HTMLElement>('[data-setting-output]'),
 	);
 
+	/* --- secret code entry -------------------------------------------------- */
+	/*
+	 * A placeholder field, not a feature. The dispatch lives in
+	 * settings-codes.ts; all this does is read the field, hand the value over,
+	 * drop the value, and report whatever came back. Two rules make it safe to
+	 * ship with no effect behind it:
+	 *
+	 *   - the code is never stored. It is not a Settings field, so it cannot
+	 *     reach the store, localStorage or the URL; it is read, dispatched and
+	 *     wiped in the same synchronous turn, and wiped again on close.
+	 *   - the code is never echoed. Only `outcome.message` is shown, and no
+	 *     message in settings-codes.ts repeats the input.
+	 *
+	 * There is deliberately no <form> around the input: a password-type field
+	 * inside a form is what invites browsers and password managers to offer to
+	 * save it, and this is not a credential. Enter in the field submits.
+	 */
+	const codeInput = overlay.querySelector<HTMLInputElement>('[data-settings-code]');
+	const codeSubmit = overlay.querySelector<HTMLButtonElement>('[data-settings-code-submit]');
+	const codeStatus = overlay.querySelector<HTMLElement>('[data-settings-code-status]');
+
+	const setCodeStatus = (message: string) => {
+		if (codeStatus) codeStatus.textContent = message;
+	};
+
+	/** Drop the typed code out of the DOM. Nothing is left behind. */
+	const clearCode = () => {
+		if (codeInput) codeInput.value = '';
+	};
+
+	const submitCodeFromOverlay = () => {
+		if (!codeInput) return;
+		// Read first, clear second: the value is out of the field before any
+		// handler — today's or a future one — can observe it.
+		const outcome = submitCode(codeInput.value, overlay);
+		clearCode();
+		setCodeStatus(outcome.message);
+	};
+
+	codeSubmit?.addEventListener('click', submitCodeFromOverlay);
+
+	codeInput?.addEventListener('keydown', (event) => {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		submitCodeFromOverlay();
+	});
+
 	/* --- dialog ------------------------------------------------------------- */
 
 	let lastFocused: HTMLElement | null = null;
@@ -66,11 +115,21 @@ export function initSettingsOverlay(): void {
 		if (open) {
 			// Focus the dialog itself: a screen reader announces it, and the
 			// first Tab lands on the close button (first focusable inside).
+			// `lastFocused` is deliberately kept here — the close path below is
+			// what puts focus back on the trigger that opened the panel.
 			overlay.focus();
-		} else if (lastFocused && document.contains(lastFocused)) {
-			lastFocused.focus();
+		} else {
+			// A typed code never survives the menu closing — not in the field,
+			// not in the status line.
+			clearCode();
+			setCodeStatus(CODE_IDLE_MESSAGE);
+			if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+			// Released only once it has been used. Clearing it on the way IN
+			// too (as this line used to do, unconditionally) left the close
+			// path holding null, so focus fell back to <body> instead of the
+			// gear — which is exactly the restoration this panel promises.
+			lastFocused = null;
 		}
-		lastFocused = null;
 	};
 
 	for (const trigger of openers) {
@@ -166,6 +225,25 @@ export function initSettingsOverlay(): void {
 		}
 	}
 
-	subscribeSettings(syncAll);
+	unsubscribeSettings = subscribeSettings(syncAll);
 	syncAll(getSettings());
+}
+
+/**
+ * Release the overlay and re-arm `initSettingsOverlay()` for a fresh subtree.
+ *
+ * Every listener this module adds sits on a node inside the overlay (or on the
+ * triggers), so discarding the subtree discards them too — which is all the
+ * teardown there is. It also makes sure a typed code is gone even if the panel
+ * was torn down while open and its own close path never ran, and it lets a
+ * second call bind cleanly instead of silently no-op'ing on the guard. This
+ * mirrors `destroyMusicPlayer()` in scripts/music.ts.
+ */
+export function destroySettingsOverlay(): void {
+	if (!overlayStarted) return;
+	overlayStarted = false;
+	unsubscribeSettings?.();
+	unsubscribeSettings = null;
+	const input = document.querySelector<HTMLInputElement>('[data-settings-code]');
+	if (input) input.value = '';
 }

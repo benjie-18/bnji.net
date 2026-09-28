@@ -1,0 +1,185 @@
+---
+/**
+ * Tools — Image Converter & Optimizer.
+ *
+ * The whole interface is markup + CSS; every behaviour lives in
+ * src/scripts/tools-image.ts, reached through boot(). That split is the point:
+ * with JavaScript blocked, late or broken, the page still explains what the
+ * tool does and what it refuses to do, and the controls stay in the document.
+ *
+ * Limits and format lists come from src/config/tools.config.ts — the component
+ * never hard-codes a MIME type, a byte limit or a trade-off sentence.
+ */
+import Chip from '../Chip.astro';
+import GlassPanel from '../GlassPanel.astro';
+import {
+	IMAGE_FORMATS,
+	IMAGE_FORMAT_LABEL,
+	IMAGE_INPUT_ACCEPT,
+	TOOL_IMAGE_CONFIG,
+} from '../../config/tools.config';
+
+const { quality } = TOOL_IMAGE_CONFIG;
+---
+
+<section
+	class="tool tool--image"
+	id="image-converter"
+	aria-labelledby="image-converter-title"
+	data-image-converter
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>01</span><span>/ IMAGE</span></p>
+			<h2 class="tool__title" id="image-converter-title">Image Converter &amp; Optimizer</h2>
+			<p class="tool__lead">
+				Convert between PNG, JPEG and WebP, resize while keeping the aspect ratio, and see the real
+				file-size change before you save. Decoding, resizing and encoding all happen in this tab — no
+				image is uploaded anywhere.
+			</p>
+			<ul class="tool__chips" role="list">
+				<li><Chip tone="live" dot>Runs locally</Chip></li>
+				<li><Chip>PNG · JPEG · WebP out</Chip></li>
+				<li><Chip>Optional resize</Chip></li>
+			</ul>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__pane">
+				{/* The label IS the drop target: clicking it opens the picker natively,
+				    dragging a file onto it loads it, and Tab reaches the input inside. */}
+				<label class="tool-drop" data-image-drop>
+					<span class="sr-only">Choose an image to convert</span>
+					<input
+						class="tool-drop__input"
+						type="file"
+						accept={IMAGE_INPUT_ACCEPT}
+						data-image-source
+					/>
+					<span class="tool-drop__prompt">Choose an image, or drop one here</span>
+				</label>
+				<p class="tool__hint" id="image-source-hint">
+					Reads raster images your browser can decode: PNG, JPEG, WebP, GIF, BMP or AVIF. Anything else
+					is rejected by name — this tool does not convert PDFs, documents, archives or video.
+				</p>
+
+				<figure class="tool__preview">
+					<img class="tool__preview-img" data-image-source-preview alt="" aria-hidden="true" />
+					<figcaption class="tool__preview-meta mono" data-image-source-meta></figcaption>
+				</figure>
+			</div>
+
+			<div class="tool__controls">
+				<div class="tool__field">
+					<label class="tool__label" for="image-format">Output format</label>
+					<select class="tool__select" id="image-format" data-image-format>
+						{IMAGE_FORMATS.map((format) => <option value={format}>{IMAGE_FORMAT_LABEL[format]}</option>)}
+					</select>
+					<p class="tool__hint" id="image-format-hint" data-image-format-hint>
+						Lossless. Quality does not apply, so the slider is off.
+					</p>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="image-quality">
+						Quality
+						<span class="tool__value mono" data-image-quality-value>{quality.default}%</span>
+					</label>
+					<input
+						class="tool__range"
+						id="image-quality"
+						type="range"
+						min={quality.min}
+						max={quality.max}
+						step={quality.step}
+						value={quality.default}
+						aria-describedby="image-quality-hint"
+						data-image-quality
+					/>
+					<p class="tool__hint" id="image-quality-hint" data-image-quality-hint>
+						Quality does not apply to PNG — the browser ignores it, so the slider is off.
+					</p>
+				</div>
+
+				<fieldset class="tool__field tool__field--resize">
+					<legend class="tool__label">Resize (optional)</legend>
+					<div class="tool__resize">
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="image-width">Width (px)</label>
+							<input
+								class="tool__number"
+								id="image-width"
+								type="number"
+								inputmode="numeric"
+								min="1"
+								max={TOOL_IMAGE_CONFIG.maxDimension}
+								placeholder="auto"
+								data-image-width
+							/>
+						</div>
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="image-height">Height (px)</label>
+							<input
+								class="tool__number"
+								id="image-height"
+								type="number"
+								inputmode="numeric"
+								min="1"
+								max={TOOL_IMAGE_CONFIG.maxDimension}
+								placeholder="auto"
+								data-image-height
+							/>
+						</div>
+					</div>
+					<label class="tool__check">
+						<input type="checkbox" checked data-image-lock />
+						<span>Keep aspect ratio</span>
+					</label>
+					<p class="tool__hint">
+						Leave both blank to keep the original size. One value scales the other to match; two values
+						fit the image inside that box.
+					</p>
+				</fieldset>
+			</div>
+
+			{/*
+			  Plain <button class="glass-button"> rather than the GlassButton
+			  component: GlassButton only forwards the props it declares, so a
+			  data-* hook passed to it is dropped and the script would find
+			  nothing to bind. The lab components use the same markup for the
+			  same reason.
+			*/}
+			<div class="tool__actions">
+				<button
+					class="glass-button glass-button--primary"
+					type="button"
+					data-glass=""
+					data-image-convert
+				>
+					Convert
+				</button>
+				<button class="glass-button" type="button" data-glass="" data-image-download disabled>
+					Download
+				</button>
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-image-reset>
+					Reset
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-image-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-image-error hidden></p>
+
+			<div class="tool__results" data-image-results hidden>
+				<figure class="tool__preview tool__preview--output">
+					<img class="tool__preview-img" data-image-output-preview alt="" aria-hidden="true" />
+					<figcaption class="tool__preview-meta mono" data-image-output-meta></figcaption>
+				</figure>
+			</div>
+
+			<p class="tool__note">
+				JPEG has no transparency, so transparent pixels come out black. Canvas conversion also drops the
+				original metadata — EXIF, colour profiles and captions are not carried into the new file.
+			</p>
+		</div>
+	</GlassPanel>
+</section>

@@ -6,9 +6,29 @@
  * selected song rather than the playback state. Optional metadata is rendered
  * only when supplied. The queue shows track details and supported progress.
  * Volume and mute remain in the shared Settings overlay.
+ *
+ * THE MARKUP IS THE FALLBACK, NOT THE QUEUE. This component is prerendered, so
+ * it renders `MUSIC_SOURCE.tracks` — the seed playlist and the offline
+ * fallback. scripts/music.ts then fetches /api/playlist and rebuilds the queue
+ * from the playlist stored in D1 before playback starts, so an operator's edits
+ * appear without a deploy. Both paths build their markup through the same
+ * helpers (`musicTrackAriaLabel`, `getMusicTrackDateLabel`) so the rendered and
+ * runtime queues cannot drift, and an empty saved playlist stays empty rather
+ * than falling back to this array.
+ *
+ * TWO PROVIDERS, BOTH WITH A TRANSPORT. `file` is the built-in <audio> element
+ * and `youtube` is the IFrame API; both report progress and end events, so the
+ * pill never has to pretend a control works when it does not. YouTube is the
+ * only provider /admin can add — there is no upload, file picker or tag parsing
+ * anywhere in this component.
  */
 import Icon from './Icon.astro';
-import { getMusicTrackMetadata, MUSIC_SOURCE } from '../config/music.config';
+import {
+	getMusicTrackDateLabel,
+	getMusicTrackMetadata,
+	musicTrackAriaLabel,
+	MUSIC_SOURCE,
+} from '../config/music.config';
 
 interface Props {
 	isBoard?: boolean;
@@ -18,12 +38,19 @@ const { isBoard = false } = Astro.props;
 const tracks = MUSIC_SOURCE.tracks;
 const firstTrack = tracks[0];
 const firstTrackFields = getMusicTrackMetadata(firstTrack);
-const firstTrackMetadata = [
-	firstTrackFields.artist,
-	firstTrackFields.album,
-	firstTrackFields.publishedAt ? `Published ${firstTrackFields.publishedAt}` : '',
-].filter(Boolean);
+// One definition of the date line, shared with the runtime rebuild in
+// scripts/music.ts: a YouTube upload date reads "Published …", which is the
+// only date this playlist carries.
+const firstTrackDate = getMusicTrackDateLabel(firstTrack);
+const firstTrackMetadata = [firstTrackFields.artist, firstTrackFields.album, firstTrackDate].filter(Boolean);
 const trackCount = tracks.length;
+// Precomputed so the queue markup below stays a plain expression: the date
+// label needs the same helper the pill and the runtime rebuild use.
+const queue = tracks.map((track, index) => ({
+	track,
+	index,
+	dateLabel: getMusicTrackDateLabel(track),
+}));
 ---
 
 <div
@@ -128,8 +155,8 @@ const trackCount = tracks.length;
 			<p class="music-player__metadata music-player__metadata--album" data-music-current-album hidden={!firstTrackFields.album}>
 				{firstTrackFields.album}
 			</p>
-			<p class="music-player__metadata music-player__metadata--date" data-music-current-date hidden={!firstTrackFields.publishedAt}>
-				{firstTrackFields.publishedAt ? `Published ${firstTrackFields.publishedAt}` : ''}
+			<p class="music-player__metadata music-player__metadata--date" data-music-current-date hidden={!firstTrackDate}>
+				{firstTrackDate}
 			</p>
 
 			<div class="music-player__progress-region" data-music-progress-region>
@@ -159,7 +186,7 @@ const trackCount = tracks.length;
 		</div>
 		{trackCount > 0 ? (
 			<ol class="music-player__track-list" data-music-track-list>
-				{tracks.map((track, index) => (
+				{queue.map(({ track, index, dateLabel }) => (
 					<li>
 						<button
 							class="music-player__track"
@@ -167,14 +194,14 @@ const trackCount = tracks.length;
 							data-music-track-index={index}
 							data-provider={track.provider}
 							aria-pressed={index === 0 ? 'true' : 'false'}
-							aria-label={`Play ${track.title}${track.artist?.trim() ? ` by ${track.artist.trim()}` : ''}${track.album?.trim() ? `, from ${track.album.trim()}` : ''}${track.publishedAt?.trim() ? `, published ${track.publishedAt.trim()}` : ''}`}
+							aria-label={musicTrackAriaLabel(track)}
 						>
 							<span class="music-player__track-number mono" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
 							<span class="music-player__track-copy">
 								<span class="music-player__track-title">{track.title}</span>
 								{track.artist?.trim() && <span class="music-player__track-meta">{track.artist.trim()}</span>}
 								{track.album?.trim() && <span class="music-player__track-meta music-player__track-meta--album">{track.album.trim()}</span>}
-								{track.publishedAt?.trim() && <span class="music-player__track-meta music-player__track-meta--date">Published {track.publishedAt.trim()}</span>}
+								{dateLabel && <span class="music-player__track-meta music-player__track-meta--date">{dateLabel}</span>}
 							</span>
 							<span class="music-player__provider mono">{track.provider}</span>
 						</button>
@@ -182,11 +209,23 @@ const trackCount = tracks.length;
 				))}
 			</ol>
 		) : (
-			<p class="music-player__empty">Add songs to <code>src/config/music.config.ts</code> to build the playlist.</p>
+			<p class="music-player__empty">No songs are configured. Add them from the admin playlist panel.</p>
 		)}
 	</section>
 
-	<!-- Keep the hidden API player and visible Spotify control in separate hosts. -->
+	<!-- Two embed hosts, kept separate on purpose.
+
+	     The YouTube one holds the IFrame API player, which scripts/music.ts
+	     creates and destroys. It is hidden because the pill is the control
+	     surface, and a second visible YouTube player would be a duplicate set
+	     of controls that disagrees with the queue.
+
+	     The Spotify one holds the embed iframe. Unlike the YouTube player it
+	     is VISIBLE, and deliberately so: Spotify's iFrame API is documented
+	     for podcast controls and exposes no supported music-track progress or
+	     end event, so the pill cannot drive it. Its own controls are the only
+	     honest ones, and the progress note says as much. It stays in the DOM
+	     empty and aria-hidden until a Spotify track is selected. -->
 	<div class="music-player__youtube-host" data-music-youtube-host aria-hidden="true"></div>
 	<div class="music-player__spotify-host" data-music-spotify-host aria-hidden="true"></div>
 </div>
@@ -563,12 +602,6 @@ const trackCount = tracks.length;
 		font-size: var(--text-small);
 		line-height: var(--leading-snug);
 	}
-	.music-player__progress-note code,
-	.music-player__empty code {
-		color: var(--accent-strong);
-		font-family: var(--font-mono);
-		font-size: 0.92em;
-	}
 	.music-player__queue-heading h3 {
 		font-size: var(--text-small);
 	}
@@ -646,7 +679,7 @@ const trackCount = tracks.length;
 		text-transform: uppercase;
 	}
 
-	/* YouTube stays hidden; Spotify's iframe is its own visible control surface. */
+	/* The IFrame API player stays hidden: the pill is the control surface. */
 	.music-player__youtube-host {
 		position: absolute;
 		right: 0;
@@ -657,6 +690,14 @@ const trackCount = tracks.length;
 		pointer-events: none;
 		opacity: 0;
 	}
+
+	/*
+	 * The Spotify embed, unlike the YouTube player, is visible — and has to be:
+	 * there is no supported music-track API to drive, so its own controls are
+	 * the only honest ones. It is `position: fixed` rather than a child of the
+	 * pill because it must survive the pill's collapse transition, and it stays
+	 * `aria-hidden` and empty until a Spotify track is actually selected.
+	 */
 	.music-player__spotify-host:not(:empty) {
 		position: fixed;
 		z-index: var(--z-player-embed);
@@ -678,6 +719,9 @@ const trackCount = tracks.length;
 		border: 0;
 		border-radius: inherit;
 	}
+
+	/* The playlist opens above the pill, so a visible Spotify embed would sit
+	 * underneath it. Lift the panel clear rather than letting the two overlap. */
 	.music-player[data-provider='spotify'][data-playlist-open='true'] .music-player__playlist {
 		bottom: calc(100% + var(--music-spotify-embed-height) + var(--space-3));
 	}
@@ -702,7 +746,6 @@ const trackCount = tracks.length;
 		.music-player[data-on-board='true'][data-provider='spotify'][data-playlist-open='true'] .music-player__playlist,
 		:global(body:has(.board)) .music-player[data-provider='spotify'][data-playlist-open='true'] .music-player__playlist {
 			top: calc(100% + var(--music-spotify-embed-height) + var(--space-3));
-			bottom: auto;
 		}
 	}
 
@@ -721,7 +764,6 @@ const trackCount = tracks.length;
 		}
 		.music-player[data-provider='spotify'][data-playlist-open='true'] .music-player__playlist {
 			top: calc(100% + var(--music-spotify-embed-height) + var(--space-3));
-			bottom: auto;
 		}
 	}
 

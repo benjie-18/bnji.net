@@ -40,7 +40,7 @@ type PaintState = {
 
 type PaintActions = Record<string, number>;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTION_TYPES = ['pen', 'eraser', 'line', 'rectangle', 'ellipse', 'text', 'spray', 'glow', 'sticker-add', 'sticker-move', 'sticker-remove', 'draw'];
+const ACTION_TYPES = ['pen', 'eraser', 'line', 'rectangle', 'ellipse', 'text', 'spray', 'glow', 'sticker-add', 'sticker-move', 'sticker-resize', 'sticker-remove', 'draw'];
 const PAINT_SESSION_COOKIE = 'bnji_paint_session';
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -131,15 +131,23 @@ function stickerActionCounts(before: PaintSticker[], after: PaintSticker[]): Pai
 	let added = 0;
 	let moved = 0;
 	let removed = 0;
+	let resized = 0;
 	for (const sticker of after) {
 		const old = oldById.get(sticker.id);
-		if (!old) added++;
-		else if (old.x !== sticker.x || old.y !== sticker.y) moved++;
+		if (!old) {
+			added += 1;
+			continue;
+		}
+		// Counted independently: one publish can both move and resize a sticker,
+		// and the activity trail should say so rather than pick one.
+		if (old.x !== sticker.x || old.y !== sticker.y) moved += 1;
+		if (old.width !== sticker.width || old.height !== sticker.height) resized += 1;
 	}
 	for (const sticker of before) if (!nextById.has(sticker.id)) removed++;
 	return {
 		...(added ? { 'sticker-add': added } : {}),
 		...(moved ? { 'sticker-move': moved } : {}),
+		...(resized ? { 'sticker-resize': resized } : {}),
 		...(removed ? { 'sticker-remove': removed } : {}),
 	};
 }
@@ -421,6 +429,7 @@ export async function POST(context: APIContext): Promise<Response> {
 		const actions: PaintActions = { ...clientActions };
 		delete actions['sticker-add'];
 		delete actions['sticker-move'];
+		delete actions['sticker-resize'];
 		delete actions['sticker-remove'];
 		Object.assign(actions, stickerActionCounts(stickersFor(state), stickers));
 		if (Object.values(actions).reduce((sum, count) => sum + count, 0) > PAINT_CONFIG.maxActionsPerPublish) {

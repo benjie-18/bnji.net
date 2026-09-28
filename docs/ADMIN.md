@@ -216,6 +216,26 @@ Without the migration or without `ACCESS_SECRET` the guard **fails closed** with
 `503 admin_not_configured` rather than serving. Then sign in at `/admin` and
 **change the seeded token immediately**.
 
+The panel is also one click away from the public site: Settings (the header
+gear) carries an *Admin* link to `/admin/`. It is a plain anchor with no
+client-side check of its own, so the route below behaves exactly as it does
+for anyone who types the URL — unauthenticated visitors are still sent to
+`/admin/login` by the guard, never let through by the link.
+
+The playlist panel needs the same migration — `0008_music_playlist.sql` adds
+`music_playlist_items` and `music_playlist_state` to the existing `BOARD_DB`
+binding. There is no second database and no in-memory fallback: with no binding
+every playlist route answers `503 storage_unconfigured` rather than pretending a
+playlist was saved or, worse, that it was emptied. The optional provider
+credentials (`YOUTUBE_API_KEY`, and the `SPOTIFY_CLIENT_ID` /
+`SPOTIFY_CLIENT_SECRET` pair) are declared in the env schema in
+`astro.config.mjs`, looked up lazily, and only improve autofill — without them
+the importer falls back to each provider's public oEmbed endpoint and manual
+entry, so the panel is never blocked. The Spotify pair is a Client Credentials
+pair: the token it buys is server-only and never reaches a browser. Neither
+credential is needed to seed a Spotify track by hand, which uses no lookup at
+all.
+
 ---
 
 ## 7. Panel UI
@@ -233,3 +253,84 @@ Without the migration or without `ACCESS_SECRET` the guard **fails closed** with
   publish timestamps, revisions, action counts and an opaque ephemeral session
   ID. It is not an account or person identifier; local drafts, pointer paths
   and sticker images are never logged. Retention is 60 days, capped at 5,000.
+
+---
+
+## 8. The playlist panel
+
+`/admin` → *Playlist* edits the live queue that `GET /api/playlist` serves to
+the player. `MUSIC_SOURCE.tracks` is the seed and the offline fallback, never
+the live queue: the stored playlist is copied in from it exactly once, and after
+that only this panel changes what plays.
+
+- **Every mutation checks the credential itself** and answers `503` — not
+  `401` — when no credential row exists or no D1 binding is present. A panel
+  that cannot write must not look like a panel that wrote nothing.
+- **Nothing is silently dropped.** A partial `reorder` list returns `409`
+  together with the full stored order, so a stale panel recovers without a
+  second request; duplicates and unknown ids are `409` too. The error
+  vocabulary is a closed set (`invalid_json`, `invalid_link`,
+  `title_required`, `playlist_full`, `invalid_id`, `not_found`,
+  `invalid_order`, `invalid_direction`, `query_failed`,
+  `storage_unconfigured`) and the panel renders the reason.
+- **Links are normalised server-side**, never stored as pasted: a canonical
+  YouTube link becomes `https://youtube.com/watch?v=…`, and `http://` /
+  `youtu.be` / Shorts / live / embed inputs are accepted and rewritten to it.
+  A playlist, channel or any non-YouTube link is refused with a reason rather
+  than stored as something the player cannot advance from. The submitted URL
+  itself is never fetched — requests go only to the fixed provider endpoints in
+  `MUSIC_PROVIDER_URLS`, built from an id `parseMusicLink()` already validated.
+- **Only YouTube can be imported here.** `parseMusicLink()` also accepts a
+  Spotify track link, because the player does play Spotify tracks — but those
+  are seeded by hand from `src/config/music.config.ts` and have no admin UI.
+  Both `/api/admin/playlist` and `/api/admin/playlist/resolve` therefore refuse
+  anything that is not `IMPORTABLE_PROVIDER` with `400 invalid_link`. This is
+  enforced, not assumed: the panel's copy, its date label and its error message
+  all describe YouTube, and the save path carries only `publishedAt`, so a
+  Spotify row would silently lose the `releaseDate` the player actually reads
+  for that provider.
+- **There is one date field per provider.** A YouTube video has one date worth
+  storing, its upload date, stored as `publishedAt`; the panel labels the input
+  **Publication date** and the player shows "Published …". A hand-seeded
+  Spotify track carries `releaseDate` instead and the player shows
+  "Released …" — `musicDateField(provider)` picks the right one, so the two
+  never share a column or a verb. `sourceId` is stored for re-resolution;
+  `durationSeconds` and `thumbnailUrl` stay display-only and are never
+  persisted.
+- **Providers this build does not play are skipped, not deleted.**
+  `ACTIVE_PROVIDERS` in `src/server/music-store.ts` is
+  `['file', 'spotify', 'youtube']`, and the storage `CHECK` constraint in
+  `0008_music_playlist.sql` is exactly the same three — the two agree, so a
+  valid row never fails a constraint this code does not itself violate.
+  `rowToItem()` still returns `null` for anything outside that set, which makes
+  a row from a *future* build that adds a fourth provider inert in every read
+  path (public endpoint, admin list, move, reorder, remove) without touching
+  your data. Nothing today falls in that gap, so there is normally nothing to
+  delete. If a future provider is ever retired and you do want the rows gone,
+  run this yourself — it is your data, and it is the only destructive statement
+  in this feature:
+
+  ```sql
+  -- Substitute the providers the CURRENT build plays. Listing a provider that
+  -- is still live here deletes every track using it.
+  DELETE FROM music_playlist_items WHERE provider NOT IN ('file', 'spotify', 'youtube');
+  ```
+
+  Back up the database first (`wrangler d1 export bnji-board --remote`), and
+  note that a `reorder` afterwards must list exactly the rows that remain, or it
+  is refused with `409`.
+
+  **Spotify is the one to be careful with.** It is live in the player but has no
+  admin UI: a Spotify track is added by hand in `src/config/music.config.ts`
+  and seeded into D1 from there. The statement above lists it, so it is safe as
+  written — but a copy that drops `'spotify'` from the `NOT IN` list would
+  silently delete every hand-seeded Spotify track. Check the list against
+  `ACTIVE_PROVIDERS` before running it.
+- **The panel never touches dashboard DOM.** `startAdminPlaylist(root, host)`
+  returns actions and receives exactly two writers (`say`, `fail`), the same
+  contract the rest of the dashboard uses.
+
+`npm test` covers the store (seed-once, dense positions, the UNIQUE
+constraint, the retired-provider skip), link normalisation, the provider
+lookups, the player's provider switching and every route's refusal, against
+real SQLite through a D1-shaped adapter.

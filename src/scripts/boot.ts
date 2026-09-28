@@ -29,6 +29,8 @@ import { initSettings } from './settings';
 import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
+import { initImageConverter } from './tools-image';
+import { initJsonFormatter } from './tools-json';
 
 function start(name: string, init: () => void): void {
 	try {
@@ -60,4 +62,8 @@ export function boot(): void {
 	start('nav-scroll-state', initNavScrollState);
 	start('reveal', initReveal);
 	start('parallax', initParallax);
+	// Both tools are no-ops on every other page: each init bails unless its
+	// subtree is in the document, so they cost one querySelector elsewhere.
+	start('image-converter', initImageConverter);
+	start('json-formatter', initJsonFormatter);
 }

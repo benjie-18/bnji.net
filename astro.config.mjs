@@ -25,6 +25,24 @@ export default defineConfig({
 			ACCESS_TOKEN: envField.string({ context: "server", access: "secret", optional: true }),
 			ACCESS_PASSWORD_SHA: envField.string({ context: "server", access: "secret", optional: true }),
 			ACCESS_SECRET: envField.string({ context: "server", access: "secret", optional: true }),
+			// YouTube playlist metadata lookup. OPTIONAL: the importer falls
+			// back to public oEmbed and then to manual entry, so the feature
+			// works with no key configured. A server-context secret — never
+			// inlined into a client bundle.
+			YOUTUBE_API_KEY: envField.string({ context: "server", access: "secret", optional: true }),
+			// Spotify Client Credentials pair. OPTIONAL for the same reason:
+			// with no pair the Spotify path falls back to public oEmbed and
+			// then to manual entry. This is a Client Credentials pair, which
+			// is server-only — the token it buys never leaves the Worker.
+			//
+			// Declared even though the admin panel imports no Spotify link:
+			// getSecret() reads the Worker env by name whether or not a key is
+			// declared, so an undeclared secret still resolves and silently
+			// skips this schema. Declaring it is what puts the value in the one
+			// file an auditor reads, which is the same reason YOUTUBE_API_KEY
+			// above is declared rather than left to the same silent path.
+			SPOTIFY_CLIENT_ID: envField.string({ context: "server", access: "secret", optional: true }),
+			SPOTIFY_CLIENT_SECRET: envField.string({ context: "server", access: "secret", optional: true }),
 		},
 	},
 	integrations: [
