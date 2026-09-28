@@ -19,7 +19,13 @@
  *      in docs/CONFIGURATION.md. Do not scatter service URLs through
  *      components.
  */
-export { MUSIC_SOURCE, type MusicSourceConfig } from './music.config';
+export {
+	MUSIC_SOURCE,
+	MUSIC_PROVIDER_URLS,
+	type MusicProvider,
+	type MusicTrack,
+	type MusicSourceConfig,
+} from './music.config';
 export { DM_INTEGRATION, type DmIntegrationConfig } from './integrations.config';
 export { BOARD_CONFIG, type BoardConfig } from './board.config';
 export { ACCESS_RULES, THEME_CONFIG, INTRO_CONFIG, type RouteAccessRule } from './access.config';

@@ -129,7 +129,7 @@ export async function GET(context: APIContext): Promise<Response> {
 			{
 				id: 'music',
 				source: 'src/config/music.config.ts',
-				summary: 'Background music source identifiers.',
+				summary: 'Ordered background music playlist and public source links.',
 				values: { ...MUSIC_SOURCE },
 			},
 			{

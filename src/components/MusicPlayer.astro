@@ -1,39 +1,46 @@
 ---
 /**
- * MusicPlayer — the small, unobtrusive music control (bottom right).
+ * MusicPlayer — compact background-music controls and an ordered queue.
  *
- * Configurable layout:
- * - Open: (d s no music... ♫)
- * - Closed: (♫) — a small circular glass badge
- * Clicking ♫ toggles between open and closed.
- *
- * States ([data-state], driven by scripts/music.ts): idle, loading, playing,
- * paused, blocked, error, disabled.
+ * The pill owns play/pause, next, and playlist controls; its label follows the
+ * selected song rather than the playback state. Optional metadata is rendered
+ * only when supplied. The queue shows track details and supported progress.
+ * Volume and mute remain in the shared Settings overlay.
  */
-import { MUSIC_SOURCE } from '../config/music.config';
+import Icon from './Icon.astro';
+import { getMusicTrackMetadata, MUSIC_SOURCE } from '../config/music.config';
 
 interface Props {
 	isBoard?: boolean;
 }
 
 const { isBoard = false } = Astro.props;
-const providerLabel =
-	MUSIC_SOURCE.provider === 'none' ? 'not configured' : MUSIC_SOURCE.provider;
+const tracks = MUSIC_SOURCE.tracks;
+const firstTrack = tracks[0];
+const firstTrackFields = getMusicTrackMetadata(firstTrack);
+const firstTrackMetadata = [
+	firstTrackFields.artist,
+	firstTrackFields.album,
+	firstTrackFields.publishedAt ? `Published ${firstTrackFields.publishedAt}` : '',
+].filter(Boolean);
+const trackCount = tracks.length;
 ---
 
 <div
 	class="music-player"
 	data-glass="raised"
 	data-music-player
-	data-provider={MUSIC_SOURCE.provider}
-	data-state="idle"
+	data-provider={firstTrack?.provider ?? 'none'}
+	data-track-count={trackCount}
+	data-state={trackCount > 0 ? 'idle' : 'disabled'}
 	data-collapsed={isBoard ? 'true' : 'false'}
+	data-playlist-open="false"
 	data-on-board={isBoard ? 'true' : 'false'}
 	role="group"
-	aria-label={`Background music (${providerLabel})`}
+	aria-label="Background music player"
 >
 	<div class="music-player__controls" data-music-controls>
-		<button class="music-player__btn" type="button" data-music-play aria-label="Play music">
+		<button class="music-player__btn" type="button" data-music-play aria-label="Play music" disabled={trackCount === 0}>
 			<svg class="music-player__icon music-player__icon--play" viewBox="0 0 24 24" aria-hidden="true">
 				<path d="M8.5 5.8v12.4L19 12 8.5 5.8Z" fill="currentColor" />
 			</svg>
@@ -46,18 +53,38 @@ const providerLabel =
 		<button
 			class="music-player__btn"
 			type="button"
-			data-music-mute
-			aria-pressed="false"
-			aria-label="Mute music"
+			data-music-next
+			aria-label="Skip to next song"
+			title="Skip to next song"
+			disabled={trackCount < 2}
 		>
-			<svg viewBox="0 0 24 24" aria-hidden="true">
-				<path d="M4 9.5v5h3.4L12 18.6V5.4L7.4 9.5H4Z" fill="currentColor" />
-				<path class="music-player__wave" d="M15 9.2a4 4 0 0 1 0 5.6M17.4 7a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" />
-				<path class="music-player__cross" d="M15 9.5l5 5M20 9.5l-5 5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" />
-			</svg>
+			<Icon name="skip-forward" size={14} />
 		</button>
 
-		<p class="music-player__status mono" data-music-status aria-live="polite">Music off</p>
+		<button
+			class="music-player__btn music-player__playlist-toggle"
+			type="button"
+			data-music-playlist-toggle
+			aria-label="Open music playlist"
+			aria-haspopup="dialog"
+			aria-expanded="false"
+			aria-controls="music-playlist"
+			title="Open music playlist"
+		>
+			<Icon name="list" size={14} />
+		</button>
+
+		<p class="music-player__status" data-music-status>
+			<span class="music-player__status-title" data-music-status-title>
+				{firstTrack?.title ?? 'No songs configured'}
+			</span>
+			<span class="music-player__status-meta" data-music-status-meta hidden={!firstTrackMetadata.length}>
+				{firstTrackMetadata.join(' · ')}
+			</span>
+			<span class="sr-only" data-music-state-announcement role="status" aria-live="polite" aria-atomic="true">
+				{trackCount > 0 ? 'Music off' : 'No music'}
+			</span>
+		</p>
 	</div>
 
 	<button
@@ -74,10 +101,94 @@ const providerLabel =
 		<span class="music-player__dot-badge" aria-hidden="true"></span>
 	</button>
 
-	<!-- Provider embed host: hidden for youtube (API-driven, pill is the UI),
-	     visible above the pill for spotify (the embed is the UI), unused for
-	     file/none. -->
-	<div class="music-player__embed" data-music-embed aria-hidden="true"></div>
+	<section
+		class="music-player__playlist"
+		id="music-playlist"
+		data-music-playlist
+		role="dialog"
+		aria-labelledby="music-playlist-title"
+		hidden
+	>
+		<header class="music-player__playlist-header">
+			<div>
+				<p class="music-player__eyebrow mono">BACKGROUND AUDIO</p>
+				<h2 id="music-playlist-title">Music playlist</h2>
+			</div>
+			<button class="music-player__btn music-player__playlist-close" type="button" data-music-playlist-close aria-label="Close music playlist" title="Close playlist">
+				<span aria-hidden="true">×</span>
+			</button>
+		</header>
+
+		<section class="music-player__current" aria-label="Current song">
+			<p class="music-player__eyebrow mono">NOW PLAYING</p>
+			<h3 data-music-current-title>{firstTrack?.title ?? 'No songs configured'}</h3>
+			<p class="music-player__metadata" data-music-current-artist hidden={!firstTrackFields.artist}>
+				{firstTrackFields.artist}
+			</p>
+			<p class="music-player__metadata music-player__metadata--album" data-music-current-album hidden={!firstTrackFields.album}>
+				{firstTrackFields.album}
+			</p>
+			<p class="music-player__metadata music-player__metadata--date" data-music-current-date hidden={!firstTrackFields.publishedAt}>
+				{firstTrackFields.publishedAt ? `Published ${firstTrackFields.publishedAt}` : ''}
+			</p>
+
+			<div class="music-player__progress-region" data-music-progress-region>
+				<div
+					class="music-player__progress"
+					data-music-progress
+					role="progressbar"
+					aria-label="Song progress"
+					aria-valuemin="0"
+					aria-valuemax="100"
+					aria-valuenow="0"
+					aria-valuetext="0:00 of 0:00"
+				>
+					<span data-music-progress-fill></span>
+				</div>
+				<p class="music-player__time mono" aria-hidden="true">
+					<span data-music-elapsed>0:00</span>
+					<span data-music-duration>0:00</span>
+				</p>
+			</div>
+			<p class="music-player__progress-note" data-music-progress-note hidden></p>
+		</section>
+
+		<div class="music-player__queue-heading">
+			<h3>Songs</h3>
+			<span class="mono" data-music-queue-count>{trackCount}</span>
+		</div>
+		{trackCount > 0 ? (
+			<ol class="music-player__track-list" data-music-track-list>
+				{tracks.map((track, index) => (
+					<li>
+						<button
+							class="music-player__track"
+							type="button"
+							data-music-track-index={index}
+							data-provider={track.provider}
+							aria-pressed={index === 0 ? 'true' : 'false'}
+							aria-label={`Play ${track.title}${track.artist?.trim() ? ` by ${track.artist.trim()}` : ''}${track.album?.trim() ? `, from ${track.album.trim()}` : ''}${track.publishedAt?.trim() ? `, published ${track.publishedAt.trim()}` : ''}`}
+						>
+							<span class="music-player__track-number mono" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+							<span class="music-player__track-copy">
+								<span class="music-player__track-title">{track.title}</span>
+								{track.artist?.trim() && <span class="music-player__track-meta">{track.artist.trim()}</span>}
+								{track.album?.trim() && <span class="music-player__track-meta music-player__track-meta--album">{track.album.trim()}</span>}
+								{track.publishedAt?.trim() && <span class="music-player__track-meta music-player__track-meta--date">Published {track.publishedAt.trim()}</span>}
+							</span>
+							<span class="music-player__provider mono">{track.provider}</span>
+						</button>
+					</li>
+				))}
+			</ol>
+		) : (
+			<p class="music-player__empty">Add songs to <code>src/config/music.config.ts</code> to build the playlist.</p>
+		)}
+	</section>
+
+	<!-- Keep the hidden API player and visible Spotify control in separate hosts. -->
+	<div class="music-player__youtube-host" data-music-youtube-host aria-hidden="true"></div>
+	<div class="music-player__spotify-host" data-music-spotify-host aria-hidden="true"></div>
 </div>
 
 <style>
@@ -88,14 +199,12 @@ const providerLabel =
 		z-index: var(--z-player);
 		display: inline-flex;
 		align-items: center;
-		gap: 0.45rem;
-		padding: 0.3rem 0.35rem 0.3rem 0.55rem;
+		gap: var(--space-2);
+		padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
 		border-radius: var(--radius-pill);
 		/* Explicit property list, never `all`: border-radius must NOT animate.
-		   Interpolating 999px ↔ 50% through --ease-spring overshoots past 1,
-		   which drives the computed radius negative → clamped to 0, so the
-		   circle flashed square for a frame on every click. Both states now
-		   share --radius-pill (on a 38px square that is already a circle). */
+		   Both states share --radius-pill; on a square badge that is already
+		   circular, avoiding a one-frame square during the spring transition. */
 		transition:
 			padding var(--dur-base) var(--ease-spring),
 			gap var(--dur-base) var(--ease-spring),
@@ -105,19 +214,24 @@ const providerLabel =
 		user-select: none;
 	}
 
+	.music-player[data-playlist-open='true'] {
+		z-index: var(--z-modal);
+	}
+
 	.music-player__controls {
 		display: flex;
 		align-items: center;
-		gap: 0.45rem;
+		gap: var(--space-2);
+		min-inline-size: 0;
 		transition: opacity var(--dur-fast) var(--ease-out);
 	}
 
-	/* --- Collapsed mode: (♫) small circle --- */
+	/* --- Collapsed mode: small circular music badge --- */
 	.music-player[data-collapsed='true'] {
 		padding: 0;
 		gap: 0;
-		inline-size: 38px;
-		block-size: 38px;
+		inline-size: var(--music-player-toggle-size);
+		block-size: var(--music-player-toggle-size);
 		border-radius: var(--radius-pill);
 		justify-content: center;
 		cursor: pointer;
@@ -140,8 +254,8 @@ const providerLabel =
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		inline-size: 28px;
-		block-size: 28px;
+		inline-size: var(--music-player-control-size);
+		block-size: var(--music-player-control-size);
 		flex: none;
 		border: 1px solid var(--glass-border);
 		border-radius: 50%;
@@ -164,26 +278,31 @@ const providerLabel =
 		cursor: not-allowed;
 	}
 	.music-player__btn svg {
-		inline-size: 13px;
-		block-size: 13px;
+		inline-size: var(--music-player-icon-size);
+		block-size: var(--music-player-icon-size);
 	}
 
-	/* Toggle ♫ Button */
+	.music-player__playlist-toggle[aria-expanded='true'] {
+		color: var(--accent-strong);
+		border-color: var(--accent-line);
+		background: var(--accent-soft);
+	}
+
 	.music-player__toggle {
 		color: var(--text-muted);
 	}
 	.music-player__note-icon {
-		inline-size: 14px;
-		block-size: 14px;
+		inline-size: var(--music-player-note-size);
+		block-size: var(--music-player-note-size);
 		fill: currentColor;
 		transition: transform var(--dur-fast) var(--ease-spring), color var(--dur-fast) var(--ease-out);
 	}
 
-	/* Dot badge on the ♫ toggle button */
+	/* Dot badge on the music-toggle button */
 	.music-player__dot-badge {
 		position: absolute;
-		top: 3px;
-		right: 3px;
+		top: var(--space-1);
+		right: var(--space-1);
 		inline-size: 5px;
 		block-size: 5px;
 		border-radius: 50%;
@@ -247,8 +366,8 @@ const providerLabel =
 	}
 	.music-player[data-state='loading'] .music-player__spinner {
 		display: block;
-		inline-size: 13px;
-		block-size: 13px;
+		inline-size: var(--music-player-icon-size);
+		block-size: var(--music-player-icon-size);
 		border-radius: 50%;
 		border: 2px solid var(--glass-border-strong);
 		border-top-color: var(--accent);
@@ -276,97 +395,333 @@ const providerLabel =
 		}
 	}
 
-	/* Mute cross */
-	.music-player__cross {
-		display: none;
-	}
-	.music-player__btn[aria-pressed='true'] .music-player__cross {
-		display: block;
-	}
-	.music-player__btn[aria-pressed='true'] .music-player__wave {
-		display: none;
-	}
-
-	/* Status line */
+	/* Current-song label. Playback state remains available to assistive tech,
+	   while the visible pill always identifies the selected song. */
 	.music-player__status {
+		display: grid;
+		flex: 0 1 auto;
+		gap: var(--space-1);
+		min-inline-size: 0;
+		max-inline-size: var(--music-player-status-max-width);
 		margin: 0;
-		font-size: var(--text-micro);
-		letter-spacing: var(--tracking-mono);
-		text-transform: uppercase;
-		color: var(--text-dim);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 10ch;
-	}
-	.music-player[data-state='playing'] .music-player__status {
 		color: var(--text-muted);
 	}
-	.music-player[data-state='blocked'] .music-player__status {
+	.music-player__status-title,
+	.music-player__status-meta {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.music-player__status-title {
+		color: var(--text-strong);
+		font-family: var(--font-body);
+		font-size: var(--text-small);
+		font-weight: 600;
+		line-height: var(--leading-tight);
+	}
+	.music-player__status-meta {
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		line-height: var(--leading-snug);
+	}
+	.music-player__status-meta[hidden] {
+		display: none;
+	}
+	.music-player[data-state='blocked'] .music-player__status-title {
 		color: var(--accent-strong);
 	}
-	.music-player[data-state='error'] .music-player__status {
+	.music-player[data-state='error'] .music-player__status-title {
 		color: var(--signal-soon);
-	}
-	.music-player[data-state='disabled'] {
-		opacity: 0.72;
 	}
 	.music-player[data-state='error'] .music-player__btn[data-music-play] {
 		color: var(--signal-soon);
 		border-color: var(--signal-soon);
 	}
 
-	/* Provider embed host */
-	.music-player__embed {
+	/* Playlist popover */
+	.music-player__playlist[hidden] {
+		display: none;
+	}
+	.music-player__playlist {
 		position: absolute;
-		inset: 0;
+		right: 0;
+		bottom: calc(100% + var(--space-3));
+		z-index: var(--z-player-popover);
+		display: grid;
+		gap: var(--space-4);
+		inline-size: min(var(--music-playlist-width), calc(100vw - 2 * var(--gutter)));
+		max-block-size: min(var(--music-playlist-max-block), calc(100dvh - var(--nav-height) - 2 * var(--gutter)));
+		padding: var(--space-4);
+		overflow-x: hidden;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-lg);
+		background: var(--glass-bg-fallback);
+		color: var(--text);
+		box-shadow: var(--glass-shadow-raised);
+		backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+	}
+
+	.music-player__playlist-header,
+	.music-player__queue-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+	.music-player__playlist-header h2,
+	.music-player__queue-heading h3,
+	.music-player__current h3 {
+		margin: 0;
+		color: var(--text-strong);
+	}
+	.music-player__playlist-header h2 {
+		font-size: var(--text-lead);
+		letter-spacing: var(--tracking-snug);
+	}
+	.music-player__eyebrow {
+		margin: 0 0 var(--space-1);
+		color: var(--text-dim);
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+		text-transform: uppercase;
+	}
+	.music-player__playlist-close {
+		font-size: var(--text-lead);
+		line-height: 1;
+	}
+
+	.music-player__current {
+		display: grid;
+		gap: var(--space-2);
+		min-inline-size: 0;
+		padding: var(--space-3);
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-md);
+		background: var(--glass-bg-clear);
+	}
+	.music-player__current h3 {
+		overflow: hidden;
+		font-size: var(--text-body);
+		font-weight: 650;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.music-player__metadata {
+		margin: calc(-1 * var(--space-1)) 0 0;
+		color: var(--text-muted);
+		font-size: var(--text-small);
+		line-height: var(--leading-snug);
+	}
+	.music-player__metadata[hidden],
+	.music-player__progress-region[hidden],
+	.music-player__progress-note[hidden] {
+		display: none;
+	}
+	.music-player__metadata--album,
+	.music-player__metadata--date {
+		color: var(--text-dim);
+		font-size: var(--text-micro);
+	}
+
+	.music-player__progress-region {
+		display: grid;
+		gap: var(--space-1);
+		margin-block-start: var(--space-1);
+	}
+	.music-player__progress {
+		block-size: var(--music-progress-height);
+		overflow: hidden;
+		border-radius: var(--radius-pill);
+		background: var(--glass-border-strong);
+	}
+	.music-player__progress > span {
+		display: block;
+		inline-size: 100%;
+		block-size: 100%;
+		border-radius: inherit;
+		background: var(--accent);
+		transform: scaleX(0);
+		transform-origin: left center;
+		transition: transform var(--dur-fast) linear;
+	}
+	.music-player__time {
+		display: flex;
+		justify-content: space-between;
+		margin: 0;
+		color: var(--text-dim);
+		font-size: var(--text-micro);
+		letter-spacing: var(--tracking-mono);
+	}
+	.music-player__progress-note,
+	.music-player__empty {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: var(--text-small);
+		line-height: var(--leading-snug);
+	}
+	.music-player__progress-note code,
+	.music-player__empty code {
+		color: var(--accent-strong);
+		font-family: var(--font-mono);
+		font-size: 0.92em;
+	}
+	.music-player__queue-heading h3 {
+		font-size: var(--text-small);
+	}
+	.music-player__queue-heading > span {
+		color: var(--text-dim);
+		font-size: var(--text-micro);
+	}
+
+	.music-player__track-list {
+		display: grid;
+		gap: var(--space-1);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.music-player__track-list li {
+		min-inline-size: 0;
+	}
+	.music-player__track {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-3);
+		inline-size: 100%;
+		padding: var(--space-3);
+		border: 1px solid transparent;
+		border-radius: var(--radius-md);
+		background: transparent;
+		color: var(--text);
+		text-align: left;
+		cursor: pointer;
+		transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+	}
+	.music-player__track:hover {
+		border-color: var(--glass-border);
+		background: var(--glass-bg-quiet);
+	}
+	.music-player__track:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+	.music-player__track[aria-pressed='true'] {
+		border-color: var(--accent-line);
+		background: var(--accent-soft);
+	}
+	.music-player__track-number {
+		color: var(--text-dim);
+		font-size: var(--text-micro);
+	}
+	.music-player__track-copy {
+		display: grid;
+		min-inline-size: 0;
+		gap: var(--space-1);
+	}
+	.music-player__track-title,
+	.music-player__track-meta {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.music-player__track-title {
+		font-size: var(--text-small);
+		font-weight: 600;
+	}
+	.music-player__track-meta {
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+	}
+	.music-player__track-meta--album {
+		color: var(--text-dim);
+	}
+	.music-player__provider {
+		color: var(--text-dim);
+		font-size: var(--text-micro);
+		text-transform: uppercase;
+	}
+
+	/* YouTube stays hidden; Spotify's iframe is its own visible control surface. */
+	.music-player__youtube-host {
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		inline-size: var(--music-youtube-frame-size);
+		block-size: var(--music-youtube-frame-size);
 		overflow: hidden;
 		pointer-events: none;
 		opacity: 0;
 	}
-
-	.music-player[data-provider='spotify'] .music-player__embed:not(:empty) {
+	.music-player__spotify-host:not(:empty) {
 		position: fixed;
+		z-index: var(--z-player-embed);
 		right: var(--gutter);
-		bottom: calc(var(--gutter) + 44px);
-		inset: auto;
-		inline-size: min(320px, calc(100vw - 2 * var(--gutter)));
-		overflow: visible;
+		bottom: calc(var(--gutter) + var(--music-player-expanded-offset));
+		inline-size: min(var(--music-playlist-width), calc(100vw - 2 * var(--gutter)));
+		block-size: var(--music-spotify-embed-height);
+		overflow: hidden;
 		pointer-events: auto;
 		opacity: 1;
+		border: 1px solid var(--glass-border);
 		border-radius: var(--radius-md);
 		box-shadow: var(--glass-shadow-raised);
 	}
+	.music-player__spotify-host iframe {
+		display: block;
+		inline-size: 100%;
+		block-size: 100%;
+		border: 0;
+		border-radius: inherit;
+	}
+	.music-player[data-provider='spotify'][data-playlist-open='true'] .music-player__playlist {
+		bottom: calc(100% + var(--music-spotify-embed-height) + var(--space-3));
+	}
 
-	/* Placement rules: On the board page at <= 980px or on mobile <= 720px,
-	   mount underneath the top nav dock so it NEVER collides with the composer */
+	/* At narrow widths the player sits under the nav; its menu opens below it. */
 	@media (max-width: 980px) {
 		.music-player[data-on-board='true'],
 		:global(body:has(.board)) .music-player {
-			top: calc(var(--nav-offset) + var(--nav-height) + 8px);
+			top: calc(var(--nav-offset) + var(--nav-height) + var(--space-2));
 			bottom: auto;
 		}
-		.music-player[data-on-board='true'][data-provider='spotify'] .music-player__embed:not(:empty),
-		:global(body:has(.board)) .music-player[data-provider='spotify'] .music-player__embed:not(:empty) {
-			top: calc(var(--nav-offset) + var(--nav-height) + 52px);
+		.music-player[data-on-board='true'] .music-player__spotify-host:not(:empty),
+		:global(body:has(.board)) .music-player .music-player__spotify-host:not(:empty) {
+			top: calc(var(--nav-offset) + var(--nav-height) + var(--space-2) + var(--music-player-expanded-offset));
+			bottom: auto;
+		}
+		.music-player[data-on-board='true'] .music-player__playlist,
+		:global(body:has(.board)) .music-player .music-player__playlist {
+			top: calc(100% + var(--space-3));
+			bottom: auto;
+		}
+		.music-player[data-on-board='true'][data-provider='spotify'][data-playlist-open='true'] .music-player__playlist,
+		:global(body:has(.board)) .music-player[data-provider='spotify'][data-playlist-open='true'] .music-player__playlist {
+			top: calc(100% + var(--music-spotify-embed-height) + var(--space-3));
 			bottom: auto;
 		}
 	}
 
 	@media (max-width: 720px) {
 		.music-player {
-			top: calc(var(--nav-offset) + var(--nav-height) + 8px);
+			top: calc(var(--nav-offset) + var(--nav-height) + var(--space-2));
 			bottom: auto;
 		}
-		.music-player[data-provider='spotify'] .music-player__embed:not(:empty) {
-			top: calc(var(--nav-offset) + var(--nav-height) + 52px);
+		.music-player .music-player__spotify-host:not(:empty) {
+			top: calc(var(--nav-offset) + var(--nav-height) + var(--space-2) + var(--music-player-expanded-offset));
 			bottom: auto;
 		}
-	}
-
-	@media (max-width: 560px) {
-		.music-player__status {
-			max-width: 7ch;
+		.music-player .music-player__playlist {
+			top: calc(100% + var(--space-3));
+			bottom: auto;
+		}
+		.music-player[data-provider='spotify'][data-playlist-open='true'] .music-player__playlist {
+			top: calc(100% + var(--music-spotify-embed-height) + var(--space-3));
+			bottom: auto;
 		}
 	}
 
@@ -375,6 +730,9 @@ const providerLabel =
 		.music-player[data-state='blocked'] .music-player__btn[data-music-play],
 		.music-player[data-state='loading'] .music-player__spinner {
 			animation: none;
+		}
+		.music-player__progress > span {
+			transition: none;
 		}
 	}
 </style>

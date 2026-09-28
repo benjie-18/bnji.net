@@ -1,67 +1,86 @@
-/**
- * Background music — SOURCE CONFIGURATION (public).
- *
- * ┌──────────────────────────────────────────────────────────────────────┐
- * │  ENTER YOUR MUSIC SOURCE HERE. This is the only place to change.     │
- * └──────────────────────────────────────────────────────────────────────┘
- *
- * Pick exactly one provider and fill its fields. The player component
- * (src/components/MusicPlayer.astro + src/scripts/music.ts) adapts its
- * behaviour to the provider; nothing else in the project needs to change.
- *
- *   provider: 'none'     — player renders a disabled, explained state.
- *   provider: 'youtube' — fill `youtube.videoId` (the ?v= part of a YouTube
- *                          URL). Playback uses the official IFrame API, loaded
- *                          at page start so the autoplay attempt can run; the
- *                          iframe itself stays hidden (the pill is the UI).
- *   provider: 'spotify' — fill `spotify.id` (track/album/playlist ID) and
- *                          `spotify.type`. Playback uses Spotify's embed
- *                          iframe, mounted VISIBLE above the pill: Spotify
- *                          exposes no transport/volume API, so the embed's
- *                          own UI is the control surface and the pill's
- *                          mute button is disabled for this provider.
- *   provider: 'file'    — fill `file.url` with a direct audio URL (mp3/ogg/
- *                          wav, same-origin or CORS-enabled). Full transport:
- *                          play/pause, volume, mute, loading and error states.
- *
- * Autoplay: ATTEMPTED on page load. If blocked, the first trusted page input
- * triggers one more attempt for file/YouTube without cancelling that input.
- * This is not a policy bypass: a browser may still refuse (notably for
- * scroll-only input). Spotify exposes no transport API, so its embed's own
- * play button remains the control. The pill's tap-to-play affordance remains
- * for file/YouTube. Volume/mute preferences live in the settings store
- * (scripts/settings.ts), not here; defaultVolume only seeds it.
- *
- * PUBLIC vs SECRET: all values here are PUBLIC identifiers (they end up in
- * shipped HTML/JS). Never put API keys or private URLs in this file.
- */
+/* ==========================================================================
+   BNJI.NET — background music playlist (public configuration).
+   --------------------------------------------------------------------------
+   Add songs to `tracks` in playback order; reordering the array changes the
+   queue. Each item needs a stable `id`, a title, a provider and a URL. Artist,
+   album and publication date are optional; non-empty metadata is shown after
+   the title in the pill and playlist, while missing fields stay hidden.
+
+   Providers:
+     file     — place the audio file under public/music/ and use its root path,
+                or use a direct same-origin/CORS-enabled audio URL.
+     youtube  — paste a YouTube watch, youtu.be, shorts or embed URL.
+     spotify  — paste an open.spotify.com track/album/playlist URL. Spotify's
+                current iFrame API is documented for podcast controls; it does
+                not provide a supported progress/end contract for music tracks.
+                Use the embed's own controls. Use file or YouTube for site-level
+                progress and automatic advance.
+
+   Volume/mute preferences live in the visitor settings store. These values are
+   public and shipped to browsers; never put secrets or private URLs here.
+   ========================================================================== */
+export type MusicProvider = 'file' | 'youtube' | 'spotify';
+
+export type MusicTrack = {
+	/** Stable, unique key used by the rendered playlist. */
+	id: string;
+	/** Display title. */
+	title: string;
+	/** Optional display metadata; empty or missing fields are not rendered. */
+	artist?: string;
+	album?: string;
+	/** Optional upload/release date when the provider or owner supplies it. */
+	publishedAt?: string;
+	provider: MusicProvider;
+	/** Direct audio URL, or a YouTube/Spotify link for that provider. */
+	url: string;
+};
+
 export type MusicSourceConfig = {
-	provider: 'none' | 'youtube' | 'spotify' | 'file';
-	youtube: {
-		/** e.g. 'dQw4w9WgXcQ' — leave empty until you have a source. */
-		videoId: string;
-	};
-	spotify: {
-		/** Spotify entity ID (track / album / playlist). */
-		id: string;
-		type: 'track' | 'album' | 'playlist';
-	};
-	file: {
-		/** Direct audio file URL, e.g. '/music/ambient.mp3'. */
-		url: string;
-		/** Title shown in the player while playing. */
-		title: string;
-	};
-	/** Initial volume 0..1 applied on first user-initiated play. */
+	/** Ordered queue; array order is playback order. An empty list disables music. */
+	tracks: MusicTrack[];
+	/** Initial volume 0..1, applied to file/YouTube playback. */
 	defaultVolume: number;
 };
 
+export type MusicTrackDisplayMetadata = {
+	artist: string;
+	album: string;
+	publishedAt: string;
+};
+
+/** Normalize optional per-track metadata; absent values stay empty for the UI to omit. */
+export function getMusicTrackMetadata(track: MusicTrack | null | undefined): MusicTrackDisplayMetadata {
+	return {
+		artist: track?.artist?.trim() ?? '',
+		album: track?.album?.trim() ?? '',
+		publishedAt: track?.publishedAt?.trim() ?? '',
+	};
+}
+
+/** Endpoints and accepted hosts belong to the music integration config. */
+export const MUSIC_PROVIDER_URLS = {
+	youtube: {
+		iframeApi: 'https://www.youtube.com/iframe_api',
+		hosts: ['youtube.com', 'youtu.be'],
+	},
+	spotify: {
+		embedBase: 'https://open.spotify.com/embed',
+		host: 'open.spotify.com',
+	},
+} as const;
+
 export const MUSIC_SOURCE: MusicSourceConfig = {
-	// ▼▼▼ CONFIGURE HERE ▼▼▼
-	provider: 'file',
-	youtube: { videoId: '' },
-	spotify: { id: '', type: 'track' },
-	file: { url: '/music/the feeling.mp3', title: 'the feeling' },
-	// ▲▲▲ CONFIGURE HERE ▲▲▲
+	tracks: [
+		// Copy an entry, replace its fields, then move it to set playback order.
+		// { id: 'next-song', title: 'Song title', artist: 'Artist', album: 'Album', publishedAt: '2026-01-01', provider: 'file', url: '/music/song.mp3' },
+		// { id: 'youtube-song', title: 'Video title', provider: 'youtube', url: 'https://youtu.be/VIDEO_ID' },
+		{
+			id: 'the-feeling',
+			title: 'the feeling',
+			provider: 'file',
+			url: '/music/the feeling.mp3',
+		},
+	],
 	defaultVolume: 0.6,
 };

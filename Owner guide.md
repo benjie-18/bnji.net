@@ -138,16 +138,29 @@ To add a second profile, create a typed data file under `src/data/profiles/`, re
 
 ## 5. Add or change background music
 
-Edit **`src/config/music.config.ts`**. Choose one provider by changing `provider`:
+Edit **`src/config/music.config.ts`**. Add songs to `MUSIC_SOURCE.tracks`; the array order is playback order. Each entry needs a unique `id`, `title`, `provider`, and `url`. For example:
 
-- `'none'`: no configured music source.
-- `'youtube'`: use the video ID from a YouTube URL’s `v=` parameter.
-- `'spotify'`: provide the Spotify track, album, or playlist ID and matching `type`.
-- `'file'`: provide a direct audio-file URL and a title.
+```ts
+{
+  id: 'next-song',
+  title: 'Song title',
+  artist: 'Artist',       // optional
+  album: 'Album',         // optional
+  publishedAt: '2026-01-01', // optional; include only when known
+  provider: 'youtube',
+  url: 'https://youtu.be/VIDEO_ID',
+}
+```
 
-For a local audio file, place it under `public/`. For example, `public/music/ambient.mp3` is addressed as `/music/ambient.mp3`.
+Supported providers:
 
-`defaultVolume` is from `0` to `1`. It sets the initial volume preference; visitors can change their own volume and mute settings. The player attempts autoplay, but browsers may block it. Visitors may need to press play. Spotify’s own embedded player provides its playback controls.
+- **`file`**: put an audio file in `public/music/` and use its root-relative path, such as `/music/ambient.mp3`. Same-origin or CORS-enabled audio URLs also work.
+- **`youtube`**: paste a YouTube video link. The player accepts watch, `youtu.be`, Shorts, live, and embed URLs.
+- **`spotify`**: paste an `open.spotify.com` track, album, or playlist link. Spotify uses its own embedded controls; site-level progress and automatic advance are not available for music tracks, but the playlist’s Skip button still works.
+
+The player pill shows the selected song title. Non-empty artist, album, and `publishedAt` metadata appears in smaller text; fields that are missing or blank are hidden for that song. Metadata is entered in this config and is not fetched automatically. Reorder songs by moving their entries in the array. Set `tracks: []` to disable music.
+
+`defaultVolume` is from `0` to `1` and sets the initial volume preference. Visitors can change volume and mute in **Settings → Audio**. The player attempts autoplay, but browsers may block it; visitors may need to press play. The `/admin` panel does not currently edit the playlist or accept audio uploads.
 
 Music URLs and source IDs in this file are public. Never put a music-service password or API key here.
 
