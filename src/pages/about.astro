@@ -1,44 +1,15 @@
 ---
 /**
- * /about/ — the long-form version of the homepage identity section.
+ * /about/ — profile overview and a link to the full social profile.
  *
  * Copy lives here rather than in data/ because it is prose specific to one page;
  * anything reused (name, location, tagline, socials) comes from data/site.ts.
  */
-import Chip from '../components/Chip.astro';
-import GlassPanel from '../components/GlassPanel.astro';
 import ProfileCard from '../components/ProfileCard.astro';
 import PageHeader from '../components/PageHeader.astro';
-import SectionHeading from '../components/SectionHeading.astro';
 import Icon from '../components/Icon.astro';
 import { SITE } from '../data/site';
 import Layout from '../layouts/Layout.astro';
-
-const PRINCIPLES = [
-	{
-		title: 'Simple underneath, deliberate on top',
-		body: 'Astro, a handful of TypeScript modules and CSS custom properties. Nothing here needs a framework to move a star two pixels to the left.',
-	},
-	{
-		title: 'Data before markup',
-		body: 'Projects, navigation, services and experiments are typed arrays in src/data/. Changing the site usually means editing a value, not a component.',
-	},
-	{
-		title: 'Readable by machines too',
-		body: 'This site is partly maintained by a local coding agent. Small files, obvious names and an AGENTS.md are not bureaucracy — they are how the work gets done.',
-	},
-] as const;
-
-const TOOLBOX = [
-	'Lorem',
-	'Ipsum',
-	'Dolor',
-	'Sit',
-	'Amet',
-	'Consectetur',
-	'Adipiscing',
-	'Elit',
-] as const;
 
 const title = `About ${SITE.author.name}`;
 const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SITE.author.location}. ${SITE.author.tagline}`;
@@ -69,58 +40,6 @@ const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SIT
 					</a>
 				</div>
 			</section>
-			<section class="section section--tight" aria-labelledby="story-title">
-				<SectionHeading
-					label="STORY"
-					titleId="story-title"
-					title="Systems that stay understandable."
-				/>
-				<GlassPanel pad="lg" reveal class="prose">
-					<p>
-						The site itself is part of the work: a canvas starfield, a 2027 liquid glass optical system built
-						on CSS custom properties and SVG displacement mapping, and no client-side framework bloat.
-					</p>
-					<p>
-						Everything animated uses GPU-composited <code>opacity</code> and <code>transform</code>.
-						Pointer and lighting physics react smoothly to cursor coordinates and gracefully
-						stand down whenever a visitor requests reduced motion or reduced transparency.
-					</p>
-				</GlassPanel>
-			</section>
-
-			<section class="section section--tight" aria-labelledby="principles-title">
-				<SectionHeading
-					label="PRINCIPLES"
-					titleId="principles-title"
-					title="Three rules this site keeps"
-				/>
-				<div class="principles">
-					{
-						PRINCIPLES.map((principle, index) => (
-							<GlassPanel pad="md" reveal revealDelay={index * 90} class="principle">
-								<span class="principle__index">{String(index + 1).padStart(2, '0')}</span>
-								<h3 class="principle__title">{principle.title}</h3>
-								<p class="principle__body">{principle.body}</p>
-							</GlassPanel>
-						))
-					}
-				</div>
-			</section>
-
-			{/* Optional toolbox placeholder section (can be populated with real tools and re-enabled):
-			<section class="section section--tight" aria-labelledby="toolbox-title">
-				<SectionHeading
-					label="TOOLBOX"
-					titleId="toolbox-title"
-					title="What is usually running"
-				/>
-				<GlassPanel variant="quiet" pad="md" reveal>
-					<ul class="toolbox" role="list">
-						{TOOLBOX.map((tool) => <li><Chip>{tool}</Chip></li>)}
-					</ul>
-				</GlassPanel>
-			</section>
-			*/}
 		</div>
 	</div>
 </Layout>
@@ -132,10 +51,6 @@ const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SIT
 
 	.about-body {
 		padding-block-end: clamp(3rem, 8vh, 6rem);
-	}
-
-	.about-body .prose {
-		font-size: 1.02rem;
 	}
 
 	/* --- Profile CTA ----------------------------------------------------- */
@@ -191,48 +106,4 @@ const description = `${SITE.author.name} — ${SITE.author.role}, based in ${SIT
 		}
 	}
 
-	.principles {
-		display: grid;
-		gap: var(--grid-gap);
-	}
-
-	@media (min-width: 900px) {
-		.principles {
-			grid-template-columns: repeat(3, minmax(0, 1fr));
-		}
-	}
-
-	.principle {
-		display: grid;
-		gap: 0.6rem;
-		align-content: start;
-		block-size: 100%;
-	}
-
-	.principle__index {
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		letter-spacing: 0.16em;
-		color: var(--accent);
-		opacity: 0.8;
-	}
-
-	.principle__title {
-		font-size: 1.1rem;
-		font-weight: 450;
-		letter-spacing: var(--tracking-snug);
-	}
-
-	.principle__body {
-		color: var(--text-muted);
-		font-size: 0.94rem;
-		line-height: 1.62;
-	}
-
-	.toolbox {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.45rem;
-		list-style: none;
-	}
 </style>

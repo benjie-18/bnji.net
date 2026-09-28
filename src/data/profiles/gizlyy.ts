@@ -89,8 +89,8 @@ export const gizlyyProfile: ProfileData = {
 	copyBlocks: [
 		{
 			label: 'Discord',
-			value: 'gizlyy#7274',
-			subLabel: 'gizlyy · G1zly',
+			value: 'gizlyy',
+			subLabel: 'bnji · gizlyy#0001',
 		},
 	],
 

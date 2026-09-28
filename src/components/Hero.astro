@@ -23,8 +23,6 @@
 import GlassButton from './GlassButton.astro';
 import { SITE } from '../data/site';
 
-const year = new Date().getFullYear();
-
 /** Mono facts under the calls to action. Kept here (not in data/) because they
  *  are hero copy, not a reusable data model. */
 const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · liquid glass'] as const;
@@ -36,7 +34,7 @@ const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · l
 			<p class="hero-status" data-load style="--load-delay: 340ms">
 				<span class="dot dot--live" aria-hidden="true"></span>
 				<span class="hero-status__text">
-					{SITE.author.location} &middot; {SITE.author.role} &middot; {year}
+					{SITE.author.location}
 				</span>
 			</p>
 
@@ -46,8 +44,6 @@ const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · l
 				</span>
 				<span class="sr-only"> — {SITE.author.name}'s personal digital hub</span>
 			</h1>
-
-			<div class="hero-rule" data-load style="--load-delay: 560ms" aria-hidden="true"></div>
 
 			{/* The placeholder identity line is intentionally omitted from the hero. */}
 
@@ -129,7 +125,7 @@ const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · l
 		font-size: var(--text-hero);
 		font-weight: 200;
 		letter-spacing: var(--tracking-tight);
-		line-height: 1;
+		line-height: 1.2;
 		margin: 0;
 	}
 
@@ -137,21 +133,8 @@ const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · l
 		display: inline-block;
 		/* Optical centring: a tracked wordmark otherwise looks shifted right. */
 		padding-inline-end: 0.045em;
-	}
-
-	/* A hairline under the wordmark gives the composition a horizon without
-	   adding another panel to the page. */
-	.hero-rule {
-		inline-size: min(520px, 72vw);
-		block-size: 1px;
-		background: linear-gradient(
-			to right,
-			transparent,
-			var(--glass-border-strong) 22%,
-			var(--accent-line) 50%,
-			var(--glass-border-strong) 78%,
-			transparent
-		);
+		/* Keep descenders inside the gradient painting area, even on mobile. */
+		padding-block-end: 0.12em;
 	}
 
 	/* --- Byline ----------------------------------------------------------- */
@@ -275,10 +258,6 @@ const HERO_FACTS = ['Creative Engineering', 'Interactive Lab', 'Dual themes · l
 			min-height: 86vh;
 			min-height: 86svh;
 			padding-block-start: clamp(2rem, 6vh, 4rem);
-		}
-
-		.hero-title {
-			line-height: 0.9;
 		}
 
 		.hero-scroll {

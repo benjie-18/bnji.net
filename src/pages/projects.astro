@@ -6,7 +6,6 @@
  * two-column bento. Adding a project to the data file is enough to make it
  * appear here — this page has no per-project markup.
  */
-import GlassPanel from '../components/GlassPanel.astro';
 import PageHeader from '../components/PageHeader.astro';
 import ProjectCard from '../components/ProjectCard.astro';
 import { getAllProjects } from '../data/projects';
@@ -57,15 +56,6 @@ const description = `Projects by ${SITE.author.name} — software, local AI infr
 			}
 		</div>
 
-		<GlassPanel variant="quiet" pad="md" reveal class="projects-note">
-			<p class="projects-note__title mono">How this list works</p>
-			<p class="projects-note__body">
-				Every card is rendered from a typed array in <code>src/data/projects.ts</code>.
-				Adding a project means adding an object — title, description, tags, status,
-				optional link and image — and nothing else. The homepage picks up the first
-				three entries marked <code>featured</code>.
-			</p>
-		</GlassPanel>
 	</div>
 </Layout>
 
@@ -76,29 +66,4 @@ const description = `Projects by ${SITE.author.name} — software, local AI infr
 		padding-block-end: clamp(3rem, 8vh, 6rem);
 	}
 
-	.projects-note {
-		display: grid;
-		gap: 0.6rem;
-	}
-
-	.projects-note__title {
-		color: var(--text-dim);
-	}
-
-	.projects-note__body {
-		color: var(--text-muted);
-		font-size: 0.95rem;
-		line-height: 1.65;
-		max-width: 76ch;
-	}
-
-	.projects-note code {
-		font-family: var(--font-mono);
-		font-size: 0.85em;
-		padding: 0.14em 0.4em;
-		border-radius: var(--radius-xs);
-		background: rgba(255, 255, 255, 0.07);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		color: var(--accent-strong);
-	}
 </style>
