@@ -493,10 +493,10 @@ export function startAdminDashboard(): void {
 			if (form) {
 				const ds = data.dynamicSettings;
 				for (const [key, val] of Object.entries(ds)) {
-					const input = form.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-setting-input="${key}"]`);
+					const input = form.querySelector<HTMLElement>(`[data-setting-input="${key}"]`) as { type?: string; value?: string; checked?: boolean } | null;
 					if (input) {
 						if (input.type === 'checkbox') {
-							(input as HTMLInputElement).checked = Boolean(val);
+							input.checked = Boolean(val);
 						} else {
 							input.value = String(val ?? '');
 						}
@@ -1125,7 +1125,7 @@ export function startAdminDashboard(): void {
 
 		// Handle explicit values
 		for (const [key, val] of formData.entries()) {
-			const input = form.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${key}"]`);
+			const input = form.querySelector<HTMLElement>(`[name="${key}"]`) as { type?: string } | null;
 			if (input && input.type === 'number') {
 				payload[key] = Number(val);
 			} else {

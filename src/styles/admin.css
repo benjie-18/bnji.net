@@ -556,11 +556,14 @@ html[data-theme='light'] .admin .admin__action[aria-current='true'] {
 	position: relative;
 	inline-size: 100%;
 	block-size: 220px;
-	overflow: hidden;
+	overflow-x: auto;
+	overflow-y: hidden;
+	-webkit-overflow-scrolling: touch;
 }
 
 .admin__chart-svg {
 	inline-size: 100%;
+	min-inline-size: 600px;
 	block-size: 100%;
 	display: block;
 }

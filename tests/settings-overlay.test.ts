@@ -444,6 +444,27 @@ test('a real submission is answered honestly and the field is cleared', async ()
 	assert.doesNotMatch(dom.codeStatus.textContent ?? '', new RegExp(CODE), 'the status never echoes the code');
 });
 
+test('submitting "verity" arms verity balls and persists active state in sessionStorage', async () => {
+	const dom = await boot();
+	const { isVerityArmed, clearVerityBalls } = await import('../src/scripts/verity-balls.ts');
+
+	try {
+		dom.codeInput.value = 'verity';
+		click(dom.codeSubmit);
+
+		assert.equal(dom.codeStatus.textContent, 'Verity summoned! Close settings to drop the balls.');
+		assert.equal(isVerityArmed(), true, 'verity is armed upon submitting code');
+		assert.equal(globalThis.sessionStorage.getItem('bnji_verity_active'), 'true', 'sessionStorage holds active state');
+
+		click(dom.close);
+
+		clearVerityBalls();
+		assert.equal(globalThis.sessionStorage.getItem('bnji_verity_active'), null, 'clearing balls removes sessionStorage state');
+	} finally {
+		clearVerityBalls();
+	}
+});
+
 test('Enter in the field submits, and no form is involved', async () => {
 	const dom = await boot();
 

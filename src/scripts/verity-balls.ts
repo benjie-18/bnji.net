@@ -11,6 +11,8 @@
  * - Zero CPU / memory overhead when cleared or inactive.
  */
 
+const VERITY_STORAGE_KEY = 'bnji_verity_active';
+
 let verityArmed = false;
 let activeStage: HTMLElement | null = null;
 let rafId: number | null = null;
@@ -18,16 +20,38 @@ let visibilityListener: (() => void) | null = null;
 
 export function armVerity(): void {
 	verityArmed = true;
+	try {
+		sessionStorage.setItem(VERITY_STORAGE_KEY, 'true');
+	} catch {
+		// Ignore storage errors in restricted environments
+	}
 }
 
 export function isVerityArmed(): boolean {
-	return verityArmed;
+	if (verityArmed) return true;
+	try {
+		return sessionStorage.getItem(VERITY_STORAGE_KEY) === 'true';
+	} catch {
+		return false;
+	}
+}
+
+export function initVerityBalls(): void {
+	try {
+		if (sessionStorage.getItem(VERITY_STORAGE_KEY) === 'true') {
+			spawnVerityBalls();
+		}
+	} catch {
+		// Ignore storage errors in restricted environments
+	}
 }
 
 export function checkAndTriggerVerity(): void {
 	if (verityArmed) {
 		verityArmed = false;
 		spawnVerityBalls();
+	} else {
+		initVerityBalls();
 	}
 }
 
@@ -38,6 +62,11 @@ type Ball = {
 	vy: number;
 	r: number;
 	el: HTMLElement;
+	isDragging?: boolean;
+	pointerId?: number;
+	lastPointerX?: number;
+	lastPointerY?: number;
+	lastPointerTime?: number;
 };
 
 type RectBound = {
@@ -48,6 +77,11 @@ type RectBound = {
 };
 
 export function clearVerityBalls(): void {
+	try {
+		sessionStorage.removeItem(VERITY_STORAGE_KEY);
+	} catch {
+		// Ignore storage errors in restricted environments
+	}
 	if (rafId !== null) {
 		cancelAnimationFrame(rafId);
 		rafId = null;
@@ -102,10 +136,40 @@ export function spawnVerityBalls(): void {
 	const count = Math.min(180, Math.max(45, Math.floor((totalArea * 0.12) / ballArea)));
 	const balls: Ball[] = [];
 
-	// Collect interactive UI element bounds for collisions
-	const uiElements = Array.from(
-		document.querySelectorAll<HTMLElement>('.glass-panel, .glass-button, .bento, header, footer, .hero-actions'),
-	);
+	function queryUIElements(): HTMLElement[] {
+		const selector = [
+			'[data-glass]',
+			'.glass-panel',
+			'.glass-button',
+			'a.glass-button',
+			'header',
+			'footer',
+			'article',
+			'section',
+			'button',
+			'.card',
+			'input',
+			'select',
+			'textarea',
+			'[role="button"]',
+			'[role="region"]',
+			'.bento',
+			'.hero-actions',
+		].join(', ');
+
+		const raw = Array.from(document.querySelectorAll<HTMLElement>(selector));
+		return raw.filter((el) => {
+			let p: HTMLElement | null = el;
+			while (p) {
+				if (p.id === 'verity-balls-stage') return false;
+				p = p.parentElement;
+			}
+			return true;
+		});
+	}
+
+	let uiElements = queryUIElements();
+	let frameCount = 0;
 
 	for (let i = 0; i < count; i++) {
 		const el = document.createElement('div');
@@ -118,6 +182,9 @@ export function spawnVerityBalls(): void {
 		el.style.backgroundPosition = 'center';
 		el.style.boxShadow = '0 4px 10px rgba(0,0,0,0.3)';
 		el.style.willChange = 'transform';
+		el.style.pointerEvents = 'auto';
+		el.style.cursor = 'grab';
+		el.style.touchAction = 'none';
 		stage.appendChild(el);
 
 		// Drop from top of viewport in staggered waves
@@ -126,7 +193,78 @@ export function spawnVerityBalls(): void {
 		const vx = (Math.random() - 0.5) * 220;
 		const vy = Math.random() * 60 + 20;
 
-		balls.push({ x, y, vx, vy, r: radius, el });
+		const ball: Ball = { x, y, vx, vy, r: radius, el };
+
+		// Pointer dragging interaction logic
+		el.addEventListener('pointerdown', (e: PointerEvent) => {
+			if (e.button !== 0 && e.pointerType === 'mouse') return;
+			ball.isDragging = true;
+			ball.pointerId = e.pointerId;
+			ball.lastPointerX = e.clientX;
+			ball.lastPointerY = e.clientY;
+			ball.lastPointerTime = performance.now();
+			ball.vx = 0;
+			ball.vy = 0;
+			el.style.cursor = 'grabbing';
+			try {
+				el.setPointerCapture(e.pointerId);
+			} catch {
+				// Ignore setPointerCapture errors if unsupported
+			}
+		});
+
+		el.addEventListener('pointermove', (e: PointerEvent) => {
+			if (!ball.isDragging || e.pointerId !== ball.pointerId) return;
+			const now = performance.now();
+			const dt = (now - (ball.lastPointerTime ?? now)) / 1000;
+
+			ball.x = e.clientX;
+			ball.y = e.clientY;
+
+			if (dt > 0.005) {
+				const dx = e.clientX - (ball.lastPointerX ?? e.clientX);
+				const dy = e.clientY - (ball.lastPointerY ?? e.clientY);
+
+				const instVx = dx / dt;
+				const instVy = dy / dt;
+
+				// Smooth velocity to prevent abrupt spikes
+				ball.vx = ball.vx * 0.3 + instVx * 0.7;
+				ball.vy = ball.vy * 0.3 + instVy * 0.7;
+
+				ball.lastPointerX = e.clientX;
+				ball.lastPointerY = e.clientY;
+				ball.lastPointerTime = now;
+			}
+		});
+
+		const releasePointer = (e: PointerEvent) => {
+			if (!ball.isDragging || e.pointerId !== ball.pointerId) return;
+			ball.isDragging = false;
+			ball.pointerId = undefined;
+			el.style.cursor = 'grab';
+
+			// Clamp release velocity (max 2000 px/s)
+			const maxSpeed = 2000;
+			const speed = Math.hypot(ball.vx, ball.vy);
+			if (speed > maxSpeed) {
+				ball.vx = (ball.vx / speed) * maxSpeed;
+				ball.vy = (ball.vy / speed) * maxSpeed;
+			}
+
+			try {
+				if (el.hasPointerCapture(e.pointerId)) {
+					el.releasePointerCapture(e.pointerId);
+				}
+			} catch {
+				// Ignore release failures
+			}
+		};
+
+		el.addEventListener('pointerup', releasePointer);
+		el.addEventListener('pointercancel', releasePointer);
+
+		balls.push(ball);
 	}
 
 	let lastTime = performance.now();
@@ -147,132 +285,218 @@ export function spawnVerityBalls(): void {
 		const W = window.innerWidth;
 		const H = window.innerHeight;
 
+		frameCount++;
+		if (frameCount % 60 === 0) {
+			uiElements = queryUIElements();
+		}
+
 		// Get fresh UI collision bounds
 		const uiBounds: RectBound[] = uiElements
 			.map((el) => {
 				const rect = el.getBoundingClientRect();
-				if (rect.width <= 0 || rect.height <= 0 || rect.width >= W * 0.95) return null;
+				if (
+					rect.width <= 10 ||
+					rect.height <= 10 ||
+					(rect.width >= W * 0.95 && rect.height >= H * 0.95)
+				) {
+					return null;
+				}
 				return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
 			})
 			.filter((b): b is RectBound => b !== null);
 
-		// Physics Integration & Wall/UI Collisions
-		for (let i = 0; i < balls.length; i++) {
-			const b = balls[i];
+		// 2 Sub-steps per frame for high precision and zero tunneling/shakiness
+		const subSteps = 2;
+		const subDt = dt / subSteps;
+		const subFriction = Math.pow(friction, 1 / subSteps);
 
-			b.vy += gravity * dt;
-			b.vx *= friction;
-			b.vy *= friction;
+		// Zero-allocation spatial grid arrays
+		const maxCols = Math.max(1, Math.ceil(W / cellSize) + 2);
+		const maxRows = Math.max(1, Math.ceil(H / cellSize) + 2);
+		const totalCells = maxCols * maxRows;
+		const gridHead = new Int32Array(totalCells);
+		const gridNext = new Int32Array(balls.length);
 
-			b.x += b.vx * dt;
-			b.y += b.vy * dt;
+		for (let step = 0; step < subSteps; step++) {
+			// Physics Integration & Wall/UI Collisions
+			for (let i = 0; i < balls.length; i++) {
+				const b = balls[i];
 
-			// Screen Walls
-			if (b.x < b.r) {
-				b.x = b.r;
-				b.vx = Math.abs(b.vx) * restitution;
-			} else if (b.x > W - b.r) {
-				b.x = W - b.r;
-				b.vx = -Math.abs(b.vx) * restitution;
-			}
+				if (b.isDragging) {
+					continue;
+				}
 
-			// Screen Floor & Ceiling
-			if (b.y > H - b.r) {
-				b.y = H - b.r;
-				b.vy = -Math.abs(b.vy) * restitution;
-				b.vx *= 0.94; // floor friction
-			} else if (b.y < b.r && b.vy < 0) {
-				b.y = b.r;
-				b.vy = Math.abs(b.vy) * restitution;
-			}
+				b.vy += gravity * subDt;
+				b.vx *= subFriction;
+				b.vy *= subFriction;
 
-			// UI Elements Collision
-			for (const box of uiBounds) {
-				if (
-					b.x + b.r > box.left &&
-					b.x - b.r < box.right &&
-					b.y + b.r > box.top &&
-					b.y - b.r < box.bottom
-				) {
-					if (b.y < box.top && b.vy > 0) {
-						b.y = box.top - b.r;
-						b.vy = -Math.abs(b.vy) * restitution;
-					} else if (b.y > box.bottom && b.vy < 0) {
-						b.y = box.bottom + b.r;
-						b.vy = Math.abs(b.vy) * restitution;
-					} else if (b.x < box.left && b.vx > 0) {
-						b.x = box.left - b.r;
-						b.vx = -Math.abs(b.vx) * restitution;
-					} else if (b.x > box.right && b.vx < 0) {
-						b.x = box.right + b.r;
-						b.vx = Math.abs(b.vx) * restitution;
+				b.x += b.vx * subDt;
+				b.y += b.vy * subDt;
+
+				// Screen Walls
+				if (b.x < b.r) {
+					b.x = b.r;
+					b.vx = Math.abs(b.vx) * restitution;
+				} else if (b.x > W - b.r) {
+					b.x = W - b.r;
+					b.vx = -Math.abs(b.vx) * restitution;
+				}
+
+				// Screen Floor & Ceiling
+				if (b.y > H - b.r) {
+					b.y = H - b.r;
+					b.vy = -Math.abs(b.vy) * restitution;
+					b.vx *= 0.94; // floor friction
+				} else if (b.y < b.r && b.vy < 0) {
+					b.y = b.r;
+					b.vy = Math.abs(b.vy) * restitution;
+				}
+
+				// Precise Circle-AABB UI Element Collision Resolution
+				for (let j = 0; j < uiBounds.length; j++) {
+					const box = uiBounds[j];
+
+					// Quick bounding box check first
+					if (
+						b.x + b.r < box.left ||
+						b.x - b.r > box.right ||
+						b.y + b.r < box.top ||
+						b.y - b.r > box.bottom
+					) {
+						continue;
+					}
+
+					// Find closest point on UI box to ball center
+					const closestX = Math.max(box.left, Math.min(b.x, box.right));
+					const closestY = Math.max(box.top, Math.min(b.y, box.bottom));
+
+					const dX = b.x - closestX;
+					const dY = b.y - closestY;
+					const distSq = dX * dX + dY * dY;
+
+					if (distSq < b.r * b.r) {
+						if (distSq === 0) {
+							// Ball center is inside the UI box: push out to nearest edge
+							const dl = b.x - box.left;
+							const dr = box.right - b.x;
+							const dt = b.y - box.top;
+							const db = box.bottom - b.y;
+							const minD = Math.min(dl, dr, dt, db);
+
+							if (minD === dt) {
+								b.y = box.top - b.r;
+								b.vy = -Math.abs(b.vy) * restitution;
+							} else if (minD === db) {
+								b.y = box.bottom + b.r;
+								b.vy = Math.abs(b.vy) * restitution;
+							} else if (minD === dl) {
+								b.x = box.left - b.r;
+								b.vx = -Math.abs(b.vx) * restitution;
+							} else {
+								b.x = box.right + b.r;
+								b.vx = Math.abs(b.vx) * restitution;
+							}
+						} else {
+							// Ball touches edge or corner of UI box from outside
+							const dist = Math.sqrt(distSq);
+							const overlap = b.r - dist;
+							const nx = dX / dist;
+							const ny = dY / dist;
+
+							// Separate ball from box along collision normal
+							b.x += nx * overlap;
+							b.y += ny * overlap;
+
+							// Reflect velocity along collision normal
+							const vDotN = b.vx * nx + b.vy * ny;
+							if (vDotN < 0) {
+								b.vx -= (1 + restitution) * vDotN * nx;
+								b.vy -= (1 + restitution) * vDotN * ny;
+							}
+						}
 					}
 				}
 			}
-		}
 
-		// Spatial Grid for O(N) Pairwise Ball Collisions
-		const grid = new Map<string, number[]>();
-		for (let i = 0; i < balls.length; i++) {
-			const b = balls[i];
-			const cx = Math.floor(b.x / cellSize);
-			const cy = Math.floor(b.y / cellSize);
-			const key = `${cx},${cy}`;
-			const cell = grid.get(key);
-			if (cell) {
-				cell.push(i);
-			} else {
-				grid.set(key, [i]);
+			// Allocation-free Spatial Grid for O(N) Ball-Ball Collisions
+			gridHead.fill(-1);
+			for (let i = 0; i < balls.length; i++) {
+				const b = balls[i];
+				const cx = Math.min(maxCols - 1, Math.max(0, Math.floor(b.x / cellSize)));
+				const cy = Math.min(maxRows - 1, Math.max(0, Math.floor(b.y / cellSize)));
+				const cellIdx = cy * maxCols + cx;
+				gridNext[i] = gridHead[cellIdx];
+				gridHead[cellIdx] = i;
 			}
-		}
 
-		// Collision resolution across neighbor cells
-		const offsets = [
-			[0, 0], [1, 0], [0, 1], [1, 1], [-1, 1],
-		];
+			// Check cell and neighbor cell collisions
+			for (let cy = 0; cy < maxRows; cy++) {
+				for (let cx = 0; cx < maxCols; cx++) {
+					const cellIdx = cy * maxCols + cx;
+					let i = gridHead[cellIdx];
 
-		for (const [key, members] of grid.entries()) {
-			const [cx, cy] = key.split(',').map(Number);
+					while (i !== -1) {
+						// Check remaining balls in current cell & neighboring cells
+						for (let ndy = 0; ndy <= 1; ndy++) {
+							for (let ndx = (ndy === 0 ? 0 : -1); ndx <= 1; ndx++) {
+								const ncx = cx + ndx;
+								const ncy = cy + ndy;
 
-			for (const [dx, dy] of offsets) {
-				const nKey = `${cx + dx},${cy + dy}`;
-				const neighbors = grid.get(nKey);
-				if (!neighbors) continue;
+								if (ncx >= 0 && ncx < maxCols && ncy >= 0 && ncy < maxRows) {
+									const nCellIdx = ncy * maxCols + ncx;
+									let j = (ndx === 0 && ndy === 0) ? gridNext[i] : gridHead[nCellIdx];
 
-				for (const i of members) {
-					for (const j of neighbors) {
-						if (i >= j) continue; // avoid self and duplicate checks
+									while (j !== -1) {
+										const b1 = balls[i];
+										const b2 = balls[j];
 
-						const b1 = balls[i];
-						const b2 = balls[j];
+										const delX = b2.x - b1.x;
+										const delY = b2.y - b1.y;
+										const distSq = delX * delX + delY * delY;
+										const minDist = b1.r + b2.r;
 
-						const delX = b2.x - b1.x;
-						const delY = b2.y - b1.y;
-						const distSq = delX * delX + delY * delY;
-						const minDist = b1.r + b2.r;
+										if (distSq > 0 && distSq < minDist * minDist) {
+											const dist = Math.sqrt(distSq);
+											const nx = delX / dist;
+											const ny = delY / dist;
 
-						if (distSq > 0 && distSq < minDist * minDist) {
-							const dist = Math.sqrt(distSq);
-							const nx = delX / dist;
-							const ny = delY / dist;
+											// Separate balls evenly (or skip separation if one is dragged)
+											const overlap = (minDist - dist) * 0.5;
+											if (!b1.isDragging && !b2.isDragging) {
+												b1.x -= nx * overlap;
+												b1.y -= ny * overlap;
+												b2.x += nx * overlap;
+												b2.y += ny * overlap;
+											} else if (!b1.isDragging) {
+												b1.x -= nx * overlap * 2;
+												b1.y -= ny * overlap * 2;
+											} else if (!b2.isDragging) {
+												b2.x += nx * overlap * 2;
+												b2.y += ny * overlap * 2;
+											}
 
-							// Separate
-							const overlap = (minDist - dist) * 0.5;
-							b1.x -= nx * overlap;
-							b1.y -= ny * overlap;
-							b2.x += nx * overlap;
-							b2.y += ny * overlap;
+											// Relative velocity along collision normal
+											const kx = b1.vx - b2.vx;
+											const ky = b1.vy - b2.vy;
+											const p = (nx * kx + ny * ky) * restitution;
 
-							// Relative velocity along collision normal
-							const kx = b1.vx - b2.vx;
-							const ky = b1.vy - b2.vy;
-							const p = (nx * kx + ny * ky) * restitution;
+											if (!b1.isDragging) {
+												b1.vx -= p * nx;
+												b1.vy -= p * ny;
+											}
+											if (!b2.isDragging) {
+												b2.vx += p * nx;
+												b2.vy += p * ny;
+											}
+										}
 
-							b1.vx -= p * nx;
-							b1.vy -= p * ny;
-							b2.vx += p * nx;
-							b2.vy += p * ny;
+										j = gridNext[j];
+									}
+								}
+							}
 						}
+
+						i = gridNext[i];
 					}
 				}
 			}

@@ -51,10 +51,10 @@ export const SITE = {
 	 * this one place so metadata, JSON-LD and the footer stay consistent.
 	 */
 	author: {
-		name: 'Benjamin',
+		name: 'BNJI',
 		role: 'Founder',
 		tagline: '',
-		location: 'QC, CA',
+		location: 'Global',
 	},
 	/**
 	 * PLACEHOLDER — swap for a real mailbox. It lives here (and only here) so
