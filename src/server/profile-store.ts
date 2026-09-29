@@ -57,6 +57,7 @@ export interface ProfileStore {
 	/* Views */
 	recordView(profileSlug: string, sessionKey: string, dayKey: string, now: number): Promise<boolean>;
 	getViewStats(profileSlug: string): Promise<ViewStats>;
+	getAllTrackedPages(): Promise<{ slug: string; name: string; total: number; today: number; week: number; month: number }[]>;
 
 	/* Reactions */
 	getReactionCounts(profileSlug: string): Promise<ReactionCounts>;
@@ -92,6 +93,25 @@ function createD1ProfileStore(db: D1Database): ProfileStore {
 				.bind(profileSlug, sessionKey, dayKey, now)
 				.run();
 			return true;
+		},
+
+		async getAllTrackedPages() {
+			const { results } = await db
+				.prepare('SELECT DISTINCT profile_slug FROM profile_views')
+				.bind()
+				.all<{ profile_slug: string }>();
+
+			const pages: { slug: string; name: string; total: number; today: number; week: number; month: number }[] = [];
+			for (const row of results) {
+				const slug = row.profile_slug;
+				const stats = await this.getViewStats(slug);
+				pages.push({
+					slug,
+					name: slug.startsWith('/') ? slug : `/${slug}/`,
+					...stats,
+				});
+			}
+			return pages.sort((a, b) => b.total - a.total);
 		},
 
 		async getViewStats(profileSlug) {

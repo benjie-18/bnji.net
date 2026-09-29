@@ -256,40 +256,23 @@ export function startAdminDashboard(): void {
 	async function loadSecurity(): Promise<void> {
 		const params = new URLSearchParams();
 		const surface = valueOf(root, '[data-filter-surface]');
+		const path = root.querySelector<HTMLInputElement>('[data-filter-path]')?.value.trim();
 		const ip = root.querySelector<HTMLInputElement>('[data-filter-ip]')?.value.trim();
 		const device = root.querySelector<HTMLInputElement>('[data-filter-device]')?.value.trim();
 		const enriched = root.querySelector<HTMLInputElement>('[data-filter-enriched]')?.checked;
 		const limit = root.querySelector<HTMLInputElement>('[data-filter-limit]')?.value;
 
 		if (surface) params.set('surface', surface);
+		if (path) params.set('profileSlug', path);
 		if (ip) params.set('ip', ip);
 		if (device) params.set('device', device);
 		if (enriched) params.set('enrichedOnly', '1');
 		if (limit) params.set('limit', limit);
 
-		const [data, paintActivity] = await Promise.all([
-			guard(() => adminFetch<{ events: SecurityEvent[]; total: number }>(`/api/admin/security?${params}`)),
-			guard(() => adminFetch<{ events: PaintActivity[]; total: number; retentionDays: number }>('/api/admin/paint-activity?limit=50')),
-		]);
+		const data = await guard(() => adminFetch<{ events: SecurityEvent[]; total: number }>(`/api/admin/security?${params}`));
 		if (!data || active !== 'security') return;
 
 		say(`${data.events.length} shown · ${data.total} security events match`);
-		if (paintActivity) {
-			renderTable(
-				root.querySelector<HTMLElement>('[data-paint-activity]')!,
-				[
-					{ label: 'When', get: (r) => formatTime(Number(r.createdAt)), mono: true },
-					{ label: 'Revision', get: (r) => r.revision, mono: true },
-					{ label: 'Visitor/session (ephemeral)', get: (r) => r.visitorId, mono: true },
-					{
-						label: 'Published action counts',
-						get: (r) => Object.entries(r.actions ?? {}).map(([type, count]) => `${type.replace(/-/g, ' ')} ×${count}`).join(', ') || '—',
-					},
-				],
-				paintActivity.events as unknown as Record<string, unknown>[],
-				'No accepted Paint publishes have been logged.',
-			);
-		}
 
 		renderTable(
 			root.querySelector<HTMLElement>('[data-security-table]')!,
@@ -362,14 +345,34 @@ export function startAdminDashboard(): void {
 		if (search) params.set('search', search);
 		params.set('limit', '50');
 
-		const data = await guard(() =>
-			adminFetch<{ messages: ModeratedMessage[]; summary: { total: number } }>(
-				`/api/admin/board?${params}`,
+		const [data, paintActivity] = await Promise.all([
+			guard(() =>
+				adminFetch<{ messages: ModeratedMessage[]; summary: { total: number } }>(
+					`/api/admin/board?${params}`,
+				),
 			),
-		);
+			guard(() => adminFetch<{ events: PaintActivity[]; total: number; retentionDays: number }>('/api/admin/paint-activity?limit=50')),
+		]);
 		if (!data || active !== 'board') return;
 
 		say(`${data.messages.length} shown · ${data.summary.total} total`);
+
+		if (paintActivity) {
+			renderTable(
+				root.querySelector<HTMLElement>('[data-paint-activity]')!,
+				[
+					{ label: 'When', get: (r) => formatTime(Number(r.createdAt)), mono: true },
+					{ label: 'Revision', get: (r) => r.revision, mono: true },
+					{ label: 'Visitor/session (ephemeral)', get: (r) => r.visitorId, mono: true },
+					{
+						label: 'Published action counts',
+						get: (r) => Object.entries(r.actions ?? {}).map(([type, count]) => `${type.replace(/-/g, ' ')} ×${count}`).join(', ') || '—',
+					},
+				],
+				paintActivity.events as unknown as Record<string, unknown>[],
+				'No accepted Paint publishes have been logged.',
+			);
+		}
 
 		const container = root.querySelector<HTMLElement>('[data-board-table]')!;
 		container.textContent = '';
@@ -418,8 +421,12 @@ export function startAdminDashboard(): void {
 			tr.appendChild(body);
 
 			const statusCell = document.createElement('td');
-			statusCell.className = 'is-mono';
-			statusCell.textContent = message.status;
+			const badge = document.createElement('span');
+			const s = message.status;
+			badge.className = `admin__badge admin__badge--${s}`;
+			const icon = s === 'visible' ? '🟢' : s === 'reported' ? '🟡' : s === 'hidden' ? '🟠' : '🔴';
+			badge.textContent = `${icon} ${s}`;
+			statusCell.appendChild(badge);
 			tr.appendChild(statusCell);
 
 			const reports = document.createElement('td');
@@ -973,6 +980,62 @@ export function startAdminDashboard(): void {
 			}
 		} finally {
 			if (btn) btn.disabled = false;
+		}
+	});
+
+	root.querySelector('[data-settings-reset-btn]')?.addEventListener('click', async () => {
+		const form = root.querySelector<HTMLFormElement>('[data-site-settings-form]');
+		if (!form) return;
+		const statusEl = form.querySelector<HTMLElement>('[data-settings-save-status]');
+		const errorEl = form.querySelector<HTMLElement>('[data-settings-save-error]');
+
+		if (!confirm('Are you sure you want to reset all dynamic site settings back to default values?')) {
+			return;
+		}
+
+		try {
+			// Import defaults from store defaults
+			const defaults = {
+				boardProvider: 'd1',
+				boardMaxTextLength: 250,
+				boardPostCooldownSeconds: 20,
+				boardHourlyPostLimit: 20,
+				boardPollIntervalMs: 20000,
+				boardMaxImageBytes: 1433600,
+				dmProvider: 'none',
+				dmMaxLength: 1000,
+				dmCooldownSeconds: 30,
+				siteName: 'BNJI',
+				siteTitle: 'BNJI.NET — Personal Digital Hub',
+				siteDescription: 'Personal digital hub.',
+				authorName: 'BNJI',
+				authorLocation: 'Global',
+				defaultTheme: 'dark',
+				introEnabled: true,
+			};
+
+			const res = await guard(() =>
+				adminFetch<{ ok: boolean; dynamicSettings: Record<string, unknown> }>('/api/admin/config', {
+					method: 'POST',
+					body: JSON.stringify(defaults),
+				}),
+			);
+
+			if (res && res.ok) {
+				if (statusEl) {
+					statusEl.textContent = 'Settings reset to system defaults!';
+					statusEl.hidden = false;
+				}
+				await loadConfig();
+			} else if (errorEl) {
+				errorEl.textContent = 'Failed to reset configuration settings.';
+				errorEl.hidden = false;
+			}
+		} catch {
+			if (errorEl) {
+				errorEl.textContent = 'Error resetting configuration.';
+				errorEl.hidden = false;
+			}
 		}
 	});
 
