@@ -60,17 +60,17 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'fluid-sandbox',
 		title: 'Fluid Sandbox',
 		description:
-			'A FLIP/PIC liquid simulation in a glass box. Pour liquid, draw walls, stir and drain it, tilt gravity, and tune viscosity, cohesion, speed and colour — the liquid levels itself, splashes, foams at speed and blends where colours meet.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['physics', 'simulation', 'interactive'],
 		status: 'live',
 		component: 'FluidSandbox',
-		question: 'How convincing can a real pressure-solved liquid feel inside a web page?',
+		question: 'Lorem ipsum dolor sit amet consectetur adipiscing elit?',
 	},
 	{
 		slug: 'piano-bars',
 		title: '3D Piano Bars',
 		description:
-			'Extruded 3D glass cuboids in continuous sine-wave motion or interactive piano mode. Light up upon hover, press, and keyboard actuation with Web Audio harmonic chime feedback, adapting between dark obsidian and frosty aqua crystal.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['3d', 'audio', 'interactive'],
 		status: 'live',
 		component: 'PianoBars',
@@ -79,7 +79,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'stack-game',
 		title: 'Isometric Stack',
 		description:
-			'A 3D isometric block stacking game adapted to bnji.net’s glass palette. Drop alternating blocks, chop overhangs into falling debris, and sustain combo streaks with precise alignment.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['game', '3d', 'physics'],
 		status: 'live',
 		component: 'StackGame',
@@ -88,7 +88,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'iso-progress',
 		title: '3D Isometric Progress Bar',
 		description:
-			'An extruded 3D isometric progress bar with multi-facet lighting, liquid crystal fluid fill, interactive tilt/yaw perspective sliders, and selectable bnji.net aero colorways.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['3d', 'tools', 'interactive'],
 		status: 'live',
 		component: 'IsoProgress',
@@ -97,7 +97,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'cursor-trails',
 		title: 'Trailing Cursor Laboratory',
 		description:
-			'An interactive pointer trail laboratory with customizable particle shapes (starlight sparks, glass orbs, ribbon streamers, neon dust), physics dynamics (spring drift, gravitational pull, scatter burst), and adaptive themes.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['particles', 'physics', 'interactive'],
 		status: 'live',
 		component: 'CursorTrails',
@@ -106,7 +106,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'voxel-map',
 		title: '3D Voxel Map Creator',
 		description:
-			'An isometric 3D voxel terrain studio with 4-way turntable camera orbit, elevation sculpting tools (raise, lower, flatten), preset topographies, and 6 translucent aero glass materials.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['3d', 'tools', 'interactive'],
 		status: 'live',
 		component: 'VoxelMap',
@@ -115,7 +115,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'glass-minesweeper',
 		title: 'Minesweeper',
 		description:
-			'Classic Minesweeper reimagined in liquid aero glass styling. Features reactive status smiley, live mine counter, digital stopwatch, flag mode toggle, and safe first-click guarantee.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['game', 'interactive'],
 		status: 'live',
 		component: 'GlassMinesweeper',
@@ -124,7 +124,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'cps-counter',
 		title: 'CPS Counter',
 		description:
-			'A high-frequency neuromuscular click speed benchmark. Track burst click frequency across 5s sprint, 10s endurance, or free cadence with live rate, peak velocity, and dynamic ripple feedback.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['benchmark', 'tools', 'interactive'],
 		status: 'live',
 		component: 'CpsCounter',
@@ -133,7 +133,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'starfield-tuner',
 		title: 'Starfield Tuner',
 		description:
-			'The same engine that draws the site background, exposed through live controls. Dial in density, twinkle and cursor response, then copy the numbers back into the component.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['canvas', 'tools'],
 		status: 'live',
 		component: 'StarfieldTuner',
@@ -142,7 +142,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'glass-bench',
 		title: 'Liquid Glass Optical Laboratory',
 		description:
-			'An optical calibration laboratory recreating Apple 2027 Liquid Glass: Snell’s Law refraction, 4th-power squircle SDF bezels, adaptive luminance (glass_L = 0.58·L_bg + 34), Fresnel rims, and test backdrops.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['tools', 'interactive'],
 		status: 'live',
 		component: 'GlassBench',
@@ -151,7 +151,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'orbit-field',
 		title: 'Orbit Field',
 		description:
-			'A few hundred particles under pointer gravity, integrated with semi-implicit Euler and clamped so a fast cursor cannot explode the simulation.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['particles', 'physics', 'canvas'],
 		status: 'live',
 		component: 'OrbitField',
@@ -160,7 +160,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'webgl-nebula',
 		title: 'WebGL Nebula',
 		description:
-			'A raymarched volumetric background meant to sit behind the hero at a fraction of the cost of the current gradient layers.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['3d', 'canvas'],
 		status: 'wip',
 	},
@@ -168,7 +168,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'audio-reactive-sky',
 		title: 'Audio-Reactive Sky',
 		description:
-			'Web Audio analyser driving star brightness — music makes the sky breathe. Needs a user gesture to start, so it lives in the Lab and not on the homepage.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['audio', 'canvas'],
 		status: 'idea',
 	},
@@ -176,7 +176,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'minecraft-world-viewer',
 		title: 'Minecraft World Viewer',
 		description:
-			'Read a region file, draw chunks on a canvas, pan around a world without launching the game.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['3d', 'tools'],
 		status: 'idea',
 	},
@@ -184,7 +184,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'bubble-pop',
 		title: 'Bubble Pop',
 		description:
-			'A small arcade loop: glossy bubbles rise through the panel and pop when clicked or tapped. Score, combo streak and a calm mode for reduced motion.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['game', 'canvas', 'interactive'],
 		status: 'live',
 		component: 'BubblePop',
@@ -193,7 +193,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'memory-pairs',
 		title: 'Memory Pairs',
 		description:
-			'The classic flip-and-match card game on a 4x4 glass grid. Move counter, best score in session storage, fully keyboard playable.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['game', 'interactive'],
 		status: 'live',
 		component: 'MemoryPairs',
@@ -202,7 +202,7 @@ export const EXPERIMENTS: Experiment[] = [
 		slug: 'reaction-timer',
 		title: 'Reaction Timer',
 		description:
-			'Measure response time in milliseconds: wait for the glow, click or press Space as fast as possible. Five rounds, median and best tracked.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 		tags: ['benchmark', 'tools', 'interactive'],
 		status: 'live',
 		component: 'ReactionTimer',

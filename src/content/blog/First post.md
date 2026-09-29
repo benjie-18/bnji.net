@@ -1,6 +1,6 @@
 ---
 title: "First post!!"
-description: "The first not placeholder post on the site."
+description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
 pubDate: "2026-09-27"
 heroImage: "/verity.webp"
 tags: ["notes"]

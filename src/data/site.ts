@@ -33,7 +33,7 @@ export const SITE = {
 	/** Suffix appended to per-page titles, e.g. "Lab · BNJI". */
 	titleSuffix: 'BNJI',
 	description:
-		'bnji.net is my personnal web hub for my projects.',
+		'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
 	/** Canonical production origin. bnji.net is served by a Cloudflare Worker. */
 	url: 'https://bnji.net',
 	locale: 'en',
