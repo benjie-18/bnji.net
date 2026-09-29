@@ -693,17 +693,37 @@ export function startAdminDashboard(): void {
 		}
 		svg.appendChild(gridGroup);
 
-		// Area path
-		const areaD = `M ${pts[0].x},${padY + innerH} ` +
-			pts.map((p) => `L ${p.x},${p.y}`).join(' ') +
-			` L ${pts[pts.length - 1].x},${padY + innerH} Z`;
+		// Generate smooth organic cubic Bezier curve commands
+		const bottomY = padY + innerH;
+		let lineD = `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+
+		if (N === 1) {
+			lineD += ` L ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+		} else {
+			for (let i = 0; i < N - 1; i++) {
+				const p0 = pts[Math.max(0, i - 1)];
+				const p1 = pts[i];
+				const p2 = pts[i + 1];
+				const p3 = pts[Math.min(N - 1, i + 2)];
+
+				const cp1x = p1.x + (p2.x - p0.x) / 6;
+				const cp1y = p1.y + (p2.y - p0.y) / 6;
+				const cp2x = p2.x - (p3.x - p1.x) / 6;
+				const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+				lineD += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+			}
+		}
+
+		const areaD = `M ${pts[0].x.toFixed(1)},${bottomY} L ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)} ` +
+			lineD.slice(lineD.indexOf('C') > -1 ? lineD.indexOf('C') : lineD.indexOf('L')) +
+			` L ${pts[pts.length - 1].x.toFixed(1)},${bottomY} Z`;
+
 		const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 		area.setAttribute('d', areaD);
 		area.setAttribute('fill', 'url(#chartGrad)');
 		svg.appendChild(area);
 
-		// Line stroke path
-		const lineD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
 		const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 		line.setAttribute('d', lineD);
 		line.setAttribute('fill', 'none');

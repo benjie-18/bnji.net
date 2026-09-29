@@ -133,7 +133,7 @@ function createD1ProfileStore(db: D1Database): ProfileStore {
 			if (scope === 'homepage') {
 				whereClause = "WHERE (profile_slug = '/' OR profile_slug = '' OR profile_slug = 'homepage')";
 			} else if (scope === 'projects') {
-				whereClause = "WHERE profile_slug LIKE '/projects%'";
+				whereClause = "WHERE (profile_slug LIKE '/projects%' OR profile_slug LIKE '/tools%' OR profile_slug LIKE '/lab%')";
 			} else if (scope === 'me') {
 				whereClause = "WHERE (profile_slug LIKE '%gizlyy%' OR profile_slug LIKE '%me%' OR profile_slug LIKE '%profile%')";
 			}

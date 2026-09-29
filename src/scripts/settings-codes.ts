@@ -64,7 +64,20 @@ export type CodeHandler = (submission: CodeSubmission) => CodeOutcome | null;
  * Settings overlay picks it up without changing. Until then every submission
  * is answered with `CODE_UNAVAILABLE_MESSAGE`, which is the truth.
  */
-export const CODE_HANDLERS: readonly CodeHandler[] = [];
+import { armVerity } from './verity-balls';
+
+export const handleVerityCode: CodeHandler = ({ code }) => {
+	if (code === 'verity') {
+		armVerity();
+		return {
+			status: 'accepted',
+			message: 'Verity summoned! Close settings to drop the balls.',
+		};
+	}
+	return null;
+};
+
+export const CODE_HANDLERS: readonly CodeHandler[] = [handleVerityCode];
 
 /** Shown whenever nothing handled the code — which is every code today. */
 export const CODE_UNAVAILABLE_MESSAGE = 'Code effects aren’t enabled yet.';
@@ -81,7 +94,7 @@ export const CODE_EMPTY_MESSAGE = 'Enter a code first.';
  * string it will receive.
  */
 export function normalizeCode(raw: string): string {
-	return raw.trim().replace(/\s+/g, ' ');
+	return raw.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 /**

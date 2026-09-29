@@ -654,7 +654,7 @@ test('every hook the controller queries is rendered by a component', async () =>
 	assert.match(markup, /data-settings-code\b/, 'the masked input is bound');
 	assert.match(markup, /data-settings-code-submit\b/, 'the submit button is bound');
 	assert.match(markup, /data-settings-code-status\b/, 'the status line is bound');
-	assert.match(markup, /type="password"/, 'the input is masked');
+	assert.match(markup, /type="text"/, 'the input is un-censored');
 	assert.match(markup, /autocomplete="off"/, 'the input opts out of autofill');
 	assert.match(markup, /role="status"/, 'the status line is a live region');
 	assert.match(markup, /aria-live="polite"/, 'the status line is announced politely');

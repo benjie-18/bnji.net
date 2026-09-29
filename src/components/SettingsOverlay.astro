@@ -66,11 +66,6 @@ import '../styles/settings.css';
 		</button>
 	</header>
 
-	<p class="settings-overlay__note mono">
-		Saved on this device only. Theme and the opening sequence apply immediately; the
-		other controls are stored and light up as their wiring lands.
-	</p>
-
 	<!-- Appearance -->
 	<fieldset class="settings-group">
 		<legend class="settings-group__title mono">Appearance</legend>
@@ -92,7 +87,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-uiscale">
 				UI scale
-				<span class="settings-row__hint">scales the whole rem-based layout; applied before first paint</span>
 			</label>
 			<span class="settings-row__control">
 				<input
@@ -110,7 +104,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-glass">
 				Advanced glass effects
-				<span class="settings-row__hint">off: flat tinted surfaces — no blur, internal optics or pointer specular</span>
 			</label>
 			<input id="settings-glass" type="checkbox" class="settings-switch" data-setting="advancedGlass" />
 		</div>
@@ -123,7 +116,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-intro">
 				Opening sequence
-				<span class="settings-row__hint">the homepage scroll intro; changes apply on the next page load</span>
 			</label>
 			<input id="settings-intro" type="checkbox" class="settings-switch" data-setting="introEnabled" />
 		</div>
@@ -131,7 +123,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-reduced">
 				Reduced visual effects
-				<span class="settings-row__hint">calms decorative motion: reveals, parallax, ambient drift, cursor halo; static sky</span>
 			</label>
 			<input id="settings-reduced" type="checkbox" class="settings-switch" data-setting="reducedEffects" />
 		</div>
@@ -139,7 +130,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-perf">
 				Performance mode
-				<span class="settings-row__hint">cheaper rendering: capped starfield (30fps, no meteors) and no aero environment layer</span>
 			</label>
 			<input id="settings-perf" type="checkbox" class="settings-switch" data-setting="performanceMode" />
 		</div>
@@ -147,7 +137,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-cursor">
 				Cursor effects
-				<span class="settings-row__hint">the cursor halo and the starfield's response to your pointer</span>
 			</label>
 			<input id="settings-cursor" type="checkbox" class="settings-switch" data-setting="cursorEffects" />
 		</div>
@@ -155,7 +144,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-density">
 				Star / particle density
-				<span class="settings-row__hint">star population, live — 0% is an empty sky</span>
 			</label>
 			<span class="settings-row__control">
 				<input
@@ -178,7 +166,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-muted">
 				Mute audio
-				<span class="settings-row__hint">mutes every track in the playlist — the pill has no mute button of its own</span>
 			</label>
 			<input id="settings-muted" type="checkbox" class="settings-switch" data-setting="muted" />
 		</div>
@@ -186,7 +173,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<label class="settings-row__label" for="settings-volume">
 				Volume
-				<span class="settings-row__hint">the player's level for every track — the pill has no slider, this is it</span>
 			</label>
 			<span class="settings-row__control">
 				<input
@@ -203,10 +189,7 @@ import '../styles/settings.css';
 	</fieldset>
 
 	<!--
-		Secret codes. Raw markup rather than the GlassButton component on
-		purpose: GlassButton only forwards the props it declares, so a raw
-		`glass-button` element is how a control carries a `data-settings-*`
-		hook at all (the same reason the lab's tool buttons are raw).
+		Secret codes.
 	-->
 	<fieldset class="settings-group">
 		<legend class="settings-group__title mono">Secret codes</legend>
@@ -214,18 +197,15 @@ import '../styles/settings.css';
 		<div class="settings-row settings-row--stack">
 			<label class="settings-row__label" for="settings-code">
 				Code
-				<span class="settings-row__hint">
-					for effects that are not wired up yet — nothing is stored, and a code is not a login
-				</span>
 			</label>
 			<span class="settings-row__control">
 				<input
 					id="settings-code"
 					class="settings-code__input"
-					type="password"
+					type="text"
 					autocomplete="off"
 					spellcheck="false"
-					placeholder="••••••"
+					placeholder="Enter code..."
 					aria-describedby="settings-code-status"
 					data-settings-code
 				/>
@@ -247,7 +227,6 @@ import '../styles/settings.css';
 		<div class="settings-row">
 			<span class="settings-row__label">
 				Admin panel
-				<span class="settings-row__hint">opens /admin/ — the server asks for the token there</span>
 			</span>
 			<a class="glass-button glass-button--sm" href="/admin/" data-glass="">
 				Admin
