@@ -54,6 +54,7 @@
  * surfaces).
  */
 import { BOARD_CONFIG } from '../../config/board.config';
+import { getSiteSettings } from '../../server/site-settings-store';
 import {
 	decodeCursor,
 	getBoardStore,
@@ -121,15 +122,15 @@ function etagMatches(header: string | null, etag: string): boolean {
  * decode, so validating a large attachment costs nothing: the string is
  * never turned back into bytes, let alone decoded as an image.
  */
-function inspectImage(value: unknown): {
+function inspectImage(value: unknown, maxImageBytes: number): {
 	value?: string;
 	reason?: 'image_too_large' | 'image_unsupported';
 } {
 	if (typeof value !== 'string' || value.length === 0) return {};
 
 	// Cap the regex work: a legitimate attachment is already near the base64
-	// expansion of BOARD_CONFIG.maxImageBytes, plus the data-URL prefix.
-	const maxEncoded = Math.ceil((BOARD_CONFIG.maxImageBytes * 4) / 3) + 64;
+	// expansion of maxImageBytes, plus the data-URL prefix.
+	const maxEncoded = Math.ceil((maxImageBytes * 4) / 3) + 64;
 	if (value.length > maxEncoded) {
 		return { reason: 'image_too_large' };
 	}
@@ -138,17 +139,10 @@ function inspectImage(value: unknown): {
 	if (!match) return { reason: 'image_unsupported' };
 	if (!BOARD_CONFIG.allowedImageTypes.includes(match[1])) return { reason: 'image_unsupported' };
 
-	// base64 length -> bytes (3/4 ratio), must fit the configured cap.
-	//
-	// The padding has to come off, or the count runs 1-2 bytes high. A file of
-	// exactly maxImageBytes encodes to a length whose naive 3/4 product is
-	// maxImageBytes + 1, so the file the client's own check accepts (file.size
-	// <= max) would be rejected here as too large — the two halves disagreeing
-	// at exactly the limit the copy promises.
 	const encoded = match[2];
 	const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
 	const bytes = (encoded.length * 3) / 4 - padding;
-	if (bytes > BOARD_CONFIG.maxImageBytes) return { reason: 'image_too_large' };
+	if (bytes > maxImageBytes) return { reason: 'image_too_large' };
 
 	return { value };
 }
@@ -223,6 +217,8 @@ export async function POST(context: APIContext): Promise<Response> {
 	const store = getBoardStore(env);
 	if (!store) return json({ error: 'storage_unconfigured' }, 503);
 
+	const dynamicConfig = await getSiteSettings();
+
 	const kv = env.BOARD_KV as KvRateLimitStore | undefined;
 	const key = clientIp(context.request);
 
@@ -230,13 +226,13 @@ export async function POST(context: APIContext): Promise<Response> {
 	const cooldown = await rateLimit(
 		kv,
 		`board:post:${key}`,
-		BOARD_CONFIG.postCooldownSeconds * 1000,
+		dynamicConfig.boardPostCooldownSeconds * 1000,
 		1,
 	);
 	if (!cooldown.allowed) {
 		return json({ error: 'rate_limited', retryAfter: cooldown.retryAfter }, 429);
 	}
-	const hourly = await rateLimit(kv, `board:hour:${key}`, 3_600_000, BOARD_CONFIG.hourlyPostLimit);
+	const hourly = await rateLimit(kv, `board:hour:${key}`, 3_600_000, dynamicConfig.boardHourlyPostLimit);
 	if (!hourly.allowed) {
 		return json({ error: 'rate_limited', retryAfter: hourly.retryAfter }, 429);
 	}
@@ -252,27 +248,23 @@ export async function POST(context: APIContext): Promise<Response> {
 	const text = typeof body.text === 'string' ? body.text.replace(CONTROL_CHARS, '').trim() : '';
 	if (text.length === 0) return json({ error: 'empty_text' }, 422);
 	// Server-side body cap: reject, never truncate.
-	if (text.length > BOARD_CONFIG.maxTextLength) {
+	if (text.length > dynamicConfig.boardMaxTextLength) {
 		return json(
 			{
 				error: 'text_too_long',
-				maxLength: BOARD_CONFIG.maxTextLength,
+				maxLength: dynamicConfig.boardMaxTextLength,
 				length: text.length,
 			},
 			422,
 		);
 	}
-	// Image validation. sanitizeImage() drops anything it will not accept
-	// (wrong shape, wrong MIME, or over the byte cap) and says nothing, so
-	// the caller learns only that the post was accepted WITHOUT the image —
-	// which reads as "my upload worked". A rejected attachment is a mistake
-	// the visitor can fix, so the failure is named and sized for them.
-	const imageCheck = inspectImage(body.image);
+
+	const imageCheck = inspectImage(body.image, dynamicConfig.boardMaxImageBytes);
 	if (imageCheck.reason) {
 		return json(
 			{
 				error: imageCheck.reason,
-				maxBytes: BOARD_CONFIG.maxImageBytes,
+				maxBytes: dynamicConfig.boardMaxImageBytes,
 			},
 			422,
 		);

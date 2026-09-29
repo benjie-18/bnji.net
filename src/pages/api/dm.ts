@@ -18,7 +18,7 @@
  *   200 sent · 422 invalid · 429 rate_limited · 503 not_configured ·
  *   502 upstream_error
  */
-import { DM_INTEGRATION } from '../../config/integrations.config';
+import { getSiteSettings } from '../../server/site-settings-store';
 import { rateLimit, type KvRateLimitStore } from '../../server/ratelimit';
 import { getSecurityStore } from '../../server/security-store';
 import { buildSecurityEvent } from '../../server/security-helpers';
@@ -38,16 +38,18 @@ function json(data: unknown, status = 200): Response {
 	});
 }
 
-export function GET(): Response {
+export async function GET(): Promise<Response> {
+	const settings = await getSiteSettings();
 	return json({
-		enabled: DM_INTEGRATION.provider !== 'none',
-		provider: DM_INTEGRATION.provider,
-		maxLength: DM_INTEGRATION.maxLength,
+		enabled: settings.dmProvider !== 'none',
+		provider: settings.dmProvider,
+		maxLength: settings.dmMaxLength,
 	});
 }
 
 export async function POST(context: APIContext): Promise<Response> {
-	if (DM_INTEGRATION.provider === 'none') {
+	const settings = await getSiteSettings();
+	if (settings.dmProvider === 'none') {
 		return json({ state: 'not_configured' }, 503);
 	}
 
@@ -60,7 +62,7 @@ export async function POST(context: APIContext): Promise<Response> {
 	const cooldown = await rateLimit(
 		kv,
 		`dm:post:${key}`,
-		DM_INTEGRATION.cooldownSeconds * 1000,
+		settings.dmCooldownSeconds * 1000,
 		1,
 	);
 	if (!cooldown.allowed) {
@@ -80,8 +82,8 @@ export async function POST(context: APIContext): Promise<Response> {
 	const body = (payload ?? {}) as { message?: unknown; contact?: unknown };
 	const message =
 		typeof body.message === 'string' ? body.message.replace(CONTROL_CHARS, '').trim() : '';
-	if (message.length === 0 || message.length > DM_INTEGRATION.maxLength) {
-		return json({ state: 'invalid', maxLength: DM_INTEGRATION.maxLength }, 422);
+	if (message.length === 0 || message.length > settings.dmMaxLength) {
+		return json({ state: 'invalid', maxLength: settings.dmMaxLength }, 422);
 	}
 	const contact = typeof body.contact === 'string' ? body.contact.trim().slice(0, 320) : '';
 
@@ -115,7 +117,7 @@ export async function POST(context: APIContext): Promise<Response> {
 	};
 
 	try {
-		if (DM_INTEGRATION.provider === 'discord') {
+		if (settings.dmProvider === 'discord') {
 			const webhook = secrets.DISCORD_WEBHOOK_URL;
 			if (!webhook) return json({ state: 'not_configured' }, 503);
 			const response = await fetch(webhook, {
@@ -138,7 +140,7 @@ export async function POST(context: APIContext): Promise<Response> {
 			return json({ state: 'sent' });
 		}
 
-		if (DM_INTEGRATION.provider === 'ntfy') {
+		if (settings.dmProvider === 'ntfy') {
 			const topic = secrets.NTFY_URL;
 			if (!topic) return json({ state: 'not_configured' }, 503);
 			const response = await fetch(topic, {

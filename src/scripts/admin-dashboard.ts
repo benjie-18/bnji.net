@@ -473,8 +473,30 @@ export function startAdminDashboard(): void {
 	/* --- configuration ------------------------------------------------------ */
 
 	async function loadConfig(): Promise<void> {
-		const data = await guard(() => adminFetch<Record<string, unknown>>('/api/admin/config'));
+		const data = await guard(() => adminFetch<{
+			groups?: unknown[];
+			retention?: Record<string, unknown>;
+			dynamicSettings?: Record<string, unknown>;
+		}>('/api/admin/config'));
 		if (!data || active !== 'config') return;
+
+		// Populate dynamic settings form inputs
+		if (data.dynamicSettings) {
+			const form = root.querySelector<HTMLFormElement>('[data-site-settings-form]');
+			if (form) {
+				const ds = data.dynamicSettings;
+				for (const [key, val] of Object.entries(ds)) {
+					const input = form.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-setting-input="${key}"]`);
+					if (input) {
+						if (input.type === 'checkbox') {
+							(input as HTMLInputElement).checked = Boolean(val);
+						} else {
+							input.value = String(val ?? '');
+						}
+					}
+				}
+			}
+		}
 
 		const container = root.querySelector<HTMLElement>('[data-config-groups]')!;
 		container.textContent = '';
@@ -892,6 +914,66 @@ export function startAdminDashboard(): void {
 
 	root.querySelector('[data-token-form]')?.addEventListener('submit', (event) => {
 		void changeToken(event as SubmitEvent);
+	});
+
+	root.querySelector('[data-site-settings-form]')?.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		const form = event.target as HTMLFormElement;
+		const errorEl = form.querySelector<HTMLElement>('[data-settings-save-error]');
+		const statusEl = form.querySelector<HTMLElement>('[data-settings-save-status]');
+		const btn = form.querySelector<HTMLButtonElement>('[data-settings-save-btn]');
+
+		if (errorEl) errorEl.hidden = true;
+		if (statusEl) statusEl.hidden = true;
+		if (btn) btn.disabled = true;
+
+		const payload: Record<string, unknown> = {};
+		const formData = new FormData(form);
+
+		// Handle explicit values
+		for (const [key, val] of formData.entries()) {
+			const input = form.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${key}"]`);
+			if (input && input.type === 'number') {
+				payload[key] = Number(val);
+			} else {
+				payload[key] = val;
+			}
+		}
+
+		// Handle checkboxes
+		const checkboxes = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+		for (const cb of checkboxes) {
+			if (cb.name) {
+				payload[cb.name] = cb.checked;
+			}
+		}
+
+		try {
+			const res = await guard(() =>
+				adminFetch<{ ok: boolean; dynamicSettings: Record<string, unknown> }>('/api/admin/config', {
+					method: 'POST',
+					body: JSON.stringify(payload),
+				}),
+			);
+
+			if (res && res.ok) {
+				if (statusEl) {
+					statusEl.textContent = 'Configuration saved successfully! Changes are live across server routes.';
+					statusEl.hidden = false;
+				}
+				say('Site configuration saved to D1.');
+			} else if (errorEl) {
+				errorEl.textContent = 'Failed to save configuration updates.';
+				errorEl.hidden = false;
+			}
+		} catch {
+			if (errorEl) {
+				errorEl.textContent = 'Network or server error while saving configuration.';
+				errorEl.hidden = false;
+			}
+		} finally {
+			if (btn) btn.disabled = false;
+		}
 	});
 
 	// The session cookie is the only credential here, and it survives a page
