@@ -79,9 +79,9 @@ const CHANNELS = [
 		gap: var(--grid-gap);
 	}
 
-	@media (min-width: 860px) {
+	@media (min-width: 600px) {
 		.contact-channels {
-			grid-template-columns: repeat(3, minmax(0, 1fr));
+			grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
 		}
 	}
 

@@ -34,6 +34,7 @@ import {
 	stickerAt,
 	stickerResizeBounds,
 	summarizeStickerActions,
+	quantizePixelData,
 	type PaintSticker,
 	type ResizeCorner,
 	type StickerOperation,
@@ -474,3 +475,37 @@ test('adding the same sticker twice is idempotent', () => {
 	];
 	assert.deepEqual(applyStickerOperations(shared, operations), [added]);
 });
+
+/* --- pixel quantization & compression ------------------------------------ */
+
+test('quantizePixelData clears dirty transparent boundary pixels', () => {
+	// A pixel with alpha <= threshold (e.g. 5) has dirty RGB and is zeroed out
+	const data = new Uint8ClampedArray([120, 150, 180, 5, 200, 210, 220, 255]);
+	quantizePixelData(data, 8, 6);
+	assert.deepEqual(Array.from(data.slice(0, 4)), [0, 0, 0, 0], 'dirty transparent pixel zeroed');
+	assert.deepEqual(Array.from(data.slice(4, 8)), [200, 210, 220, 255], 'opaque pixel unchanged at 8-bit');
+});
+
+test('quantizePixelData clamps near-opaque pixels to full opacity', () => {
+	const data = new Uint8ClampedArray([50, 60, 70, 252]);
+	quantizePixelData(data, 8, 6);
+	assert.equal(data[3], 255, 'alpha 252 snapped to 255');
+});
+
+test('quantizePixelData quantizes RGB channels to fewer bits', () => {
+	const data = new Uint8ClampedArray([105, 153, 201, 255]);
+	quantizePixelData(data, 6, 6);
+	// 6-bit quantization rounds with offset: (val + 2) & 0b11111100
+	assert.equal(data[0] % 4, 0, 'red channel is multiple of 4 (6-bit)');
+	assert.equal(data[1] % 4, 0, 'green channel is multiple of 4 (6-bit)');
+	assert.equal(data[2] % 4, 0, 'blue channel is multiple of 4 (6-bit)');
+	assert.equal(data[3], 255, 'alpha kept 255');
+});
+
+test('quantizePixelData is a no-op when bits=8 and threshold=0', () => {
+	const data = new Uint8ClampedArray([123, 45, 67, 89]);
+	const copy = Array.from(data);
+	quantizePixelData(data, 8, 0);
+	assert.deepEqual(Array.from(data), copy);
+});
+

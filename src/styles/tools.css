@@ -229,8 +229,7 @@
 }
 
 .tool__select,
-.tool__number,
-.tool__editor {
+.tool__number {
 	inline-size: 100%;
 	min-inline-size: 0;
 	border: 1px solid var(--glass-border);
@@ -334,24 +333,6 @@
 .tool__range:disabled {
 	cursor: not-allowed;
 	opacity: 0.55;
-}
-
-/* --- editor -------------------------------------------------------------- */
-
-.tool__editor {
-	min-block-size: 14rem;
-	resize: vertical;
-	line-height: 1.6;
-	tab-size: 2;
-	/* A JSON document is read line by line, so lines stay lines and long ones
-	   scroll instead of re-wrapping into a different shape. */
-	white-space: pre;
-	overflow-wrap: normal;
-	overflow-x: auto;
-}
-
-.tool__editor::placeholder {
-	color: var(--text-dim);
 }
 
 /* --- actions ------------------------------------------------------------- */
@@ -464,7 +445,6 @@
 	.tool-drop,
 	.tool__select,
 	.tool__number,
-	.tool__editor,
 	.tool__preview-img,
 	.tool__error {
 		border: 1px solid CanvasText;

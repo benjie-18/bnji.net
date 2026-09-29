@@ -44,7 +44,7 @@ const counterEmoji = viewCount !== undefined ? '👁' : profile.counter?.emoji;
 const counterNote = viewCount !== undefined ? 'views' : profile.counter?.note;
 ---
 
-<article class="profile-page" aria-label={`${profile.displayName}'s profile`}>
+<article class="profile-page" data-glass="raised" aria-label={`${profile.displayName}'s profile`}>
 
 	{/* Avatar */}
 	<div class="profile-page__avatar-wrap">

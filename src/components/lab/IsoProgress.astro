@@ -491,8 +491,9 @@
 		});
 
 		// Auto ping-pong loop
+		let isVisible = true;
 		const autoStep = () => {
-			if (!isAuto) return;
+			if (!isAuto || !isVisible || document.hidden) return;
 			progress += autoDir * 0.45;
 			if (progress >= 100) {
 				progress = 100;
@@ -510,7 +511,9 @@
 			autoBtn.setAttribute('aria-pressed', 'true');
 			autoDot.classList.add('dot--live');
 			cancelAnimationFrame(autoAnimId);
-			autoAnimId = requestAnimationFrame(autoStep);
+			if (isVisible && !document.hidden) {
+				autoAnimId = requestAnimationFrame(autoStep);
+			}
 		};
 
 		const stopAuto = () => {
@@ -573,6 +576,31 @@
 			render();
 		});
 		themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+		if (typeof IntersectionObserver !== 'undefined') {
+			new IntersectionObserver((entries) => {
+				for (const entry of entries) {
+					isVisible = entry.isIntersecting;
+					if (isVisible && isAuto) {
+						cancelAnimationFrame(autoAnimId);
+						autoAnimId = requestAnimationFrame(autoStep);
+					} else if (!isVisible && autoAnimId) {
+						cancelAnimationFrame(autoAnimId);
+						autoAnimId = 0;
+					}
+				}
+			}).observe(root);
+		}
+
+		document.addEventListener('visibilitychange', () => {
+			if (!document.hidden && isVisible && isAuto) {
+				cancelAnimationFrame(autoAnimId);
+				autoAnimId = requestAnimationFrame(autoStep);
+			} else if (document.hidden && autoAnimId) {
+				cancelAnimationFrame(autoAnimId);
+				autoAnimId = 0;
+			}
+		});
 
 		setProgress(68);
 	}

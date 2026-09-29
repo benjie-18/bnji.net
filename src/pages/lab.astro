@@ -242,12 +242,14 @@ const description = `Interactive experiments by ${SITE.author.name} — canvas s
 					}
 				});
 
+				const fragment = document.createDocumentFragment();
 				sorted.forEach((exp) => {
-					container.appendChild(exp);
+					fragment.appendChild(exp);
 				});
 				if (emptyState) {
-					container.appendChild(emptyState);
+					fragment.appendChild(emptyState);
 				}
+				container.appendChild(fragment);
 			};
 
 			sortSelect?.addEventListener('change', () => {
