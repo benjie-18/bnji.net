@@ -66,7 +66,7 @@ export const prerender = false;
 				Overview
 			</button>
 			<button class="admin__tab" type="button" data-tab="board" aria-selected="false">
-				Message board
+				Boards
 			</button>
 			<button class="admin__tab" type="button" data-tab="playlist" aria-selected="false">
 				Playlist
@@ -84,32 +84,81 @@ export const prerender = false;
 
 		<p class="admin__error" role="alert" data-admin-error hidden />
 
-		<!-- Statistics: the site-wide numbers, grouped by where they come from -->
+		<!-- Statistics: Global website analytics & page breakdown -->
 		<section class="admin__panel" data-panel="stats">
-			<p class="admin__hint">
-				Every number below is read through the same store method the public
-				feature uses, so it cannot disagree with what visitors see.
-			</p>
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">📊 Site-Wide Traffic &amp; Page Activity</h2>
+				<p class="admin__hint">
+					Global page-view counts, unique session activity, and traffic distribution across all site routes.
+				</p>
 
-			<div class="admin__cards" data-stats-root>
-				<div class="admin__card" data-glass>
-					<h2 class="admin__h2">Traffic</h2>
-					<div data-stats-traffic />
-					<div class="admin__stack" data-stats-traffic-list />
+				<form class="admin__filters" data-stats-filters style="margin-bottom: 1rem;">
+					<label>
+						<span>Views Scope</span>
+						<select name="scope" data-stats-scope>
+							<option value="global">Global (All Pages)</option>
+							<option value="homepage">Homepage (/)</option>
+							<option value="projects">Projects Category (/projects/)</option>
+							<option value="me">Me / Profile (/gizlyy/)</option>
+						</select>
+					</label>
+					<label>
+						<span>Time Range</span>
+						<select name="timeRange" data-stats-time-range>
+							<option value="hour">Hour (Last 24h)</option>
+							<option value="day" selected>Day (Last 30 days)</option>
+							<option value="week">Week (Last 12 weeks)</option>
+							<option value="month">Month (Last 12 months)</option>
+							<option value="year">Year (Last 5 years)</option>
+							<option value="all">All Time</option>
+						</select>
+					</label>
+					<label>
+						<span>Page Search</span>
+						<input name="pathSearch" type="text" placeholder="e.g. /projects/ or /blog/" data-stats-path-search />
+					</label>
+					<label>
+						<span>Min Views</span>
+						<input name="minViews" type="number" min="0" value="0" data-stats-min-views />
+					</label>
+					<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Update Chart &amp; List</button>
+				</form>
+
+				<!-- Interactive Liquid Glass Time-Series Chart -->
+				<div class="admin__chart-card" data-glass="quiet" style="margin-block: 1.25rem;">
+					<div class="admin__chart-head">
+						<span class="mono" style="font-size: var(--text-micro); color: var(--text-dim);" data-stats-chart-title>
+							VIEWS OVER TIME
+						</span>
+						<span class="mono" style="font-size: var(--text-micro); color: var(--accent-strong);" data-stats-chart-total>
+							0 Total Views
+						</span>
+					</div>
+					<div class="admin__chart-viewport" data-stats-chart-container>
+						<svg class="admin__chart-svg" viewBox="0 0 800 240" preserveAspectRatio="none" data-stats-chart-svg>
+							<!-- Filled gradient area & glowing vector stroke generated at runtime -->
+						</svg>
+						<div class="admin__chart-tooltip mono" data-stats-chart-tooltip hidden></div>
+					</div>
 				</div>
 
+				<div data-stats-traffic-overview />
+				<div class="admin__table-wrap" data-stats-traffic-table style="margin-top: 1rem;" />
+			</div>
+
+			<div class="admin__cards" data-stats-root style="margin-top: 1.5rem;">
 				<div class="admin__card" data-glass>
-					<h2 class="admin__h2">Engagement</h2>
+					<h2 class="admin__h2">💡 Engagement &amp; Reactions</h2>
 					<div class="admin__stack" data-stats-engagement />
 				</div>
 
 				<div class="admin__card" data-glass>
-					<h2 class="admin__h2">Message board</h2>
+					<h2 class="admin__h2">💬 Message Board Summary</h2>
 					<div data-stats-board />
 				</div>
 
 				<div class="admin__card" data-glass>
-					<h2 class="admin__h2">Security</h2>
+					<h2 class="admin__h2">🔒 Security &amp; Device Overview</h2>
 					<div data-stats-security />
 				</div>
 			</div>
@@ -142,10 +191,14 @@ export const prerender = false;
 					<span>Surface</span>
 					<select name="surface" data-filter-surface>
 						<option value="">All surfaces</option>
-						<option value="profile">Profile</option>
+						<option value="profile">Profile &amp; Pages</option>
 						<option value="board">Message board</option>
 						<option value="dm">Direct message</option>
 					</select>
+				</label>
+				<label>
+					<span>Page / Path</span>
+					<input name="path" type="text" placeholder="/projects/ or /blog/…" data-filter-path />
 				</label>
 				<label>
 					<span>IP address</span>
@@ -166,42 +219,49 @@ export const prerender = false;
 				<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
 			</form>
 			<p class="admin__hint">
-				Filter by device fingerprint to see everything one device did, across every surface.
+				Filter by page path, IP, or device fingerprint to see interaction history across all pages.
 			</p>
 			<div class="admin__table-wrap" data-glass data-security-table />
+		</section>
+
+		<!-- Boards: Consolidated Message Board & Paint Canvas -->
+		<section class="admin__panel" data-panel="board" hidden>
 			<div class="admin__card" data-glass>
-				<h2 class="admin__h2">Published Paint activity</h2>
+				<h2 class="admin__h2">💬 Message Board Triage &amp; Moderation</h2>
 				<p class="admin__hint">
-					Only accepted Sync &amp; refresh publishes appear here. Local edits are not logged; entries contain action summaries, not pointer paths or sticker images. The opaque visitor/session ID is temporary and does not identify an account or person. Retained for up to 60 days, capped at 5,000 entries.
+					Filter, review, and moderate visitor messages. Statuses: 🟢 Visible, 🟡 Reported (triage queue), 🟠 Hidden, 🔴 Deleted.
+				</p>
+				<form class="admin__filters" data-board-filters>
+					<label>
+						<span>Status</span>
+						<select name="status" data-board-status>
+							<option value="">All statuses</option>
+							<option value="reported">🟡 Reported (Triage)</option>
+							<option value="visible">🟢 Visible</option>
+							<option value="hidden">🟠 Hidden</option>
+							<option value="deleted">🔴 Deleted</option>
+						</select>
+					</label>
+					<label>
+						<span>Min reports</span>
+						<input name="minReports" type="number" min="0" value="0" data-board-min-reports />
+					</label>
+					<label>
+						<span>Search text</span>
+						<input name="search" type="text" placeholder="message text" data-board-search />
+					</label>
+					<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
+				</form>
+				<div class="admin__table-wrap" data-board-table />
+			</div>
+
+			<div class="admin__card" data-glass style="margin-top: 1.5rem;">
+				<h2 class="admin__h2">🎨 Shared Paint Canvas Activity</h2>
+				<p class="admin__hint">
+					Published drawing activity log, sticker operations, and canvas sync activity.
 				</p>
 				<div class="admin__table-wrap" data-paint-activity />
 			</div>
-		</section>
-
-		<!-- Board moderation -->
-		<section class="admin__panel" data-panel="board" hidden>
-			<form class="admin__filters" data-glass data-board-filters>
-				<label>
-					<span>Status</span>
-					<select name="status" data-board-status>
-						<option value="">All statuses</option>
-						<option value="reported">Reported</option>
-						<option value="visible">Visible</option>
-						<option value="hidden">Hidden</option>
-						<option value="deleted">Deleted</option>
-					</select>
-				</label>
-				<label>
-					<span>Min reports</span>
-					<input name="minReports" type="number" min="0" value="0" data-board-min-reports />
-				</label>
-				<label>
-					<span>Search text</span>
-					<input name="search" type="text" placeholder="message text" data-board-search />
-				</label>
-				<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
-			</form>
-			<div class="admin__table-wrap" data-glass data-board-table />
 		</section>
 
 		<!-- Music playlist: import a provider link, edit the draft, reorder -->
@@ -367,10 +427,116 @@ export const prerender = false;
 
 		<!-- Configuration -->
 		<section class="admin__panel" data-panel="config" hidden>
-			<p class="admin__hint">
-				Values are read from the same modules the running site uses, so this can never
-				drift from actual behaviour. Secrets are reported as present or absent only —
-				never returned.
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">Interactive Site Configuration Editor</h2>
+				<p class="admin__hint">
+					Modify site settings, limits, features, and identity copy dynamically. Changes save to D1 and apply immediately across server routes without needing a code re-deploy.
+				</p>
+				<form class="admin__form" data-site-settings-form>
+					<div class="admin__cards">
+						<div class="admin__config-group">
+							<h3>Message Board Policy</h3>
+							<label class="admin__field">
+								<span>Board Storage Provider</span>
+								<select name="boardProvider" data-setting-input="boardProvider">
+									<option value="d1">Cloudflare D1 (Recommended)</option>
+									<option value="rest">External REST API</option>
+								</select>
+							</label>
+							<label class="admin__field">
+								<span>Max Text Length (characters)</span>
+								<input type="number" name="boardMaxTextLength" min="10" max="1000" data-setting-input="boardMaxTextLength" />
+							</label>
+							<label class="admin__field">
+								<span>Post Cooldown (seconds)</span>
+								<input type="number" name="boardPostCooldownSeconds" min="0" max="3600" data-setting-input="boardPostCooldownSeconds" />
+							</label>
+							<label class="admin__field">
+								<span>Hourly Post Limit per Client</span>
+								<input type="number" name="boardHourlyPostLimit" min="1" max="1000" data-setting-input="boardHourlyPostLimit" />
+							</label>
+							<label class="admin__field">
+								<span>Polling Interval (ms)</span>
+								<input type="number" name="boardPollIntervalMs" min="0" max="120000" step="1000" data-setting-input="boardPollIntervalMs" />
+							</label>
+						</div>
+
+						<div class="admin__config-group">
+							<h3>Direct Message Integration</h3>
+							<label class="admin__field">
+								<span>DM Delivery Provider</span>
+								<select name="dmProvider" data-setting-input="dmProvider">
+									<option value="none">Disabled (No delivery)</option>
+									<option value="discord">Discord Webhook</option>
+									<option value="ntfy">ntfy Notification</option>
+								</select>
+							</label>
+							<label class="admin__field">
+								<span>Max Message Length (characters)</span>
+								<input type="number" name="dmMaxLength" min="50" max="5000" data-setting-input="dmMaxLength" />
+							</label>
+							<label class="admin__field">
+								<span>Cooldown (seconds)</span>
+								<input type="number" name="dmCooldownSeconds" min="0" max="3600" data-setting-input="dmCooldownSeconds" />
+							</label>
+						</div>
+
+						<div class="admin__config-group">
+							<h3>Identity &amp; Branding</h3>
+							<label class="admin__field">
+								<span>Site Wordmark / Name</span>
+								<input type="text" name="siteName" maxlength="50" data-setting-input="siteName" />
+							</label>
+							<label class="admin__field">
+								<span>Full Title</span>
+								<input type="text" name="siteTitle" maxlength="100" data-setting-input="siteTitle" />
+							</label>
+							<label class="admin__field">
+								<span>Site Description</span>
+								<input type="text" name="siteDescription" maxlength="300" data-setting-input="siteDescription" />
+							</label>
+							<label class="admin__field">
+								<span>Author Name</span>
+								<input type="text" name="authorName" maxlength="100" data-setting-input="authorName" />
+							</label>
+							<label class="admin__field">
+								<span>Author Location</span>
+								<input type="text" name="authorLocation" maxlength="100" data-setting-input="authorLocation" />
+							</label>
+						</div>
+
+						<div class="admin__config-group">
+							<h3>System &amp; Experience Defaults</h3>
+							<label class="admin__field">
+								<span>Default Theme</span>
+								<select name="defaultTheme" data-setting-input="defaultTheme">
+									<option value="dark">Dark Space Theme</option>
+									<option value="light">Frutiger Aero Light Theme</option>
+								</select>
+							</label>
+							<label class="admin__field admin__check" style="margin-top: 0.8rem;">
+								<input type="checkbox" name="introEnabled" data-setting-input="introEnabled" />
+								<span>Scroll Intro Enabled by Default</span>
+							</label>
+						</div>
+					</div>
+
+					<p class="admin__error" role="alert" data-settings-save-error hidden />
+					<p class="admin__hint" data-settings-save-status hidden />
+
+					<div class="admin__actions" style="margin-top: 1rem; align-items: center; justify-content: space-between;">
+						<button class="glass-button glass-button--primary" data-glass="" type="submit" data-settings-save-btn>
+							Save Configuration
+						</button>
+						<button class="glass-button glass-button--quiet" data-glass="" type="button" data-settings-reset-btn>
+							Reset to Defaults
+						</button>
+					</div>
+				</form>
+			</div>
+
+			<p class="admin__hint" style="margin-top: 1.5rem;">
+				Below is the complete low-level runtime configuration dump and environment state. Secrets are reported as present or absent only — never returned.
 			</p>
 			<div class="admin__cards" data-config-groups />
 		</section>

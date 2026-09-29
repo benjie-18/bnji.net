@@ -256,40 +256,23 @@ export function startAdminDashboard(): void {
 	async function loadSecurity(): Promise<void> {
 		const params = new URLSearchParams();
 		const surface = valueOf(root, '[data-filter-surface]');
+		const path = root.querySelector<HTMLInputElement>('[data-filter-path]')?.value.trim();
 		const ip = root.querySelector<HTMLInputElement>('[data-filter-ip]')?.value.trim();
 		const device = root.querySelector<HTMLInputElement>('[data-filter-device]')?.value.trim();
 		const enriched = root.querySelector<HTMLInputElement>('[data-filter-enriched]')?.checked;
 		const limit = root.querySelector<HTMLInputElement>('[data-filter-limit]')?.value;
 
 		if (surface) params.set('surface', surface);
+		if (path) params.set('profileSlug', path);
 		if (ip) params.set('ip', ip);
 		if (device) params.set('device', device);
 		if (enriched) params.set('enrichedOnly', '1');
 		if (limit) params.set('limit', limit);
 
-		const [data, paintActivity] = await Promise.all([
-			guard(() => adminFetch<{ events: SecurityEvent[]; total: number }>(`/api/admin/security?${params}`)),
-			guard(() => adminFetch<{ events: PaintActivity[]; total: number; retentionDays: number }>('/api/admin/paint-activity?limit=50')),
-		]);
+		const data = await guard(() => adminFetch<{ events: SecurityEvent[]; total: number }>(`/api/admin/security?${params}`));
 		if (!data || active !== 'security') return;
 
 		say(`${data.events.length} shown · ${data.total} security events match`);
-		if (paintActivity) {
-			renderTable(
-				root.querySelector<HTMLElement>('[data-paint-activity]')!,
-				[
-					{ label: 'When', get: (r) => formatTime(Number(r.createdAt)), mono: true },
-					{ label: 'Revision', get: (r) => r.revision, mono: true },
-					{ label: 'Visitor/session (ephemeral)', get: (r) => r.visitorId, mono: true },
-					{
-						label: 'Published action counts',
-						get: (r) => Object.entries(r.actions ?? {}).map(([type, count]) => `${type.replace(/-/g, ' ')} ×${count}`).join(', ') || '—',
-					},
-				],
-				paintActivity.events as unknown as Record<string, unknown>[],
-				'No accepted Paint publishes have been logged.',
-			);
-		}
 
 		renderTable(
 			root.querySelector<HTMLElement>('[data-security-table]')!,
@@ -362,14 +345,34 @@ export function startAdminDashboard(): void {
 		if (search) params.set('search', search);
 		params.set('limit', '50');
 
-		const data = await guard(() =>
-			adminFetch<{ messages: ModeratedMessage[]; summary: { total: number } }>(
-				`/api/admin/board?${params}`,
+		const [data, paintActivity] = await Promise.all([
+			guard(() =>
+				adminFetch<{ messages: ModeratedMessage[]; summary: { total: number } }>(
+					`/api/admin/board?${params}`,
+				),
 			),
-		);
+			guard(() => adminFetch<{ events: PaintActivity[]; total: number; retentionDays: number }>('/api/admin/paint-activity?limit=50')),
+		]);
 		if (!data || active !== 'board') return;
 
 		say(`${data.messages.length} shown · ${data.summary.total} total`);
+
+		if (paintActivity) {
+			renderTable(
+				root.querySelector<HTMLElement>('[data-paint-activity]')!,
+				[
+					{ label: 'When', get: (r) => formatTime(Number(r.createdAt)), mono: true },
+					{ label: 'Revision', get: (r) => r.revision, mono: true },
+					{ label: 'Visitor/session (ephemeral)', get: (r) => r.visitorId, mono: true },
+					{
+						label: 'Published action counts',
+						get: (r) => Object.entries(r.actions ?? {}).map(([type, count]) => `${type.replace(/-/g, ' ')} ×${count}`).join(', ') || '—',
+					},
+				],
+				paintActivity.events as unknown as Record<string, unknown>[],
+				'No accepted Paint publishes have been logged.',
+			);
+		}
 
 		const container = root.querySelector<HTMLElement>('[data-board-table]')!;
 		container.textContent = '';
@@ -418,8 +421,12 @@ export function startAdminDashboard(): void {
 			tr.appendChild(body);
 
 			const statusCell = document.createElement('td');
-			statusCell.className = 'is-mono';
-			statusCell.textContent = message.status;
+			const badge = document.createElement('span');
+			const s = message.status;
+			badge.className = `admin__badge admin__badge--${s}`;
+			const icon = s === 'visible' ? '🟢' : s === 'reported' ? '🟡' : s === 'hidden' ? '🟠' : '🔴';
+			badge.textContent = `${icon} ${s}`;
+			statusCell.appendChild(badge);
 			tr.appendChild(statusCell);
 
 			const reports = document.createElement('td');
@@ -473,8 +480,30 @@ export function startAdminDashboard(): void {
 	/* --- configuration ------------------------------------------------------ */
 
 	async function loadConfig(): Promise<void> {
-		const data = await guard(() => adminFetch<Record<string, unknown>>('/api/admin/config'));
+		const data = await guard(() => adminFetch<{
+			groups?: unknown[];
+			retention?: Record<string, unknown>;
+			dynamicSettings?: Record<string, unknown>;
+		}>('/api/admin/config'));
 		if (!data || active !== 'config') return;
+
+		// Populate dynamic settings form inputs
+		if (data.dynamicSettings) {
+			const form = root.querySelector<HTMLFormElement>('[data-site-settings-form]');
+			if (form) {
+				const ds = data.dynamicSettings;
+				for (const [key, val] of Object.entries(ds)) {
+					const input = form.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-setting-input="${key}"]`);
+					if (input) {
+						if (input.type === 'checkbox') {
+							(input as HTMLInputElement).checked = Boolean(val);
+						} else {
+							input.value = String(val ?? '');
+						}
+					}
+				}
+			}
+		}
 
 		const container = root.querySelector<HTMLElement>('[data-config-groups]')!;
 		container.textContent = '';
@@ -596,7 +625,166 @@ export function startAdminDashboard(): void {
 			byEndpoint: { surface: string; endpoint: string; count: number }[];
 			retentionDays: number;
 		} | null);
+		timeSeries?: { label: string; timestamp: number; count: number }[];
 	};
+
+	function renderChart(
+		svg: SVGElement,
+		tooltip: HTMLElement,
+		buckets: { label: string; timestamp: number; count: number }[],
+	): void {
+		svg.replaceChildren();
+		if (!buckets || buckets.length === 0) return;
+
+		const W = 800;
+		const H = 240;
+		const padX = 50;
+		const padY = 30;
+		const innerW = W - padX * 2;
+		const innerH = H - padY * 2;
+
+		const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+		const N = buckets.length;
+
+		// Calculate coordinates
+		const pts = buckets.map((b, i) => {
+			const x = padX + (i / Math.max(1, N - 1)) * innerW;
+			const y = padY + innerH - (b.count / maxCount) * innerH;
+			return { x, y, ...b };
+		});
+
+		// Gradient definition
+		const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+		const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+		grad.id = 'chartGrad';
+		grad.setAttribute('x1', '0');
+		grad.setAttribute('y1', '0');
+		grad.setAttribute('x2', '0');
+		grad.setAttribute('y2', '1');
+
+		const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+		stop1.setAttribute('offset', '0%');
+		stop1.setAttribute('stop-color', 'var(--accent)');
+		stop1.setAttribute('stop-opacity', '0.45');
+
+		const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+		stop2.setAttribute('offset', '100%');
+		stop2.setAttribute('stop-color', 'var(--accent)');
+		stop2.setAttribute('stop-opacity', '0.02');
+
+		grad.appendChild(stop1);
+		grad.appendChild(stop2);
+		defs.appendChild(grad);
+		svg.appendChild(defs);
+
+		// Grid lines
+		const gridGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+		for (let step = 0; step <= 4; step++) {
+			const gy = padY + (step / 4) * innerH;
+			const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+			line.setAttribute('x1', String(padX));
+			line.setAttribute('y1', String(gy));
+			line.setAttribute('x2', String(W - padX));
+			line.setAttribute('y2', String(gy));
+			line.setAttribute('stroke', 'var(--glass-border)');
+			line.setAttribute('stroke-width', '1');
+			line.setAttribute('stroke-dasharray', '4 4');
+			gridGroup.appendChild(line);
+		}
+		svg.appendChild(gridGroup);
+
+		// Generate smooth organic cubic Bezier curve commands
+		const bottomY = padY + innerH;
+		let lineD = `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+
+		if (N === 1) {
+			lineD += ` L ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+		} else {
+			for (let i = 0; i < N - 1; i++) {
+				const p0 = pts[Math.max(0, i - 1)];
+				const p1 = pts[i];
+				const p2 = pts[i + 1];
+				const p3 = pts[Math.min(N - 1, i + 2)];
+
+				const cp1x = p1.x + (p2.x - p0.x) / 6;
+				const cp1y = p1.y + (p2.y - p0.y) / 6;
+				const cp2x = p2.x - (p3.x - p1.x) / 6;
+				const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+				lineD += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+			}
+		}
+
+		const areaD = `M ${pts[0].x.toFixed(1)},${bottomY} L ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)} ` +
+			lineD.slice(lineD.indexOf('C') > -1 ? lineD.indexOf('C') : lineD.indexOf('L')) +
+			` L ${pts[pts.length - 1].x.toFixed(1)},${bottomY} Z`;
+
+		const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+		area.setAttribute('d', areaD);
+		area.setAttribute('fill', 'url(#chartGrad)');
+		svg.appendChild(area);
+
+		const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+		line.setAttribute('d', lineD);
+		line.setAttribute('fill', 'none');
+		line.setAttribute('stroke', 'var(--accent-strong)');
+		line.setAttribute('stroke-width', '3');
+		line.setAttribute('stroke-linecap', 'round');
+		line.setAttribute('stroke-linejoin', 'round');
+		svg.appendChild(line);
+
+		// Data Nodes & Axis labels
+		const nodesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+		const stepSkip = Math.max(1, Math.floor(N / 7));
+
+		pts.forEach((p, i) => {
+			// Dot
+			const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+			circle.setAttribute('cx', String(p.x));
+			circle.setAttribute('cy', String(p.y));
+			circle.setAttribute('r', '4');
+			circle.setAttribute('fill', 'var(--accent-strong)');
+			circle.setAttribute('stroke', 'var(--bg)');
+			circle.setAttribute('stroke-width', '2');
+			nodesGroup.appendChild(circle);
+
+			// Axis text
+			if (i % stepSkip === 0 || i === N - 1) {
+				const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+				text.setAttribute('x', String(p.x));
+				text.setAttribute('y', String(H - 8));
+				text.setAttribute('text-anchor', 'middle');
+				text.setAttribute('fill', 'var(--text-dim)');
+				text.setAttribute('font-size', '11');
+				text.setAttribute('font-family', 'var(--font-mono)');
+				text.textContent = p.label;
+				nodesGroup.appendChild(text);
+			}
+		});
+		svg.appendChild(nodesGroup);
+
+		// Hover interaction
+		const container = svg.parentElement;
+		if (container) {
+			container.onpointermove = (e) => {
+				const rect = container.getBoundingClientRect();
+				const relX = (e.clientX - rect.left) / rect.width;
+				const idx = Math.min(N - 1, Math.max(0, Math.round(relX * (N - 1))));
+				const pt = pts[idx];
+
+				if (pt) {
+					tooltip.textContent = `${pt.label}: ${pt.count} view${pt.count === 1 ? '' : 's'}`;
+					tooltip.style.left = `${(pt.x / W) * 100}%`;
+					tooltip.style.top = `${(pt.y / H) * 100}%`;
+					tooltip.hidden = false;
+				}
+			};
+
+			container.onpointerleave = () => {
+				tooltip.hidden = true;
+			};
+		}
+	}
 
 	/**
 	 * Render a group of stat rows, or a plain explanation when the group has
@@ -676,41 +864,63 @@ export function startAdminDashboard(): void {
 	}
 
 	async function loadStats(): Promise<void> {
-		const data = await guard(() => adminFetch<StatsPayload>('/api/admin/stats'));
+		const scope = valueOf(root, '[data-stats-scope]') || 'global';
+		const timeRange = valueOf(root, '[data-stats-time-range]') || 'day';
+
+		const data = await guard(() => adminFetch<StatsPayload>(`/api/admin/stats?scope=${encodeURIComponent(scope)}&timeRange=${encodeURIComponent(timeRange)}`));
 		if (!data || active !== 'stats') return;
 
 		say(`Updated ${formatTime(data.generatedAt)}`);
 
-		/* traffic — the same getViewStats() the public profile pill renders */
-		renderStatGroup(
-			'[data-stats-traffic] > dl, [data-stats-traffic] > .admin__source',
-			[
-				['Total profile views', data.traffic.siteTotal],
-				['Profiles tracked', data.traffic.profiles.length],
-			],
-			'No view data yet.',
-		);
-		const trafficEl = root.querySelector<HTMLElement>('[data-stats-traffic]');
-		if (trafficEl) {
-			const note = document.createElement('p');
-			note.className = 'admin__config-source';
-			note.textContent = `src/server/profile-store.ts · getViewStats() · ${data.traffic.note}`;
-			// insertBefore rather than prepend(): `prepend` resolves against a
-			// Workers-types overload in this project and rejects a Node.
-			trafficEl.insertBefore(note, trafficEl.firstChild);
+		// Render interactive SVG Chart
+		const svgEl = root.querySelector<SVGElement>('[data-stats-chart-svg]');
+		const tooltipEl = root.querySelector<HTMLElement>('[data-stats-chart-tooltip]');
+		const chartTotalEl = root.querySelector<HTMLElement>('[data-stats-chart-total]');
+		const chartTitleEl = root.querySelector<HTMLElement>('[data-stats-chart-title]');
+
+		if (data.timeSeries && svgEl && tooltipEl) {
+			renderChart(svgEl, tooltipEl, data.timeSeries);
+			const totalInSeries = data.timeSeries.reduce((s, b) => s + b.count, 0);
+			if (chartTotalEl) chartTotalEl.textContent = `${totalInSeries} Views`;
+			if (chartTitleEl) chartTitleEl.textContent = `${scope.toUpperCase()} VIEWS (${timeRange.toUpperCase()})`;
 		}
-		renderSourceList(
-			'[data-stats-traffic-list]',
-			data.traffic.profiles.map((p) => ({
-				title: `/${p.slug}/ — ${p.name}`,
-				rows: [
-					['Total views', p.total],
-					['Today', p.today],
-					['This week', p.week],
-					['This month', p.month],
-				],
-			})),
-			'No profiles are being tracked.',
+
+		/* traffic — Global site traffic analytics */
+		renderFacts(
+			root.querySelector<HTMLElement>('[data-stats-traffic-overview]')!,
+			[
+				['Total Site Views', data.traffic.siteTotal],
+				['Pages / Routes Tracked', data.traffic.profiles.length],
+			],
+		);
+
+		const searchFilter = valueOf(root, '[data-stats-path-search]').toLowerCase();
+		const minViewsFilter = Number(valueOf(root, '[data-stats-min-views]')) || 0;
+
+		const filteredProfiles = data.traffic.profiles.filter((p) => {
+			const matchesPath = !searchFilter || p.name.toLowerCase().includes(searchFilter) || p.slug.toLowerCase().includes(searchFilter);
+			const matchesViews = p.total >= minViewsFilter;
+			return matchesPath && matchesViews;
+		});
+
+		const totalSiteViews = Math.max(1, data.traffic.siteTotal);
+
+		renderTable(
+			root.querySelector<HTMLElement>('[data-stats-traffic-table]')!,
+			[
+				{ label: 'Page / Route', get: (r) => r.name, mono: true },
+				{ label: 'Total Views', get: (r) => r.total, mono: true },
+				{ label: 'Today', get: (r) => r.today, mono: true },
+				{ label: 'This Week', get: (r) => r.week, mono: true },
+				{ label: 'This Month', get: (r) => r.month, mono: true },
+				{
+					label: 'Traffic Share',
+					get: (r) => `${(((Number(r.total) || 0) / totalSiteViews) * 100).toFixed(1)}%`,
+					mono: true,
+				},
+			],
+			filteredProfiles as unknown as Record<string, unknown>[],
+			'No tracked pages match these filters.',
 		);
 
 		/* engagement — reactions and outbound link clicks */
@@ -880,6 +1090,11 @@ export function startAdminDashboard(): void {
 		});
 	});
 
+	root.querySelector('[data-stats-filters]')?.addEventListener('submit', (event) => {
+		event.preventDefault();
+		void loadStats();
+	});
+
 	root.querySelector('[data-security-filters]')?.addEventListener('submit', (event) => {
 		event.preventDefault();
 		void loadSecurity();
@@ -892,6 +1107,122 @@ export function startAdminDashboard(): void {
 
 	root.querySelector('[data-token-form]')?.addEventListener('submit', (event) => {
 		void changeToken(event as SubmitEvent);
+	});
+
+	root.querySelector('[data-site-settings-form]')?.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		const form = event.target as HTMLFormElement;
+		const errorEl = form.querySelector<HTMLElement>('[data-settings-save-error]');
+		const statusEl = form.querySelector<HTMLElement>('[data-settings-save-status]');
+		const btn = form.querySelector<HTMLButtonElement>('[data-settings-save-btn]');
+
+		if (errorEl) errorEl.hidden = true;
+		if (statusEl) statusEl.hidden = true;
+		if (btn) btn.disabled = true;
+
+		const payload: Record<string, unknown> = {};
+		const formData = new FormData(form);
+
+		// Handle explicit values
+		for (const [key, val] of formData.entries()) {
+			const input = form.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${key}"]`);
+			if (input && input.type === 'number') {
+				payload[key] = Number(val);
+			} else {
+				payload[key] = val;
+			}
+		}
+
+		// Handle checkboxes
+		const checkboxes = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+		for (const cb of checkboxes) {
+			if (cb.name) {
+				payload[cb.name] = cb.checked;
+			}
+		}
+
+		try {
+			const res = await guard(() =>
+				adminFetch<{ ok: boolean; dynamicSettings: Record<string, unknown> }>('/api/admin/config', {
+					method: 'POST',
+					body: JSON.stringify(payload),
+				}),
+			);
+
+			if (res && res.ok) {
+				if (statusEl) {
+					statusEl.textContent = 'Configuration saved successfully! Changes are live across server routes.';
+					statusEl.hidden = false;
+				}
+				say('Site configuration saved to D1.');
+			} else if (errorEl) {
+				errorEl.textContent = 'Failed to save configuration updates.';
+				errorEl.hidden = false;
+			}
+		} catch {
+			if (errorEl) {
+				errorEl.textContent = 'Network or server error while saving configuration.';
+				errorEl.hidden = false;
+			}
+		} finally {
+			if (btn) btn.disabled = false;
+		}
+	});
+
+	root.querySelector('[data-settings-reset-btn]')?.addEventListener('click', async () => {
+		const form = root.querySelector<HTMLFormElement>('[data-site-settings-form]');
+		if (!form) return;
+		const statusEl = form.querySelector<HTMLElement>('[data-settings-save-status]');
+		const errorEl = form.querySelector<HTMLElement>('[data-settings-save-error]');
+
+		if (!confirm('Are you sure you want to reset all dynamic site settings back to default values?')) {
+			return;
+		}
+
+		try {
+			// Import defaults from store defaults
+			const defaults = {
+				boardProvider: 'd1',
+				boardMaxTextLength: 250,
+				boardPostCooldownSeconds: 20,
+				boardHourlyPostLimit: 20,
+				boardPollIntervalMs: 20000,
+				boardMaxImageBytes: 1433600,
+				dmProvider: 'none',
+				dmMaxLength: 1000,
+				dmCooldownSeconds: 30,
+				siteName: 'BNJI',
+				siteTitle: 'BNJI.NET — Personal Digital Hub',
+				siteDescription: 'Personal digital hub.',
+				authorName: 'BNJI',
+				authorLocation: 'Global',
+				defaultTheme: 'dark',
+				introEnabled: true,
+			};
+
+			const res = await guard(() =>
+				adminFetch<{ ok: boolean; dynamicSettings: Record<string, unknown> }>('/api/admin/config', {
+					method: 'POST',
+					body: JSON.stringify(defaults),
+				}),
+			);
+
+			if (res && res.ok) {
+				if (statusEl) {
+					statusEl.textContent = 'Settings reset to system defaults!';
+					statusEl.hidden = false;
+				}
+				await loadConfig();
+			} else if (errorEl) {
+				errorEl.textContent = 'Failed to reset configuration settings.';
+				errorEl.hidden = false;
+			}
+		} catch {
+			if (errorEl) {
+				errorEl.textContent = 'Error resetting configuration.';
+				errorEl.hidden = false;
+			}
+		}
 	});
 
 	// The session cookie is the only credential here, and it survives a page

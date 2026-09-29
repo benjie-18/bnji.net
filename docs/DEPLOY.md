@@ -55,6 +55,7 @@ Expected output — any unapplied migrations, including `0007_paint_stickers_act
 │ 0005_admin_credentials.sql            │
 │ 0006_board_paint.sql                  │
 │ 0007_paint_stickers_activity.sql      │
+│ 0009_site_settings.sql                │
 └──────────────────────────────────────┘
 ```
 
@@ -83,6 +84,7 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `board_paint_state` | `/board/` shared Paint canvas | One bounded drawing PNG, revision and editable sticker list |
 | `board_paint_commits` | Paint publish retries | At most 128 recent request IDs for idempotency |
 | `board_paint_activity` | Admin security/activity surface | Accepted publish summaries only; admin-only, 60-day retention, capped at 5,000 rows |
+| `site_settings` | Dynamic site configuration | Dynamic key-value store for `/admin` → Configuration hot-swapping |
 
 Migration `0004` added four columns to the existing `board_messages`:
 `report_count`, `reported_at`, `status_note`, `moderated_at`. Migration `0006`

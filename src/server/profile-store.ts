@@ -51,12 +51,23 @@ export type ReactionRow = {
 	created_at: number;
 };
 
+export type TimeSeriesBucket = {
+	label: string;
+	timestamp: number;
+	count: number;
+};
+
+export type TimeSeriesScope = 'global' | 'homepage' | 'projects' | 'me';
+export type TimeSeriesRange = 'hour' | 'day' | 'week' | 'month' | 'year' | 'all';
+
 export interface ProfileStore {
 	readonly kind: 'd1';
 
 	/* Views */
 	recordView(profileSlug: string, sessionKey: string, dayKey: string, now: number): Promise<boolean>;
 	getViewStats(profileSlug: string): Promise<ViewStats>;
+	getAllTrackedPages(): Promise<{ slug: string; name: string; total: number; today: number; week: number; month: number }[]>;
+	getTimeSeriesViews(scope: TimeSeriesScope, timeRange: TimeSeriesRange): Promise<TimeSeriesBucket[]>;
 
 	/* Reactions */
 	getReactionCounts(profileSlug: string): Promise<ReactionCounts>;
@@ -92,6 +103,104 @@ function createD1ProfileStore(db: D1Database): ProfileStore {
 				.bind(profileSlug, sessionKey, dayKey, now)
 				.run();
 			return true;
+		},
+
+		async getAllTrackedPages() {
+			const { results } = await db
+				.prepare('SELECT DISTINCT profile_slug FROM profile_views')
+				.bind()
+				.all<{ profile_slug: string }>();
+
+			const pages: { slug: string; name: string; total: number; today: number; week: number; month: number }[] = [];
+			for (const row of results) {
+				const slug = row.profile_slug;
+				const stats = await this.getViewStats(slug);
+				pages.push({
+					slug,
+					name: slug.startsWith('/') ? slug : `/${slug}/`,
+					...stats,
+				});
+			}
+			return pages.sort((a, b) => b.total - a.total);
+		},
+
+		async getTimeSeriesViews(scope, timeRange) {
+			const now = Date.now();
+			let whereClause = '';
+			const values: (string | number)[] = [];
+
+			// Scope filter
+			if (scope === 'homepage') {
+				whereClause = "WHERE (profile_slug = '/' OR profile_slug = '' OR profile_slug = 'homepage')";
+			} else if (scope === 'projects') {
+				whereClause = "WHERE (profile_slug LIKE '/projects%' OR profile_slug LIKE '/tools%' OR profile_slug LIKE '/lab%')";
+			} else if (scope === 'me') {
+				whereClause = "WHERE (profile_slug LIKE '%gizlyy%' OR profile_slug LIKE '%me%' OR profile_slug LIKE '%profile%')";
+			}
+
+			// Time range cutoff
+			let intervalMs = 86_400_000;
+			let bucketCount = 30;
+
+			if (timeRange === 'hour') {
+				intervalMs = 3_600_000;
+				bucketCount = 24;
+			} else if (timeRange === 'day') {
+				intervalMs = 86_400_000;
+				bucketCount = 30;
+			} else if (timeRange === 'week') {
+				intervalMs = 7 * 86_400_000;
+				bucketCount = 12;
+			} else if (timeRange === 'month') {
+				intervalMs = 30 * 86_400_000;
+				bucketCount = 12;
+			} else if (timeRange === 'year') {
+				intervalMs = 365 * 86_400_000;
+				bucketCount = 5;
+			} else if (timeRange === 'all') {
+				intervalMs = 30 * 86_400_000;
+				bucketCount = 24;
+			}
+
+			const since = now - bucketCount * intervalMs;
+			whereClause += whereClause ? ` AND created_at >= ${since}` : `WHERE created_at >= ${since}`;
+
+			const { results } = await db
+				.prepare(`SELECT created_at FROM profile_views ${whereClause} ORDER BY created_at ASC`)
+				.bind(...values)
+				.all<{ created_at: number }>();
+
+			// Initialize buckets
+			const buckets: TimeSeriesBucket[] = [];
+			for (let i = bucketCount - 1; i >= 0; i--) {
+				const start = now - i * intervalMs;
+				const date = new Date(start);
+				let label = '';
+				if (timeRange === 'hour') {
+					label = `${date.getHours().toString().padStart(2, '0')}:00`;
+				} else if (timeRange === 'day') {
+					label = `${date.getMonth() + 1}/${date.getDate()}`;
+				} else if (timeRange === 'week' || timeRange === 'month' || timeRange === 'all') {
+					label = `${date.toLocaleString('default', { month: 'short' })} ${date.getDate()}`;
+				} else {
+					label = `${date.getFullYear()}`;
+				}
+				buckets.push({ label, timestamp: start, count: 0 });
+			}
+
+			// Aggregate query results into corresponding bucket
+			for (const row of results) {
+				const t = Number(row.created_at);
+				const idx = buckets.findIndex((b, i) => {
+					const nextT = i < buckets.length - 1 ? buckets[i + 1].timestamp : Infinity;
+					return t >= b.timestamp && t < nextT;
+				});
+				if (idx !== -1) {
+					buckets[idx].count++;
+				}
+			}
+
+			return buckets;
 		},
 
 		async getViewStats(profileSlug) {

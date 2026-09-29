@@ -29,6 +29,7 @@ import { getProfileBySlug, PROFILES } from '../../../data/profiles';
 import { RETENTION_DAYS, CLEANUP_THRESHOLD } from '../../../server/security-store';
 import { REPORT_RETENTION_DAYS } from '../../../server/board-store';
 import { adminUnauthorized, isAdminRequest, adminNotConfigured, adminConfigured } from '../../../server/admin';
+import { getSiteSettings, updateSiteSettings } from '../../../server/site-settings-store';
 import { serverEnvironment } from '../../../server/env';
 import type { APIContext } from 'astro';
 
@@ -82,10 +83,13 @@ export async function GET(context: APIContext): Promise<Response> {
 		secretPresence[name] = Boolean(env[name]);
 	}
 
+	const dynamicSettings = await getSiteSettings();
+
 	return json({
 		generatedAt: new Date().toISOString(),
 
 		site: { ...SITE },
+		dynamicSettings,
 
 		// Every public knob, grouped by the module that owns it. Each group
 		// names its source file so an operator can go straight to the code.
@@ -193,4 +197,23 @@ export async function GET(context: APIContext): Promise<Response> {
 			defaultProfileExists: Boolean(getProfileBySlug('gizlyy')),
 		},
 	});
+}
+
+export async function POST(context: APIContext): Promise<Response> {
+	if (!(await adminConfigured())) return adminNotConfigured();
+	if (!(await isAdminRequest(context))) return adminUnauthorized();
+
+	let body: Record<string, unknown>;
+	try {
+		body = await context.request.json();
+	} catch {
+		return json({ error: 'invalid_json' }, 400);
+	}
+
+	const result = await updateSiteSettings(body);
+	if (!result.ok) {
+		return json({ error: result.error ?? 'failed_to_update' }, 500);
+	}
+
+	return json({ ok: true, dynamicSettings: result.settings });
 }
