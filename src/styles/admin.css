@@ -537,6 +537,56 @@ html[data-theme='light'] .admin .admin__action[aria-current='true'] {
 	padding: 0.4rem 0.55rem;
 }
 
+/* --- Time-Series Chart ------------------------------------------------ */
+.admin__chart-card {
+	border-radius: var(--radius-lg);
+	padding: 1rem 1.2rem;
+	border: 1px solid var(--glass-border);
+	display: grid;
+	gap: 0.8rem;
+}
+
+.admin__chart-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.admin__chart-viewport {
+	position: relative;
+	inline-size: 100%;
+	block-size: 220px;
+	overflow: hidden;
+}
+
+.admin__chart-svg {
+	inline-size: 100%;
+	block-size: 100%;
+	display: block;
+}
+
+.admin__chart-tooltip {
+	position: absolute;
+	pointer-events: none;
+	padding: 0.35rem 0.65rem;
+	border-radius: var(--radius-xs);
+	background: rgba(8, 14, 24, 0.92);
+	border: 1px solid var(--accent-line);
+	color: var(--text-strong);
+	font-size: var(--text-micro);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+	transform: translate(-50%, -120%);
+	white-space: nowrap;
+	z-index: 10;
+}
+
+html[data-theme='light'] .admin__chart-tooltip {
+	background: rgba(255, 255, 255, 0.95);
+	border-color: rgba(0, 146, 200, 0.45);
+	color: #02121a;
+	box-shadow: 0 4px 12px rgba(0, 40, 100, 0.15);
+}
+
 /* --- Status Badges ----------------------------------------------------- */
 .admin__badge {
 	display: inline-flex;

@@ -94,6 +94,26 @@ export const prerender = false;
 
 				<form class="admin__filters" data-stats-filters style="margin-bottom: 1rem;">
 					<label>
+						<span>Views Scope</span>
+						<select name="scope" data-stats-scope>
+							<option value="global">Global (All Pages)</option>
+							<option value="homepage">Homepage (/)</option>
+							<option value="projects">Projects Category (/projects/)</option>
+							<option value="me">Me / Profile (/gizlyy/)</option>
+						</select>
+					</label>
+					<label>
+						<span>Time Range</span>
+						<select name="timeRange" data-stats-time-range>
+							<option value="hour">Hour (Last 24h)</option>
+							<option value="day" selected>Day (Last 30 days)</option>
+							<option value="week">Week (Last 12 weeks)</option>
+							<option value="month">Month (Last 12 months)</option>
+							<option value="year">Year (Last 5 years)</option>
+							<option value="all">All Time</option>
+						</select>
+					</label>
+					<label>
 						<span>Page Search</span>
 						<input name="pathSearch" type="text" placeholder="e.g. /projects/ or /blog/" data-stats-path-search />
 					</label>
@@ -101,8 +121,26 @@ export const prerender = false;
 						<span>Min Views</span>
 						<input name="minViews" type="number" min="0" value="0" data-stats-min-views />
 					</label>
-					<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Filter Pages</button>
+					<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Update Chart &amp; List</button>
 				</form>
+
+				<!-- Interactive Liquid Glass Time-Series Chart -->
+				<div class="admin__chart-card" data-glass="quiet" style="margin-block: 1.25rem;">
+					<div class="admin__chart-head">
+						<span class="mono" style="font-size: var(--text-micro); color: var(--text-dim);" data-stats-chart-title>
+							VIEWS OVER TIME
+						</span>
+						<span class="mono" style="font-size: var(--text-micro); color: var(--accent-strong);" data-stats-chart-total>
+							0 Total Views
+						</span>
+					</div>
+					<div class="admin__chart-viewport" data-stats-chart-container>
+						<svg class="admin__chart-svg" viewBox="0 0 800 240" preserveAspectRatio="none" data-stats-chart-svg>
+							<!-- Filled gradient area & glowing vector stroke generated at runtime -->
+						</svg>
+						<div class="admin__chart-tooltip mono" data-stats-chart-tooltip hidden></div>
+					</div>
+				</div>
 
 				<div data-stats-traffic-overview />
 				<div class="admin__table-wrap" data-stats-traffic-table style="margin-top: 1rem;" />

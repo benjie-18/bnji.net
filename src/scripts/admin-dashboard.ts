@@ -625,7 +625,146 @@ export function startAdminDashboard(): void {
 			byEndpoint: { surface: string; endpoint: string; count: number }[];
 			retentionDays: number;
 		} | null);
+		timeSeries?: { label: string; timestamp: number; count: number }[];
 	};
+
+	function renderChart(
+		svg: SVGElement,
+		tooltip: HTMLElement,
+		buckets: { label: string; timestamp: number; count: number }[],
+	): void {
+		svg.replaceChildren();
+		if (!buckets || buckets.length === 0) return;
+
+		const W = 800;
+		const H = 240;
+		const padX = 50;
+		const padY = 30;
+		const innerW = W - padX * 2;
+		const innerH = H - padY * 2;
+
+		const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+		const N = buckets.length;
+
+		// Calculate coordinates
+		const pts = buckets.map((b, i) => {
+			const x = padX + (i / Math.max(1, N - 1)) * innerW;
+			const y = padY + innerH - (b.count / maxCount) * innerH;
+			return { x, y, ...b };
+		});
+
+		// Gradient definition
+		const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+		const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+		grad.id = 'chartGrad';
+		grad.setAttribute('x1', '0');
+		grad.setAttribute('y1', '0');
+		grad.setAttribute('x2', '0');
+		grad.setAttribute('y2', '1');
+
+		const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+		stop1.setAttribute('offset', '0%');
+		stop1.setAttribute('stop-color', 'var(--accent)');
+		stop1.setAttribute('stop-opacity', '0.45');
+
+		const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+		stop2.setAttribute('offset', '100%');
+		stop2.setAttribute('stop-color', 'var(--accent)');
+		stop2.setAttribute('stop-opacity', '0.02');
+
+		grad.appendChild(stop1);
+		grad.appendChild(stop2);
+		defs.appendChild(grad);
+		svg.appendChild(defs);
+
+		// Grid lines
+		const gridGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+		for (let step = 0; step <= 4; step++) {
+			const gy = padY + (step / 4) * innerH;
+			const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+			line.setAttribute('x1', String(padX));
+			line.setAttribute('y1', String(gy));
+			line.setAttribute('x2', String(W - padX));
+			line.setAttribute('y2', String(gy));
+			line.setAttribute('stroke', 'var(--glass-border)');
+			line.setAttribute('stroke-width', '1');
+			line.setAttribute('stroke-dasharray', '4 4');
+			gridGroup.appendChild(line);
+		}
+		svg.appendChild(gridGroup);
+
+		// Area path
+		const areaD = `M ${pts[0].x},${padY + innerH} ` +
+			pts.map((p) => `L ${p.x},${p.y}`).join(' ') +
+			` L ${pts[pts.length - 1].x},${padY + innerH} Z`;
+		const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+		area.setAttribute('d', areaD);
+		area.setAttribute('fill', 'url(#chartGrad)');
+		svg.appendChild(area);
+
+		// Line stroke path
+		const lineD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+		const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+		line.setAttribute('d', lineD);
+		line.setAttribute('fill', 'none');
+		line.setAttribute('stroke', 'var(--accent-strong)');
+		line.setAttribute('stroke-width', '3');
+		line.setAttribute('stroke-linecap', 'round');
+		line.setAttribute('stroke-linejoin', 'round');
+		svg.appendChild(line);
+
+		// Data Nodes & Axis labels
+		const nodesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+		const stepSkip = Math.max(1, Math.floor(N / 7));
+
+		pts.forEach((p, i) => {
+			// Dot
+			const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+			circle.setAttribute('cx', String(p.x));
+			circle.setAttribute('cy', String(p.y));
+			circle.setAttribute('r', '4');
+			circle.setAttribute('fill', 'var(--accent-strong)');
+			circle.setAttribute('stroke', 'var(--bg)');
+			circle.setAttribute('stroke-width', '2');
+			nodesGroup.appendChild(circle);
+
+			// Axis text
+			if (i % stepSkip === 0 || i === N - 1) {
+				const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+				text.setAttribute('x', String(p.x));
+				text.setAttribute('y', String(H - 8));
+				text.setAttribute('text-anchor', 'middle');
+				text.setAttribute('fill', 'var(--text-dim)');
+				text.setAttribute('font-size', '11');
+				text.setAttribute('font-family', 'var(--font-mono)');
+				text.textContent = p.label;
+				nodesGroup.appendChild(text);
+			}
+		});
+		svg.appendChild(nodesGroup);
+
+		// Hover interaction
+		const container = svg.parentElement;
+		if (container) {
+			container.onpointermove = (e) => {
+				const rect = container.getBoundingClientRect();
+				const relX = (e.clientX - rect.left) / rect.width;
+				const idx = Math.min(N - 1, Math.max(0, Math.round(relX * (N - 1))));
+				const pt = pts[idx];
+
+				if (pt) {
+					tooltip.textContent = `${pt.label}: ${pt.count} view${pt.count === 1 ? '' : 's'}`;
+					tooltip.style.left = `${(pt.x / W) * 100}%`;
+					tooltip.style.top = `${(pt.y / H) * 100}%`;
+					tooltip.hidden = false;
+				}
+			};
+
+			container.onpointerleave = () => {
+				tooltip.hidden = true;
+			};
+		}
+	}
 
 	/**
 	 * Render a group of stat rows, or a plain explanation when the group has
@@ -705,10 +844,26 @@ export function startAdminDashboard(): void {
 	}
 
 	async function loadStats(): Promise<void> {
-		const data = await guard(() => adminFetch<StatsPayload>('/api/admin/stats'));
+		const scope = valueOf(root, '[data-stats-scope]') || 'global';
+		const timeRange = valueOf(root, '[data-stats-time-range]') || 'day';
+
+		const data = await guard(() => adminFetch<StatsPayload>(`/api/admin/stats?scope=${encodeURIComponent(scope)}&timeRange=${encodeURIComponent(timeRange)}`));
 		if (!data || active !== 'stats') return;
 
 		say(`Updated ${formatTime(data.generatedAt)}`);
+
+		// Render interactive SVG Chart
+		const svgEl = root.querySelector<SVGElement>('[data-stats-chart-svg]');
+		const tooltipEl = root.querySelector<HTMLElement>('[data-stats-chart-tooltip]');
+		const chartTotalEl = root.querySelector<HTMLElement>('[data-stats-chart-total]');
+		const chartTitleEl = root.querySelector<HTMLElement>('[data-stats-chart-title]');
+
+		if (data.timeSeries && svgEl && tooltipEl) {
+			renderChart(svgEl, tooltipEl, data.timeSeries);
+			const totalInSeries = data.timeSeries.reduce((s, b) => s + b.count, 0);
+			if (chartTotalEl) chartTotalEl.textContent = `${totalInSeries} Views`;
+			if (chartTitleEl) chartTitleEl.textContent = `${scope.toUpperCase()} VIEWS (${timeRange.toUpperCase()})`;
+		}
 
 		/* traffic — Global site traffic analytics */
 		renderFacts(
