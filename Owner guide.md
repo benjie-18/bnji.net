@@ -429,6 +429,8 @@ npx wrangler d1 migrations apply bnji-board --remote
 npx wrangler d1 migrations list bnji-board --remote
 ```
 
+The database setup includes `0009_site_settings.sql` for key-value configuration overrides managed dynamically from `/admin` → **Configuration**.
+
 Wrangler must be authenticated to the correct Cloudflare account. If prompted, run `npx wrangler login`.
 
 The merged Paint update includes migration `0007_paint_stickers_activity.sql`. Applying migrations runs those that are pending; it does not create another database. Check the migration list before and after applying. Cloudflare Workers Builds deploying code does not, by itself, apply D1 migrations.

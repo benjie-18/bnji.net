@@ -367,10 +367,113 @@ export const prerender = false;
 
 		<!-- Configuration -->
 		<section class="admin__panel" data-panel="config" hidden>
-			<p class="admin__hint">
-				Values are read from the same modules the running site uses, so this can never
-				drift from actual behaviour. Secrets are reported as present or absent only —
-				never returned.
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">Interactive Site Configuration Editor</h2>
+				<p class="admin__hint">
+					Modify site settings, limits, features, and identity copy dynamically. Changes save to D1 and apply immediately across server routes without needing a code re-deploy.
+				</p>
+				<form class="admin__form" data-site-settings-form>
+					<div class="admin__cards">
+						<div class="admin__config-group">
+							<h3>Message Board Policy</h3>
+							<label class="admin__field">
+								<span>Board Storage Provider</span>
+								<select name="boardProvider" data-setting-input="boardProvider">
+									<option value="d1">Cloudflare D1 (Recommended)</option>
+									<option value="rest">External REST API</option>
+								</select>
+							</label>
+							<label class="admin__field">
+								<span>Max Text Length (characters)</span>
+								<input type="number" name="boardMaxTextLength" min="10" max="1000" data-setting-input="boardMaxTextLength" />
+							</label>
+							<label class="admin__field">
+								<span>Post Cooldown (seconds)</span>
+								<input type="number" name="boardPostCooldownSeconds" min="0" max="3600" data-setting-input="boardPostCooldownSeconds" />
+							</label>
+							<label class="admin__field">
+								<span>Hourly Post Limit per Client</span>
+								<input type="number" name="boardHourlyPostLimit" min="1" max="1000" data-setting-input="boardHourlyPostLimit" />
+							</label>
+							<label class="admin__field">
+								<span>Polling Interval (ms)</span>
+								<input type="number" name="boardPollIntervalMs" min="0" max="120000" step="1000" data-setting-input="boardPollIntervalMs" />
+							</label>
+						</div>
+
+						<div class="admin__config-group">
+							<h3>Direct Message Integration</h3>
+							<label class="admin__field">
+								<span>DM Delivery Provider</span>
+								<select name="dmProvider" data-setting-input="dmProvider">
+									<option value="none">Disabled (No delivery)</option>
+									<option value="discord">Discord Webhook</option>
+									<option value="ntfy">ntfy Notification</option>
+								</select>
+							</label>
+							<label class="admin__field">
+								<span>Max Message Length (characters)</span>
+								<input type="number" name="dmMaxLength" min="50" max="5000" data-setting-input="dmMaxLength" />
+							</label>
+							<label class="admin__field">
+								<span>Cooldown (seconds)</span>
+								<input type="number" name="dmCooldownSeconds" min="0" max="3600" data-setting-input="dmCooldownSeconds" />
+							</label>
+						</div>
+
+						<div class="admin__config-group">
+							<h3>Identity &amp; Branding</h3>
+							<label class="admin__field">
+								<span>Site Wordmark / Name</span>
+								<input type="text" name="siteName" maxlength="50" data-setting-input="siteName" />
+							</label>
+							<label class="admin__field">
+								<span>Full Title</span>
+								<input type="text" name="siteTitle" maxlength="100" data-setting-input="siteTitle" />
+							</label>
+							<label class="admin__field">
+								<span>Site Description</span>
+								<input type="text" name="siteDescription" maxlength="300" data-setting-input="siteDescription" />
+							</label>
+							<label class="admin__field">
+								<span>Author Name</span>
+								<input type="text" name="authorName" maxlength="100" data-setting-input="authorName" />
+							</label>
+							<label class="admin__field">
+								<span>Author Location</span>
+								<input type="text" name="authorLocation" maxlength="100" data-setting-input="authorLocation" />
+							</label>
+						</div>
+
+						<div class="admin__config-group">
+							<h3>System &amp; Experience Defaults</h3>
+							<label class="admin__field">
+								<span>Default Theme</span>
+								<select name="defaultTheme" data-setting-input="defaultTheme">
+									<option value="dark">Dark Space Theme</option>
+									<option value="light">Frutiger Aero Light Theme</option>
+								</select>
+							</label>
+							<label class="admin__field admin__check" style="margin-top: 0.8rem;">
+								<input type="checkbox" name="introEnabled" data-setting-input="introEnabled" />
+								<span>Scroll Intro Enabled by Default</span>
+							</label>
+						</div>
+					</div>
+
+					<p class="admin__error" role="alert" data-settings-save-error hidden />
+					<p class="admin__hint" data-settings-save-status hidden />
+
+					<div class="admin__actions" style="margin-top: 1rem;">
+						<button class="glass-button glass-button--primary" data-glass="" type="submit" data-settings-save-btn>
+							Save Configuration
+						</button>
+					</div>
+				</form>
+			</div>
+
+			<p class="admin__hint" style="margin-top: 1.5rem;">
+				Below is the complete low-level runtime configuration dump and environment state. Secrets are reported as present or absent only — never returned.
 			</p>
 			<div class="admin__cards" data-config-groups />
 		</section>
