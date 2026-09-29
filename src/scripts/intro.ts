@@ -52,9 +52,14 @@ export function initIntro(): void {
 		return t * t * (3 - 2 * t);
 	};
 
-	const update = () => {
+	let denom = 1;
+	const measure = () => {
 		const spacerHeight = spacer.offsetHeight;
-		const denom = Math.max(1, spacerHeight - window.innerHeight);
+		denom = Math.max(1, spacerHeight - window.innerHeight);
+	};
+	measure();
+
+	const update = () => {
 		const p = Math.min(1, Math.max(0, window.scrollY / denom));
 
 		if (p <= 0.001) {
@@ -92,6 +97,13 @@ export function initIntro(): void {
 
 	const schedule = createFrameScheduler(update);
 	window.addEventListener('scroll', schedule, { passive: true });
-	window.addEventListener('resize', schedule, { passive: true });
+	window.addEventListener(
+		'resize',
+		() => {
+			measure();
+			schedule();
+		},
+		{ passive: true },
+	);
 	update();
 }

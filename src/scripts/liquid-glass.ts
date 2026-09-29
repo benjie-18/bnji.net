@@ -13,8 +13,16 @@
  * 6. Interactive Illumination & Subtle Elastic Deformation.
  * 7. Concentric Geometry & Glass Groups.
  * 8. Performance Caching: displacement maps cached by geometry bucket; pointer
- *    moves never regenerate maps.
+ *    moves never regenerate maps. The whole SVG filter library is also built
+ *    LAZILY: only when the engine actually supports url() filters inside
+ *    backdrop-filter AND the visitor has advancedGlass on. Generating five
+ *    per-pixel normal maps (up to 320x220) and five base64 PNG data URLs for
+ *    an effect the browser cannot render — or the visitor has switched off —
+ *    was pure boot cost with no visual result.
  */
+
+import { createFrameScheduler, hasFinePointer, prefersReducedMotion } from './environment';
+import { getSettings, subscribeSettings } from './settings';
 
 export type GlassGeometry = {
 	width: number;
@@ -178,55 +186,6 @@ export function initLiquidGlass(): void {
 		return;
 	}
 
-	// Build SVG displacement filter collection
-	const svgNS = 'http://www.w3.org/2000/svg';
-	let svgRoot: Element | null = document.getElementById('liquid-glass-svg-defs');
-	if (!svgRoot) {
-		const newSvg = document.createElementNS(svgNS, 'svg');
-		newSvg.id = 'liquid-glass-svg-defs';
-		newSvg.setAttribute('style', 'position:absolute;width:0;height:0;pointer-events:none;overflow:hidden;');
-		newSvg.setAttribute('aria-hidden', 'true');
-		document.body.appendChild(newSvg);
-		svgRoot = newSvg;
-	}
-
-	const defs = document.createElementNS(svgNS, 'defs');
-
-	// Populate filters for standard geometry buckets
-	(Object.keys(BUCKETS) as BucketKey[]).forEach((bucketKey) => {
-		const bucket = BUCKETS[bucketKey];
-		const mapUrl = generateRefractionMap({
-			...bucket,
-			refractiveIndex: 1.5168,
-			dispersion: bucketKey === 'pill' || bucketKey === 'navbar',
-		});
-
-		const filter = document.createElementNS(svgNS, 'filter');
-		filter.id = `lg-refract-${bucketKey}`;
-		filter.setAttribute('x', '-12%');
-		filter.setAttribute('y', '-12%');
-		filter.setAttribute('width', '124%');
-		filter.setAttribute('height', '124%');
-		filter.setAttribute('color-interpolation-filters', 'sRGB');
-
-		const feImage = document.createElementNS(svgNS, 'feImage');
-		feImage.setAttribute('href', mapUrl);
-		feImage.setAttribute('result', 'dispMap');
-		filter.appendChild(feImage);
-
-		const feDisp = document.createElementNS(svgNS, 'feDisplacementMap');
-		feDisp.setAttribute('in', 'SourceGraphic');
-		feDisp.setAttribute('in2', 'dispMap');
-		feDisp.setAttribute('scale', bucketKey === 'panel' ? '24' : '18');
-		feDisp.setAttribute('xChannelSelector', 'R');
-		feDisp.setAttribute('yChannelSelector', 'G');
-		filter.appendChild(feDisp);
-
-		defs.appendChild(filter);
-	});
-
-	svgRoot?.appendChild(defs);
-
 	// Test SVG filter support in backdrop-filter
 	const testDiv = document.createElement('div');
 	testDiv.style.backdropFilter = 'url(#lg-refract-pill)';
@@ -236,11 +195,64 @@ export function initLiquidGlass(): void {
 		document.documentElement.classList.add('supports-optical-refraction');
 	}
 
-	// Concentric Geometry and Interactive Illumination tracking
+	// Build SVG displacement filter collection lazily only when optical refraction is supported and active
+	const buildSvgFilters = () => {
+		if (document.getElementById('liquid-glass-svg-defs')) return;
+
+		const svgNS = 'http://www.w3.org/2000/svg';
+		const newSvg = document.createElementNS(svgNS, 'svg');
+		newSvg.id = 'liquid-glass-svg-defs';
+		newSvg.setAttribute('style', 'position:absolute;width:0;height:0;pointer-events:none;overflow:hidden;');
+		newSvg.setAttribute('aria-hidden', 'true');
+
+		const defs = document.createElementNS(svgNS, 'defs');
+
+		// Populate filters for standard geometry buckets
+		(Object.keys(BUCKETS) as BucketKey[]).forEach((bucketKey) => {
+			const bucket = BUCKETS[bucketKey];
+			const mapUrl = generateRefractionMap({
+				...bucket,
+				refractiveIndex: 1.5168,
+				dispersion: bucketKey === 'pill' || bucketKey === 'navbar',
+			});
+
+			const filter = document.createElementNS(svgNS, 'filter');
+			filter.id = `lg-refract-${bucketKey}`;
+			filter.setAttribute('x', '-12%');
+			filter.setAttribute('y', '-12%');
+			filter.setAttribute('width', '124%');
+			filter.setAttribute('height', '124%');
+			filter.setAttribute('color-interpolation-filters', 'sRGB');
+
+			const feImage = document.createElementNS(svgNS, 'feImage');
+			feImage.setAttribute('href', mapUrl);
+			feImage.setAttribute('result', 'dispMap');
+			filter.appendChild(feImage);
+
+			const feDisp = document.createElementNS(svgNS, 'feDisplacementMap');
+			feDisp.setAttribute('in', 'SourceGraphic');
+			feDisp.setAttribute('in2', 'dispMap');
+			feDisp.setAttribute('scale', bucketKey === 'panel' ? '24' : '18');
+			feDisp.setAttribute('xChannelSelector', 'R');
+			feDisp.setAttribute('yChannelSelector', 'G');
+			filter.appendChild(feDisp);
+
+			defs.appendChild(filter);
+		});
+
+		newSvg.appendChild(defs);
+		document.body.appendChild(newSvg);
+	};
+
+	let advancedGlass = getSettings().advancedGlass;
+	if (supportsSvgBackdrop && advancedGlass) {
+		buildSvgFilters();
+	}
+
+	// Concentric Geometry: Batch DOM reads first to eliminate layout thrashing
 	const glassSurfaces = Array.from(document.querySelectorAll<HTMLElement>('[data-glass]'));
 
-	glassSurfaces.forEach((surface) => {
-		// Determine best bucket match by aspect ratio
+	const configs = glassSurfaces.map((surface) => {
 		const rect = surface.getBoundingClientRect();
 		const ratio = rect.width / Math.max(1, rect.height);
 		let bucket: BucketKey = 'card';
@@ -249,33 +261,63 @@ export function initLiquidGlass(): void {
 		else if (Math.abs(ratio - 1) < 0.25) bucket = 'square';
 		else if (rect.height > 200) bucket = 'panel';
 
-		surface.style.setProperty('--glass-bucket-filter', `url(#lg-refract-${bucket})`);
-
-		// Concentric child radius setup
 		const computed = window.getComputedStyle(surface);
 		const outerRadius = parseFloat(computed.borderRadius) || 16;
 		const padding = parseFloat(computed.paddingLeft) || 16;
 		const innerRadius = Math.max(4, outerRadius - padding * 0.5);
-		surface.style.setProperty('--glass-concentric-radius', `${innerRadius}px`);
+
+		return {
+			surface,
+			bucketFilter: `url(#lg-refract-${bucket})`,
+			concentricRadius: `${innerRadius}px`,
+			padding: `${padding}px`,
+		};
 	});
 
-	// Subtle pointer illumination & deformation
-	const prefersReducedMotion =
-		window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+	// Batch DOM writes together
+	for (const { surface, bucketFilter, concentricRadius, padding } of configs) {
+		surface.style.setProperty('--glass-bucket-filter', bucketFilter);
+		surface.style.setProperty('--glass-concentric-radius', concentricRadius);
+		surface.style.setProperty('--parent-pad', padding);
+	}
 
-	if (!prefersReducedMotion) {
+	// Subtle pointer illumination & deformation: fine pointer only, gated by reduced-motion and advancedGlass
+	if (!prefersReducedMotion() && hasFinePointer()) {
+		subscribeSettings((settings) => {
+			advancedGlass = settings.advancedGlass;
+			if (supportsSvgBackdrop && advancedGlass) {
+				buildSvgFilters();
+			}
+		});
+
+		let pendingTarget: HTMLElement | null = null;
+		let pendingX = 0;
+		let pendingY = 0;
+
+		const flush = createFrameScheduler(() => {
+			if (!pendingTarget) return;
+			const rect = pendingTarget.getBoundingClientRect();
+			if (rect.width > 0 && rect.height > 0) {
+				const x = ((pendingX - rect.left) / rect.width) * 100;
+				const y = ((pendingY - rect.top) / rect.height) * 100;
+				pendingTarget.style.setProperty('--glass-spec-x', `${x.toFixed(1)}%`);
+				pendingTarget.style.setProperty('--glass-spec-y', `${y.toFixed(1)}%`);
+			}
+		});
+
 		window.addEventListener(
 			'pointermove',
 			(e) => {
-				const target = (e.target as HTMLElement)?.closest?.<HTMLElement>('[data-glass~="interactive"], [data-glass~="raised"]');
+				if (!advancedGlass) return;
+				const target = (e.target as HTMLElement)?.closest?.<HTMLElement>(
+					'[data-glass~="interactive"], [data-glass~="raised"]',
+				);
 				if (!target) return;
 
-				const rect = target.getBoundingClientRect();
-				const x = ((e.clientX - rect.left) / rect.width) * 100;
-				const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-				target.style.setProperty('--glass-spec-x', `${x.toFixed(1)}%`);
-				target.style.setProperty('--glass-spec-y', `${y.toFixed(1)}%`);
+				pendingTarget = target;
+				pendingX = e.clientX;
+				pendingY = e.clientY;
+				flush();
 			},
 			{ passive: true },
 		);

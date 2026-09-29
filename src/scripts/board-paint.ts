@@ -19,8 +19,10 @@ import {
 	rebaseStickerOperations as rebaseStickerQueue,
 	summarizeStickerActions,
 	stickerResizeBounds,
+	quantizePixelData,
 	type PaintSticker,
 	type Point,
+	type ResizeBounds,
 	type ResizeCorner,
 	type StickerOperation,
 	type StickerRect,
@@ -188,15 +190,28 @@ export function initBoardPaint(): void {
 		renderOverlay();
 	};
 
+	let cachedCanvasRect: DOMRect | null = null;
+	const getCanvasRect = (): DOMRect => {
+		if (!cachedCanvasRect) {
+			cachedCanvasRect = inputCanvas.getBoundingClientRect();
+		}
+		return cachedCanvasRect;
+	};
+	const invalidateCanvasRect = (): void => {
+		cachedCanvasRect = null;
+	};
+
 	if (toolGroup && typeof ResizeObserver !== 'undefined') {
 		new ResizeObserver(() => placeToolIndicator(true)).observe(toolGroup);
 	}
 	// The handles are sized in CSS pixels, so they have to be redrawn when the
 	// canvas itself changes size.
 	window.addEventListener('resize', () => {
+		invalidateCanvasRect();
 		placeToolIndicator(true);
 		renderOverlay();
 	}, { passive: true });
+	window.addEventListener('scroll', invalidateCanvasRect, { passive: true });
 	window.addEventListener('bnji:settingschange', () => {
 		placeToolIndicator(true);
 		selectionColor = getComputedStyle(root).getPropertyValue('--accent-strong').trim();
@@ -263,6 +278,10 @@ export function initBoardPaint(): void {
 	 * The server requires the stored PNG's real pixel dimensions to match the
 	 * sticker's width and height, so a resize is not a rectangle-only change:
 	 * without this, every publish after a resize would be rejected.
+	 *
+	 * As stickers get larger, raw high-smoothing interpolation inflates entropy.
+	 * We progressively optimize and compress the image so that larger sizes stay
+	 * within the storage limit and can be resized freely.
 	 */
 	const encodeStickerAt = (id: string, nextWidth: number, nextHeight: number): string | null => {
 		const master = stickerMasters.get(id);
@@ -275,7 +294,43 @@ export function initBoardPaint(): void {
 		context.imageSmoothingEnabled = true;
 		context.imageSmoothingQuality = 'high';
 		context.drawImage(master, 0, 0, nextWidth, nextHeight);
-		return canvas.toDataURL('image/png');
+
+		let image = canvas.toDataURL('image/png');
+		if (image.length <= PAINT_CONFIG.maxStickerImageChars) return image;
+
+		// Clean transparent boundary fringes and snap near-opaque pixels.
+		let imgData = context.getImageData(0, 0, nextWidth, nextHeight);
+		quantizePixelData(imgData.data, 8, 6);
+		context.putImageData(imgData, 0, 0);
+		image = canvas.toDataURL('image/png');
+		if (image.length <= PAINT_CONFIG.maxStickerImageChars) return image;
+
+		// Progressively quantize colors so larger sizes compress under the storage limit.
+		for (const bits of [6, 5, 4, 3]) {
+			context.drawImage(master, 0, 0, nextWidth, nextHeight);
+			imgData = context.getImageData(0, 0, nextWidth, nextHeight);
+			quantizePixelData(imgData.data, bits, 6);
+			context.putImageData(imgData, 0, 0);
+			image = canvas.toDataURL('image/png');
+			if (image.length <= PAINT_CONFIG.maxStickerImageChars) return image;
+		}
+
+		// Fallback for extreme cases: nearest-neighbor from master preserves source pixels cleanly.
+		context.clearRect(0, 0, nextWidth, nextHeight);
+		context.imageSmoothingEnabled = false;
+		context.drawImage(master, 0, 0, nextWidth, nextHeight);
+		image = canvas.toDataURL('image/png');
+		if (image.length <= PAINT_CONFIG.maxStickerImageChars) return image;
+
+		for (const bits of [5, 4, 3]) {
+			imgData = context.getImageData(0, 0, nextWidth, nextHeight);
+			quantizePixelData(imgData.data, bits, 6);
+			context.putImageData(imgData, 0, 0);
+			image = canvas.toDataURL('image/png');
+			if (image.length <= PAINT_CONFIG.maxStickerImageChars) return image;
+		}
+
+		return image;
 	};
 
 	/**
@@ -289,7 +344,8 @@ export function initBoardPaint(): void {
 	 */
 	const renderStickerLayer = (): void => {
 		stickerContext.clearRect(0, 0, width, height);
-		for (const original of effectiveStickers()) {
+		const current = effectiveStickers();
+		for (const original of current) {
 			const rect = liveRect(original);
 			rememberStickerMaster(original);
 			let bitmap = stickerImages.get(original.id);
@@ -306,8 +362,10 @@ export function initBoardPaint(): void {
 				stickerContext.drawImage(bitmap, rect.x, rect.y, rect.width, rect.height);
 			}
 		}
-		pruneStickerMasters();
-		renderOverlay();
+		if (!activeStickerDrag && !activeStickerResize) {
+			pruneStickerMasters();
+		}
+		renderOverlay(current);
 	};
 
 	const compressSticker = async (file: File): Promise<PaintSticker> => {
@@ -329,7 +387,17 @@ export function initBoardPaint(): void {
 			const context = resized.getContext('2d');
 			if (!context) throw new Error('Could not resize that sticker image.');
 			context.drawImage(bitmap, 0, 0, stickerWidth, stickerHeight);
-			const image = resized.toDataURL('image/png');
+			let image = resized.toDataURL('image/png');
+			if (image.length > PAINT_CONFIG.maxStickerImageChars) {
+				for (const bits of [7, 6, 5, 4, 3]) {
+					context.drawImage(bitmap, 0, 0, stickerWidth, stickerHeight);
+					const imgData = context.getImageData(0, 0, stickerWidth, stickerHeight);
+					quantizePixelData(imgData.data, bits, 6);
+					context.putImageData(imgData, 0, 0);
+					image = resized.toDataURL('image/png');
+					if (image.length <= PAINT_CONFIG.maxStickerImageChars) break;
+				}
+			}
 			if (image.length > PAINT_CONFIG.maxStickerImageChars) throw new Error('That sticker is too detailed after resizing.');
 			return {
 				id: crypto.randomUUID(),
@@ -468,14 +536,14 @@ export function initBoardPaint(): void {
 	 * flattened into the published bitmap and the exported PNG, and the local
 	 * layer carries real edits - so handles drawn there would end up published.
 	 */
-	const renderOverlay = (): void => {
+	const renderOverlay = (stickers?: PaintSticker[]): void => {
 		clearPreview();
 		drawActivePreview();
-		drawSelectionChrome();
+		drawSelectionChrome(stickers);
 	};
 
 	const getPoint = (event: PointerEvent): Point => {
-		const rect = inputCanvas.getBoundingClientRect();
+		const rect = getCanvasRect();
 		return {
 			x: Math.max(0, Math.min(width, ((event.clientX - rect.left) / rect.width) * width)),
 			y: Math.max(0, Math.min(height, ((event.clientY - rect.top) / rect.height) * height)),
@@ -483,10 +551,10 @@ export function initBoardPaint(): void {
 	};
 
 	/** The canvas as laid out now, relative to the 1200 x 750 logical grid. */
-	const canvasScale = (): number => displayScale(inputCanvas.getBoundingClientRect().width, width);
+	const canvasScale = (): number => displayScale(getCanvasRect().width, width);
 
-	const selectedSticker = (): PaintSticker | undefined =>
-		effectiveStickers().find((sticker) => sticker.id === selectedStickerId);
+	const selectedSticker = (stickers: PaintSticker[] = effectiveStickers()): PaintSticker | undefined =>
+		stickers.find((sticker) => sticker.id === selectedStickerId);
 
 	/**
 	 * Selection chrome: an outline and four corner handles.
@@ -494,9 +562,9 @@ export function initBoardPaint(): void {
 	 * Only drawn while the sticker tool is active, so the canvas does not look
 	 * like something that can be grabbed while the visitor is drawing.
 	 */
-	const drawSelectionChrome = (): void => {
+	const drawSelectionChrome = (stickers?: PaintSticker[]): void => {
 		if (activeTool !== 'sticker' || activeDrawing) return;
-		const selected = selectedSticker();
+		const selected = selectedSticker(stickers);
 		if (!selected) return;
 		const rect = liveRect(selected);
 		const scale = canvasScale();
@@ -869,7 +937,34 @@ export function initBoardPaint(): void {
 		announce(`Sticker resized to ${nextWidth} × ${nextHeight} locally. Sync & refresh to publish.`);
 	};
 
+	let renderStickersFrame = 0;
+	const scheduleStickerRender = (): void => {
+		if (renderStickersFrame) return;
+		renderStickersFrame = window.requestAnimationFrame(() => {
+			renderStickersFrame = 0;
+			renderStickerLayer();
+		});
+	};
+
+	let previewFrame = 0;
+	const schedulePreviewRender = (): void => {
+		if (previewFrame) return;
+		previewFrame = window.requestAnimationFrame(() => {
+			previewFrame = 0;
+			drawActivePreview();
+		});
+	};
+
 	const finishDrawing = (event: PointerEvent): void => {
+		if (renderStickersFrame) {
+			window.cancelAnimationFrame(renderStickersFrame);
+			renderStickersFrame = 0;
+		}
+		if (previewFrame) {
+			window.cancelAnimationFrame(previewFrame);
+			previewFrame = 0;
+		}
+		invalidateCanvasRect();
 		if (activeStickerResize?.pointerId === event.pointerId) {
 			const resize = activeStickerResize;
 			activeStickerResize = null;
@@ -932,6 +1027,7 @@ export function initBoardPaint(): void {
 	inputCanvas.addEventListener('pointerdown', (event) => {
 		if (syncing || (event.pointerType === 'mouse' && event.button !== 0)) return;
 		event.preventDefault();
+		invalidateCanvasRect();
 		const point = getPoint(event);
 
 		if (activeTool === 'sticker') {
@@ -1027,6 +1123,7 @@ export function initBoardPaint(): void {
 	inputCanvas.addEventListener('pointerleave', () => {
 		// A captured pointer keeps reporting moves while the gesture runs, so
 		// leaving the canvas mid-drag must not reset the cursor underneath it.
+		invalidateCanvasRect();
 		if (activeDrawing || activeStickerDrag || activeStickerResize || erasingPointerId !== null) return;
 		setStickerCursor('');
 	});
@@ -1058,7 +1155,7 @@ export function initBoardPaint(): void {
 			activeStickerResize.y = next.y;
 			activeStickerResize.width = next.width;
 			activeStickerResize.height = next.height;
-			renderStickerLayer();
+			scheduleStickerRender();
 			return;
 		}
 
@@ -1067,7 +1164,7 @@ export function initBoardPaint(): void {
 			if (sticker && activeStickerDrag) {
 				activeStickerDrag.x = Math.max(0, Math.min(width - sticker.width, point.x - activeStickerDrag.offsetX));
 				activeStickerDrag.y = Math.max(0, Math.min(height - sticker.height, point.y - activeStickerDrag.offsetY));
-				renderStickerLayer();
+				scheduleStickerRender();
 			}
 			return;
 		}
@@ -1085,11 +1182,20 @@ export function initBoardPaint(): void {
 				activeDrawing.points.push(point);
 			}
 		}
-		drawActivePreview();
+		schedulePreviewRender();
 	});
 
 	inputCanvas.addEventListener('pointerup', finishDrawing);
 	inputCanvas.addEventListener('pointercancel', (event) => {
+		if (renderStickersFrame) {
+			window.cancelAnimationFrame(renderStickersFrame);
+			renderStickersFrame = 0;
+		}
+		if (previewFrame) {
+			window.cancelAnimationFrame(previewFrame);
+			previewFrame = 0;
+		}
+		invalidateCanvasRect();
 		if (activeStickerDrag?.pointerId === event.pointerId) {
 			activeStickerDrag = null;
 			renderStickerLayer();
