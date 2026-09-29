@@ -537,6 +537,44 @@ html[data-theme='light'] .admin .admin__action[aria-current='true'] {
 	padding: 0.4rem 0.55rem;
 }
 
+/* --- Status Badges ----------------------------------------------------- */
+.admin__badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.2rem 0.55rem;
+	border-radius: var(--radius-pill);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	font-weight: 600;
+}
+
+.admin__badge--visible {
+	background: rgba(121, 230, 176, 0.15);
+	color: #79e6b0;
+	border: 1px solid rgba(121, 230, 176, 0.4);
+}
+
+.admin__badge--reported {
+	background: rgba(255, 214, 138, 0.18);
+	color: #ffd68a;
+	border: 1px solid rgba(255, 214, 138, 0.45);
+}
+
+.admin__badge--hidden {
+	background: rgba(251, 146, 60, 0.18);
+	color: #fb923c;
+	border: 1px solid rgba(251, 146, 60, 0.45);
+}
+
+.admin__badge--deleted {
+	background: rgba(255, 154, 139, 0.18);
+	color: #ff9a8b;
+	border: 1px solid rgba(255, 154, 139, 0.45);
+}
+
 /* --- Music playlist ----------------------------------------------------- */
 
 /* The draft form is a card whose fields read better in two columns than in one

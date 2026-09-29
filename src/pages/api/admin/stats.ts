@@ -74,14 +74,14 @@ export async function GET(context: APIContext): Promise<Response> {
 	} = { profiles: [], siteTotal: 0, note: 'One view per session per day, counted by the profile analytics store.' };
 
 	if (profileStore) {
-		for (const profile of PROFILES) {
-			try {
-				const stats = await profileStore.getViewStats(profile.slug);
-				traffic.profiles.push({ slug: profile.slug, name: profile.displayName, ...stats });
-				traffic.siteTotal += stats.total;
-			} catch (error) {
-				console.warn('[bnji] stats: view stats failed for', profile.slug, error);
+		try {
+			const trackedPages = await profileStore.getAllTrackedPages();
+			for (const p of trackedPages) {
+				traffic.profiles.push(p);
+				traffic.siteTotal += p.total;
 			}
+		} catch (error) {
+			console.warn('[bnji] stats: view stats failed', error);
 		}
 	}
 

@@ -66,7 +66,7 @@ export const prerender = false;
 				Overview
 			</button>
 			<button class="admin__tab" type="button" data-tab="board" aria-selected="false">
-				Message board
+				Boards
 			</button>
 			<button class="admin__tab" type="button" data-tab="playlist" aria-selected="false">
 				Playlist
@@ -142,10 +142,14 @@ export const prerender = false;
 					<span>Surface</span>
 					<select name="surface" data-filter-surface>
 						<option value="">All surfaces</option>
-						<option value="profile">Profile</option>
+						<option value="profile">Profile &amp; Pages</option>
 						<option value="board">Message board</option>
 						<option value="dm">Direct message</option>
 					</select>
+				</label>
+				<label>
+					<span>Page / Path</span>
+					<input name="path" type="text" placeholder="/projects/ or /blog/…" data-filter-path />
 				</label>
 				<label>
 					<span>IP address</span>
@@ -166,42 +170,49 @@ export const prerender = false;
 				<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
 			</form>
 			<p class="admin__hint">
-				Filter by device fingerprint to see everything one device did, across every surface.
+				Filter by page path, IP, or device fingerprint to see interaction history across all pages.
 			</p>
 			<div class="admin__table-wrap" data-glass data-security-table />
+		</section>
+
+		<!-- Boards: Consolidated Message Board & Paint Canvas -->
+		<section class="admin__panel" data-panel="board" hidden>
 			<div class="admin__card" data-glass>
-				<h2 class="admin__h2">Published Paint activity</h2>
+				<h2 class="admin__h2">💬 Message Board Triage &amp; Moderation</h2>
 				<p class="admin__hint">
-					Only accepted Sync &amp; refresh publishes appear here. Local edits are not logged; entries contain action summaries, not pointer paths or sticker images. The opaque visitor/session ID is temporary and does not identify an account or person. Retained for up to 60 days, capped at 5,000 entries.
+					Filter, review, and moderate visitor messages. Statuses: 🟢 Visible, 🟡 Reported (triage queue), 🟠 Hidden, 🔴 Deleted.
+				</p>
+				<form class="admin__filters" data-board-filters>
+					<label>
+						<span>Status</span>
+						<select name="status" data-board-status>
+							<option value="">All statuses</option>
+							<option value="reported">🟡 Reported (Triage)</option>
+							<option value="visible">🟢 Visible</option>
+							<option value="hidden">🟠 Hidden</option>
+							<option value="deleted">🔴 Deleted</option>
+						</select>
+					</label>
+					<label>
+						<span>Min reports</span>
+						<input name="minReports" type="number" min="0" value="0" data-board-min-reports />
+					</label>
+					<label>
+						<span>Search text</span>
+						<input name="search" type="text" placeholder="message text" data-board-search />
+					</label>
+					<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
+				</form>
+				<div class="admin__table-wrap" data-board-table />
+			</div>
+
+			<div class="admin__card" data-glass style="margin-top: 1.5rem;">
+				<h2 class="admin__h2">🎨 Shared Paint Canvas Activity</h2>
+				<p class="admin__hint">
+					Published drawing activity log, sticker operations, and canvas sync activity.
 				</p>
 				<div class="admin__table-wrap" data-paint-activity />
 			</div>
-		</section>
-
-		<!-- Board moderation -->
-		<section class="admin__panel" data-panel="board" hidden>
-			<form class="admin__filters" data-glass data-board-filters>
-				<label>
-					<span>Status</span>
-					<select name="status" data-board-status>
-						<option value="">All statuses</option>
-						<option value="reported">Reported</option>
-						<option value="visible">Visible</option>
-						<option value="hidden">Hidden</option>
-						<option value="deleted">Deleted</option>
-					</select>
-				</label>
-				<label>
-					<span>Min reports</span>
-					<input name="minReports" type="number" min="0" value="0" data-board-min-reports />
-				</label>
-				<label>
-					<span>Search text</span>
-					<input name="search" type="text" placeholder="message text" data-board-search />
-				</label>
-				<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Apply</button>
-			</form>
-			<div class="admin__table-wrap" data-glass data-board-table />
 		</section>
 
 		<!-- Music playlist: import a provider link, edit the draft, reorder -->
@@ -464,9 +475,12 @@ export const prerender = false;
 					<p class="admin__error" role="alert" data-settings-save-error hidden />
 					<p class="admin__hint" data-settings-save-status hidden />
 
-					<div class="admin__actions" style="margin-top: 1rem;">
+					<div class="admin__actions" style="margin-top: 1rem; align-items: center; justify-content: space-between;">
 						<button class="glass-button glass-button--primary" data-glass="" type="submit" data-settings-save-btn>
 							Save Configuration
+						</button>
+						<button class="glass-button glass-button--quiet" data-glass="" type="button" data-settings-reset-btn>
+							Reset to Defaults
 						</button>
 					</div>
 				</form>

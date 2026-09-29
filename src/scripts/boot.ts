@@ -30,6 +30,7 @@ import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
+import { initTelemetry } from './telemetry';
 
 function start(name: string, init: () => void): void {
 	try {
@@ -61,6 +62,8 @@ export function boot(): void {
 	start('nav-scroll-state', initNavScrollState);
 	start('reveal', initReveal);
 	start('parallax', initParallax);
+	// Global traffic & interaction telemetry
+	start('telemetry', initTelemetry);
 	// The tool is a no-op on every other page: the init bails unless its
 	// subtree is in the document, so it costs one querySelector elsewhere.
 	start('image-converter', initImageConverter);
