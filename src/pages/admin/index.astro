@@ -84,32 +84,43 @@ export const prerender = false;
 
 		<p class="admin__error" role="alert" data-admin-error hidden />
 
-		<!-- Statistics: the site-wide numbers, grouped by where they come from -->
+		<!-- Statistics: Global website analytics & page breakdown -->
 		<section class="admin__panel" data-panel="stats">
-			<p class="admin__hint">
-				Every number below is read through the same store method the public
-				feature uses, so it cannot disagree with what visitors see.
-			</p>
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">📊 Site-Wide Traffic &amp; Page Activity</h2>
+				<p class="admin__hint">
+					Global page-view counts, unique session activity, and traffic distribution across all site routes.
+				</p>
 
-			<div class="admin__cards" data-stats-root>
-				<div class="admin__card" data-glass>
-					<h2 class="admin__h2">Traffic</h2>
-					<div data-stats-traffic />
-					<div class="admin__stack" data-stats-traffic-list />
-				</div>
+				<form class="admin__filters" data-stats-filters style="margin-bottom: 1rem;">
+					<label>
+						<span>Page Search</span>
+						<input name="pathSearch" type="text" placeholder="e.g. /projects/ or /blog/" data-stats-path-search />
+					</label>
+					<label>
+						<span>Min Views</span>
+						<input name="minViews" type="number" min="0" value="0" data-stats-min-views />
+					</label>
+					<button class="glass-button glass-button--sm glass-button--primary" data-glass="" type="submit">Filter Pages</button>
+				</form>
 
+				<div data-stats-traffic-overview />
+				<div class="admin__table-wrap" data-stats-traffic-table style="margin-top: 1rem;" />
+			</div>
+
+			<div class="admin__cards" data-stats-root style="margin-top: 1.5rem;">
 				<div class="admin__card" data-glass>
-					<h2 class="admin__h2">Engagement</h2>
+					<h2 class="admin__h2">💡 Engagement &amp; Reactions</h2>
 					<div class="admin__stack" data-stats-engagement />
 				</div>
 
 				<div class="admin__card" data-glass>
-					<h2 class="admin__h2">Message board</h2>
+					<h2 class="admin__h2">💬 Message Board Summary</h2>
 					<div data-stats-board />
 				</div>
 
 				<div class="admin__card" data-glass>
-					<h2 class="admin__h2">Security</h2>
+					<h2 class="admin__h2">🔒 Security &amp; Device Overview</h2>
 					<div data-stats-security />
 				</div>
 			</div>

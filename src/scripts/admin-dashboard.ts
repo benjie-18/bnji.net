@@ -710,36 +710,42 @@ export function startAdminDashboard(): void {
 
 		say(`Updated ${formatTime(data.generatedAt)}`);
 
-		/* traffic — the same getViewStats() the public profile pill renders */
-		renderStatGroup(
-			'[data-stats-traffic] > dl, [data-stats-traffic] > .admin__source',
+		/* traffic — Global site traffic analytics */
+		renderFacts(
+			root.querySelector<HTMLElement>('[data-stats-traffic-overview]')!,
 			[
-				['Total profile views', data.traffic.siteTotal],
-				['Profiles tracked', data.traffic.profiles.length],
+				['Total Site Views', data.traffic.siteTotal],
+				['Pages / Routes Tracked', data.traffic.profiles.length],
 			],
-			'No view data yet.',
 		);
-		const trafficEl = root.querySelector<HTMLElement>('[data-stats-traffic]');
-		if (trafficEl) {
-			const note = document.createElement('p');
-			note.className = 'admin__config-source';
-			note.textContent = `src/server/profile-store.ts · getViewStats() · ${data.traffic.note}`;
-			// insertBefore rather than prepend(): `prepend` resolves against a
-			// Workers-types overload in this project and rejects a Node.
-			trafficEl.insertBefore(note, trafficEl.firstChild);
-		}
-		renderSourceList(
-			'[data-stats-traffic-list]',
-			data.traffic.profiles.map((p) => ({
-				title: `/${p.slug}/ — ${p.name}`,
-				rows: [
-					['Total views', p.total],
-					['Today', p.today],
-					['This week', p.week],
-					['This month', p.month],
-				],
-			})),
-			'No profiles are being tracked.',
+
+		const searchFilter = valueOf(root, '[data-stats-path-search]').toLowerCase();
+		const minViewsFilter = Number(valueOf(root, '[data-stats-min-views]')) || 0;
+
+		const filteredProfiles = data.traffic.profiles.filter((p) => {
+			const matchesPath = !searchFilter || p.name.toLowerCase().includes(searchFilter) || p.slug.toLowerCase().includes(searchFilter);
+			const matchesViews = p.total >= minViewsFilter;
+			return matchesPath && matchesViews;
+		});
+
+		const totalSiteViews = Math.max(1, data.traffic.siteTotal);
+
+		renderTable(
+			root.querySelector<HTMLElement>('[data-stats-traffic-table]')!,
+			[
+				{ label: 'Page / Route', get: (r) => r.name, mono: true },
+				{ label: 'Total Views', get: (r) => r.total, mono: true },
+				{ label: 'Today', get: (r) => r.today, mono: true },
+				{ label: 'This Week', get: (r) => r.week, mono: true },
+				{ label: 'This Month', get: (r) => r.month, mono: true },
+				{
+					label: 'Traffic Share',
+					get: (r) => `${(((Number(r.total) || 0) / totalSiteViews) * 100).toFixed(1)}%`,
+					mono: true,
+				},
+			],
+			filteredProfiles as unknown as Record<string, unknown>[],
+			'No tracked pages match these filters.',
 		);
 
 		/* engagement — reactions and outbound link clicks */
@@ -907,6 +913,11 @@ export function startAdminDashboard(): void {
 		void adminFetch('/api/admin/session', { method: 'DELETE' }).finally(() => {
 			window.location.assign('/admin/login');
 		});
+	});
+
+	root.querySelector('[data-stats-filters]')?.addEventListener('submit', (event) => {
+		event.preventDefault();
+		void loadStats();
 	});
 
 	root.querySelector('[data-security-filters]')?.addEventListener('submit', (event) => {
