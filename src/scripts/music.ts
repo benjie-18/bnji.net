@@ -69,6 +69,24 @@ let started = false;
 let activeCleanup: (() => void) | null = null;
 let youtubeApiPromise: Promise<YtApi> | null = null;
 
+let pauseMusicHandler: (() => void) | null = null;
+let resumeMusicHandler: (() => void) | null = null;
+let isPlayingHandler: (() => boolean) | null = null;
+
+/** Pause background music if it is currently playing and return true, else false. */
+export function pauseMusicIfPlaying(): boolean {
+	if (isPlayingHandler?.() ?? false) {
+		pauseMusicHandler?.();
+		return true;
+	}
+	return false;
+}
+
+/** Resume background music playback. */
+export function resumeMusic(): void {
+	resumeMusicHandler?.();
+}
+
 /**
  * Accept a bare video ID or any of the YouTube URL shapes the importer and the
  * owner config can produce.
@@ -942,6 +960,10 @@ export function initMusicPlayer(): void {
 		window.addEventListener(type, onFirstInput, { capture: true, passive: true, signal });
 	}
 
+	isPlayingHandler = () => playerRoot.dataset.state === 'playing' || playerRoot.dataset.state === 'loading';
+	pauseMusicHandler = () => pauseCurrentTrack();
+	resumeMusicHandler = () => attemptCurrentTrack();
+
 	const cleanup = () => {
 		destroyed = true;
 		playbackRequest += 1;
@@ -955,6 +977,9 @@ export function initMusicPlayer(): void {
 		playerYoutubeHost.replaceChildren();
 		playlistPanel.hidden = true;
 		playerRoot.dataset.playlistOpen = 'false';
+		isPlayingHandler = null;
+		pauseMusicHandler = null;
+		resumeMusicHandler = null;
 		started = false;
 		activeCleanup = null;
 	};
