@@ -23,6 +23,7 @@
  */
 import { getSettings, setSetting, subscribeSettings, type Settings } from './settings';
 import { CODE_IDLE_MESSAGE, submitCode } from './settings-codes';
+import { checkAndTriggerVerity } from './verity-balls';
 
 let overlayStarted = false;
 let unsubscribeSettings: (() => void) | null = null;
@@ -129,6 +130,7 @@ export function initSettingsOverlay(): void {
 			// path holding null, so focus fell back to <body> instead of the
 			// gear — which is exactly the restoration this panel promises.
 			lastFocused = null;
+			checkAndTriggerVerity();
 		}
 	};
 
