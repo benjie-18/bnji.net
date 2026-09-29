@@ -1,14 +1,20 @@
 /**
- * BNJI.NET — Verity secret code balls physics effect.
+ * BNJI.NET — Verity secret code balls physics engine.
  *
- * One-time easter egg triggered upon closing the settings overlay after entering 'verity'.
+ * Easter egg triggered upon closing the settings overlay after entering 'verity'.
  * Spawns gravity-affected bouncing balls using /verity.webp with 2D physics.
- * Optimized with requestAnimationFrame, O(N) spatial bounds checks, and zero cost when inactive.
+ *
+ * Optimizations:
+ * - Dynamic density: scales count to viewport area (45..180 balls) so it fills any screen size.
+ * - Spatial grid partitioning: O(N) neighbor checks instead of O(N²).
+ * - Auto-pauses on visibilitychange (tab hidden).
+ * - Zero CPU / memory overhead when cleared or inactive.
  */
 
 let verityArmed = false;
 let activeStage: HTMLElement | null = null;
 let rafId: number | null = null;
+let visibilityListener: (() => void) | null = null;
 
 export function armVerity(): void {
 	verityArmed = true;
@@ -46,6 +52,10 @@ export function clearVerityBalls(): void {
 		cancelAnimationFrame(rafId);
 		rafId = null;
 	}
+	if (visibilityListener) {
+		document.removeEventListener('visibilitychange', visibilityListener);
+		visibilityListener = null;
+	}
 	if (activeStage) {
 		activeStage.remove();
 		activeStage = null;
@@ -54,6 +64,9 @@ export function clearVerityBalls(): void {
 
 export function spawnVerityBalls(): void {
 	clearVerityBalls();
+
+	const viewW = window.innerWidth;
+	const viewH = window.innerHeight;
 
 	const stage = document.createElement('div');
 	stage.id = 'verity-balls-stage';
@@ -79,13 +92,15 @@ export function spawnVerityBalls(): void {
 	document.body.appendChild(stage);
 	activeStage = stage;
 
-	const count = 36;
-	const radius = 22; // Height of "Read the blog" button is ~44px, radius = 22px
+	// Ball dimensions: radius = 20px (40px diameter, height of button)
+	const radius = 20;
 	const diameter = radius * 2;
-	const balls: Ball[] = [];
+	const ballArea = Math.PI * radius * radius;
+	const totalArea = viewW * viewH;
 
-	const viewW = window.innerWidth;
-	const viewH = window.innerHeight;
+	// Dynamically scale ball count to fill approx 12-15% of screen volume (45 on mobile, up to 180 on 4K)
+	const count = Math.min(180, Math.max(45, Math.floor((totalArea * 0.12) / ballArea)));
+	const balls: Ball[] = [];
 
 	// Collect interactive UI element bounds for collisions
 	const uiElements = Array.from(
@@ -105,22 +120,25 @@ export function spawnVerityBalls(): void {
 		el.style.willChange = 'transform';
 		stage.appendChild(el);
 
-		// Drop from top of viewport across random columns
+		// Drop from top of viewport in staggered waves
 		const x = Math.random() * (viewW - diameter) + radius;
-		const y = -Math.random() * 300 - radius;
-		const vx = (Math.random() - 0.5) * 200;
-		const vy = Math.random() * 50 + 20;
+		const y = -Math.random() * (viewH * 0.8) - radius;
+		const vx = (Math.random() - 0.5) * 220;
+		const vy = Math.random() * 60 + 20;
 
 		balls.push({ x, y, vx, vy, r: radius, el });
 	}
 
 	let lastTime = performance.now();
-	const gravity = 850; // px/s^2
-	const restitution = 0.72; // bounce elasticity
+	const gravity = 880; // px/s^2
+	const restitution = 0.75; // bounce elasticity
 	const friction = 0.992;
 
+	// Spatial Grid Partitioning constants
+	const cellSize = diameter;
+
 	function update(): void {
-		if (!activeStage) return;
+		if (!activeStage || document.hidden) return;
 
 		const now = performance.now();
 		const dt = Math.min((now - lastTime) / 1000, 0.032);
@@ -133,13 +151,12 @@ export function spawnVerityBalls(): void {
 		const uiBounds: RectBound[] = uiElements
 			.map((el) => {
 				const rect = el.getBoundingClientRect();
-				// Ignore hidden or full-screen elements
 				if (rect.width <= 0 || rect.height <= 0 || rect.width >= W * 0.95) return null;
 				return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
 			})
 			.filter((b): b is RectBound => b !== null);
 
-		// Physics Integration & Collisions
+		// Physics Integration & Wall/UI Collisions
 		for (let i = 0; i < balls.length; i++) {
 			const b = balls[i];
 
@@ -163,7 +180,7 @@ export function spawnVerityBalls(): void {
 			if (b.y > H - b.r) {
 				b.y = H - b.r;
 				b.vy = -Math.abs(b.vy) * restitution;
-				b.vx *= 0.95; // floor friction
+				b.vx *= 0.94; // floor friction
 			} else if (b.y < b.r && b.vy < 0) {
 				b.y = b.r;
 				b.vy = Math.abs(b.vy) * restitution;
@@ -177,23 +194,16 @@ export function spawnVerityBalls(): void {
 					b.y + b.r > box.top &&
 					b.y - b.r < box.bottom
 				) {
-					// Top edge bounce
 					if (b.y < box.top && b.vy > 0) {
 						b.y = box.top - b.r;
 						b.vy = -Math.abs(b.vy) * restitution;
-					}
-					// Bottom edge
-					else if (b.y > box.bottom && b.vy < 0) {
+					} else if (b.y > box.bottom && b.vy < 0) {
 						b.y = box.bottom + b.r;
 						b.vy = Math.abs(b.vy) * restitution;
-					}
-					// Left edge
-					else if (b.x < box.left && b.vx > 0) {
+					} else if (b.x < box.left && b.vx > 0) {
 						b.x = box.left - b.r;
 						b.vx = -Math.abs(b.vx) * restitution;
-					}
-					// Right edge
-					else if (b.x > box.right && b.vx < 0) {
+					} else if (b.x > box.right && b.vx < 0) {
 						b.x = box.right + b.r;
 						b.vx = Math.abs(b.vx) * restitution;
 					}
@@ -201,38 +211,69 @@ export function spawnVerityBalls(): void {
 			}
 		}
 
-		// Ball-to-Ball Pairwise Collisions
+		// Spatial Grid for O(N) Pairwise Ball Collisions
+		const grid = new Map<string, number[]>();
 		for (let i = 0; i < balls.length; i++) {
-			for (let j = i + 1; j < balls.length; j++) {
-				const b1 = balls[i];
-				const b2 = balls[j];
+			const b = balls[i];
+			const cx = Math.floor(b.x / cellSize);
+			const cy = Math.floor(b.y / cellSize);
+			const key = `${cx},${cy}`;
+			const cell = grid.get(key);
+			if (cell) {
+				cell.push(i);
+			} else {
+				grid.set(key, [i]);
+			}
+		}
 
-				const dx = b2.x - b1.x;
-				const dy = b2.y - b1.y;
-				const distSq = dx * dx + dy * dy;
-				const minDist = b1.r + b2.r;
+		// Collision resolution across neighbor cells
+		const offsets = [
+			[0, 0], [1, 0], [0, 1], [1, 1], [-1, 1],
+		];
 
-				if (distSq > 0 && distSq < minDist * minDist) {
-					const dist = Math.sqrt(distSq);
-					const nx = dx / dist;
-					const ny = dy / dist;
+		for (const [key, members] of grid.entries()) {
+			const [cx, cy] = key.split(',').map(Number);
 
-					// Separate
-					const overlap = (minDist - dist) * 0.5;
-					b1.x -= nx * overlap;
-					b1.y -= ny * overlap;
-					b2.x += nx * overlap;
-					b2.y += ny * overlap;
+			for (const [dx, dy] of offsets) {
+				const nKey = `${cx + dx},${cy + dy}`;
+				const neighbors = grid.get(nKey);
+				if (!neighbors) continue;
 
-					// Impulse
-					const kx = b1.vx - b2.vx;
-					const ky = b1.vy - b2.vy;
-					const p = 2 * (nx * kx + ny * ky) / 2;
+				for (const i of members) {
+					for (const j of neighbors) {
+						if (i >= j) continue; // avoid self and duplicate checks
 
-					b1.vx -= p * nx * restitution;
-					b1.vy -= p * ny * restitution;
-					b2.vx += p * nx * restitution;
-					b2.vy += p * ny * restitution;
+						const b1 = balls[i];
+						const b2 = balls[j];
+
+						const delX = b2.x - b1.x;
+						const delY = b2.y - b1.y;
+						const distSq = delX * delX + delY * delY;
+						const minDist = b1.r + b2.r;
+
+						if (distSq > 0 && distSq < minDist * minDist) {
+							const dist = Math.sqrt(distSq);
+							const nx = delX / dist;
+							const ny = delY / dist;
+
+							// Separate
+							const overlap = (minDist - dist) * 0.5;
+							b1.x -= nx * overlap;
+							b1.y -= ny * overlap;
+							b2.x += nx * overlap;
+							b2.y += ny * overlap;
+
+							// Relative velocity along collision normal
+							const kx = b1.vx - b2.vx;
+							const ky = b1.vy - b2.vy;
+							const p = (nx * kx + ny * ky) * restitution;
+
+							b1.vx -= p * nx;
+							b1.vy -= p * ny;
+							b2.vx += p * nx;
+							b2.vy += p * ny;
+						}
+					}
 				}
 			}
 		}
@@ -245,6 +286,20 @@ export function spawnVerityBalls(): void {
 
 		rafId = requestAnimationFrame(update);
 	}
+
+	// Auto-pause physics loop when the tab is hidden
+	visibilityListener = () => {
+		if (document.hidden) {
+			if (rafId !== null) {
+				cancelAnimationFrame(rafId);
+				rafId = null;
+			}
+		} else if (activeStage) {
+			lastTime = performance.now();
+			rafId = requestAnimationFrame(update);
+		}
+	};
+	document.addEventListener('visibilitychange', visibilityListener);
 
 	rafId = requestAnimationFrame(update);
 }
