@@ -724,8 +724,6 @@ export function startAdminDashboard(): void {
 		area.setAttribute('fill', 'url(#chartGrad)');
 		svg.appendChild(area);
 
-		// Line stroke path
-		const lineD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
 		const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 		line.setAttribute('d', lineD);
 		line.setAttribute('fill', 'none');
