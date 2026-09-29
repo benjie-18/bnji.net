@@ -20,6 +20,7 @@ import { adminUnauthorized, isAdminRequest, adminNotConfigured, adminConfigured,
 import { getProfileStore, type TimeSeriesScope, type TimeSeriesRange } from '../../../server/profile-store';
 import { getBoardStore } from '../../../server/board-store';
 import { getSecurityStore } from '../../../server/security-store';
+import { getSecretCodeStore } from '../../../server/secret-code-store';
 import { getProfileBySlug, PROFILES } from '../../../data/profiles';
 import { serverEnvironment } from '../../../server/env';
 import { clientIp } from '../../../server/security-helpers';
@@ -61,6 +62,7 @@ export async function GET(context: APIContext): Promise<Response> {
 	const profileStore = getProfileStore(env);
 	const boardStore = getBoardStore(env);
 	const securityStore = getSecurityStore(env);
+	const secretCodeStore = getSecretCodeStore(env);
 
 	const params = context.url.searchParams;
 	const scope = (params.get('scope') ?? 'global') as TimeSeriesScope;
@@ -170,6 +172,14 @@ export async function GET(context: APIContext): Promise<Response> {
 				})
 		: null;
 
+	/* --- secret codes ----------------------------------------------------- */
+	const secretCodes = secretCodeStore
+		? await secretCodeStore.getCodeStats().catch((error) => {
+				console.warn('[bnji] stats: secret codes summary failed', error);
+				return [];
+		  })
+		: [];
+
 	/* --- credential ------------------------------------------------------- */
 	// When the access token was last rotated. 0 means the seeded value is
 	// still in place, which the panel surfaces as a prompt to change it.
@@ -182,6 +192,7 @@ export async function GET(context: APIContext): Promise<Response> {
 		engagement,
 		board,
 		security,
+		secretCodes,
 		credential: { tokenRotatedAt, everRotated: tokenRotatedAt > 0 },
 		generatedAtIso: new Date(now).toISOString(),
 		dayMs: DAY_MS,

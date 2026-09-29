@@ -625,6 +625,7 @@ export function startAdminDashboard(): void {
 			byEndpoint: { surface: string; endpoint: string; count: number }[];
 			retentionDays: number;
 		} | null);
+		secretCodes?: { code: string; count: number; lastUsedAt: number }[];
 		timeSeries?: { label: string; timestamp: number; count: number }[];
 	};
 
@@ -996,6 +997,23 @@ export function startAdminDashboard(): void {
 					]
 				: [],
 			'Security store unavailable.',
+		);
+
+		/* secret codes */
+		renderSourceList(
+			'[data-stats-secret-codes]',
+			data.secretCodes && data.secretCodes.length > 0
+				? [
+						{
+							title: `Secret codes submitted (${data.secretCodes.reduce((s, c) => s + c.count, 0)} total uses)`,
+							rows: data.secretCodes.map((item) => [
+								item.code,
+								`${item.count.toLocaleString()} use${item.count === 1 ? '' : 's'} (last used ${formatTime(item.lastUsedAt)})`,
+							]),
+						},
+					]
+				: [],
+			'No secret codes have been submitted yet.',
 		);
 
 		applyCredentialState(data.credential);
