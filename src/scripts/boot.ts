@@ -31,6 +31,7 @@ import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
 import { initTelemetry } from './telemetry';
+import { initVerityBalls } from './verity-balls';
 
 function start(name: string, init: () => void): void {
 	try {
@@ -67,4 +68,6 @@ export function boot(): void {
 	// The tool is a no-op on every other page: the init bails unless its
 	// subtree is in the document, so it costs one querySelector elsewhere.
 	start('image-converter', initImageConverter);
+	// Restore verity balls on navigation if active in sessionStorage
+	start('verity-balls', initVerityBalls);
 }
