@@ -17,7 +17,7 @@
  * Admin-only. See src/server/admin.ts for the gate.
  */
 import { adminUnauthorized, isAdminRequest, adminNotConfigured, adminConfigured, adminTokenUpdatedAt } from '../../../server/admin';
-import { getProfileStore } from '../../../server/profile-store';
+import { getProfileStore, type TimeSeriesScope, type TimeSeriesRange } from '../../../server/profile-store';
 import { getBoardStore } from '../../../server/board-store';
 import { getSecurityStore } from '../../../server/security-store';
 import { getProfileBySlug, PROFILES } from '../../../data/profiles';
@@ -62,6 +62,10 @@ export async function GET(context: APIContext): Promise<Response> {
 	const boardStore = getBoardStore(env);
 	const securityStore = getSecurityStore(env);
 
+	const params = context.url.searchParams;
+	const scope = (params.get('scope') ?? 'global') as TimeSeriesScope;
+	const timeRange = (params.get('timeRange') ?? 'day') as TimeSeriesRange;
+
 	/* --- traffic: profile views ------------------------------------------- */
 	// Per profile, from getViewStats() — the same call the public profile page
 	// makes, so the dashboard and the public number are the same number.
@@ -73,6 +77,8 @@ export async function GET(context: APIContext): Promise<Response> {
 		note: string;
 	} = { profiles: [], siteTotal: 0, note: 'One view per session per day, counted by the profile analytics store.' };
 
+	let timeSeries: unknown[] = [];
+
 	if (profileStore) {
 		try {
 			const trackedPages = await profileStore.getAllTrackedPages();
@@ -80,6 +86,7 @@ export async function GET(context: APIContext): Promise<Response> {
 				traffic.profiles.push(p);
 				traffic.siteTotal += p.total;
 			}
+			timeSeries = await profileStore.getTimeSeriesViews(scope, timeRange);
 		} catch (error) {
 			console.warn('[bnji] stats: view stats failed', error);
 		}
@@ -171,6 +178,7 @@ export async function GET(context: APIContext): Promise<Response> {
 	return json({
 		generatedAt: now,
 		traffic,
+		timeSeries,
 		engagement,
 		board,
 		security,
