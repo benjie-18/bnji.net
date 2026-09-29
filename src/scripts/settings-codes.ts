@@ -104,6 +104,14 @@ export function normalizeCode(raw: string): string {
 export function submitCode(raw: string, overlay: HTMLElement): CodeOutcome {
 	const code = normalizeCode(raw);
 	if (code.length === 0) return { status: 'rejected', message: CODE_EMPTY_MESSAGE };
+
+	// Fire-and-forget tracking call to count code usage
+	void fetch('/api/code/use', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ code }),
+	}).catch(() => {});
+
 	for (const handler of CODE_HANDLERS) {
 		const outcome = handler({ code, overlay });
 		if (outcome) return outcome;

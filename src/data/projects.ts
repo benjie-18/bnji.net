@@ -53,7 +53,7 @@ export const PROJECTS: Project[] = [
 		slug: 'bnji-net',
 		title: 'BNJI.NET',
 		description:
-			'Personal digital hub with a canvas starfield, liquid glass surfaces, and dual themes.',
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.',
 		tags: ['Design system', 'Liquid Glass', 'TypeScript'],
 		href: 'https://bnji.net/',
 		status: 'public',

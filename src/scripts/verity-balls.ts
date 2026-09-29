@@ -11,12 +11,18 @@
  * - Zero CPU / memory overhead when cleared or inactive.
  */
 
+import { pauseMusicIfPlaying, resumeMusic } from './music';
+import { getSettings, subscribeSettings } from './settings';
+
 const VERITY_STORAGE_KEY = 'bnji_verity_active';
 
 let verityArmed = false;
 let activeStage: HTMLElement | null = null;
 let rafId: number | null = null;
 let visibilityListener: (() => void) | null = null;
+let verityAudio: HTMLAudioElement | null = null;
+let wasMusicPlayingBefore = false;
+let unsubscribeSettingsListener: (() => void) | null = null;
 
 export function armVerity(): void {
 	verityArmed = true;
@@ -82,6 +88,15 @@ export function clearVerityBalls(): void {
 	} catch {
 		// Ignore storage errors in restricted environments
 	}
+	if (verityAudio) {
+		verityAudio.pause();
+		verityAudio.currentTime = 0;
+		verityAudio = null;
+	}
+	if (unsubscribeSettingsListener) {
+		unsubscribeSettingsListener();
+		unsubscribeSettingsListener = null;
+	}
 	if (rafId !== null) {
 		cancelAnimationFrame(rafId);
 		rafId = null;
@@ -94,16 +109,43 @@ export function clearVerityBalls(): void {
 		activeStage.remove();
 		activeStage = null;
 	}
+	if (wasMusicPlayingBefore) {
+		wasMusicPlayingBefore = false;
+		resumeMusic();
+	}
 }
 
 export function spawnVerityBalls(): void {
 	clearVerityBalls();
 
-	const viewW = window.innerWidth;
-	const viewH = window.innerHeight;
+	wasMusicPlayingBefore = pauseMusicIfPlaying();
+
+	verityAudio = new Audio('/other/veritysong.mp3');
+	verityAudio.preload = 'auto';
+
+	const applyVerityAudioSettings = () => {
+		if (!verityAudio) return;
+		const settings = getSettings();
+		verityAudio.volume = settings.volume;
+		verityAudio.muted = settings.muted;
+	};
+	applyVerityAudioSettings();
+	unsubscribeSettingsListener = subscribeSettings(applyVerityAudioSettings);
+
+	verityAudio.addEventListener('ended', () => {
+		clearVerityBalls();
+	});
+
+	verityAudio.play().catch(() => {
+		// Ignore autoplay restrictions if user gesture was missing
+	});
+
+	const viewW = window.innerWidth || 1024;
+	const viewH = window.innerHeight || 768;
 
 	const stage = document.createElement('div');
 	stage.id = 'verity-balls-stage';
+	stage.setAttribute('id', 'verity-balls-stage');
 	stage.style.position = 'fixed';
 	stage.style.inset = '0';
 	stage.style.pointerEvents = 'none';
@@ -138,23 +180,22 @@ export function spawnVerityBalls(): void {
 
 	function queryUIElements(): HTMLElement[] {
 		const selector = [
-			'[data-glass]',
 			'.glass-panel',
+			'[data-glass]',
 			'.glass-button',
-			'a.glass-button',
 			'header',
 			'footer',
-			'article',
-			'section',
 			'button',
+			'a.glass-button',
 			'.card',
+			'.admin__card',
+			'.lab-experiment',
 			'input',
 			'select',
 			'textarea',
-			'[role="button"]',
-			'[role="region"]',
-			'.bento',
 			'.hero-actions',
+			'.bento-item',
+			'.bento',
 		].join(', ');
 
 		const raw = Array.from(document.querySelectorAll<HTMLElement>(selector));
@@ -163,6 +204,15 @@ export function spawnVerityBalls(): void {
 			while (p) {
 				if (p.id === 'verity-balls-stage') return false;
 				p = p.parentElement;
+			}
+			if (el.offsetWidth === 0 || el.offsetHeight === 0) return false;
+			try {
+				const style = window.getComputedStyle(el);
+				if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+					return false;
+				}
+			} catch {
+				// Ignore computed style errors in test environments
 			}
 			return true;
 		});
@@ -187,9 +237,9 @@ export function spawnVerityBalls(): void {
 		el.style.touchAction = 'none';
 		stage.appendChild(el);
 
-		// Drop from top of viewport in staggered waves
+		// Drop from top region of viewport in staggered waves
 		const x = Math.random() * (viewW - diameter) + radius;
-		const y = -Math.random() * (viewH * 0.8) - radius;
+		const y = Math.random() * (viewH * 0.35) + radius;
 		const vx = (Math.random() - 0.5) * 220;
 		const vy = Math.random() * 60 + 20;
 
@@ -347,7 +397,7 @@ export function spawnVerityBalls(): void {
 					b.y = H - b.r;
 					b.vy = -Math.abs(b.vy) * restitution;
 					b.vx *= 0.94; // floor friction
-				} else if (b.y < b.r && b.vy < 0) {
+				} else if (b.y < b.r) {
 					b.y = b.r;
 					b.vy = Math.abs(b.vy) * restitution;
 				}
@@ -376,19 +426,20 @@ export function spawnVerityBalls(): void {
 
 					if (distSq < b.r * b.r) {
 						if (distSq === 0) {
-							// Ball center is inside the UI box: push out to nearest edge
-							const dl = b.x - box.left;
-							const dr = box.right - b.x;
-							const dt = b.y - box.top;
-							const db = box.bottom - b.y;
+							// Ball center is inside the UI box: push out to nearest valid edge
+							const dl = box.left > 0 ? b.x - box.left : Number.POSITIVE_INFINITY;
+							const dr = box.right < W ? box.right - b.x : Number.POSITIVE_INFINITY;
+							const dt = box.top > 0 ? b.y - box.top : Number.POSITIVE_INFINITY;
+							const db = box.bottom < H ? box.bottom - b.y : Number.POSITIVE_INFINITY;
+
 							const minD = Math.min(dl, dr, dt, db);
 
-							if (minD === dt) {
-								b.y = box.top - b.r;
-								b.vy = -Math.abs(b.vy) * restitution;
-							} else if (minD === db) {
+							if (!Number.isFinite(minD) || minD === db) {
 								b.y = box.bottom + b.r;
 								b.vy = Math.abs(b.vy) * restitution;
+							} else if (minD === dt) {
+								b.y = box.top - b.r;
+								b.vy = -Math.abs(b.vy) * restitution;
 							} else if (minD === dl) {
 								b.x = box.left - b.r;
 								b.vx = -Math.abs(b.vx) * restitution;
@@ -403,18 +454,39 @@ export function spawnVerityBalls(): void {
 							const nx = dX / dist;
 							const ny = dY / dist;
 
-							// Separate ball from box along collision normal
-							b.x += nx * overlap;
-							b.y += ny * overlap;
+							// If element touches top edge of screen (box.top <= 0) and normal pushes ball upward,
+							// push downward past box.bottom instead of trapping above screen.
+							if (box.top <= 0 && ny < -0.3 && b.y - ny * overlap < b.r) {
+								b.y = box.bottom + b.r;
+								b.vy = Math.abs(b.vy) * restitution;
+							} else {
+								b.x += nx * overlap;
+								b.y += ny * overlap;
 
-							// Reflect velocity along collision normal
-							const vDotN = b.vx * nx + b.vy * ny;
-							if (vDotN < 0) {
-								b.vx -= (1 + restitution) * vDotN * nx;
-								b.vy -= (1 + restitution) * vDotN * ny;
+								const vDotN = b.vx * nx + b.vy * ny;
+								if (vDotN < 0) {
+									b.vx -= (1 + restitution) * vDotN * nx;
+									b.vy -= (1 + restitution) * vDotN * ny;
+								}
 							}
 						}
 					}
+				}
+
+				// Strict screen boundaries clamping
+				if (b.x < b.r) {
+					b.x = b.r;
+					b.vx = Math.abs(b.vx) * restitution;
+				} else if (b.x > W - b.r) {
+					b.x = W - b.r;
+					b.vx = -Math.abs(b.vx) * restitution;
+				}
+				if (b.y < b.r) {
+					b.y = b.r;
+					b.vy = Math.abs(b.vy) * restitution;
+				} else if (b.y > H - b.r) {
+					b.y = H - b.r;
+					b.vy = -Math.abs(b.vy) * restitution;
 				}
 			}
 
