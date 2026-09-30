@@ -49,6 +49,19 @@ class VirtualClock {
 		this.timers.delete(id);
 	}
 
+	setInterval(fn, ms = 0) {
+		// A timer entry with `interval !== undefined` re-arms itself after
+		// firing, at its ORIGINAL schedule plus one period (the browser keeps
+		// the period from first scheduling, so long overruns do not cascade).
+		const id = this.nextId++;
+		this.timers.set(id, { fn, at: this.now + Math.max(0, Number(ms) || 0), interval: Math.max(0, Number(ms) || 0) });
+		return id;
+	}
+
+	clearInterval(id) {
+		this.timers.delete(id);
+	}
+
 	/**
 	 * How many timers are still scheduled. A teardown path that forgets a
 	 * timer is invisible to every other assertion here, so the player tests
@@ -82,6 +95,7 @@ class VirtualClock {
 			const [id, timer] = entry;
 			this.timers.delete(id);
 			this.now = Math.max(this.now, timer.at);
+			if (timer.interval !== undefined) this.timers.set(id, { ...timer, at: timer.at + timer.interval });
 			timer.fn();
 		}
 		this.now = target;
@@ -206,6 +220,21 @@ class TestElement {
 			current = current.parentNode;
 		}
 		return false;
+	}
+
+	/**
+	 * `Element.closest()` — the lab games delegate their grid/canvas events and
+	 * resolve the acted-on element with it. Like the real DOM it tests the
+	 * node itself before climbing the ancestors; an unsupported selector throws.
+	 */
+	closest(selector) {
+		const test = compileSelector(selector);
+		let node = this;
+		while (node) {
+			if (test(node)) return node;
+			node = node.parentNode;
+		}
+		return null;
 	}
 
 	/** Connected to the document tree, the way `isConnected` means it. */
@@ -592,6 +621,10 @@ export function installTestDom(options = {}) {
 		window: globalThis.window,
 		Audio: globalThis.Audio,
 		fetch: globalThis.fetch,
+		setTimeout: globalThis.setTimeout,
+		clearTimeout: globalThis.clearTimeout,
+		setInterval: globalThis.setInterval,
+		clearInterval: globalThis.clearInterval,
 		requestAnimationFrame: globalThis.requestAnimationFrame,
 		cancelAnimationFrame: globalThis.cancelAnimationFrame,
 		localStorage: globalThis.localStorage,
@@ -655,6 +688,11 @@ export function installTestDom(options = {}) {
 		head,
 		body,
 		visibilityState: 'visible',
+		// `document.hidden` (StackGame's loop gate reads it); tracks
+		// `visibilityState` the way the real document does.
+		get hidden() {
+			return document.visibilityState === 'hidden';
+		},
 		createElement: (tag) => {
 			const element = new TestElement(tag);
 			element.ownerDocument = document;
@@ -721,6 +759,8 @@ export function installTestDom(options = {}) {
 		visibilityState: 'visible',
 		setTimeout: (fn, ms) => clock.setTimeout(fn, ms),
 		clearTimeout: (id) => clock.clearTimeout(id),
+		setInterval: (fn, ms) => clock.setInterval(fn, ms),
+		clearInterval: (id) => clock.clearInterval(id),
 		requestAnimationFrame: (fn) => clock.requestAnimationFrame(fn),
 		cancelAnimationFrame: (id) => clock.cancelAnimationFrame(id),
 		addEventListener: (type, fn, options) => document.addEventListener(type, fn, options),
@@ -748,6 +788,14 @@ export function installTestDom(options = {}) {
 	};
 	globalThis.requestAnimationFrame = (fn) => clock.requestAnimationFrame(fn);
 	globalThis.cancelAnimationFrame = (id) => clock.cancelAnimationFrame(id);
+	// In a browser the global scope IS window, so bare setTimeout/setInterval
+	// (as used by the lab games) must hit the same virtual clock as
+	// window.* — otherwise a `clearInterval` from one side cannot cancel a
+	// timer from the other.
+	globalThis.setTimeout = (fn, ms) => clock.setTimeout(fn, ms);
+	globalThis.clearTimeout = (id) => clock.clearTimeout(id);
+	globalThis.setInterval = (fn, ms) => clock.setInterval(fn, ms);
+	globalThis.clearInterval = (id) => clock.clearInterval(id);
 	globalThis.localStorage = storageStub;
 	globalThis.sessionStorage = sessionStub;
 
@@ -918,6 +966,10 @@ export function installTestDom(options = {}) {
 			globalThis.fetch = previous.fetch;
 			globalThis.requestAnimationFrame = previous.requestAnimationFrame;
 			globalThis.cancelAnimationFrame = previous.cancelAnimationFrame;
+			globalThis.setTimeout = previous.setTimeout;
+			globalThis.clearTimeout = previous.clearTimeout;
+			globalThis.setInterval = previous.setInterval;
+			globalThis.clearInterval = previous.clearInterval;
 			globalThis.localStorage = previous.localStorage;
 			globalThis.sessionStorage = previous.sessionStorage;
 			globalThis.CustomEvent = previous.CustomEvent;
