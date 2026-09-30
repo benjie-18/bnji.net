@@ -16,7 +16,7 @@
     "@astrojs/rss": "4.0.19",
     "@astrojs/sitemap": "3.6.1",
     "astro": "7.3.2",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
