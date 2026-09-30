@@ -28,18 +28,14 @@ const SPANS = [12, 7, 5];
 			title="Selected work"
 		/>
 
-		<div class="bento">
-			{
-				featured.map((project, index) => (
-					<ProjectCard
-						project={project}
-						index={index}
-						feature={index === 0}
-						span={SPANS[index] ?? 6}
-						revealDelay={index * 90}
-					/>
-				))
-			}
-		</div>
+		<p class="empty-notice">Nothing to see here for now 👀</p>
 	</div>
 </section>
+
+<style>
+	.empty-notice {
+		color: var(--text-muted);
+		font-size: var(--text-lead);
+		margin: 0;
+	}
+</style>

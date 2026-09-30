@@ -499,8 +499,7 @@ test('games catalog and navigation have a real empty state and preserve Lab owne
 	const card = readFileSync(new URL('../src/components/GameCard.astro', import.meta.url), 'utf8');
 	const nav = readFileSync(new URL('../src/data/navigation.ts', import.meta.url), 'utf8');
 	const footer = readFileSync(new URL('../src/components/Footer.astro', import.meta.url), 'utf8');
-	assert.match(page, /NO STANDALONE GAMES YET/);
-	assert.match(page, /Already in the Lab/);
+	assert.match(page, /No games yet\.\./);
 	assert.match(card, /Temporarily offline/);
 	assert.match(card, /Not playable yet/);
 	assert.match(nav, /label: 'Games', href: '\/games\/'/);

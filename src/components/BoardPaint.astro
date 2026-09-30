@@ -86,14 +86,8 @@ import { PAINT_CONFIG } from '../config/paint.config';
 		</div>
 	</div>
 
-	<p class="board-paint__instructions" id="paint-instructions">
-		Choose a tool, then draw with a mouse, pen or touch. Undo removes your latest unsynced mark.
-		With the sticker tool, drag a sticker to move it, drag one of its corner handles to resize it
-		(the opposite corner stays put, and the shape is kept unless you hold Shift), or focus the
-		canvas and use the arrow keys to nudge it and Alt with an arrow key to resize it.
-	</p>
-	<p class="board-paint__privacy-note">
-		Edits stay local until you publish with Sync &amp; refresh. The admin activity log records only published summaries, not pointer paths or sticker images.
+	<p class="sr-only" id="paint-instructions">
+		Choose a tool, then draw with a mouse, pen or touch. Drag a corner handle to resize a sticker (Shift overrides ratio, opposite corner stays put). Use an arrow key to move or Alt + arrow key to resize.
 	</p>
 
 	<div class="board-paint__surface" data-paint-surface>
