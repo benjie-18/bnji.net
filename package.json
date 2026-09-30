@@ -1,6 +1,6 @@
 {
   "name": "bnji-net",
-  "description": "BNJI.NET \u2014 personal digital hub: Astro, liquid glass, dual themes.",
+  "description": "BNJI.NET — personal digital hub: Astro, liquid glass, dual themes.",
   "cloudflare": {
     "label": "Astro Framework Starter",
     "products": [
@@ -39,5 +39,9 @@
     "test:e2e": "playwright test",
     "verify:access": "node scripts/verify-access.mjs"
   },
-  "type": "module"
+  "type": "module",
+  "allowScripts": {
+    "workerd@1.20260911.1": true,
+    "esbuild@0.28.2": true
+  }
 }
