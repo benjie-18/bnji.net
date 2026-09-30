@@ -3,26 +3,25 @@
 This is the owner-facing runbook. It answers one question: *after I pull, what
 do I have to do?*
 
-For the shared Paint canvas, the short version is: **if you already have the
-D1 database, apply the new migration.** No new database, bucket, secret or
-binding is required. The migration command is safe to re-run; D1 applies only
-what is missing.
+The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. For the full current Games rollout checklist, quotas, local
+Worker testing, and rollback notes, see [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md).
+The migration command is safe to re-run; D1 applies only what is missing.
 
 ---
 
-## 0. What actually changed in this update
+## 0. Current Games rollout
 
-| Area | Change | You must act? |
+| Area | Change | Owner action |
 | --- | --- | --- |
-| D1 schema | Paint adds `0007_paint_stickers_activity.sql` to the existing `bnji-board` schema | **Yes** — run `migrations apply` |
-| KV namespace | Unchanged | No |
-| D1 binding | Unchanged | No |
-| Admin credential | New `admin_credentials` table, seeded by migration 0005 | **Yes** — rotate the token |
-| `ACCESS_SECRET` | Now required for `/admin` to work at all | **Yes** — add the secret |
-| Public pages | None | No |
+| D1 | Additive migrations `0011_games.sql` (sessions/scores) and `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves) | Apply only pending migrations to existing `bnji-board` after backup |
+| Worker / Durable Objects | Astro HTTP handler, hourly retention Cron, SQLite class `GameRoom` under Wrangler migration `game-rooms-v1` | Deploy `src/worker.ts`; Wrangler applies the new class migration; confirm trigger and binding |
+| Admin | Games & play view and configurable raw tracking retention | No new credential; existing `/admin` guard applies |
+| Secrets/resources | No new binding, paid product, third-party service, or secret | None |
 
-Nothing in this update creates a second database, a second namespace, or a
-bucket. The storage model is unchanged: one D1 database, one KV namespace.
+The full current checklist—including local Worker/Durable Object verification, Free quotas, privacy, score-verifier setup and rollback—is in
+[`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md). The rest of this document
+preserves shared owner guidance; the migration list below is based on actual
+pending D1 history, not a fixed expected list.
 
 ---
 
@@ -43,25 +42,10 @@ migrations have run in its own `d1_migrations` table, so this command applies
 npx wrangler d1 migrations apply bnji-board --remote
 ```
 
-Expected output — any unapplied migrations, including `0007_paint_stickers_activity.sql`; on a database already current with shared Paint, the only new entry is `0007_paint_stickers_activity.sql`:
-
-```
-┌──────────────────────────────────────┐
-│ Name                                 │
-├──────────────────────────────────────┤
-│ 0002_profiles.sql                    │
-│ 0003_security_events.sql              │
-│ 0004_board_moderation.sql             │
-│ 0005_admin_credentials.sql            │
-│ 0006_board_paint.sql                  │
-│ 0007_paint_stickers_activity.sql      │
-│ 0009_site_settings.sql                │
-└──────────────────────────────────────┘
-```
-
-If you see `0001_board_messages.sql` in that list, your database was never
-migrated — run it, it is `CREATE TABLE IF NOT EXISTS` and will not harm
-existing data.
+The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql` and `0012_game_players_saves.sql` (unless `0011` was applied earlier). Review the list before continuing. If legacy migrations also
+appear, confirm that is expected for the target database; migration `0001`
+should not be assumed harmless merely because it uses `CREATE TABLE IF NOT
+EXISTS`—review the database state and backup first.
 
 **To check before applying** (read-only, safe):
 
@@ -78,13 +62,19 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `profile_views` | `/gizlyy/` view counter | One row per (profile, session, UTC day), so refreshing does not inflate the number |
 | `profile_link_clicks` | `/gizlyy/` link clicks | Per-link counters |
 | `profile_reactions` | `/gizlyy/` emoji reactions | One per session per reaction |
-| `security_events` | Abuse detection | IP, user agent, referrer, coarse geo, device data. **Admin-only, 60-day retention, never in any public response** |
+| `security_events` | Abuse detection | IP, user agent, referrer, coarse geo, device data. **Admin-only; shared configurable tracking retention, never public** |
 | `board_reports` | Board report flow | `(message_id, reporter_key)` primary key, so one visitor cannot inflate a report count |
 | `admin_credentials` | `/admin` sign-in | Exactly one row, `id = 1`. Stores only `hex(sha256(token))` |
 | `board_paint_state` | `/board/` shared Paint canvas | One bounded drawing PNG, revision and editable sticker list |
 | `board_paint_commits` | Paint publish retries | At most 128 recent request IDs for idempotency |
-| `board_paint_activity` | Admin security/activity surface | Accepted publish summaries only; admin-only, 60-day retention, capped at 5,000 rows |
-| `site_settings` | Dynamic site configuration | Dynamic key-value store for `/admin` → Configuration hot-swapping |
+| `board_paint_activity` | Admin security/activity surface | Accepted publish summaries only; admin-only, shared configurable tracking retention, capped at 5,000 rows |
+| `site_settings` | Dynamic site configuration | Dynamic key-value store for `/admin` → Configuration hot-swapping, including game/security raw tracking retention |
+| `game_sessions` | Games & play admin view | Anonymous guest/game/run totals, bounded visible active time and private device/IP metadata |
+| `game_scores` | Leaderboard foundation | Server-validated only, one guest-session personal best per game/mode, top 500 per mode |
+| `game_players` | Optional global game identity | Opaque ID; recovery-code digest only; no email/password |
+| `game_player_sessions` | Player authentication | Random session-token digests, expiry/revocation; FK cascade on delete |
+| `game_auth_attempts` | Recovery-code sign-in throttling | Hashed IP only; bounded age cleanup |
+| `game_saves` | Cross-device progress | Versioned JSON, ≤16 KiB/save, max 25 slots/player, revision CAS |
 
 Migration `0004` added four columns to the existing `board_messages`:
 `report_count`, `reported_at`, `status_note`, `moderated_at`. Migration `0006`
@@ -193,8 +183,7 @@ ACCESS_SECRET=<any random string>
 ```
 
 `--local` is required while the duplicate `bnji_board` binding exists in
-`wrangler.json`; see CONFIGURATION.md §5.2. Removing that binding is the
-permanent fix and touches no application code.
+`wrangler.json`; see CONFIGURATION.md §5.2. Use `--local` for local development and never let a local command target the remote `bnji_board` binding.
 
 ---
 

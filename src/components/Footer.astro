@@ -6,6 +6,7 @@
  * Contained in a pill-shaped capsule with a low vertical profile, never overlapping floating layers.
  */
 import { SITE, SOCIAL_LINKS } from '../data/site';
+import { FOOTER_NAV } from '../data/navigation';
 import BrandMark from './BrandMark.astro';
 
 const year = new Date().getFullYear();
@@ -17,6 +18,14 @@ const year = new Date().getFullYear();
 			<BrandMark size={14} />
 			<span class="footer-copy">&copy; {year} {SITE.name}</span>
 		</div>
+
+		<nav class="footer-pages" aria-label="Site">
+			<ul role="list">
+				{FOOTER_NAV.map((link) => (
+					<li><a href={link.href}>{link.label}</a></li>
+				))}
+			</ul>
+		</nav>
 
 		<nav class="footer-links" aria-label="Elsewhere">
 			<ul class="footer-socials" role="list">
@@ -98,6 +107,35 @@ const year = new Date().getFullYear();
 	.footer-stack {
 		color: var(--text-faint);
 		letter-spacing: 0.04em;
+	}
+
+	.footer-pages ul {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 0.45rem 0.9rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.footer-pages a {
+		color: var(--text-muted);
+		text-decoration: none;
+		font-size: var(--text-micro);
+		transition: color var(--dur-fast) var(--ease-out);
+	}
+
+	.footer-pages a:hover,
+	.footer-pages a:focus-visible {
+		color: var(--accent-strong);
+	}
+
+	.footer-pages a:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 3px;
+		border-radius: var(--radius-sm);
 	}
 
 	.footer-links {

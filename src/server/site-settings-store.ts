@@ -10,6 +10,7 @@ import { DM_INTEGRATION, type DmIntegrationConfig } from '../config/integrations
 import { THEME_CONFIG, INTRO_CONFIG } from '../config/access.config';
 import { SITE } from '../data/site';
 import { serverEnvironment } from './env';
+import { DEFAULT_TRACKING_RETENTION_DAYS, MIN_TRACKING_RETENTION_DAYS, MAX_TRACKING_RETENTION_DAYS } from './tracking-retention';
 
 export type DynamicSiteSettings = {
 	// Board policy
@@ -35,6 +36,8 @@ export type DynamicSiteSettings = {
 	// System defaults
 	defaultTheme: 'dark' | 'light';
 	introEnabled: boolean;
+	/** Shared raw tracking/score retention; configurable from Admin. */
+	trackingRetentionDays: number;
 };
 
 export const DYNAMIC_SETTINGS_DEFAULTS: DynamicSiteSettings = {
@@ -57,6 +60,7 @@ export const DYNAMIC_SETTINGS_DEFAULTS: DynamicSiteSettings = {
 
 	defaultTheme: THEME_CONFIG.defaultTheme,
 	introEnabled: INTRO_CONFIG.enabled,
+	trackingRetentionDays: DEFAULT_TRACKING_RETENTION_DAYS,
 };
 
 type D1Database = {
@@ -128,6 +132,7 @@ export function sanitizeSettings(raw: Record<string, unknown>): DynamicSiteSetti
 
 		defaultTheme: raw.defaultTheme === 'light' ? 'light' : 'dark',
 		introEnabled: bool(raw.introEnabled, DYNAMIC_SETTINGS_DEFAULTS.introEnabled),
+		trackingRetentionDays: Math.round(num(raw.trackingRetentionDays, DEFAULT_TRACKING_RETENTION_DAYS, MIN_TRACKING_RETENTION_DAYS, MAX_TRACKING_RETENTION_DAYS)),
 	};
 }
 

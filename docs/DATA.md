@@ -69,9 +69,12 @@ moderation flow would need to add.
 
 ## 4. Abuse-prevention data (rate limiting)
 
-`src/server/ratelimit.ts` keeps **fixed-window counters in KV** — this is the
-only abuse-prevention state, and the only place a visitor's IP address is
-recorded anywhere.
+`src/server/ratelimit.ts` keeps **fixed-window counters in KV** for board and
+DM abuse throttles. The key names contain the connecting IP only for the short
+window described below. This is separate from private security-event and Games
+tracking in D1; those tables and their access/retention rules are documented in
+[`PROFILES.md`](./PROFILES.md) and
+[`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md).
 
 - **Key shape:** `rl:<scope>:<clientKey>:<windowIndex>`, where
   `windowIndex = floor(now / windowMs)`. Scopes in use: `board:post:<ip>`
@@ -175,8 +178,14 @@ Rules the endpoint holds itself to:
 - **No invented metrics.** Every field maps to a real column. A group whose
   store is unavailable returns `null` and the panel prints an explanation, not a
   convincing `0`.
-- **Security telemetry stays separate.** It lives in `security_events` under its
-  own 60-day retention and never contributes to any public or traffic figure.
+- **Security telemetry stays separate.** It lives in `security_events` under
+  the shared configurable raw-tracking retention (default 60 days, 1–365) and
+  never contributes to any public or traffic figure. An hourly Cron sweep and
+  guarded admin reads delete at most 50 expired rows per table per invocation;
+  query cutoffs exclude expired rows immediately. The scheduled sweep can delete
+  at most 60 per table (50 plus a 10-row catch-up when the first batch is full).
+  Backlogs larger than one batch take multiple hourly sweeps plus scheduler
+  jitter to delete physically, because D1 has no row-TTL feature on this design.
 - **Deduplicated by the source.** The per-session-per-day rule is the store's,
   not the dashboard's, so a refresh cannot inflate a total.
 
@@ -198,9 +207,14 @@ recovery procedure.
 
 - Messages are **public by design**; posting requires no account and stores no
   identity.
-- The only personal datum touched is the connecting IP, held transiently in KV
-  rate-limit key names (§4) and never written to D1 or logs beyond Worker
-  console warnings.
+- The board/DM rate limiter holds the connecting IP transiently in KV key
+  names (§4); it does not write those rate-limit keys to D1. This is not a
+  site-wide statement: the separate profile `security_events` and Games
+  `game_sessions` stores collect additional request/device metadata for
+  abuse-detection and private usage reporting. They are admin-only, have
+  configurable retention, and are described in [`PROFILES.md`](./PROFILES.md)
+  and [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md). A 60-day default is a
+  product setting, not a claim of legal compliance.
 - **Credential material is stored as a hash, never as a secret.**
   `admin_credentials.token_hash` is a SHA-256 digest — there is no code path
   that reads the access token back, by design. The HMAC key that signs admin
@@ -209,9 +223,28 @@ recovery procedure.
   in the Worker environment (`wrangler secret put`).
 - Profile analytics (`profile_views`, `profile_reactions`,
   `profile_link_clicks`) are keyed by an **ephemeral random session cookie**
-  (`bnji_ps`, `src/config/session.config.ts`), not by an identity. The
+  (`bnji_ps`, `src/config/session.config.ts`), not by a player identity. The
   `session_key` is discarded with the cookie and is not correlatable across
-  sessions.
+  sessions. Games may optionally upgrade the same validated guest session to a
+  separate global player identity; this does not change profile analytics or
+  `/admin` authentication.
+- Games identity rows are in `game_players`, `game_player_sessions`,
+  `game_auth_attempts`, and `game_saves` (migration `0012`). Recovery codes
+  contain 160 bits of random entropy and only their SHA-256 digests are stored;
+  opaque 256-bit session tokens are also stored only as digests. The
+  authentication-throttle table stores a hashed IP, not the source IP. Account
+  identity and saves are optional; guest play/local progress do not require
+  them. Players may export or delete their account; deleting cascades saves,
+  linked score/run references as implemented, and live sessions. There is no
+  email or operator-assisted recovery. The game save JSON is private, bounded
+  to 16 KiB/blob and 25 slots/player; the generic schema does not validate game
+  rules or scores. See [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) for the
+  full contract, retention, quotas and owner rollout.
+- Room codes and room state live in short-lived SQLite-backed `GameRoom`
+  Durable Objects (maximum two-hour lifetime); state is opaque and untrusted,
+  with no chat history or generic score/game-rule validation. See the Games
+  operations/decision records for the exact message/state bounds and quota
+  policy.
 
 ## 10. Shared Paint canvas
 
@@ -278,9 +311,12 @@ authenticated visitor. The trail is never returned by `/api/paint`; it is
 available only through the guarded admin Paint activity endpoint and has
 `cache-control: no-store`.
 
-Paint activity follows the existing 60-day retention policy and is capped at
-5,000 rows. Old rows are lazily purged on admin reads and on accepted publishes;
-new writes also trim the table to its row bound. Public publishes remain limited
+Paint activity follows the shared `trackingRetentionDays` setting (default
+60 days, 1–365) and is capped at 5,000 rows. The hourly Worker sweep deletes at
+most 60 expired rows per table (a 50-row primary batch plus a 10-row catch-up
+only when the primary batch is full); private admin reads make a separate
+bounded batch of at most 50. Query filters hide expired rows immediately.
+Larger backlogs take multiple sweeps plus scheduler jitter to delete physically. Public publishes remain limited
 to 30 per IP per hour using the existing KV throttle; its transient IP key has
 the TTL described in §4 and is not copied into the activity table.
 

@@ -17,8 +17,8 @@
  *     CPU cores, device memory, platform, timezone, language, WebGL renderer,
  *     touch support, device fingerprint hash.
  *
- * Retention: 60 days. Lazy cleanup on admin reads — when the row count
- * exceeds CLEANUP_THRESHOLD, rows older than 60 days are deleted.
+ * Retention: shared admin-configurable raw-tracking window (60 days by
+ * default, 1–365). Hourly Worker cleanup plus admin-read recovery sweep.
  *
  * Privacy (Quebec Law 25 / PIPEDA): IP addresses, user-agent strings,
  * referrer URLs, precise geolocation, and device identifiers are personal
@@ -28,6 +28,8 @@
  *
  * Admin access: see src/pages/api/admin/ and the /admin dashboard.
  */
+
+import { getTrackingRetentionDays, purgeExpiredTrackingRows } from './tracking-retention';
 
 /* --- structural D1 types (same pattern as board-store, profile-store) ---- */
 
@@ -176,9 +178,9 @@ export interface SecurityStore {
 
 /* --- retention config ----------------------------------------------------- */
 
-/** Days to keep security events. Exported so the admin config can report it. */
+/** Legacy default retained for compatibility; runtime retention comes from trackingRetentionDays. */
 export const RETENTION_DAYS = 60;
-/** Trigger cleanup when table exceeds this many rows. Exported for the admin config. */
+/** Legacy cleanup threshold retained for the existing admin configuration display; no longer gates expiry. */
 export const CLEANUP_THRESHOLD = 5000;
 
 /* --- SQL column lists (kept in sync with the schema) ---------------------- */
@@ -406,26 +408,15 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 		},
 
 		async listRecent(query) {
-			// Lazy retention cleanup. Runs on admin reads only — the public
-			// surfaces never touch this table.
-			try {
-				const countRow = await db
-					.prepare('SELECT COUNT(*) as cnt FROM security_events')
-					.first<number>('cnt');
-				const total = Number(countRow ?? 0);
-				if (total > CLEANUP_THRESHOLD) {
-					const cutoff = Date.now() - RETENTION_DAYS * 86_400_000;
-					await db
-						.prepare('DELETE FROM security_events WHERE created_at < ?1')
-						.bind(cutoff)
-						.run();
-				}
-			} catch (error) {
-				console.warn('[bnji] security event cleanup failed:', error);
-			}
+			// A private admin read performs only one bounded recovery batch. The
+			// cutoff also hides any remaining backlog from the response.
+			const days = await getTrackingRetentionDays(db);
+			const cutoff = Date.now() - days * 86_400_000;
+			try { await purgeExpiredTrackingRows(db, 'security_events', cutoff); }
+			catch { console.warn('[bnji] security event cleanup failed'); }
 
 			const safeLimit = Math.min(Math.max(1, Math.floor(query.limit) || 1), 500);
-			const where = buildWhere(query);
+			const where = buildWhere({ ...query, since: Math.max(query.since ?? cutoff, cutoff) });
 			const { results } = await db
 				.prepare(
 					`SELECT ${ALL_COLUMNS.trim()}
@@ -438,7 +429,9 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 		},
 
 		async countMatching(filters) {
-			const where = buildWhere(filters);
+			const retentionDays = await getTrackingRetentionDays(db);
+			const cutoff = Date.now() - retentionDays * 86_400_000;
+			const where = buildWhere({ ...filters, since: Math.max(filters.since ?? cutoff, cutoff) });
 			const total = await db
 				.prepare(`SELECT COUNT(*) as cnt FROM security_events ${where.sql}`)
 				.bind(...where.values)
@@ -447,7 +440,10 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 		},
 
 		async summarize() {
-			const dayAgo = Date.now() - 86_400_000;
+			const retentionDays = await getTrackingRetentionDays(db);
+			const now = Date.now();
+			const cutoff = now - retentionDays * 86_400_000;
+			const dayAgo = Math.max(now - 86_400_000, cutoff);
 			const [
 				totalRow,
 				enrichedRow,
@@ -457,33 +453,38 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 				bySurfaceResults,
 				byEndpointResults,
 			] = await Promise.all([
-				db.prepare('SELECT COUNT(*) as cnt FROM security_events').first<number>('cnt'),
+				db.prepare('SELECT COUNT(*) as cnt FROM security_events WHERE created_at >= ?1').bind(cutoff).first<number>('cnt'),
 				db
-					.prepare('SELECT COUNT(*) as cnt FROM security_events WHERE device_fingerprint IS NOT NULL')
+					.prepare('SELECT COUNT(*) as cnt FROM security_events WHERE created_at >= ?1 AND device_fingerprint IS NOT NULL')
+					.bind(cutoff)
 					.first<number>('cnt'),
 				db
-					.prepare('SELECT COUNT(DISTINCT ip_address) as cnt FROM security_events')
+					.prepare('SELECT COUNT(DISTINCT ip_address) as cnt FROM security_events WHERE created_at >= ?1')
+					.bind(cutoff)
 					.first<number>('cnt'),
 				db
-					.prepare('SELECT COUNT(DISTINCT device_fingerprint) as cnt FROM security_events WHERE device_fingerprint IS NOT NULL')
+					.prepare('SELECT COUNT(DISTINCT device_fingerprint) as cnt FROM security_events WHERE created_at >= ?1 AND device_fingerprint IS NOT NULL')
+					.bind(cutoff)
 					.first<number>('cnt'),
 				db
 					.prepare('SELECT COUNT(*) as cnt FROM security_events WHERE created_at >= ?1')
 					.bind(dayAgo)
 					.first<number>('cnt'),
 				db
-					.prepare('SELECT surface, COUNT(*) as cnt FROM security_events GROUP BY surface')
+					.prepare('SELECT surface, COUNT(*) as cnt FROM security_events WHERE created_at >= ?1 GROUP BY surface')
+					.bind(cutoff)
 					.all<{ surface: SecuritySurface; cnt: number }>(),
 				db
 					.prepare(
-						'SELECT surface, endpoint, COUNT(*) as cnt FROM security_events GROUP BY surface, endpoint ORDER BY cnt DESC',
+						'SELECT surface, endpoint, COUNT(*) as cnt FROM security_events WHERE created_at >= ?1 GROUP BY surface, endpoint ORDER BY cnt DESC',
 					)
+					.bind(cutoff)
 					.all<{ surface: SecuritySurface; endpoint: string; cnt: number }>(),
 			]);
 
 			return {
 				total: Number(totalRow ?? 0),
-				retentionDays: RETENTION_DAYS,
+				retentionDays,
 				bySurface: bySurfaceResults.results.map((r) => ({ surface: r.surface, count: Number(r.cnt) })),
 				byEndpoint: byEndpointResults.results.map((r) => ({
 					surface: r.surface,

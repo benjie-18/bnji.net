@@ -71,6 +71,7 @@ export function sessionCookieHeader(key: string): string {
 		'Path=/',
 		`Max-Age=${SESSION_CONFIG.maxAgeSeconds}`,
 		`SameSite=${SESSION_CONFIG.sameSite}`,
+		'Secure',
 	];
 	if (SESSION_CONFIG.httpOnly) parts.push('HttpOnly');
 	return parts.join('; ');

@@ -1,9 +1,9 @@
 /**
  * BNJI.NET — client entry point.
  *
- * One module, one bundle, one call site (src/layouts/Layout.astro). The site is
+ * One entry module and one call site (src/layouts/Layout.astro). The site is
  * Astro-first: this file plus starfield/interactions/scroll is the entire
- * client-side JavaScript for every page. No framework is shipped to the browser.
+ * shared client-side entry for every page; optional features are loaded only on the pages that use them. No framework is shipped to the browser.
  *
  * Each feature is started inside its own guard so that a failure in one (a
  * missing element, an unsupported API, an experiment gone wrong) degrades that
@@ -70,4 +70,11 @@ export function boot(): void {
 	start('image-converter', initImageConverter);
 	// Restore verity balls on navigation if active in sessionStorage
 	start('verity-balls', initVerityBalls);
+	// Keep game session tracking out of the shared client chunk and skip the
+	// lazy module request entirely on pages without Lab experiments.
+	if (document.querySelector('[data-lab-experiment]')) {
+		void import('./game-runtime')
+			.then(({ initLabGameTracking }) => start('lab-game-tracking', initLabGameTracking))
+			.catch((error) => console.warn('[bnji] lab-game-tracking did not start:', error));
+	}
 }

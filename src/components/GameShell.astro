@@ -1,0 +1,165 @@
+---
+/**
+ * Shared accessible game chrome. Game-specific state and rendering stay in the
+ * consumer's slot; this component owns the lifecycle-facing status, focus and
+ * pause/error/results presentation only.
+ */
+type State = 'loading' | 'ready' | 'paused' | 'error' | 'results';
+interface Props {
+	gameId: string;
+	title: string;
+	instructions: string;
+	initialState?: State;
+	level?: 1 | 2 | 3;
+}
+const { gameId, title, instructions, initialState = 'ready', level = 1 } = Astro.props;
+const headingId = `game-${gameId.replace(/[^a-zA-Z0-9_-]/g, '-')}-title`;
+const instructionsId = `${headingId}-instructions`;
+const Title = `h${level}` as const;
+---
+
+<section
+	class="game-shell container"
+	data-game-shell
+	data-game-id={gameId}
+	data-game-title={title}
+	data-game-state={initialState}
+	aria-labelledby={headingId}
+	aria-describedby={instructionsId}
+>
+	<div class="game-shell__surface" data-glass="raised">
+		<header class="game-shell__header">
+			<p class="eyebrow">PLAY / {gameId}</p>
+			<Title id={headingId}>{title}</Title>
+			<p id={instructionsId} class="game-shell__instructions">{instructions}</p>
+		</header>
+
+		<p
+			class="sr-only"
+			data-game-shell-status
+			role={initialState === 'error' ? 'alert' : 'status'}
+			aria-live={initialState === 'error' ? 'assertive' : 'polite'}
+			aria-atomic="true"
+		>
+			{initialState === 'loading' ? `Loading ${title}.` : initialState === 'paused' ? `${title} is paused.` : initialState === 'error' ? `${title} could not start.` : initialState === 'results' ? `${title} results are ready.` : `${title} is ready.`}
+		</p>
+
+		<div data-game-shell-panel="loading" hidden={initialState !== 'loading'} class="game-shell__panel">
+			<span class="game-shell__pulse" aria-hidden="true"></span>
+			<h2 data-game-shell-focus tabindex="-1">Loading {title}</h2>
+			<p>Please wait while the game prepares.</p>
+		</div>
+
+		<div data-game-shell-panel="ready" hidden={initialState !== 'ready'} class="game-shell__panel">
+			<div class="game-shell__content"><slot /></div>
+			<div class="game-shell__actions">
+				<button type="button" class="game-shell__button" data-game-pause>Pause game</button>
+			</div>
+		</div>
+
+		<div data-game-shell-panel="paused" hidden={initialState !== 'paused'} class="game-shell__panel">
+			<h2 data-game-shell-focus tabindex="-1">Game paused</h2>
+			<p>Your game is paused. Resume when you are ready.</p>
+			<div class="game-shell__actions">
+				<button type="button" class="game-shell__button" data-game-resume>Resume game</button>
+			</div>
+		</div>
+
+		<div data-game-shell-panel="error" hidden={initialState !== 'error'} class="game-shell__panel" data-game-shell-error>
+			<h2 data-game-shell-focus tabindex="-1">Game unavailable</h2>
+			<p>This game could not start in this browser. You can return to the Games catalog.</p>
+			<a class="game-shell__link" href="/games/">Return to Games</a>
+		</div>
+
+		<div data-game-shell-panel="results" hidden={initialState !== 'results'} class="game-shell__panel">
+			<h2 data-game-shell-focus tabindex="-1">Results</h2>
+			<div class="game-shell__results"><slot name="results"><p>Your game session is complete.</p></slot></div>
+			<a class="game-shell__link" href="/games/">Return to Games</a>
+		</div>
+	</div>
+</section>
+
+<script>
+	import { initGameShells } from '../scripts/game-shell';
+	initGameShells();
+</script>
+
+<style>
+	.game-shell { padding-block: clamp(1rem, 4vw, 2.5rem) 5rem; }
+	.game-shell__surface {
+		max-width: 72rem;
+		margin-inline: auto;
+		padding: clamp(1.2rem, 4vw, 2.5rem);
+		border-radius: var(--radius-xl);
+	}
+	.game-shell__header { max-width: 66ch; margin-block-end: clamp(1.5rem, 5vw, 3rem); }
+	.game-shell__header h1,
+	.game-shell__header h2,
+	.game-shell__header h3 {
+		margin: 0.35rem 0 0;
+		color: var(--text-strong);
+		font-size: var(--text-display);
+		letter-spacing: var(--tracking-snug);
+		line-height: 1.08;
+		text-wrap: balance;
+	}
+	.game-shell__header .eyebrow { margin: 0; color: var(--accent-strong); }
+	.game-shell__instructions,
+	.game-shell__panel > p,
+	.game-shell__results { color: var(--text-muted); line-height: 1.7; }
+	.game-shell__instructions { max-width: 65ch; margin-block: 0.85rem 0; }
+	.game-shell__panel { display: grid; justify-items: start; gap: 0.85rem; min-width: 0; }
+	.game-shell__panel[hidden] { display: none !important; }
+	.game-shell__panel h2 { margin: 0; color: var(--text-strong); font-size: var(--text-title); }
+	.game-shell__content { width: 100%; min-width: 0; }
+	.game-shell__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block-start: 0.5rem; }
+	.game-shell__button,
+	.game-shell__link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 2.75rem;
+		padding: 0.65rem 1rem;
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-md);
+		background: var(--glass-bg-quiet);
+		color: var(--text-strong);
+		font: inherit;
+		font-weight: 600;
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.game-shell__button:hover,
+	.game-shell__link:hover { border-color: var(--accent-strong); }
+	.game-shell__button:focus-visible,
+	.game-shell__link:focus-visible,
+	.game-shell__panel [tabindex="-1"]:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 4px;
+	}
+	.game-shell__link { color: var(--accent-strong); }
+	:global(html:not(.js)) .game-shell [data-game-pause],
+	:global(html:not(.js)) .game-shell [data-game-resume] { display: none; }
+	.game-shell__pulse {
+		width: 0.8rem;
+		aspect-ratio: 1;
+		border-radius: 50%;
+		background: var(--accent-strong);
+		box-shadow: 0 0 0.9rem var(--accent-strong);
+		animation: game-shell-pulse 1.2s ease-in-out infinite alternate;
+	}
+	.game-shell__results { width: 100%; }
+	@keyframes game-shell-pulse { to { opacity: 0.35; transform: scale(0.8); } }
+	@media (max-width: 560px) {
+		.game-shell__surface { padding: 1.1rem; }
+		.game-shell__header h1, .game-shell__header h2, .game-shell__header h3 { font-size: var(--text-title); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.game-shell__pulse { animation: none; }
+		.game-shell__button, .game-shell__link { scroll-behavior: auto; transition: none; }
+	}
+	@media (forced-colors: active) {
+		.game-shell__button, .game-shell__link { border: 1px solid ButtonText; }
+		.game-shell__button:focus-visible, .game-shell__link:focus-visible { outline-color: Highlight; }
+	}
+</style>

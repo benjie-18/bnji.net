@@ -1,8 +1,14 @@
-# BNJI.NET - Agent Context Recap
+# BNJI.NET - Historical Agent Context Recap
 
-Complete top-to-bottom map of the site as of the final session state (now on GitHub `main`,
-plus the owner's follow-up commit wiring real D1/KV binding IDs). Read `AGENTS.md` first -
-it holds the hard rules; this document explains how everything actually works.
+This is a point-in-time architecture snapshot from before the playlist and Games
+migrations/features were added; it is **not** a current inventory. Read `AGENTS.md`
+for repository guidance and prefer current source/configuration. The current Games
+catalog, part-one and part-two architecture decisions, identity/save/room
+contracts, retention, quota evidence, local Worker procedure and owner rollout
+notes are in [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md),
+[`GAMES-DECISIONS.md`](./GAMES-DECISIONS.md), and
+[`PLAYER-MULTIPLAYER-DECISIONS.md`](./PLAYER-MULTIPLAYER-DECISIONS.md). The remaining sections below are
+historical context and may contain outdated route/config lists.
 
 ## 1. What the site is
 

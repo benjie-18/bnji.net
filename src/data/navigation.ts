@@ -61,6 +61,7 @@ export const PRIMARY_NAV: NavEntry[] = [
 		items: [
 			{ label: 'Projects', href: '/projects/', description: 'Selected work and placeholders' },
 			{ label: 'Lab', href: '/lab/', description: 'Interactive experiments' },
+			{ label: 'Games', href: '/games/', description: 'A growing catalog of games' },
 			{ label: 'Tools', href: '/tools/', description: 'Image and JSON tools that run locally' },
 		],
 	},
@@ -108,6 +109,7 @@ export const FOOTER_NAV: NavItem[] = [
 	{ label: 'Blog', href: '/blog/' },
 	{ label: 'Projects', href: '/projects/' },
 	{ label: 'Lab', href: '/lab/' },
+	{ label: 'Games', href: '/games/' },
 	{ label: 'Board', href: '/board/' },
 	{ label: 'Profile', href: '/gizlyy/' },
 	{ label: 'Contact', href: '/contact/' },

@@ -26,7 +26,7 @@ import { MUSIC_LOOKUP, MUSIC_PLAYLIST, MUSIC_SOURCE } from '../../../config/musi
 import { ACCESS_RULES, THEME_CONFIG, INTRO_CONFIG } from '../../../config/access.config';
 import { SITE } from '../../../data/site';
 import { getProfileBySlug, PROFILES } from '../../../data/profiles';
-import { RETENTION_DAYS, CLEANUP_THRESHOLD } from '../../../server/security-store';
+import { CLEANUP_THRESHOLD } from '../../../server/security-store';
 import { REPORT_RETENTION_DAYS } from '../../../server/board-store';
 import { adminUnauthorized, isAdminRequest, adminNotConfigured, adminConfigured } from '../../../server/admin';
 import { getSiteSettings, updateSiteSettings } from '../../../server/site-settings-store';
@@ -172,9 +172,12 @@ export async function GET(context: APIContext): Promise<Response> {
 		// Operational policy that is not a single config value but governs
 		// what the admin can see at all.
 		retention: {
-			securityEventsDays: RETENTION_DAYS,
+			trackingRetentionDays: dynamicSettings.trackingRetentionDays,
+			securityEventsDays: dynamicSettings.trackingRetentionDays,
+			gameSessionsAndScoresDays: dynamicSettings.trackingRetentionDays,
+			boardPaintActivityDays: dynamicSettings.trackingRetentionDays,
 			boardReportsDays: REPORT_RETENTION_DAYS,
-			securityCleanupThreshold: CLEANUP_THRESHOLD,
+			legacySecurityCleanupThreshold: CLEANUP_THRESHOLD,
 		},
 
 		environment: {

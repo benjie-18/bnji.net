@@ -1,0 +1,27 @@
+---
+// This file is copied into src/pages only while Playwright's temporary dev server runs.
+import GameShell from '../components/GameShell.astro';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Game shell test" description="Development fixture for the reusable game shell." noindex>
+	<GameShell gameId="bnji.shell-fixture" title="Shell test" instructions="Use the controls to test accessible game-shell states." initialState="ready">
+		<p>The game content remains supplied by its owner.</p>
+		<button type="button" data-demo-loading>Show loading state</button>
+		<button type="button" data-demo-error>Show error state</button>
+		<button type="button" data-demo-results>Show results state</button>
+		<p slot="results">Demo result: complete.</p>
+	</GameShell>
+</Layout>
+
+<script>
+	import { setGameShellState } from '../scripts/game-shell';
+	const root = document.querySelector<HTMLElement>('[data-game-shell]');
+	root?.addEventListener('click', (event) => {
+		const target = event.target;
+		if (!(target instanceof Element)) return;
+		if (target.closest('[data-demo-loading]')) setGameShellState(root, 'loading');
+		if (target.closest('[data-demo-error]')) setGameShellState(root, 'error');
+		if (target.closest('[data-demo-results]')) setGameShellState(root, 'results');
+	});
+</script>

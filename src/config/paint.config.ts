@@ -30,7 +30,6 @@ export const PAINT_CONFIG = {
 	retainedCommitIds: 128,
 	maxActionsPerPublish: 5000,
 	maxActivityRows: 5000,
-	activityRetentionDays: 60,
 	palette: [
 		{ name: 'Charcoal', token: 'var(--paint-ink-charcoal)' },
 		{ name: 'Red', token: 'var(--paint-ink-red)' },

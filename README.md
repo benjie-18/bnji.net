@@ -18,7 +18,9 @@ bokeh) — both wrapped in a realistic liquid-glass surface system. Built with
 > | [`docs/ADMIN.md`](./docs/ADMIN.md) | The admin system — the token, sessions, the stats dashboard, and how to rotate the credential |
 > | [`docs/PROFILES.md`](./docs/PROFILES.md) | The profile link page: its counter, click tracking and privacy posture |
 > | [`docs/AGENT-RECAP.md`](./docs/AGENT-RECAP.md) | Architecture recap: boot order, data flow, and the invariants to preserve |
-> | [`docs/DEPLOY.md`](./docs/DEPLOY.md) | Owner runbook: pull, apply migrations, add secrets, deploy, rotate the admin token |
+> | [`docs/DEPLOY.md`](./docs/DEPLOY.md) | Owner runbook: migrations, existing secrets, deployment and verification |
+> | [`docs/GAMES-DECISIONS.md`](./docs/GAMES-DECISIONS.md) | Games architecture decision and identity/verifier seams |
+> | [`docs/GAMES-OPERATIONS.md`](./docs/GAMES-OPERATIONS.md) | Games setup, privacy/retention, Cloudflare Free quotas and first-game recipe |
 >
 > Content note: this project intentionally carries **no personal biography**;
 > identity copy is neutral placeholder text by design.
@@ -106,6 +108,7 @@ npm run deploy     # publish to Cloudflare Workers
   `requestAnimationFrame` loop pause via `IntersectionObserver` when scrolled
   away and on `visibilitychange` when the tab is hidden; the rest are driven by
   user events and have no loop to pause.
+- **Games** (`/games/`, linked under Projects) — a typed catalog linking five existing Lab mini-games without copying them. The shared lifecycle/tracker, private admin view, fail-closed score verifier, optional global player identity, bounded cross-device versioned saves, and generic authenticated Durable Object room transport are implemented. Guest/local play remains available; no playable game or game-specific score/turn validation was added. Free-plan rollout/migrations are owner-operated; see `docs/GAMES-OPERATIONS.md`.
 - **Browser tools** (`/tools/`, linked from the Projects dropdown) — two tools
   that never send anything anywhere, because there is no API route behind
   either of them. *Image Converter & Optimizer* decodes, resizes and re-encodes
@@ -120,7 +123,9 @@ npm run deploy     # publish to Cloudflare Workers
 - **Admin panel** (`/admin`, gated) — one shared access token stored as a
   SHA-256 hash in D1 and rotated from the panel itself; a site-wide statistics
   dashboard built only from data the app already records; board moderation;
-  a security-event log; and the runtime configuration dump. Sessions are
+  a security-event log; private Games & play session/device/playtime views; and
+  the runtime configuration dump. Raw game/security tracking retention is
+  editable in the panel and swept hourly. Sessions are
   HttpOnly/Secure/SameSite and are invalidated the moment the token rotates.
   Full write-up in [`docs/ADMIN.md`](./docs/ADMIN.md).
 - **Access control** — `ACCESS_RULES` declares protected prefixes; `src/middleware.ts`

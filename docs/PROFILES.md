@@ -170,11 +170,17 @@ by `POST /api/security/enrich`.
 | `touch_support` | INTEGER | `navigator.maxTouchPoints > 0` | 1 / 0 / NULL |
 | `device_fingerprint` | TEXT | Derived server-side | SHA-256 of the above + UA (24-char hex) |
 
-**Retention: 60 days.** Lazy cleanup on admin reads — when the row count
-exceeds 5000, rows older than 60 days are deleted. 60 days is long enough
-to detect sustained abuse patterns (e.g. a weeks-long bot campaign) and
-short enough to satisfy Quebec Law 25 and PIPEDA data-minimisation
-requirements for security-incident investigation.
+**Retention: shared admin-configurable window, default 60 days (range 1–365).**
+`trackingRetentionDays` in `/admin` → Configuration governs
+`security_events`, Games session/score tracking, and Paint activity. The hourly
+Worker cleanup deletes at most 60 expired rows per tracking table per invocation
+(a 50-row primary batch plus a 10-row catch-up only when the primary batch is
+full); a private admin read performs one additional bounded 50-row recovery
+batch, while query cutoffs exclude older rows immediately. A backlog can
+therefore take multiple sweeps plus scheduler jitter to be physically deleted. This is an operational
+retention setting, not a representation or guarantee of compliance with any
+privacy law; owners should select and review a period appropriate to their
+purposes and obligations.
 
 **Why these fields:**
 - `ip_address`: needed to identify and ban repeat abusers. Stored raw
@@ -191,7 +197,8 @@ requirements for security-incident investigation.
   `cf.latitude`/`cf.longitude` when the feature is enabled on the
   Cloudflare account. These are IP-derived coordinates and are strictly
   more sensitive than city — they are the highest-risk personal data in
-  this table and are treated as such (admin-only, 60-day retention).
+  this table and are treated as such (admin-only, shared configurable tracking
+  retention; 60 days by default).
 - `referrer`: the referring URL, which can contain personal browsing
   context and sensitive query parameters. Truncated to 2048 characters.
 - `fingerprint`: a lightweight SHA-256 hash of `ua + asn + country`. This
@@ -352,15 +359,18 @@ or any other product purpose.
 
 ### 4.4 Retention
 
-**60 days.** Rows older than that are purged during admin reads (lazy
-cleanup triggered when row count exceeds 5000). Justification: 60 days
-covers a sustained abuse campaign (e.g. a weeks-long bot attack) while
-minimising the window during which personal information is stored.
+**Configurable; 60 days by default (1–365 days).** The setting is stored in
+`site_settings` and can be changed under `/admin` → Configuration. An hourly
+Worker sweep removes expired rows; admin security reads run cleanup as a
+recovery path. Without a backlog larger than one batch, normal scheduled expiry
+can lag the configured cutoff by up to one hour plus scheduler jitter; larger
+backlogs need multiple sweeps. Do not treat this as exact-time TTL.
 
-Under Quebec's Law 25 and PIPEDA, IP addresses, device identifiers,
-precise geolocation, and referrer URLs are all personal information even
-when collected for security. The 60-day retention is the minimum useful
-window for abuse investigation.
+The 60-day default covers a sustained abuse campaign (e.g. a weeks-long bot
+attack) while minimising the window during which personal information is
+stored. Under Quebec's Law 25 and PIPEDA, IP addresses, device identifiers,
+precise geolocation, and referrer URLs are personal information even when
+collected for security.
 
 Note: the admin endpoint reads the event list first and the total count
 second, so the `total` it reports reflects post-purge state rather than

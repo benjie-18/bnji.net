@@ -1,0 +1,35 @@
+---
+import Chip from './Chip.astro';
+import GlassPanel from './GlassPanel.astro';
+import { GAME_STATUS_LABEL, type Game } from '../data/games';
+
+interface Props { game: Game }
+const { game } = Astro.props;
+const href = game.href ?? game.labHref;
+const capabilityText = game.capabilities?.join(' · ');
+---
+<GlassPanel pad="md" class="games-card" as="article">
+	<div class="games-card__top">
+		<span class="mono games-card__id">{game.id}</span>
+		<Chip>{GAME_STATUS_LABEL[game.status]}</Chip>
+	</div>
+	<h3>{game.title}</h3>
+	<p>{game.description}</p>
+	<div class="games-card__footer">
+		{href ? <a class="games-card__link" href={href}>{game.labHref ? 'Open in the Lab' : 'Play'} <span aria-hidden="true">↗</span></a> : <span class="games-card__link" aria-disabled="true">{game.status === 'unavailable' ? 'Temporarily offline' : 'Not playable yet'}</span>}
+		{capabilityText && <span class="games-capabilities">{capabilityText}</span>}
+	</div>
+</GlassPanel>
+
+<style>
+	.games-card { min-height: 100%; }
+	.games-card__top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+	.games-card__id { color: var(--text-dim); font-size: var(--text-micro); overflow-wrap: anywhere; }
+	.games-card h3 { margin: 1.1rem 0 0.45rem; color: var(--text-strong); font-size: var(--text-lead); }
+	.games-card p { color: var(--text-muted); line-height: 1.65; }
+	.games-card__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 1.25rem; }
+	.games-card__link { color: var(--accent-strong); text-decoration: none; font-weight: 600; }
+	.games-card__link:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 4px; border-radius: var(--radius-sm); }
+	.games-card__link[aria-disabled='true'] { color: var(--text-muted); cursor: default; }
+	.games-capabilities { color: var(--text-dim); font-size: var(--text-micro); }
+</style>

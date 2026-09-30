@@ -29,7 +29,8 @@
  *
  * SECURITY: the response is full of personal information under Quebec Law 25
  * and PIPEDA. It is gated, `no-store`, and must never be linked from a public
- * page. Retention (60 days, lazily purged here) bounds the exposure.
+ * page. The shared retention setting is 1–365 days (60 by default); each
+ * admin read purges one bounded batch and excludes expired backlog.
  */
 import {
 	SECURITY_SURFACES,
@@ -38,6 +39,7 @@ import {
 } from '../../../server/security-store';
 import { adminConfigured, adminNotConfigured, adminUnauthorized, isAdminRequest } from '../../../server/admin';
 import { serverEnvironment } from '../../../server/env';
+import { getTrackingRetentionDays } from '../../../server/tracking-retention';
 import type { APIContext } from 'astro';
 
 export const prerender = false;
@@ -101,7 +103,7 @@ export async function GET(context: APIContext): Promise<Response> {
 		const payload: Record<string, unknown> = {
 			events,
 			total: await store.countMatching(filters),
-			retentionDays: 60,
+			retentionDays: await getTrackingRetentionDays(env.BOARD_DB as Parameters<typeof getTrackingRetentionDays>[0]),
 			filters: {
 				surface: surface ?? null,
 				profileSlug: profileSlug ?? null,

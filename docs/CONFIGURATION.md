@@ -93,7 +93,7 @@ irrelevant here.
 | `BOARD_CONFIG.provider` | PUBLIC | `src/config/board.config.ts` | `'d1' \| 'rest'` preference. **No in-memory production fallback**: an unconfigured store returns an honest `503 storage_unconfigured` instead of silently losing messages. |
 | `maxTextLength: 250` | PUBLIC | same | Enforced server-side in `/api/board` with **422 `text_too_long`** — long posts are rejected, never truncated. |
 | other limits (`maxImageBytes`, `allowedImageTypes`, `postCooldownSeconds`, `hourlyPostLimit`, `pollIntervalMs`, visible-count range) | PUBLIC | same | Abuse/size policy; the server re-validates everything. |
-| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | One-time setup: `npx wrangler d1 create bnji-board`, paste the printed `database_id` into `wrangler.json` (the committed placeholder is a nil UUID so `wrangler dev` works locally but a deploy fails loudly until replaced), then `npx wrangler d1 migrations apply bnji-board --remote`. Local dev: `npx wrangler d1 migrations apply bnji-board --local` instead. Schema: the seven files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
+| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | The existing `bnji-board` database ID and binding are already configured; do not create/replace it for Games. Owner-operated deployments should review pending migrations and apply them with `npx wrangler d1 migrations apply bnji-board --remote`. Local development uses `--local`. Schema: the twelve files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
 | `BOARD_KV` KV binding | **INFRA** | `wrangler.json` | Shared rate limiting (see below). `npx wrangler kv namespace create BOARD_KV`, paste the id (same placeholder rule). |
 | `BOARD_REST_URL`, `BOARD_REST_TOKEN` | **SECRET** | Worker env | Optional external JSON API provider (`provider: 'rest'`). |
 
@@ -107,7 +107,7 @@ exact but adds deployment infra for no practical gain here. If KV is missing
 entirely, rate limiting **fails open** with a console warning — it is an abuse
 throttle, not authentication.
 
-### 5.1 D1 schema — seven migrations, one database
+### 5.1 D1 schema — twelve migrations, one database
 
 There is **one** D1 database (`bnji-board`, bound twice: see the note below). The
 migrations are cumulative and tracked by D1 in its own `d1_migrations` table, so
@@ -118,11 +118,16 @@ and is the normal way to move an existing database forward.
 | --- | --- | --- |
 | 0001 | `board_messages.sql` | `board_messages` + `idx_board_public`. The public feed's only table. |
 | 0002 | `profiles.sql` | `profile_views` (per-session daily dedup), `profile_link_clicks`, `profile_reactions`. Powers `/gizlyy/`. |
-| 0003 | `security_events.sql` | `security_events` + 4 indexes. Abuse telemetry, 60-day retention, admin-only, never public. |
+| 0003 | `security_events.sql` | `security_events` + 4 indexes. Abuse telemetry, shared configurable raw-tracking retention (60-day default), admin-only, never public. |
 | 0004 | `board_moderation.sql` | 4 columns on `board_messages` (`report_count`, `reported_at`, `status_note`, `moderated_at`), `board_reports`, 2 indexes. Makes the `status` column reachable from a real report flow. |
 | 0005 | `admin_credentials.sql` | `admin_credentials` (one row, `id = 1` enforced by CHECK). Holds `hex(sha256(token))` — the hashed admin token, rotated from the panel. |
 | 0006 | `board_paint.sql` | One versioned shared canvas snapshot plus a bounded set of recent publish IDs for safe retries. Independent of `board_messages`. |
-| 0007 | `paint_stickers_activity.sql` | Editable bounded sticker state plus a private Paint publish-summary trail (60-day retention, 5,000-row cap). |
+| 0007 | `paint_stickers_activity.sql` | Editable bounded sticker state plus a private Paint publish-summary trail (configurable tracking retention, 5,000-row cap). |
+| 0008 | `music_playlist.sql` | Ordered live playlist and seed-state tables. |
+| 0009 | `site_settings.sql` | Admin-editable runtime site settings, including tracking retention. |
+| 0010 | `secret_code_uses.sql` | Private bounded admin code-use metrics. |
+| 0011 | `games.sql` | Private per-game session runs and server-validated leaderboard rows. |
+| 0012 | `game_players_saves.sql` | Optional player identities, digested sessions, hashed-IP auth-attempt buckets, and bounded revisioned saves. |
 
 ⚠️ 0004 uses `ALTER TABLE … ADD COLUMN`, so it must run after 0001. The filename
 order D1 applies them in guarantees this — do not run the files by hand or
@@ -230,6 +235,23 @@ request is answered by one guard that reads the database.
 `POST /api/admin/session` with `newToken` performs the rotation; without it, the
 body is a login. Both paths live on the one route because they are the one
 concern: the credential and the sessions derived from it.
+
+### 6b. Private tracking retention — ADMIN SETTING
+
+`/admin` → **Configuration** exposes `trackingRetentionDays` (default **60**,
+allowed range **1–365**). It controls private `security_events`, Games
+`game_sessions`/`game_scores`, and Paint publish activity. It does not change
+public profile analytics, game-score ranking caps, session-cookie lifetime, or
+board-report deduplication.
+
+The hourly Worker Cron deletes at most 60 expired rows per tracking table per
+invocation (a 50-row primary batch plus a 10-row catch-up only when the primary
+batch is full). Private admin-read recovery deletes at most 50 per table.
+Public/admin queries filter at the configured cutoff immediately, but physical
+deletion can take multiple sweeps plus scheduler jitter when a backlog exists. This is a retention control, not
+a legal-compliance guarantee; choose a period that matches the actual purpose
+and applicable obligations. See [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md)
+for the data inventory, quotas, local testing, and rollback guidance.
 
 ## 7. Intro sequence — PUBLIC
 

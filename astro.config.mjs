@@ -62,10 +62,10 @@ export default defineConfig({
 	adapter: cloudflare({
 		// @astrojs/cloudflare v14 replaced the `platformProxy` option with the
 		// Cloudflare Vite plugin, so `platformProxy` is no longer a valid key (it
-		// also failed type-checking). Prerendering runs through Astro's Node
-		// environment, which is the configuration verified to build cleanly.
-		// Nothing on the site reads runtime bindings: every page is prerendered
-		// and served as a static asset by the Worker.
+		// also failed type-checking). Prerenderable pages run through Astro's
+		// Node environment; API routes with prerender=false still execute in the
+		// Worker and use runtime bindings such as BOARD_DB and BOARD_KV. Local
+		// route verification must therefore use Wrangler, not only `astro dev`.
 		prerenderEnvironment: "node",
 	}),
 });
