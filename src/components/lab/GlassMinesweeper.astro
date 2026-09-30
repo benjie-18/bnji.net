@@ -12,6 +12,9 @@
  * - High-contrast Light Mode: deep royal sapphire, jade, ruby, and violet numbers with crisp delimitation
  * - Raised HUD chassis with dark crystal counters and reactive circular liquid lens smiley face
  * - Safe first-click guarantee with auto-cascade clearing
+ * - Win screen: a glass overlay announcing the win with the board size and
+ *   time, plus a Play Again reset (a loss keeps the classic revealed-mines
+ *   board, no overlay)
  * - Web Audio harmonic sound generator
  */
 ---
@@ -154,6 +157,18 @@
 				))
 			}
 		</div>
+
+		<!-- Win overlay: shown by the win path, reset with the board -->
+		<div class="ms-overlay" data-ms-overlay hidden>
+			<div class="ms-overlay-card">
+				<span class="ms-overlay-emoji" data-ms-overlay-emoji>(★‿★)</span>
+				<h3 class="ms-overlay-title mono" data-ms-overlay-title>You win!</h3>
+				<p class="ms-overlay-desc" data-ms-overlay-desc>Cleared the board.</p>
+				<button class="glass-button glass-button--primary mono" type="button" data-ms-play-again>
+					Play Again
+				</button>
+			</div>
+		</div>
 	</div>
 
 	<!-- Footer Hint -->
@@ -262,6 +277,11 @@
 		const settingsToggleBtn = root.querySelector<HTMLButtonElement>('[data-ms-settings-toggle]')!;
 		const settingsCloseBtn = root.querySelector<HTMLButtonElement>('[data-ms-settings-close]')!;
 		const settingsDrawer = root.querySelector<HTMLElement>('[data-ms-settings-drawer]')!;
+		const overlayEl = root.querySelector<HTMLElement>('[data-ms-overlay]')!;
+		const overlayEmoji = root.querySelector<HTMLElement>('[data-ms-overlay-emoji]')!;
+		const overlayTitle = root.querySelector<HTMLElement>('[data-ms-overlay-title]')!;
+		const overlayDesc = root.querySelector<HTMLElement>('[data-ms-overlay-desc]')!;
+		const playAgainBtn = root.querySelector<HTMLButtonElement>('[data-ms-play-again]')!;
 		const diffBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-ms-diff]'));
 
 		// Settings inputs & outputs
@@ -629,6 +649,14 @@
 					}
 				}
 				minesEl.textContent = '000';
+
+				// Win screen: the face change and auto-flags are not a screen.
+				// Tell the visitor they won, how it went, and where to go next.
+				overlayEmoji.textContent = theme.won;
+				overlayTitle.textContent = 'You win!';
+				overlayDesc.textContent = `Cleared ${rows}×${cols} in ${elapsedSeconds}s.`;
+				overlayEl.hidden = false;
+				playAgainBtn.focus();
 			} else {
 				isGameOver = true;
 				setFace('dead');
@@ -663,6 +691,7 @@
 			cellsRevealed = 0;
 			elapsedSeconds = 0;
 			timeEl.textContent = '000';
+			overlayEl.hidden = true;
 			updateMinesDisplay();
 			setFace('normal');
 			updateInputs();
@@ -671,6 +700,7 @@
 		};
 
 		faceBtn.addEventListener('click', resetGame);
+		playAgainBtn.addEventListener('click', resetGame);
 
 		flagToggleBtn.addEventListener('click', () => {
 			isFlagMode = !isFlagMode;
@@ -993,6 +1023,7 @@
 
 	/* Board Viewport: Optical Stage with Calibration Grid */
 	.ms-board-viewport {
+		position: relative;
 		display: flex;
 		justify-content: center;
 		align-items: center;
@@ -1325,5 +1356,63 @@
 		100% {
 			transform: scale(1);
 		}
+	}
+
+	/* =========================================================================
+	   4. WIN OVERLAY: glass card over the optical stage (same pattern as the
+	   Stack game's end-of-run screen; revealed by the win path, hidden on reset)
+	   ========================================================================= */
+	.ms-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(6, 10, 18, 0.75);
+		backdrop-filter: blur(10px);
+		z-index: 10;
+		padding: 1rem;
+	}
+
+	:global(html[data-theme='light']) .ms-overlay {
+		background: rgba(255, 255, 255, 0.85);
+	}
+
+	.ms-overlay[hidden] {
+		display: none;
+	}
+
+	.ms-overlay-card {
+		max-width: 340px;
+		text-align: center;
+		display: grid;
+		gap: 0.9rem;
+		padding: 1.6rem;
+		border-radius: var(--radius-lg);
+		background: var(--glass-bg-raised);
+		border: 1px solid var(--glass-border-strong);
+		box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+	}
+
+	:global(html[data-theme='light']) .ms-overlay-card {
+		box-shadow: 0 16px 40px rgba(15, 45, 90, 0.22);
+	}
+
+	.ms-overlay-emoji {
+		font-size: 2.4rem;
+		line-height: 1;
+	}
+
+	.ms-overlay-title {
+		font-size: 1.3rem;
+		letter-spacing: 0.05em;
+		color: var(--text-strong);
+	}
+
+	.ms-overlay-desc {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+		line-height: 1.45;
+		margin: 0;
 	}
 </style>

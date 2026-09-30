@@ -9,7 +9,9 @@
  * - Proper debris depth-sorting and unbounded falling physics to prevent clipping
  * - Adjustable Layer Thickness and Camera Zoom controls
  * - Spark burst particle explosions on perfect placements
- * - Alternating X/Z movement axes with combo multiplier (<3px snap)
+ * - Alternating X/Z movement axes with combo multiplier (≤3.5px snap): the
+ *   n-th consecutive perfect drop is worth n points, and the best streak of
+ *   the run is recorded so the game-over screen can report it
  * - Web Audio synth feedback for placements, chops, combos, and game over
  */
 ---
@@ -201,6 +203,10 @@
 		let isGameOver = false;
 		let score = 0;
 		let combo = 0;
+		// The fatal drop always resets `combo` to 0, so the run's best streak
+		// must be recorded as it happens or the game-over screen could only
+		// ever report 0.
+		let bestCombo = 0;
 		let cameraY = 0;
 		let targetCameraY = 0;
 
@@ -254,6 +260,7 @@
 			sparks = [];
 			score = 0;
 			combo = 0;
+			bestCombo = 0;
 			cameraY = 0;
 			targetCameraY = 0;
 			scoreEl.textContent = '0';
@@ -302,12 +309,18 @@
 			const ox = canvas.width / 2;
 			const oy = canvas.height * 0.74;
 
+			// Points for this placement: 1 for a normal drop, or the live combo
+			// for a perfect one (the n-th consecutive perfect drop is worth n).
+			let points = 1;
+
 			// Snap check for perfect alignment
 			if (Math.abs(diff) <= snapThreshold) {
 				diff = 0;
 				if (activeAxis === 'x') curX = prev.x;
 				else curZ = prev.z;
 				combo++;
+				if (combo > bestCombo) bestCombo = combo;
+				points = combo;
 				comboCountEl.textContent = String(combo);
 				comboEl.hidden = false;
 				playTone(480 + combo * 55, 'triangle', 0.35);
@@ -386,7 +399,7 @@
 				colorIndex: stack.length,
 			});
 
-			score++;
+			score += points;
 			scoreEl.textContent = String(score);
 			if (score > bestScore) {
 				bestScore = score;
@@ -403,7 +416,11 @@
 			playTone(160, 'sawtooth', 0.5);
 
 			overlayTitle.textContent = 'GAME OVER';
-			overlayDesc.textContent = `Stacked ${score} crystal layers! Best combo: ${combo}.`;
+			// The fatal drop always missed, so `combo` is 0 here by
+			// construction — the screen must report the recorded best. The
+			// layer count comes from the stack, since `score` is now a
+			// combo-multiplied total rather than a layer count.
+			overlayDesc.textContent = `Stacked ${stack.length - 1} crystal layers! Best combo: ${bestCombo}.`;
 			startBtn.textContent = 'Play Again';
 			overlay.removeAttribute('hidden');
 		};
