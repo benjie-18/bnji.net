@@ -121,6 +121,7 @@ Rendered in `/admin` → *Statistics*.
 | Message board | `boardStore.summarize()` | `total`, `byStatus`, `postedLast24h`, `reportedLast24h` |
 | Security | `securityStore.summarize()` | `total`, `last24h`, `uniqueIps`, `uniqueDevices`, `enriched`, `bySurface`, `byEndpoint`, `retentionDays` |
 | Credential | `admin_credentials.updated_at` | `0` = seeded, never rotated |
+| Game usage | `GET /api/admin/games` | Private per-game aggregates and up to 100 recent run details (active time, IP/UA/device classes, validated score counts); bounded by configured retention and omits guest/player/run identifiers |
 
 Rules the endpoint holds to:
 
@@ -128,8 +129,9 @@ Rules the endpoint holds to:
   the panel prints an explanation rather than a convincing `0`.
 - **No "recent posts" total** — an early draft of the panel had one; the store
   does not aggregate it, so it was removed rather than faked.
-- **Security telemetry stays separate**, keeps its own table and 60-day
-  retention, and never contributes to a public or traffic figure.
+- **Security telemetry stays separate**, keeps its own table and the shared
+  configurable raw-tracking retention (default 60 days, 1–365), and never
+  contributes to a public or traffic figure.
 
 ---
 
@@ -252,7 +254,8 @@ all.
 - The Security panel also shows the admin-only Paint activity trail: accepted
   publish timestamps, revisions, action counts and an opaque ephemeral session
   ID. It is not an account or person identifier; local drafts, pointer paths
-  and sticker images are never logged. Retention is 60 days, capped at 5,000.
+  and sticker images are never logged. Retention uses the shared admin setting
+  (60 days by default, 1–365), with a 5,000-row cap.
 
 ---
 

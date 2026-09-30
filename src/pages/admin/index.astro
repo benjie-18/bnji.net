@@ -74,6 +74,9 @@ export const prerender = false;
 			<button class="admin__tab" type="button" data-tab="security" aria-selected="false">
 				Security log
 			</button>
+			<button class="admin__tab" type="button" data-tab="games" aria-selected="false">
+				Games &amp; play
+			</button>
 			<button class="admin__tab" type="button" data-tab="settings" aria-selected="false">
 				Settings
 			</button>
@@ -227,6 +230,20 @@ export const prerender = false;
 				Filter by page path, IP, or device fingerprint to see interaction history across all pages.
 			</p>
 			<div class="admin__table-wrap" data-glass data-security-table />
+		</section>
+
+		<!-- Private game sessions, devices, playtime and validated score totals. -->
+		<section class="admin__panel" data-panel="games" hidden>
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">Game sessions &amp; usage</h2>
+				<p class="admin__hint">Private session, IP, user-agent, device class, active playtime, verified score summaries, and aggregate player/save counts. Active time excludes hidden tabs and offscreen games. Raw rows follow the configured retention period; account credentials and save contents are never shown here.</p>
+				<div data-games-retention />
+				<div class="admin__table-wrap" data-games-summary />
+			</div>
+			<div class="admin__card" data-glass style="margin-top: 1rem;">
+				<h2 class="admin__h2">Recent game sessions</h2>
+				<div class="admin__table-wrap" data-games-sessions />
+			</div>
 		</section>
 
 		<!-- Boards: Consolidated Message Board & Paint Canvas -->
@@ -522,6 +539,10 @@ export const prerender = false;
 							<label class="admin__field admin__check" style="margin-top: 0.8rem;">
 								<input type="checkbox" name="introEnabled" data-setting-input="introEnabled" />
 								<span>Scroll Intro Enabled by Default</span>
+							</label>
+							<label class="admin__field">
+								<span>Raw tracking and score retention (days; 1–365)</span>
+								<input type="number" name="trackingRetentionDays" min="1" max="365" step="1" data-setting-input="trackingRetentionDays" />
 							</label>
 						</div>
 					</div>

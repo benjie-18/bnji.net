@@ -126,9 +126,10 @@
 				}
 			};
 
+			let onscreen = typeof IntersectionObserver === 'undefined';
 			const loop = (now: number) => {
-				frame = requestAnimationFrame(loop);
-				if (!isPageVisible()) return;
+				frame = 0;
+				if (!onscreen || !isPageVisible()) return;
 				const dt = last ? Math.min((now - last) / 1000, 0.05) : 0.016;
 				last = now;
 
@@ -158,6 +159,7 @@
 					popParticles = popParticles.filter((p) => p.alpha > 0);
 				}
 				draw();
+				frame = requestAnimationFrame(loop);
 			};
 
 			let audioCtx: AudioContext | null = null;
@@ -264,18 +266,29 @@
 			});
 			host.tabIndex = 0;
 
-			const observer = new IntersectionObserver((entries) => {
-				for (const entry of entries) {
-					if (entry.isIntersecting && !frame) {
-						last = 0;
-						frame = requestAnimationFrame(loop);
-					} else if (!entry.isIntersecting && frame) {
-						cancelAnimationFrame(frame);
-						frame = 0;
-					}
+			const syncLoop = () => {
+				if (!onscreen || !isPageVisible()) {
+					if (frame) cancelAnimationFrame(frame);
+					frame = 0;
+					return;
 				}
-			});
-			observer.observe(host);
+				if (!frame) {
+					last = 0;
+					frame = requestAnimationFrame(loop);
+				}
+			};
+
+			if (typeof IntersectionObserver !== 'undefined') {
+				const observer = new IntersectionObserver((entries) => {
+					for (const entry of entries) {
+						onscreen = entry.isIntersecting;
+						syncLoop();
+					}
+				});
+				observer.observe(host);
+			}
+			document.addEventListener('visibilitychange', syncLoop);
+			syncLoop();
 			measure();
 			for (let i = 0; i < 6; i++) {
 				spawn();

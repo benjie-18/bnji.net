@@ -1,0 +1,255 @@
+---
+/** /games/ is the public catalog. Lab experiments are linked to their existing owners, never imported here. */
+import GlassPanel from '../components/GlassPanel.astro';
+import GameCard from '../components/GameCard.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { GAMES } from '../data/games';
+import Layout from '../layouts/Layout.astro';
+
+const standalone = GAMES.filter((game) => !game.labHref);
+const labGames = GAMES.filter((game) => game.labHref);
+---
+
+<Layout title="Games" description="The BNJI.NET games catalog and shared game foundations.">
+	<PageHeader
+		index="07"
+		label="GAMES"
+		titleId="page-title"
+		title="Games"
+		description="A home for focused, browser-friendly games, optional player accounts, offline-first saves, and private multiplayer rooms. Existing Lab experiments stay in the Lab."
+		meta={[`${labGames.length} Lab links`, `${standalone.length} standalone games`, 'Built to grow']}
+	/>
+
+	<div class="container games-body">
+		<section class="player-tools" data-player-tools aria-labelledby="player-tools-title">
+			<div class="player-tools__head">
+				<div>
+					<p class="eyebrow">PLAYER ID &amp; SAVES</p>
+					<h2 id="player-tools-title">Keep your progress yours.</h2>
+				</div>
+				<p class="player-tools__guest-note">Guest play is always available. Local progress stays on this device until you choose to sync.</p>
+			</div>
+			<p class="player-tools__greeting" data-player-greeting>You are playing as a guest. Account tools load when available.</p>
+			<p class="player-tools__live" data-player-live role="status" aria-live="polite" aria-atomic="true"></p>
+
+			<div class="player-tools__guest" data-player-guest>
+				<form class="player-tools__form" data-player-create>
+					<h3>Create one global player account</h3>
+					<p>Use a display name and a private recovery code. No email, password, or third-party account is required.</p>
+					<label><span>Display name</span><input name="displayName" type="text" maxlength="24" autocomplete="nickname" required /></label>
+					<button class="player-tools__button player-tools__button--primary" type="submit">Create account &amp; claim this guest session</button>
+				</form>
+				<form class="player-tools__form" data-player-login>
+					<h3>Already have a player code?</h3>
+					<label><span>Recovery code</span><input name="recoveryCode" type="text" maxlength="37" autocomplete="off" autocapitalize="characters" spellcheck="false" required /></label>
+					<button class="player-tools__button" type="submit">Sign in on this device</button>
+				</form>
+			</div>
+
+			<div class="player-tools__account" data-player-account hidden>
+				<div class="player-tools__account-actions">
+					<button class="player-tools__button" type="button" data-player-sync>Sync saves</button>
+					<button class="player-tools__button" type="button" data-rotate-recovery>Rotate recovery code</button>
+					<a class="player-tools__button" href="/api/games/account/export" data-player-export>Export account data</a>
+					<button class="player-tools__button" type="button" data-player-signout>Sign out</button>
+					<button class="player-tools__button player-tools__button--danger" type="button" data-player-delete>Delete account</button>
+				</div>
+				<p class="player-tools__note">Recovery is by code only. Keep it private; if you lose the code and all signed-in devices, the account cannot be recovered.</p>
+			</div>
+
+			<div class="player-tools__recovery" data-recovery-panel hidden>
+				<h3>Save this recovery code now</h3>
+				<p>It is shown only once. Anyone with it can sign in. Store it somewhere private, then dismiss this message.</p>
+				<output class="player-tools__code" data-recovery-code aria-label="One-time recovery code"></output>
+				<div class="player-tools__account-actions">
+					<button class="player-tools__button" type="button" data-copy-recovery>Copy code</button>
+					<button class="player-tools__button" type="button" data-download-recovery>Download code</button>
+					<button class="player-tools__button player-tools__button--primary" type="button" data-recovery-dismiss>Hide code</button>
+				</div>
+			</div>
+
+			<div class="player-tools__saves" data-player-saves>
+				<div class="player-tools__saves-head"><h3>Local &amp; cloud save snapshots</h3><span>Up to 25 slots · 16 KiB each · versioned</span></div>
+				<p class="player-tools__note">Existing Stack and Memory Pairs bests are bridged as personal progress—not verified leaderboard scores. Sync uses revision checks; conflicts always ask before choosing a version.</p>
+				<div class="player-tools__save-list" data-save-list><p>Checking this device for local progress…</p></div>
+			</div>
+		</section>
+
+		<section class="room-tools" data-room-tools aria-labelledby="room-tools-title">
+			<div>
+				<p class="eyebrow">MULTIPLAYER FOUNDATION</p>
+				<h2 id="room-tools-title">Private room, shared connection.</h2>
+				<p>Rooms are temporary and code-protected. This is a versioned transport/snapshot layer only; it does not validate a move, score, turn, or game rule. No game is attached to it yet.</p>
+			</div>
+			<div class="room-tools__forms">
+				<form data-room-create>
+					<label for="room-game">Room context</label>
+					<select id="room-game" name="gameId" required>
+						{GAMES.filter((game) => game.status === 'available').map((game) => <option value={game.id}>{game.title}</option>)}
+					</select>
+					<button class="player-tools__button player-tools__button--primary" type="submit">Create a room</button>
+				</form>
+				<form data-room-join>
+					<label for="room-code-input">Room code</label>
+					<input id="room-code-input" name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" required />
+					<button class="player-tools__button" type="submit">Join or reconnect</button>
+				</form>
+			</div>
+			<div class="room-tools__status">
+				<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
+				<div data-room-code-panel hidden><span>Share this room code privately:</span> <output data-room-code></output> <button class="player-tools__button player-tools__button--small" type="button" data-room-copy>Copy code</button> <button class="player-tools__button player-tools__button--small" type="button" data-room-leave disabled>Leave room</button></div>
+			</div>
+		</section>
+
+		<section aria-labelledby="standalone-title">
+			<div class="games-section-heading">
+				<div>
+					<p class="eyebrow">01 / CATALOG</p>
+					<h2 id="standalone-title">Standalone games</h2>
+				</div>
+				<span class="mono games-count">{standalone.length} published</span>
+			</div>
+			{
+				standalone.length === 0 ? (
+					<GlassPanel pad="lg" class="games-empty">
+						<p class="games-empty__eyebrow mono">NO STANDALONE GAMES YET</p>
+						<h3>The catalog is ready when the first game is.</h3>
+						<p>Nothing here is a placeholder download or a pretend score board. New titles will appear when they are playable and ready to publish.</p>
+					</GlassPanel>
+				) : (
+					<div class="games-grid">
+						{standalone.map((game) => <GameCard game={game} />)}
+					</div>
+				)
+			}
+		</section>
+
+		<section aria-labelledby="lab-games-title">
+			<div class="games-section-heading">
+				<div>
+					<p class="eyebrow">02 / EXPERIMENTS</p>
+					<h2 id="lab-games-title">Already in the Lab</h2>
+				</div>
+				<a class="games-all-link" href="/lab/">Browse all Lab experiments <span aria-hidden="true">↗</span></a>
+			</div>
+			<div class="games-grid">
+				{labGames.map((game) => <GameCard game={game} />)}
+			</div>
+		</section>
+
+		<aside class="games-foundation" data-glass="quiet" aria-label="Game platform foundations">
+			<span class="games-foundation__mark" aria-hidden="true">✳</span>
+			<div>
+				<p class="eyebrow">THE FOUNDATION</p>
+				<h2>Small, responsive, and ready to grow.</h2>
+				<p>Games keep stable IDs, a shared lifecycle, private tracking, and fail-closed score verification. Optional global player identity, revisioned offline-first saves, and short-lived generic rooms sit beside the game code; guest play remains first-class.</p>
+			</div>
+			<a href="/lab/">Explore experiments <span aria-hidden="true">→</span></a>
+		</aside>
+	</div>
+</Layout>
+
+<script>
+	import { mountPlayerTools } from '../scripts/game-player-ui';
+	import { mountGameRooms } from '../scripts/game-room-ui';
+	const tools = document.querySelector<HTMLElement>('[data-player-tools]');
+	if (tools) void mountPlayerTools(tools);
+	const rooms = document.querySelector<HTMLElement>('[data-room-tools]');
+	if (rooms) mountGameRooms(rooms);
+</script>
+
+<style>
+	.games-body {
+		display: grid;
+		gap: clamp(2rem, 6vw, 4.5rem);
+		padding-block: 0 6rem;
+	}
+	.player-tools {
+		display: grid;
+		gap: 1rem;
+		padding: clamp(1.1rem, 3vw, 1.7rem);
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-lg);
+		background: var(--glass-bg);
+	}
+	.player-tools__head, .player-tools__saves-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+	.player-tools__head h2 { margin: 0.25rem 0 0; color: var(--text-strong); font-size: var(--text-title); }
+	.player-tools__guest-note, .player-tools__note, .player-tools__greeting, .player-tools__live { color: var(--text-muted); line-height: 1.55; }
+	.player-tools__guest-note { max-width: 42ch; margin: 0; }
+	.player-tools__greeting { margin: 0; color: var(--text-strong); }
+	.player-tools__live { min-height: 1.5em; margin: 0; }
+	.player-tools__guest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+	.player-tools__form { display: grid; align-content: start; gap: 0.7rem; padding: 1rem; border: 1px solid var(--glass-border); border-radius: var(--radius-md); }
+	.player-tools__form h3, .player-tools__recovery h3, .player-tools__saves h3 { margin: 0; color: var(--text-strong); font-size: var(--text-lead); }
+	.player-tools__form p, .player-tools__recovery p { margin: 0; color: var(--text-muted); line-height: 1.55; }
+	.player-tools__form label { display: grid; gap: 0.35rem; color: var(--text-strong); font-size: var(--text-small); }
+	.player-tools__form input { width: 100%; min-height: 2.8rem; padding: 0.65rem 0.75rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
+	.player-tools__form input:focus-visible, .player-tools__button:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
+	.player-tools__button { display: inline-flex; min-height: 2.7rem; align-items: center; justify-content: center; padding: 0.6rem 0.85rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: transparent; font: inherit; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; }
+	.player-tools__button:hover { border-color: var(--accent-strong); }
+	.player-tools__button:disabled { opacity: 0.55; cursor: wait; }
+	.player-tools__button--primary { border-color: var(--accent-strong); color: var(--text-inverse, #10121a); background: var(--accent-strong); }
+	.player-tools__button--danger { color: var(--signal-danger, #b3314b); }
+	.player-tools__account-actions, .player-tools__choices { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+	.player-tools__note { margin: 0; font-size: var(--text-small); }
+	.player-tools__recovery { display: grid; gap: 0.8rem; padding: 1rem; border: 1px solid var(--signal-soon); border-radius: var(--radius-md); }
+	.player-tools__code { display: block; overflow-wrap: anywhere; padding: 0.8rem; border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font-family: var(--font-mono, monospace); font-size: clamp(1rem, 3vw, 1.35rem); letter-spacing: 0.06em; user-select: all; }
+	.player-tools__saves { display: grid; gap: 0.75rem; padding-top: 0.5rem; }
+	.player-tools__saves-head span { color: var(--text-muted); font-size: var(--text-small); }
+	.player-tools__save-list { display: grid; gap: 0.6rem; }
+	.player-tools__empty, .player-tools__save-list > p { margin: 0; color: var(--text-muted); }
+	.player-tools__save { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.65rem; padding: 0.8rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); }
+	.player-tools__save strong { color: var(--text-strong); }
+	.player-tools__save p { margin: 0.2rem 0 0; color: var(--text-muted); font-size: var(--text-small); }
+	.player-tools__state { color: var(--text-muted); font-size: var(--text-small); }
+	.player-tools__state--saved { color: var(--accent-strong); }
+	.player-tools__state--conflict { color: var(--signal-danger, #b3314b); font-weight: 700; }
+	.player-tools__choices { grid-column: 1 / -1; }
+	.room-tools { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: 1rem 2rem; padding: clamp(1.1rem, 3vw, 1.7rem); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--glass-bg); }
+	.room-tools h2 { margin: 0.25rem 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
+	.room-tools p, .room-tools__status { color: var(--text-muted); line-height: 1.55; }
+	.room-tools p { margin: 0; }
+	.room-tools__forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+	.room-tools__forms form { display: grid; align-content: start; gap: 0.55rem; }
+	.room-tools__forms label, .room-tools__status span { color: var(--text-strong); font-size: var(--text-small); }
+	.room-tools__forms select, .room-tools__forms input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
+	.room-tools__forms select:focus-visible, .room-tools__forms input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
+	.room-tools__status { grid-column: 1 / -1; min-height: 1.5em; }
+	.room-tools__status output { margin-inline: 0.4rem; color: var(--text-strong); font-family: var(--font-mono, monospace); overflow-wrap: anywhere; user-select: all; }
+	.room-tools__status > div { margin-top: 0.35rem; }
+	.games-section-heading {
+		display: flex;
+		align-items: end;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-block-end: 1.25rem;
+	}
+	.games-section-heading h2,
+	.games-foundation h2 {
+		margin: 0.25rem 0 0;
+		font-size: var(--text-title);
+		letter-spacing: var(--tracking-snug);
+		color: var(--text-strong);
+	}
+	.games-count { color: var(--text-muted); font-size: var(--text-micro); }
+	.games-empty { max-width: 52rem; }
+	.games-empty__eyebrow { color: var(--signal-soon); font-size: var(--text-micro); letter-spacing: var(--tracking-mono); }
+	.games-empty h3 { margin: 0.5rem 0; font-size: var(--text-lead); color: var(--text-strong); }
+	.games-empty p:last-child { max-width: 52ch; margin-bottom: 0; color: var(--text-muted); line-height: 1.7; }
+	.games-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--grid-gap); }
+	.games-all-link, .games-foundation > a { color: var(--accent-strong); text-decoration: none; font-weight: 600; }
+	.games-all-link:focus-visible, .games-foundation > a:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 4px; border-radius: var(--radius-sm); }
+	.games-foundation { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1.25rem; padding: clamp(1.25rem, 4vw, 2rem); border-radius: var(--radius-lg); }
+	.games-foundation p:not(.eyebrow) { max-width: 65ch; margin-bottom: 0; color: var(--text-muted); line-height: 1.7; }
+	.games-foundation__mark { display: grid; place-items: center; width: 3rem; aspect-ratio: 1; border: 1px solid var(--glass-border); border-radius: 50%; color: var(--accent-strong); font-size: 1.5rem; }
+	@media (max-width: 800px) { .games-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .games-foundation { grid-template-columns: auto 1fr; } .games-foundation > a { grid-column: 2; } }
+	@media (max-width: 560px) {
+		.games-grid, .player-tools__guest, .room-tools, .room-tools__forms { grid-template-columns: 1fr; }
+		.games-section-heading, .player-tools__head, .player-tools__saves-head { align-items: start; flex-direction: column; }
+		.player-tools__save { grid-template-columns: 1fr; }
+		.player-tools__choices { display: grid; grid-template-columns: 1fr; }
+		.player-tools__button { width: 100%; }
+		.player-tools__account-actions { display: grid; grid-template-columns: 1fr; }
+	}
+	@media (prefers-reduced-motion: reduce) { .games-card, .games-foundation { scroll-behavior: auto; } }
+</style>

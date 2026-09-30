@@ -9,6 +9,7 @@
  */
 import { BOARD_CONFIG } from '../../config/board.config';
 import { PAINT_CONFIG } from '../../config/paint.config';
+import { preparePaintActivityTrim, preparePaintCommitTrim } from '../../server/paint-activity-store';
 import { serverEnvironment } from '../../server/env';
 import { clientIp } from '../../server/security-helpers';
 import { rateLimit, type KvRateLimitStore } from '../../server/ratelimit';
@@ -20,7 +21,7 @@ export const prerender = false;
 // code or adding another Workers types package.
 type PaintStatement = {
 	bind(...values: (string | number | null)[]): PaintStatement;
-	first<T>(): Promise<T | null>;
+	first<T>(column?: string): Promise<T | null>;
 	run(): Promise<{ meta?: { changes?: number } }>;
 };
 
@@ -438,7 +439,6 @@ export async function POST(context: APIContext): Promise<Response> {
 		if (Object.keys(actions).length === 0) return json({ error: 'invalid_actions' }, 422);
 		const session = paintSession(context.request);
 		const sessionHeaders: Record<string, string> = session.setCookie ? { 'set-cookie': session.setCookie } : {};
-		const retentionCutoff = now - PAINT_CONFIG.activityRetentionDays * 86_400_000;
 		const results = await db.batch([
 			db
 				.prepare(
@@ -466,24 +466,8 @@ export async function POST(context: APIContext): Promise<Response> {
 					 )`,
 				)
 				.bind(now, nextRevision, session.id, JSON.stringify(actions), requestId),
-			db.prepare('DELETE FROM board_paint_activity WHERE created_at < ?1').bind(retentionCutoff),
-			db
-				.prepare(
-					`DELETE FROM board_paint_activity
-					 WHERE id NOT IN (
-						 SELECT id FROM board_paint_activity ORDER BY created_at DESC, id DESC LIMIT ?1
-					 )`,
-				)
-				.bind(PAINT_CONFIG.maxActivityRows),
-			db
-				.prepare(
-					`DELETE FROM board_paint_commits
-					 WHERE request_id NOT IN (
-						 SELECT request_id FROM board_paint_commits
-						 ORDER BY created_at DESC, rowid DESC LIMIT ?1
-					 )`,
-				)
-				.bind(PAINT_CONFIG.retainedCommitIds),
+		preparePaintActivityTrim(db, PAINT_CONFIG.maxActivityRows),
+		preparePaintCommitTrim(db, PAINT_CONFIG.retainedCommitIds),
 		]);
 		if ((results[0]?.meta?.changes ?? 0) === 0) {
 			const latest = await currentState(db);

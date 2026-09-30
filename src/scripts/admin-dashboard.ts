@@ -19,7 +19,7 @@
 import { adminFetch, coalesce, formatTime, renderFacts, renderTable } from './admin';
 import { startAdminPlaylist } from './admin-playlist';
 
-type TabName = 'stats' | 'overview' | 'board' | 'playlist' | 'security' | 'settings' | 'config';
+type TabName = 'stats' | 'overview' | 'board' | 'playlist' | 'security' | 'games' | 'settings' | 'config';
 
 type PaintActivity = {
 	id: number;
@@ -317,6 +317,56 @@ export function startAdminDashboard(): void {
 			],
 			data.events as unknown as Record<string, unknown>[],
 			'No security events match these filters.',
+		);
+	}
+
+	/* --- games and private usage ------------------------------------------- */
+
+	async function loadGames(): Promise<void> {
+		const data = await guard(() => adminFetch<{
+			retentionDays: number;
+			identity: { players: number; activeSessions: number; saveBlobs: number; saveBytes: number };
+			totals: { gameId: string; sessions: number; activeMs: number; scores: number }[];
+			sessions: {
+				gameId: string; startedAt: number; endedAt: number | null;
+				lastSeenAt: number; activeMs: number; ipAddress: string; userAgent: string; browser: string;
+				operatingSystem: string; deviceClass: string; screenClass: string; inputClass: string;
+			}[];
+		}>('/api/admin/games'));
+		if (!data || active !== 'games') return;
+		say(`${data.sessions.length} recent game sessions · raw rows retained ${data.retentionDays} days`);
+		renderFacts(root.querySelector<HTMLElement>('[data-games-retention]')!, [
+			['Raw retention', `${data.retentionDays} days`],
+			['Sessions shown', data.sessions.length],
+			['Score rows', data.totals.reduce((sum, row) => sum + row.scores, 0)],
+			['Player accounts', data.identity.players],
+			['Active account sessions', data.identity.activeSessions],
+			['Cloud save blobs', data.identity.saveBlobs],
+			['Cloud save data', `${(data.identity.saveBytes / 1024).toFixed(1)} KiB`],
+		]);
+		renderTable(
+			root.querySelector<HTMLElement>('[data-games-summary]')!,
+			[
+				{ label: 'Game ID', get: (row) => row.gameId, mono: true },
+				{ label: 'Guest sessions', get: (row) => row.sessions, mono: true },
+				{ label: 'Active playtime', get: (row) => `${(Number(row.activeMs) / 60_000).toFixed(1)} min`, mono: true },
+				{ label: 'Validated scores', get: (row) => row.scores, mono: true },
+			],
+			data.totals as unknown as Record<string, unknown>[],
+			'No game sessions have been recorded.',
+		);
+		renderTable(
+			root.querySelector<HTMLElement>('[data-games-sessions]')!,
+			[
+				{ label: 'Last active', get: (row) => formatTime(Number(row.lastSeenAt)), mono: true },
+				{ label: 'Game', get: (row) => row.gameId, mono: true },
+				{ label: 'Active time', get: (row) => `${(Number(row.activeMs) / 60_000).toFixed(1)} min`, mono: true },
+				{ label: 'IP', get: (row) => row.ipAddress, mono: true },
+				{ label: 'Device', get: (row) => [row.deviceClass, row.browser, row.operatingSystem, row.screenClass, row.inputClass].join(' · ') },
+				{ label: 'User agent', get: (row) => row.userAgent },
+			],
+			data.sessions as unknown as Record<string, unknown>[],
+			'No game sessions have been recorded.',
 		);
 	}
 
@@ -1088,6 +1138,7 @@ export function startAdminDashboard(): void {
 			if (active === 'stats') return loadStats();
 			if (active === 'overview') return loadOverview();
 			if (active === 'security') return loadSecurity();
+			if (active === 'games') return loadGames();
 			if (active === 'board') return loadBoard();
 			if (active === 'playlist') return playlist.load();
 			return loadConfig();

@@ -433,7 +433,7 @@ The database setup includes `0009_site_settings.sql` for key-value configuration
 
 Wrangler must be authenticated to the correct Cloudflare account. If prompted, run `npx wrangler login`.
 
-The merged Paint update includes migration `0007_paint_stickers_activity.sql`. Applying migrations runs those that are pending; it does not create another database. Check the migration list before and after applying. Cloudflare Workers Builds deploying code does not, by itself, apply D1 migrations.
+The merged Paint update includes migration `0007_paint_stickers_activity.sql`; the Games foundation adds `0011_games.sql` and `0012_game_players_saves.sql` when those versions are pending. Applying migrations runs only unapplied versions; it does not create another database. Back up, check the migration list before and after applying, and follow the exact Free-plan checks in `docs/GAMES-OPERATIONS.md` before the owner-operated Games rollout. Cloudflare Workers Builds deploying code does not, by itself, apply D1 migrations. Wrangler's `game-rooms-v1` SQLite Durable Object class migration is registered with the Worker deploy, not a D1 SQL migration.
 
 ## 13. Set up the admin panel
 
@@ -457,6 +457,8 @@ The admin area includes statistics, the background music playlist, board moderat
 
 The security-event log is separate and contains request/security information such as IP address and user-agent data. It is admin-only and has its own retention policy. Review `docs/DATA.md` and `docs/PROFILES.md` for the detailed data and privacy descriptions.
 
+The Games identity at `/games/` is a separate, optional player feature; it is not the profile-analytics cookie and does not change `/admin` authentication. Players may use a one-time, randomly generated recovery code; the site stores only its digest and cannot recover a lost code. Do not ask players to share it, put it in support messages, screenshots, analytics, or logs. Game saves are bounded/private and export/delete are player-controlled. Generic room payloads are untrusted synchronization state, not server-validated game results. Guest play/local progress remain available. Cloudflare's checked Free quotas, required `0011`/`0012` migration and `GameRoom` rollout steps are maintained in `docs/GAMES-OPERATIONS.md`; remain on Workers Free and do not create paid dependencies.
+
 ## 14. Preview and check your changes
 
 For a quick visual preview of public pages:
@@ -471,15 +473,18 @@ For a project-wide build, type check, access-control verification, and Wrangler 
 npm run check
 ```
 
-Worker-specific features such as D1-backed API routes need a Wrangler/Cloudflare-compatible runtime, not just the basic Astro development server. For local Worker testing, first build, apply migrations to the local database, and run Wrangler in local mode:
+Worker-specific features such as D1-backed APIs and Durable Objects need a Wrangler/Cloudflare-compatible runtime, not just the basic Astro development server. For local Worker testing:
 
 ```powershell
-npm run build
+npm test
+npm run check
+npx wrangler d1 migrations list bnji-board --local
+# Apply only if the needed migration is not already present:
 npx wrangler d1 migrations apply bnji-board --local
-npx wrangler dev --local --port 8788
+npx wrangler dev --local --test-scheduled --ip 0.0.0.0 --port 8788
 ```
 
-Local secrets for that runtime go in `.dev.vars`. The file is git-ignored; never commit it. The project has a duplicate remote D1 binding for production, so `--local` is important for local Wrangler work.
+Use `/games/` to exercise optional local account/save/room controls. The current sandbox D1 may already have all migrations and smoke-test data; inspect the list instead of repeating unnecessary setup. Exact expected behavior, Free quotas, production rollout and migration details are in `docs/GAMES-OPERATIONS.md`. Local secrets, only if needed for unrelated admin tests, go in `.dev.vars`; it is git-ignored and must never be committed. The project has a duplicate remote D1 binding, so `--local` is mandatory for local Wrangler work; never use `--remote` in local tests.
 
 ## 15. Publish changes
 
