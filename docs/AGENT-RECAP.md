@@ -56,7 +56,10 @@ migrations/             0001 board_messages + idx_board_public, 0002 profiles,
                          0003 security_events, 0004 board_moderation,
                          0005 admin_credentials, 0006 board_paint, 0007 paint_stickers_activity - applied in order
 docs/CONFIGURATION.md   every owner-facing config knob incl. one-time infra setup
-docs/DATA.md            board data model, moderation states, rate-limit privacy rules
+docs/DATA.md            board data model, moderation states, rate-limit privacy rules, collection register
+docs/DATA-COLLECTION-POLICY.md   what may be collected, retention, admin visibility, disclosure
+docs/CHAT-SYSTEM-PLAN.md         planned chat, private messaging, friends, moderation (not implemented)
+docs/DEPENDENCY-POLICY.md        dependency tiers, review process, allowed infrastructure
 docs/ADMIN.md           admin credential, sessions, stats, rotation
 docs/PROFILES.md        profile counters, click tracking, privacy posture
 AGENTS.md               hard rules for agents (read first)
@@ -217,15 +220,18 @@ npm run dev       astro dev only - does NOT run middleware/API/Worker runtime
 
 ## 9. Hard rules (from AGENTS.md - do not violate)
 
-1. **No new dependencies.** Lockfile frozen; if installs drift use `npm install --no-package-lock`.
-2. Don't modify deployment infra (`wrangler.json`, `.gitignore` exclusions, `public/fonts/`)
-   beyond documented one-time binding setup.
+1. **Dependencies allowed per tier.** See `docs/DEPENDENCY-POLICY.md` (was: lockfile frozen). Runtime/visitor-facing additions need a justification or decision record; commit the lockfile with the manifest.
+2. Deployment infra changes (`wrangler.json`, migrations, bindings, DO classes) are allowed
+   when planned and documented (see `docs/DEPLOY.md`); never weaken `.gitignore` build-output
+   exclusions, and never touch `public/fonts/`.
 3. Canonical URL only via `SITE.url`/`absoluteUrl()` - never `Astro.url`/`location`/hardcoded domains.
 4. No secrets in code/docs/commits; env-only via `src/server/env.ts`.
 5. No personal biography anywhere - neutral placeholders only.
 6. Owner-facing knobs live in `src/config/`, documented in docs/CONFIGURATION.md.
 7. Blog = drop `.md` files in `src/content/blog/`; no CMS, no MDX, no second content dir.
 8. No UI frameworks/islands - Astro + CSS + small TS modules only.
+9. Data collection is allowed but must be registered: `docs/DATA-COLLECTION-POLICY.md` +
+   `docs/DATA.md` §11 (fields, retention, readership, disclosure) before a surface ships.
 
 ## 10. Gotchas learned the hard way
 

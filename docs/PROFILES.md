@@ -182,6 +182,14 @@ retention setting, not a representation or guarantee of compliance with any
 privacy law; owners should select and review a period appropriate to their
 purposes and obligations.
 
+> **Policy note (2026-09-30).** The fields above are unchanged. What changed is
+> the governing policy: [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md)
+> now permits additional collection (chat history, admin-visible message logs,
+> activity attribution) provided each surface is registered in
+> [`DATA.md`](./DATA.md) §11 with its retention and readership and disclosed to
+> visitors. Anything collected under that policy that would also land in these
+> security tables must be documented here too.
+
 **Why these fields:**
 - `ip_address`: needed to identify and ban repeat abusers. Stored raw
   (not hashed) because abuse response requires matching against future

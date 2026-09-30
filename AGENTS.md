@@ -10,12 +10,20 @@ tiny, the design coherent and the deployment boring.
 
 ## 1. Hard rules (do not violate)
 
-1. **No new dependencies.** `package.json` and `package-lock.json` are frozen.
-   Never add npm packages, never run a lockfile-writing install in CI-like
-   environments (`npm install --no-package-lock` if resolution drifts).
-2. **Do not modify deployment infrastructure**: `wrangler.json`, the Worker
-   entry, `.gitignore` exclusions (`.astro/`, `.wrangler/`, `dist/`,
-   `node_modules/`), or `public/fonts/`.
+1. **Dependencies are allowed, deliberately.** The lockfile is no longer
+   frozen. `docs/DEPENDENCY-POLICY.md` is the authority: Tier A (dev-only) is
+   routine; Tier B (runtime, never shipped to browsers) needs a one-line
+   justification in the same commit; Tier C (visitor-facing or architecture
+   changing) needs a decision record and a measured first-paint budget. Commit
+   the lockfile with the manifest, keep `npm audit` clean, and update
+   `docs/DEPENDENCY-AUDIT.md` when production dependencies change.
+2. **Do not modify deployment infrastructure silently.** `wrangler.json`, the
+   Worker entry, D1 migrations, bindings and Durable Object classes may change
+   when a planned feature needs it (see `docs/CHAT-SYSTEM-PLAN.md`), but each
+   change is its own reviewed commit, is reflected in `docs/DEPLOY.md` and
+   `docs/CONFIGURATION.md`, and never weakens the build-output exclusions in
+   `.gitignore` (`.astro/`, `.wrangler/`, `dist/`, `node_modules/`).
+   `public/fonts/` stays untouched.
 3. **Canonical origin lives in one place**: `src/data/site.ts` (`SITE.url`).
    `astro.config.mjs` imports it for `site:`. Components must use
    `absoluteUrl()`/`SITE.url` — never `Astro.url`, never `location`, never a
@@ -34,6 +42,15 @@ tiny, the design coherent and the deployment boring.
 7. **Keep the blog workflow dumb-simple**: a post is one Markdown file in
    `src/content/blog/` (MDX and its workflow were removed). Never introduce a
    CMS, a build step for content, or a second content directory.
+8. **Data collection is allowed; silent collection is not.**
+   `docs/DATA-COLLECTION-POLICY.md` is the authority. Storing chat history,
+   admin-visible message logs, per-session activity and similar is permitted
+   when the same commit registers the surface in `docs/DATA.md` (fields,
+   purpose, retention, who can read it), puts its limits and retention in
+   `src/config/`, and adds the plain-language line to the public privacy page
+   (`/privacy/`, planned — until it exists the feature's own page must say what
+   is stored). Credentials stay hashed, public APIs stay minimal, and "we
+   collect it" is never a substitute for "we document it".
 
 ## 2. Architecture map
 
@@ -55,6 +72,12 @@ tiny, the design coherent and the deployment boring.
 Section components are one concern each; pages compose them in order. Never
 build a monolithic page template with inline content — put content in
 `src/data/`, structure in components.
+
+Planned surfaces — room chat, private messaging with images, friends, presence
+and admin chat tooling — are specified in `docs/CHAT-SYSTEM-PLAN.md`, with the
+collection rules in `docs/DATA-COLLECTION-POLICY.md`. **None of it is
+implemented.** Until a phase lands, public copy, `README.md` and this map must
+describe it as planned.
 
 ## 3. Content rules
 
@@ -119,11 +142,14 @@ The inner loop while iterating, then the full gate before calling it done:
 ```bash
 npm run build          # must pass, no new warnings
 npm exec -- tsc        # must be clean (typecheck only)
+npm test               # the behaviour suite (node:test) — no browser needed
 npm run check          # the gate: build + tsc + wrangler deploy --dry-run
 ```
 
-`npm run check` already runs the first two, so running it covers all of them;
-the separate lines are for a fast inner loop. Two things to know about the
+`npm run check` already runs the first two, so running it plus `npm test`
+covers the gate; the separate lines are for a fast inner loop. There is still
+no CI in this repository, so these commands are the enforcement — run them
+before saying a change is done. Two things to know about the
 typecheck step:
 
 - Use `npm exec -- tsc`, **not** `npx tsc`. If `node_modules` is missing or

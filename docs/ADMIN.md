@@ -257,6 +257,31 @@ all.
   and sticker images are never logged. Retention uses the shared admin setting
   (60 days by default, 1–365), with a 5,000-row cap.
 
+### Planned admin surfaces (not implemented)
+
+The chat system plan ([`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md)) adds a
+**Chat** tab and a moderation queue. Nothing below exists yet; it is recorded
+here so the admin docs and the plan cannot drift apart:
+
+- **Active rooms** — a bounded `room_registry` row per room lets an
+  administrator list unexpired rooms and open a room's live chat through a
+  service-authenticated Durable Object endpoint. Rooms expire in ≤2 hours and
+  are deleted with their transcript.
+- **Moderation actions** — delete a message, kick or mute a member, and
+  temporarily ban a principal; every action writes to a moderation audit log.
+- **Reports** — the board's proven flow (report → distinct-reporter count →
+  triage) applied to room chat, with the reported message snapshotted at report
+  time so evidence survives the room's expiry.
+- **Private messaging** — admin visibility is a configured mode (metadata only,
+  content on report, or full logging; see the collection policy and plan §3 D10
+  and §15 Q1). Whichever mode is configured must be disclosed to users in the
+  messaging UI; the admin panel must never show content the configured mode
+  says is not collected.
+
+All of these follow the existing rules: admin-guard authenticated,
+`cache-control: no-store`, no internal IDs in public responses, and an entry in
+the `docs/DATA.md` §11 collection register before the surface ships.
+
 ---
 
 ## 8. The playlist panel

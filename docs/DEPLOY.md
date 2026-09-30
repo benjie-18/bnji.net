@@ -7,6 +7,18 @@ The Games foundation has additive D1 migrations `0011_games.sql` (tracking/score
 Worker testing, and rollback notes, see [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md).
 The migration command is safe to re-run; D1 applies only what is missing.
 
+> **Upcoming, not yet scheduled — chat, private messaging and friends.**
+> The plan in [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) will add D1
+> migrations (names/handles, room registry, reports, DM conversations/messages,
+> friends), up to two Durable Object classes (`DMConversation`, `Presence`),
+> worker config-file changes, and possibly an R2 bucket for image storage.
+> Under [`DEPENDENCY-POLICY.md`](./DEPENDENCY-POLICY.md) §6 each of those is a
+> **separate owner decision** with its own rollout row here before it ships.
+> Nothing in this section is provisioned today, and no action is required until
+> a phase lands. When one does, this table gains its row, the retention values
+> land in `src/config/`, and the `docs/DATA.md` §11 register entry is written in
+> the same change.
+
 ---
 
 ## 0. Current Games rollout

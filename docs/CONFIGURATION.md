@@ -77,6 +77,14 @@ Read server-side only, via `getSecret()` (`astro:env/server`) in
 `GET /api/dm` whether delivery is enabled and renders an explained disabled
 state otherwise.
 
+> **Planned, separate feature (not implemented):** account-to-account live
+> private messaging with images is specified in
+> [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) Phase D. It is a different
+> product from this contact-form relay and will get its own config file
+> (`src/config/dm.config.ts`) for retention, attachment limits and the admin
+> visibility mode. It does not replace the Discord/ntfy relay, which stays the
+> "contact the owner" path.
+
 ## 5. Public message board — policy PUBLIC, storage INFRA, credentials SECRET
 
 Storage is **Cloudflare D1** (`BOARD_DB` binding). Why D1 over KV: the board's
@@ -272,13 +280,22 @@ for the data inventory, quotas, local testing, and rollback guidance.
 | Shared board paint | `src/config/paint.config.ts` | Logical canvas size, PNG/request caps, polling and publish limits. The current D1 snapshot is independent from message rows; see [`DATA.md`](./DATA.md) §10. |
 | Browser tools (`/tools/`) | `src/config/tools.config.ts` | Output formats (PNG/JPEG/WebP), which of them honour a quality slider, the accepted input types, and the client-side size/pixel limits. PUBLIC. Both tools run in the visitor's browser, so these are guards against an enormous file, not upload quotas — nothing is uploaded. |
 
-## 9. Deployment — INFRA (do not change casually)
+## 9. Deployment — INFRA (change deliberately, never silently)
 
 | Value | Location | Notes |
 | --- | --- | --- |
 | Worker name/compat/assets | `wrangler.json` | Static assets from `./dist`. |
 | Adapter options | `astro.config.mjs` | `prerenderEnvironment: "node"`. |
 | Env schema (secrets list) | `astro.config.mjs` (`env.schema`) | Declares which secrets exist; all optional so builds work unconfigured. |
+| D1 migrations, DO classes, bindings, R2 | `wrangler.json`, `migrations/` | **Allowed when planned and documented** (`docs/DEPLOY.md` + this file + `docs/DEPENDENCY-POLICY.md` §6). Each change is its own reviewed commit, and never weakens the `.gitignore` build-output exclusions. |
+
+**Planned config files (not implemented).** The chat plan adds
+`src/config/chat.config.ts` (room chat caps, message length, per-member budget,
+filter toggle), `src/config/dm.config.ts` (retention window, attachment limits,
+admin visibility mode, request/friend caps) and `src/config/friends.config.ts`
+(friend caps, discovery mode, presence visibility). They follow the existing
+rules: public policy only, limits in config rather than hard-coded, documented
+here when they land. See [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) §9.
 
 ## 10. Replacing things safely — checklist
 
