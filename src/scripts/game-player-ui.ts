@@ -123,13 +123,15 @@ export async function mountPlayerTools(root: HTMLElement): Promise<void> {
 		form?.addEventListener('submit', async (event) => {
 			event.preventDefault();
 			if (recovering) return;
-			await captureLegacyLocalProgress();
+			// Read the form before setBusy disables its controls: disabled controls are
+			// excluded from FormData, which previously sent displayName/recoveryCode as null.
+			const formData = new FormData(form);
+			const body = selector === '[data-player-create]'
+				? { action: 'create', displayName: formData.get('displayName') }
+				: { action: 'login', recoveryCode: formData.get('recoveryCode') };
 			setBusy(form, true);
 			try {
-				const formData = new FormData(form);
-				const body = selector === '[data-player-create]'
-					? { action: 'create', displayName: formData.get('displayName') }
-					: { action: 'login', recoveryCode: formData.get('recoveryCode') };
+				await captureLegacyLocalProgress();
 				const { response, data } = await postAccount(body);
 				if (!response.ok) {
 					say(live, data.error === 'login_locked' ? `Too many sign-in attempts. Wait ${data.retryAfter ?? 'a while'} seconds and try again.` : data.error === 'invalid_recovery_code' ? 'That recovery code is not valid. Check the code and try again.' : 'Could not update the account. Your local progress is still available.');

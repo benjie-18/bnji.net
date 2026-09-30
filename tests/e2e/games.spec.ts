@@ -106,6 +106,35 @@ test('Games and shell retain useful static content when JavaScript is disabled',
 	}
 });
 
+test('account creation sends the display name typed before the submit handler disables the form', async ({ page }) => {
+	// Regression: setBusy() disables the controls, so FormData must be read first.
+	// Mocking the endpoint keeps the assertion on the request body, not on D1 state.
+	const requests: Array<{ method: string; body: unknown }> = [];
+	await page.route('**/api/games/account', async (route) => {
+		const request = route.request();
+		requests.push({ method: request.method(), body: request.method() === 'POST' ? request.postDataJSON() : null });
+		if (request.method() === 'GET') {
+			await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: false }) });
+			return;
+		}
+		await route.fulfill({
+			status: 201,
+			contentType: 'application/json',
+			body: JSON.stringify({ authenticated: true, displayName: 'Benji', recoveryCode: 'BNJI-TEST-CODE-ONCE', recoveryCodeDisplayedOnce: true }),
+		});
+	});
+
+	await page.goto('/games/');
+	// loadStatus() runs after the submit listeners attach, so this greeting proves the form is live.
+	await expect(page.locator('[data-player-greeting]')).toContainText('No account or network save is required');
+	const createForm = page.locator('[data-player-create]');
+	await createForm.getByLabel('Display name').fill('Benji');
+	await createForm.getByRole('button', { name: 'Create account & claim this guest session' }).click();
+
+	await expect.poll(() => requests.find((request) => request.method === 'POST')).toEqual({ method: 'POST', body: { action: 'create', displayName: 'Benji' } });
+	await expectNoAxeViolations(page);
+});
+
 test('Bubble Pop cancels its animation frame while the tab is hidden and resumes when visible', async ({ page, context }) => {
 	await page.addInitScript(() => {
 		const canvasGetContext = HTMLCanvasElement.prototype.getContext;
