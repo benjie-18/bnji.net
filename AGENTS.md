@@ -56,7 +56,7 @@ tiny, the design coherent and the deployment boring.
 
 | Path                     | Purpose                                                                 |
 | ------------------------ | ----------------------------------------------------------------------- |
-| `src/config/*.ts`        | All owner-facing configuration: music source, DM provider, board policy, ACCESS_RULES, theme + intro defaults (these SEED the visitor settings store in `src/scripts/settings.ts`; runtime values live there, persisted in localStorage `bnji-settings-v1`, controlled from the Settings overlay). Public values only. |
+| `src/config/*.ts`        | All owner-facing configuration: music source, DM provider, board policy, names policy (display-name/handle limits), ACCESS_RULES, theme + intro defaults (these SEED the visitor settings store in `src/scripts/settings.ts`; runtime values live there, persisted in localStorage `bnji-settings-v1`, controlled from the Settings overlay). Public values only. |
 | `src/server/*.ts`        | Server-only modules: board stores (d1/rest), KV rate limiter, access primitives, env access. Never imported by client code. |
 | `src/middleware.ts`      | Route-guard enforcement for ACCESS_RULES (SSR routes only; honest about static limits). |
 | `src/pages/api/*`        | API boundaries: `/api/board`, `/api/dm`. `prerender = false`; validation, sanitization, rate limits live here. |

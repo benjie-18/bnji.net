@@ -94,7 +94,7 @@ test('account creation stores only credential/session digests and safely claims 
 	assert.equal((db.raw.prepare('SELECT player_id FROM game_scores WHERE session_id = ?').get(GUEST_C) as { player_id: string | null }).player_id, null, 'account creation must not claim another guest score');
 	const status = await accountApi.GET(requestContext('/api/games/account', { cookie }));
 	const statusText = await status.text();
-	assert.deepEqual(JSON.parse(statusText), { authenticated: true, displayName: 'Player One', saveCount: 0 });
+	assert.deepEqual(JSON.parse(statusText), { authenticated: true, displayName: 'Player One', saveCount: 0, handle: null });
 	assert.doesNotMatch(statusText, /playerId|sessionId|recoveryHash|tokenHash|BNJI-/i);
 });
 

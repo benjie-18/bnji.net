@@ -257,14 +257,15 @@ recovery procedure.
   See the Games operations/decision records for the exact message/state bounds
   and quota policy.
 - **Planned collection surfaces** (registered here when implemented, per the
-  collection policy): guest display names keyed by session digest; a room
-  registry that lets administrators list and read active rooms; report
-  snapshots and a moderation audit log; account-to-account private messages
-  with images under a bounded retention window; friendships, blocks and
-  presence; and optional Paint attribution. None of these exist yet, and none
-  may ship without the register entry, the config value for retention, and the
-  privacy-page line described in
-  [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md) §1.
+  collection policy): a room registry that lets administrators list and read
+  active rooms; report snapshots and a moderation audit log; account-to-account
+  private messages with images under a bounded retention window; friendships,
+  blocks and presence; and optional Paint attribution. None of these exist
+  yet, and none may ship without the register entry, the config value for
+  retention, and the privacy-page line described in
+  [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md) §1. (Guest display
+  names and account handles were the first surfaces on this list to land; they
+  are now live and registered in §11 below.)
 
 ## 10. Shared Paint canvas
 
@@ -365,7 +366,9 @@ with its retention and readership stated. Today's register:
 | Profile analytics | View/react/click counts keyed by ephemeral session cookie | 60 days default | Admins only (aggregates public) | [`PROFILES.md`](./PROFILES.md) |
 | Security events | Request metadata, device fingerprint, hashed IP | 60 days default | Admins only | [`PROFILES.md`](./PROFILES.md) |
 | Games tracking | Anonymous run rows, coarse device class, server-observed IP/UA | `trackingRetentionDays` | Admins only | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
-| Games account | Display name, digested recovery code/sessions, saves, scores | Until account deletion | Own account; admins see aggregates | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
+| Games account | Display name, optional public handle, digested recovery code/sessions, saves, scores | Until account deletion | Own account; admins see aggregates | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
+| Guest display names | Display name for this browser, stored keyed by a SHA-256 digest of the session cookie (the raw cookie value is never stored) | 30 days after the last change (config) | Own session only — never linked to an account; not browsable by admins | `/games/` rooms panel note + this row |
+| Account handles | Public handle + handle-change timestamp | Until account deletion | Public by exact match: handle and display name only, never a player ID | `/games/` account panel note + this row |
 | Room chat | **Planned** — bounded text, display label, opaque member ID | Room lifetime (≤2 h), deleted with the room | Room members; admins while the room exists | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
 | Private messages | **Planned** — text, images, read watermark | Bounded window, default 30 days (config) | The two participants; admins per the configured visibility mode | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
 | Friends / blocks / presence | **Planned** — handles, edge states, ephemeral presence | Account lifetime; presence ephemeral | Own account; presence visible to accepted friends | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |

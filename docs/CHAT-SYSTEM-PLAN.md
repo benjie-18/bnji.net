@@ -1,6 +1,11 @@
 # Chat, private messaging and friends — implementation plan
 
-**Status: PLAN ONLY. Nothing in this document is implemented.**
+**Status: living spec. Phase A (display names + account handles) is
+implemented as of 2026-09-30 (migration `0013_names.sql`,
+`src/server/display-name.ts`, `src/config/names.config.ts`,
+`POST/GET /api/profile/name`, `GET /api/players?handle=`, handle claim via
+`/api/games/account` `action: "set-handle"`); phases B–E are design only —
+none of them is deployed.**
 Written 2026-09-30 (America/Toronto) from an audit of commit `48865d8`.
 
 This plan is authorised by an explicit owner decision that overrides the

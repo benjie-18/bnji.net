@@ -3,7 +3,7 @@
 This is the owner-facing runbook. It answers one question: *after I pull, what
 do I have to do?*
 
-The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. For the full current Games rollout checklist, quotas, local
+The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. The chat plan's Phase A adds one more additive migration, `0013_names.sql` (guest display names + account handles) — again no new binding, secret, or paid resource. For the full current Games rollout checklist, quotas, local
 Worker testing, and rollback notes, see [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md).
 The migration command is safe to re-run; D1 applies only what is missing.
 
@@ -25,7 +25,7 @@ The migration command is safe to re-run; D1 applies only what is missing.
 
 | Area | Change | Owner action |
 | --- | --- | --- |
-| D1 | Additive migrations `0011_games.sql` (sessions/scores) and `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves) | Apply only pending migrations to existing `bnji-board` after backup |
+| D1 | Additive migrations `0011_games.sql` (sessions/scores), `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves) and `0013_names.sql` (guest display names, account handles) | Apply only pending migrations to existing `bnji-board` after backup |
 | Worker / Durable Objects | Astro HTTP handler, hourly retention Cron, SQLite class `GameRoom` under Wrangler migration `game-rooms-v1` | Deploy `src/worker.ts`; Wrangler applies the new class migration; confirm trigger and binding |
 | Admin | Games & play view and configurable raw tracking retention | No new credential; existing `/admin` guard applies |
 | Secrets/resources | No new binding, paid product, third-party service, or secret | None |
@@ -54,7 +54,7 @@ migrations have run in its own `d1_migrations` table, so this command applies
 npx wrangler d1 migrations apply bnji-board --remote
 ```
 
-The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql` and `0012_game_players_saves.sql` (unless `0011` was applied earlier). Review the list before continuing. If legacy migrations also
+The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql`, `0012_game_players_saves.sql` and `0013_names.sql` (unless earlier ones were applied already). Review the list before continuing. If legacy migrations also
 appear, confirm that is expected for the target database; migration `0001`
 should not be assumed harmless merely because it uses `CREATE TABLE IF NOT
 EXISTS`—review the database state and backup first.
@@ -83,10 +83,11 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `site_settings` | Dynamic site configuration | Dynamic key-value store for `/admin` → Configuration hot-swapping, including game/security raw tracking retention |
 | `game_sessions` | Games & play admin view | Anonymous guest/game/run totals, bounded visible active time and private device/IP metadata |
 | `game_scores` | Leaderboard foundation | Server-validated only, one guest-session personal best per game/mode, top 500 per mode |
-| `game_players` | Optional global game identity | Opaque ID; recovery-code digest only; no email/password |
+| `game_players` | Optional global game identity | Opaque ID; recovery-code digest only; no email/password. `0013_names.sql` adds the nullable unique `handle` (`[a-z0-9_]{3,20}`) + `handle_changed_at` columns; existing rows untouched, NULL until claimed |
 | `game_player_sessions` | Player authentication | Random session-token digests, expiry/revocation; FK cascade on delete |
 | `game_auth_attempts` | Recovery-code sign-in throttling | Hashed IP only; bounded age cleanup |
 | `game_saves` | Cross-device progress | Versioned JSON, ≤16 KiB/save, max 25 slots/player, revision CAS |
+| `guest_profiles` | `/games/` guest display names (chat plan Phase A) | One row per visitor session, keyed by `sha256(session id)`; display name only; swept hourly on a fixed 30-day window; no raw session values |
 
 Migration `0004` added four columns to the existing `board_messages`:
 `report_count`, `reported_at`, `status_note`, `moderated_at`. Migration `0006`

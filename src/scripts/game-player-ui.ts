@@ -1,11 +1,12 @@
 import { applyLegacyLocalProgress, captureLegacyLocalProgress, chooseCloudVersion, chooseLocalVersion, listLocalSaves, setSaveAccountAvailable, syncPlayerSaves, type GameSave } from './game-saves';
+import { NAMES_CONFIG } from '../config/names.config';
 
 const GAME_TITLES: Record<string, string> = {
 	'bnji.glass-minesweeper': 'Minesweeper', 'bnji.memory-pairs': 'Memory Pairs', 'bnji.bubble-pop': 'Bubble Pop',
 	'bnji.reaction-timer': 'Reaction Timer', 'bnji.isometric-stack': 'Isometric Stack',
 };
 
-type AccountState = { authenticated: boolean; displayName?: string; saveCount?: number };
+type AccountState = { authenticated: boolean; displayName?: string; saveCount?: number; handle?: string | null };
 
 function $(selector: string, root: HTMLElement): HTMLElement | null { return root.querySelector<HTMLElement>(selector); }
 function say(element: HTMLElement | null, message: string): void { if (element) element.textContent = message; }
@@ -116,7 +117,35 @@ export async function mountPlayerTools(root: HTMLElement): Promise<void> {
 		setSaveAccountAvailable(account.authenticated);
 		const greeting = $('[data-player-greeting]', root);
 		if (greeting) greeting.textContent = account.authenticated ? `Signed in as ${account.displayName ?? 'player'}. Save blobs are private to this account.` : 'You are playing as a guest. No account or network save is required.';
+		const handleStatus = $('[data-handle-status]', root);
+		if (handleStatus) handleStatus.textContent = account.authenticated
+			? (account.handle ? `Current handle: @${account.handle}.` : 'No handle yet — claim one above.')
+			: '';
 	}
+
+	const handleForm = $('[data-player-handle]', root) as HTMLFormElement | null;
+	handleForm?.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		if (!account.authenticated || !handleForm) return;
+		// Read the form before setBusy disables its controls (FormData skips disabled fields).
+		const handle = String(new FormData(handleForm).get('handle') ?? '').trim().toLowerCase();
+		const handleStatus = $('[data-handle-status]', root);
+		setBusy(handleForm, true);
+		try {
+			const { response, data } = await postAccount({ action: 'set-handle', handle });
+			if (!response.ok) {
+				say(handleStatus, data.error === 'handle_taken' ? 'That handle is taken. Try another.'
+					: data.error === 'handle_cooldown' ? `Handles change once every ${NAMES_CONFIG.handle.changeCooldownDays} days. Try again in ${Math.max(1, Math.ceil(Number(data.retryAfter ?? 0) / 86_400))} days.`
+					: data.error === 'invalid_handle' ? `Handles are ${NAMES_CONFIG.handle.minLength}–${NAMES_CONFIG.handle.maxLength} characters: lowercase letters, numbers, and underscores.`
+					: data.error === 'rate_limited' ? `Too many attempts. Try again in ${Math.ceil(Number(data.retryAfter ?? 60) / 60)} minutes.`
+					: 'Could not save the handle. Try again when online.');
+				return;
+			}
+			account.handle = typeof data.handle === 'string' ? data.handle : null;
+			say(handleStatus, `Handle saved: @${String(account.handle ?? handle)}.`);
+		} catch { say(handleStatus, 'Could not reach the account service. Try again when online.'); }
+		finally { setBusy(handleForm, false); }
+	});
 
 	for (const selector of ['[data-player-create]', '[data-player-login]']) {
 		const form = $(selector, root) as HTMLFormElement | null;

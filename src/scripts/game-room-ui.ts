@@ -1,4 +1,5 @@
 import { connectGameRoom, createGameRoom, type RoomNotice } from './game-rooms';
+import { NAMES_CONFIG } from '../config/names.config';
 
 export function mountGameRooms(root: HTMLElement): void {
 	const live = root.querySelector<HTMLElement>('[data-room-live]');
@@ -8,6 +9,49 @@ export function mountGameRooms(root: HTMLElement): void {
 	const leaveButton = root.querySelector<HTMLButtonElement>('[data-room-leave]');
 	let activeSocket: WebSocket | null = null;
 	let roomCode = '';
+
+	// Display-name setter (chat plan Phase A): guests set a session-scoped
+	// label, signed-in players rename the account — same endpoint both ways.
+	const nameForm = root.querySelector<HTMLFormElement>('[data-profile-name]');
+	const nameStatus = root.querySelector<HTMLElement>('[data-profile-name-status]');
+	const nameInput = nameForm?.querySelector<HTMLInputElement>('[name="displayName"]') ?? null;
+	function nameSay(message: string): void { if (nameStatus) nameStatus.textContent = message; }
+	async function loadProfileName(): Promise<void> {
+		try {
+			const response = await fetch('/api/profile/name', { credentials: 'same-origin', cache: 'no-store' });
+			if (!response.ok) return;
+			const data = await response.json() as { displayName?: string | null; scope?: string };
+			if (typeof data.displayName === 'string' && nameInput && !nameInput.value) nameInput.value = data.displayName;
+			if (data.displayName) nameSay(`Current name: ${data.displayName} · ${data.scope === 'account' ? 'account name' : 'guest name'}`);
+			else nameSay('No display name yet.');
+		} catch { nameSay('Display names load when online.'); }
+	}
+	nameForm?.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		// Read before setBusy-style disabling: disabled controls drop out of FormData.
+		const displayName = nameInput?.value ?? '';
+		const submit = nameForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+		if (submit) submit.disabled = true;
+		try {
+			const response = await fetch('/api/profile/name', {
+				method: 'POST', credentials: 'same-origin', cache: 'no-store',
+				headers: { 'content-type': 'application/json' }, body: JSON.stringify({ displayName }),
+			});
+			const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+			if (!response.ok) {
+				nameSay(data.error === 'display_name_too_long' ? `Names are up to ${NAMES_CONFIG.displayName.maxLength} characters.`
+					: data.error === 'display_name_reserved' ? 'That name is reserved — pick another.'
+					: data.error === 'invalid_display_name' ? 'Use letters, numbers, spaces, and - _ . only.'
+					: data.error === 'rate_limited' ? `Too many name changes. Try again in ${Math.ceil(Number(data.retryAfter ?? 60) / 60)} minutes.`
+					: 'Could not save the name. Try again when online.');
+				return;
+			}
+			if (nameInput) nameInput.value = String(data.displayName ?? '');
+			nameSay(`Name saved: ${String(data.displayName ?? '')} · ${data.scope === 'account' ? 'account name' : `guest name, kept ${NAMES_CONFIG.guestProfiles.retentionDays} days`}.`);
+		} catch { nameSay('Could not reach the naming service. Try again when online.'); }
+		finally { if (submit) submit.disabled = false; }
+	});
+	void loadProfileName();
 	function say(message: string): void { if (live) live.textContent = message; }
 	function connect(code: string): void {
 		if (activeSocket && activeSocket.readyState < WebSocket.CLOSING) activeSocket.close(1000, 'Switching rooms');
