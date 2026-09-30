@@ -7,6 +7,13 @@ sources of truth are `migrations/0001_board_messages.sql`,
 and `src/config/board.config.ts`. Configuration (limits, providers, windows) is
 documented separately in [`CONFIGURATION.md`](./CONFIGURATION.md) §5.
 
+**Collection policy:** what the site is allowed to store, who may read it, and
+what must be disclosed is governed by
+[`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md). That policy
+permits chat history, admin-visible message logs and activity attribution, and
+requires every surface to be registered in §11 of this document before it
+ships.
+
 ## 1. Where data lives
 
 | Store | Binding | Contents |
@@ -241,10 +248,23 @@ recovery procedure.
   rules or scores. See [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) for the
   full contract, retention, quotas and owner rollout.
 - Room codes and room state live in short-lived SQLite-backed `GameRoom`
-  Durable Objects (maximum two-hour lifetime); state is opaque and untrusted,
-  with no chat history or generic score/game-rule validation. See the Games
-  operations/decision records for the exact message/state bounds and quota
-  policy.
+  Durable Objects (maximum two-hour lifetime); game state is opaque and
+  untrusted, with no generic score/game-rule validation. **Chat history is
+  planned and permitted** ([`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md)):
+  room chat will live only inside the room's lifetime and be deleted with it,
+  so a room conversation never outlives the room. That supersedes the earlier
+  recorded "no chat history" position; the current code still has no chat.
+  See the Games operations/decision records for the exact message/state bounds
+  and quota policy.
+- **Planned collection surfaces** (registered here when implemented, per the
+  collection policy): guest display names keyed by session digest; a room
+  registry that lets administrators list and read active rooms; report
+  snapshots and a moderation audit log; account-to-account private messages
+  with images under a bounded retention window; friendships, blocks and
+  presence; and optional Paint attribution. None of these exist yet, and none
+  may ship without the register entry, the config value for retention, and the
+  privacy-page line described in
+  [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md) §1.
 
 ## 10. Shared Paint canvas
 
@@ -311,6 +331,13 @@ authenticated visitor. The trail is never returned by `/api/paint`; it is
 available only through the guarded admin Paint activity endpoint and has
 `cache-control: no-store`.
 
+> **Changed 2026-09-30:** the paragraph above describes the code as it stands.
+> It is no longer a permanent limit. [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md)
+> §6 permits extending this trail — account/session attribution, per-action
+> detail, and (with a strong recommendation against) pointer paths or canvas
+> snapshots on report. Each extension is a separate register entry here and a
+> config value, and it must be disclosed before it is switched on.
+
 Paint activity follows the shared `trackingRetentionDays` setting (default
 60 days, 1–365) and is capped at 5,000 rows. The hourly Worker sweep deletes at
 most 60 expired rows per table (a 50-row primary batch plus a 10-row catch-up
@@ -324,3 +351,25 @@ Paint requires `BOARD_CONFIG.provider === 'd1'`. With the message board in
 `rest` mode, the existing visible unavailable state and API response
 `503 paint_requires_d1_board` remain in place; Paint never writes behind the
 external REST provider or assumes an undocumented contract.
+
+## 11. Collection register
+
+Required by [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md) §1: every
+surface that stores user content or behaviour appears here **before it ships**,
+with its retention and readership stated. Today's register:
+
+| Surface | Stored | Retention | Who can read it | Disclosed |
+| --- | --- | --- | --- | --- |
+| Message board | Message text, optional image, status, report count | Permanent (§3) | Public (visible/reported); admins see all statuses | Board page notes moderation; admins are named in `/admin` docs |
+| Board Paint activity | Accepted-publish counts, revision, opaque Paint session ID | `trackingRetentionDays` (default 60) | Admins only | §10 above |
+| Profile analytics | View/react/click counts keyed by ephemeral session cookie | 60 days default | Admins only (aggregates public) | [`PROFILES.md`](./PROFILES.md) |
+| Security events | Request metadata, device fingerprint, hashed IP | 60 days default | Admins only | [`PROFILES.md`](./PROFILES.md) |
+| Games tracking | Anonymous run rows, coarse device class, server-observed IP/UA | `trackingRetentionDays` | Admins only | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
+| Games account | Display name, digested recovery code/sessions, saves, scores | Until account deletion | Own account; admins see aggregates | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
+| Room chat | **Planned** — bounded text, display label, opaque member ID | Room lifetime (≤2 h), deleted with the room | Room members; admins while the room exists | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
+| Private messages | **Planned** — text, images, read watermark | Bounded window, default 30 days (config) | The two participants; admins per the configured visibility mode | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
+| Friends / blocks / presence | **Planned** — handles, edge states, ephemeral presence | Account lifetime; presence ephemeral | Own account; presence visible to accepted friends | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
+
+Rules for this table: no row may say "permanent" by omission; every row's
+retention value lives in `src/config/`; and any surface whose stored fields
+change gets its row updated in the same commit.

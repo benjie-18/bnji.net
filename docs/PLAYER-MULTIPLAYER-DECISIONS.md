@@ -14,7 +14,20 @@ Store versioned, game-agnostic JSON blobs in the existing D1 database. Contract:
 
 ## Multiplayer
 
-Choose one SQLite-backed Durable Object per unguessable room code, using the already-custom `src/worker.ts` entrypoint and Astro's Cloudflare handler. The Worker validates the browser's player context at HTTP/WebSocket upgrade and passes a server-derived principal to the private DO binding; the DO never trusts a client-supplied member ID. Use the recommended hibernation WebSocket API, maximum 8 concurrent members, a 4 KiB UTF-8 message bound, a small schema/versioned protocol, a per-connection message ceiling, CAS versions for shared opaque state, a short reconnect grace, and a hard room expiry. Persist only bounded room metadata/state; no chat history. Invalid versions return a conflict snapshot, reconnect resumes only an unexpired room, and expired/full rooms fail explicitly. The server validates envelopes, size, membership and version only: it does **not** validate scores, turns, moves, game rules or client-supplied game state. A future game must supply its own authority/verifier.
+Choose one SQLite-backed Durable Object per unguessable room code, using the already-custom `src/worker.ts` entrypoint and Astro's Cloudflare handler. The Worker validates the browser's player context at HTTP/WebSocket upgrade and passes a server-derived principal to the private DO binding; the DO never trusts a client-supplied member ID. Use the recommended hibernation WebSocket API, maximum 8 concurrent members, a 4 KiB UTF-8 message bound, a small schema/versioned protocol, a per-connection message ceiling, CAS versions for shared opaque state, a short reconnect grace, and a hard room expiry. Persist only bounded room metadata/state and bounded room chat (see the amendment below). Invalid versions return a conflict snapshot, reconnect resumes only an unexpired room, and expired/full rooms fail explicitly. The server validates envelopes, size, membership and version only: it does **not** validate scores, turns, moves, game rules or client-supplied game state. A future game must supply its own authority/verifier.
+
+> **Amendment — 2026-09-30 (owner decision).** The original decision above
+> persisted "no chat history". That is superseded. Room chat is now planned and
+> permitted, stored inside the same Durable Object, deleted with the room,
+> surviving reconnects for the room's lifetime. Chat does not travel through
+> the game-state envelope and never consults `room-authority.ts`; it is a
+> transport feature with its own validation, rate budget and admin-visible
+> moderation path. The collection rules live in
+> [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md), and the phased
+> design — room chat, moderation tooling, admin visibility, guest and account
+> names, private messaging with images, and friends — is specified in
+> [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md). Nothing in that plan is
+> implemented yet; this note records the decision, not a delivery.
 
 This is a generic synchronization primitive, not a finished matchmaking/product surface. Rooms are private to participants who have the high-entropy room code; membership requires a validated guest or player session. Bound requests/messages and monitor the shared account quota; Free limits are ceilings, not a capacity promise. Independent local Worker verification (2026-09-29): room creation, matching-Origin WebSocket upgrades for two independent guest-cookie clients, distinct guest principals, stale-revision rejection at revision 0, unexpected disconnect reservation, same-cookie reconnect, fail-closed state rejection (`game_adapter_unavailable` because no game adapter is registered), explicit leave, and host handoff were exercised. No shared game-state revision was advanced. The local Worker used Wrangler/D1/DO emulation; direct local requests do not verify Cloudflare-edge IP-header replacement. This verifies local behavior only, not production deployment, remote DO migration, account-wide quotas under load, or a room's game rules.
 

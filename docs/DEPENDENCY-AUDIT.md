@@ -2,6 +2,14 @@
 
 **Checked:** 2026-09-29 (America/Toronto), Node 22 / npm 10.
 
+> **Policy note (2026-09-30).** This document remains the audit record for
+> production dependencies. The rule that produced it — "no new dependencies,
+> lockfile frozen" — has been replaced by the tiered policy in
+> [`DEPENDENCY-POLICY.md`](./DEPENDENCY-POLICY.md). New dependencies are
+> permitted per tier; this file is updated in the same commit whenever a
+> production dependency changes, and `npm audit` / `npm audit --omit=dev` are
+> re-run after every change.
+
 ## Findings and reachability
 
 The initial `npm audit` reported three moderate advisories and one high advisory:
