@@ -35,20 +35,39 @@ export type DisplayNameResult =
 	| { ok: true; name: string }
 	| { ok: false; error: 'invalid_display_name' | 'display_name_too_long' | 'display_name_reserved' };
 
-export function sanitizeDisplayName(value: unknown): DisplayNameResult {
-	if (typeof value !== 'string') return { ok: false, error: 'invalid_display_name' };
-	const name = value.normalize('NFKC')
-		// Whitespace controls (\t \n \r) map to a space; every other control or
+export type PlainTextResult = { ok: true; value: string } | { ok: false; error: 'empty' | 'too_long' };
+
+/**
+ * The shared NFKC → strip control/format → collapse → trim pipeline, used by
+ * display names AND room-chat message text (plan §12.2). Length is counted in
+ * code points. No charset restriction — chat text may be any printable
+ * Unicode; rendering stays `textContent`-only so that is safe.
+ */
+export function sanitizePlainText(value: unknown, maxLength: number): PlainTextResult {
+	if (typeof value !== 'string') return { ok: false, error: 'empty' };
+	const text = value.normalize('NFKC')
+		// Whitespace controls (\t \n \r) become a space; every other control or
 		// format character (NUL, RLO, ZWJ, BOM) is deleted outright.
 		.replace(/[\p{Cc}\p{Cf}]/gu, (char) => (/\s/u.test(char) ? ' ' : ''))
 		.replace(/\s+/gu, ' ')
 		.trim();
-	if (!name) return { ok: false, error: 'invalid_display_name' };
-	// Charset before length so a 30-character emoji string reports the honest
-	// "invalid" rather than "too long" (it was never name-shaped at all).
+	if (!text) return { ok: false, error: 'empty' };
+	if ([...text].length > maxLength) return { ok: false, error: 'too_long' };
+	return { ok: true, value: text };
+}
+
+export function sanitizeDisplayName(value: unknown): DisplayNameResult {
+	// Sanitise without a length cap first: charset is checked before length so
+	// a 30-emoji string reports the honest "invalid", never "too long".
+	const base = sanitizePlainText(value, Number.MAX_SAFE_INTEGER);
+	if (!base.ok) return { ok: false, error: 'invalid_display_name' };
+	const name = base.value;
+	// Charset: letters, marks (combining accents), numbers, space, underscore,
+	// hyphen, period. No emoji, no @, no punctuation beyond the list.
 	if (!/^[\p{L}\p{M}\p{N} _\-.]+$/u.test(name)) return { ok: false, error: 'invalid_display_name' };
 	// Count code points, not UTF-16 units: one astral CJK character = 1.
 	if ([...name].length > NAMES_CONFIG.displayName.maxLength) return { ok: false, error: 'display_name_too_long' };
+	// Reserved after case-fold — matches "Admin", "ADMIN", fullwidth "ａｄｍｉｎ".
 	if ((NAMES_CONFIG.displayName.reserved as readonly string[]).includes(name.toLowerCase())) {
 		return { ok: false, error: 'display_name_reserved' };
 	}

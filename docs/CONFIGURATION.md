@@ -302,6 +302,22 @@ Changing any value takes effect on the next Worker start; no migration is
 needed unless you widen `displayName.maxLength` or the handle bounds past
 their storage `CHECK`s.
 
+## 8b. Room chat — PUBLIC (chat plan Phase B)
+
+`src/config/chat.config.ts` (`CHAT_CONFIG`, exported from `src/config/index.ts`)
+holds the complete room-chat policy. The chat panel reads it for input
+attributes and visibility, the `GameRoom` Durable Object reads it for
+enforcement, and it is the plan §14 kill switch.
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `enabled` | `src/config/chat.config.ts` | Master switch, default `true`. `false` = chat frames refused server-side with `chat_rejected chat_disabled` and the panel hides itself server-side (the markup is wrapped in `{CHAT_CONFIG.enabled && …}`) — rollback without touching the rest of the room protocol. |
+| `maxTextLength` | same | 250 code points after sanitising (NFKC, whitespace control → space, other `Cc`/`Cf` stripped, collapse, trim — shared pipeline with display names, but no charset limit: punctuation and emoji are plain text). Over-cap or blank messages get `chat_rejected invalid_text`. |
+| `maxStoredMessages` | same | 200 messages per room; oldest rows are trimmed on insert (DO SQLite `game_room_chat`, AUTOINCREMENT sequence). |
+| `historyChunkMessages` | same | 25 messages per `chat_history` frame, additionally byte-packed so no frame exceeds the 4,096-byte outbound guard the client enforces (`ROOM_MAX_OUTBOUND_FRAME_BYTES`). Sent after the snapshot on every accept. |
+| `rate.burst` / `rate.refillMs` | same | Per-member token bucket in the socket attachment: burst 5, then ~1 token per 4,000 ms (≈15/min sustained). Breaches get `chat_rejected rate_limited` with `retryAfterMs` — the socket stays open. Never written to KV (plan §5.4). |
+| `rate.globalPerSecond` | same | Pre-parse abuse ceiling: 8 frames/sec across **all** frame types per connection; the 9th closes the socket with 1013 before any parsing or SQL. |
+
 ## 9. Deployment — INFRA (change deliberately, never silently)
 
 | Value | Location | Notes |

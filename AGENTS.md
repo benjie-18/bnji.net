@@ -73,10 +73,11 @@ Section components are one concern each; pages compose them in order. Never
 build a monolithic page template with inline content — put content in
 `src/data/`, structure in components.
 
-Planned surfaces — room chat, private messaging with images, friends, presence
+Planned surfaces — private messaging with images, friends, presence
 and admin chat tooling — are specified in `docs/CHAT-SYSTEM-PLAN.md`, with the
-collection rules in `docs/DATA-COLLECTION-POLICY.md`. **None of it is
-implemented.** Until a phase lands, public copy, `README.md` and this map must
+collection rules in `docs/DATA-COLLECTION-POLICY.md`. Room chat (plan Phase B)
+is now implemented; everything else in that list is **not**. Until a phase
+lands, public copy, `README.md` and this map must
 describe it as planned.
 
 ## 3. Content rules

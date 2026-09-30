@@ -1,13 +1,29 @@
-/** Generic room coordination only. It validates membership/envelopes/revisions, never game rules or scores. */
+/** Generic room coordination only. It validates membership/envelopes/revisions, never game rules or scores. Chat (plan Phase B) lives here as a transport feature: DO SQLite rows, socket-attachment rate buckets, and zero contact with `revision`/`state_json`. */
 import { DurableObject } from 'cloudflare:workers';
-import { parseRoomClientMessage, parseRoomStateMessage, roomCanAdmitMember, roomIsExpired, roomReconnectIsAllowed, ROOM_CAPACITY, ROOM_MAX_MESSAGE_BYTES, ROOM_MAX_STATE_BYTES, ROOM_MAX_MESSAGES_PER_SECOND, ROOM_PROTOCOL_VERSION, ROOM_RECONNECT_GRACE_MS, ROOM_STATE_WRITE_INTERVAL_MS, ROOM_TTL_MS } from './game-room-protocol';
+import { CHAT_CONFIG } from '../config/chat.config';
+import { sanitizeDisplayName } from './display-name';
+import {
+	consumeChatToken, packChatHistory, parseRoomClientMessage, parseRoomStateMessage, roomCanAdmitMember, roomIsExpired, roomReconnectIsAllowed,
+	ROOM_CAPACITY, ROOM_MAX_GLOBAL_MESSAGES_PER_SECOND, ROOM_MAX_MESSAGE_BYTES, ROOM_MAX_STATE_BYTES, ROOM_PROTOCOL_VERSION,
+	ROOM_RECONNECT_GRACE_MS, ROOM_STATE_WRITE_INTERVAL_MS, ROOM_TTL_MS, sanitizeChatText,
+	type RoomChatFrame, type RoomMemberFrame,
+} from './game-room-protocol';
 import { authorizeRoomStateTransition } from './room-authority';
 
 interface RoomEnv {}
 type Principal = { key: string; hash: string };
-type Attachment = { principalHash: string; memberId: string; rateSecond: number; rateCount: number };
+type Attachment = {
+	principalHash: string; memberId: string;
+	/** Pre-parse abuse ceiling counters (plan §5.4.1, all frame types). */
+	rateSecond: number; rateCount: number;
+	/** Per-member chat token bucket (plan §5.4.2) — survives hibernation. */
+	chatTokens: number; chatTokensAt: number;
+	/** Sanitized display label resolved at upgrade time; self-asserted, never an authorization input. */
+	label: string;
+};
 type RoomRow = { game_id: string; owner_hash: string; created_at: number; expires_at: number; revision: number; state_json: string; last_state_at: number };
 type MemberRow = { principal_hash: string; member_id: string; reconnect_until: number | null };
+type ChatRow = { n: number; label: string; principal_hash: string; text: string; created_at: number; removed: string | null };
 
 function json(data: unknown, status = 200): Response {
 	return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
@@ -19,6 +35,15 @@ function randomId(): string {
 function readPrincipal(request: Request): string | null {
 	const value = request.headers.get('x-bnji-verified-principal') ?? '';
 	return /^(?:player|guest):[a-f0-9]{32}$/.test(value) ? value : null;
+}
+/** Label from the upgrade route, URL-encoded because headers are not a Unicode channel. Sanitized here again — the DO never trusts a header. */
+function readChatLabel(request: Request, principal: string): string {
+	const raw = request.headers.get('x-bnji-chat-label');
+	let decoded = '';
+	if (raw) { try { decoded = decodeURIComponent(raw); } catch { decoded = ''; } }
+	const sanitized = sanitizeDisplayName(decoded);
+	if (sanitized.ok) return sanitized.name;
+	return principal.startsWith('player:') ? 'Player' : 'Guest';
 }
 function socketAttachment(socket: WebSocket): Attachment | null {
 	try { return socket.deserializeAttachment() as Attachment | null; } catch { return null; }
@@ -37,6 +62,16 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			);
 			CREATE TABLE IF NOT EXISTS game_room_members (
 				principal_hash TEXT PRIMARY KEY, member_id TEXT NOT NULL UNIQUE, reconnect_until INTEGER, joined_at INTEGER NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS game_room_chat (
+				n INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL, principal_hash TEXT NOT NULL,
+				text TEXT NOT NULL, created_at INTEGER NOT NULL, removed TEXT
+			);
+			CREATE TABLE IF NOT EXISTS game_room_chat_log (
+				id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, actor_hash TEXT NOT NULL, target TEXT, at INTEGER NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS game_room_mutes (
+				principal_hash TEXT PRIMARY KEY, muted_at INTEGER NOT NULL
 			);
 		`);
 	}
@@ -114,7 +149,12 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		const client = pair[0];
 		const server = pair[1];
 		this.state.acceptWebSocket(server);
-		server.serializeAttachment({ principalHash: hash, memberId, rateSecond: Math.floor(now / 1000), rateCount: 0 } satisfies Attachment);
+		server.serializeAttachment({
+			principalHash: hash, memberId,
+			rateSecond: Math.floor(now / 1000), rateCount: 0,
+			chatTokens: CHAT_CONFIG.rate.burst, chatTokensAt: now,
+			label: readChatLabel(request, principal),
+		} satisfies Attachment);
 		this.handoffHost();
 		for (const socket of this.state.getWebSockets()) {
 			if (socket === server) continue;
@@ -124,8 +164,149 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		}
 		const snapshot = this.snapshot(this.room() ?? room, hash);
 		server.send(JSON.stringify(snapshot));
+		// Plan §5.2: history follows the snapshot, chunked so no frame trips the
+		// client's outbound-size guard; `mine` is computed per socket.
+		for (const history of packChatHistory(this.historyFrames(hash), CHAT_CONFIG.historyChunkMessages)) {
+			server.send(JSON.stringify(history));
+		}
+		this.broadcastMembers();
 		this.broadcastPresence();
 		return new Response(null, { status: 101, webSocket: client });
+	}
+
+	// ------------------------------------------------------------------ chat
+
+	private historyFrames(forHash: string): RoomChatFrame[] {
+		const rows = this.state.storage.sql.exec<ChatRow>(
+			'SELECT n, label, principal_hash, text, created_at, removed FROM game_room_chat ORDER BY n DESC LIMIT ?', CHAT_CONFIG.maxStoredMessages,
+		).toArray();
+		return rows.reverse().map((row) => ({
+			v: ROOM_PROTOCOL_VERSION, type: 'chat' as const, n: Number(row.n), label: row.label,
+			text: row.text, at: Number(row.created_at), mine: row.principal_hash === forHash,
+			...(row.removed ? { removed: row.removed as 'host' | 'self' } : {}),
+		}));
+	}
+	private sendMembers(socket: WebSocket, forHash: string): void {
+		const room = this.room();
+		const muted = new Set(this.state.storage.sql.exec<{ principal_hash: string }>('SELECT principal_hash FROM game_room_mutes').toArray().map((row) => row.principal_hash));
+		const members: RoomMemberFrame['members'] = [];
+		for (const peer of this.state.getWebSockets()) {
+			const attachment = socketAttachment(peer);
+			if (!attachment || peer.readyState !== WebSocket.OPEN) continue;
+			members.push({
+				memberId: attachment.memberId, label: attachment.label,
+				isHost: Boolean(room && room.owner_hash === attachment.principalHash),
+				isSelf: attachment.principalHash === forHash,
+				muted: muted.has(attachment.principalHash),
+			});
+		}
+		socket.send(JSON.stringify({ v: ROOM_PROTOCOL_VERSION, type: 'members', members } satisfies RoomMemberFrame));
+	}
+	/** Roster frame is per-socket (`isSelf` differs), so this fans out individually. */
+	private broadcastMembers(): void {
+		for (const socket of this.state.getWebSockets()) {
+			const attachment = socketAttachment(socket);
+			if (!attachment) continue;
+			try { this.sendMembers(socket, attachment.principalHash); } catch { try { socket.close(1011, 'Room delivery failed'); } catch { /* no-op */ } }
+		}
+	}
+	private reject(socket: WebSocket, error: string, retryAfterMs?: number): void {
+		try {
+			socket.send(JSON.stringify({ v: ROOM_PROTOCOL_VERSION, type: 'chat_rejected', error, ...(retryAfterMs ? { retryAfterMs } : {}) }));
+		} catch { try { socket.close(1011, 'Room delivery failed'); } catch { /* no-op */ } }
+	}
+	private isMuted(principalHash: string): boolean {
+		return Boolean(this.state.storage.sql.exec<{ principal_hash: string }>('SELECT principal_hash FROM game_room_mutes WHERE principal_hash = ?', principalHash).toArray()[0]);
+	}
+	private logChatAction(action: string, actorHash: string, target: string | null): void {
+		this.state.storage.sql.exec('INSERT INTO game_room_chat_log (action, actor_hash, target, at) VALUES (?, ?, ?, ?)', action, actorHash, target, Date.now());
+	}
+
+	private async handleChat(socket: WebSocket, attachment: Attachment, text: string): Promise<void> {
+		if (!CHAT_CONFIG.enabled) return this.reject(socket, 'chat_disabled');
+		const sanitized = sanitizeChatText(text);
+		if (!sanitized.ok) return this.reject(socket, 'invalid_text');
+		if (this.isMuted(attachment.principalHash)) return this.reject(socket, 'muted');
+		const now = Date.now();
+		const bucket = consumeChatToken(
+			{ tokens: attachment.chatTokens, at: attachment.chatTokensAt }, now,
+			{ burst: CHAT_CONFIG.rate.burst, refillMs: CHAT_CONFIG.rate.refillMs },
+		);
+		attachment.chatTokens = bucket.state.tokens;
+		attachment.chatTokensAt = bucket.state.at;
+		socket.serializeAttachment(attachment);
+		if (!bucket.allowed) return this.reject(socket, 'rate_limited', bucket.retryAfterMs);
+		const inserted = this.state.storage.sql.exec<{ n: number }>(
+			'INSERT INTO game_room_chat (label, principal_hash, text, created_at, removed) VALUES (?, ?, ?, ?, NULL) RETURNING n',
+			attachment.label, attachment.principalHash, sanitized.text, now,
+		).toArray()[0];
+		// Storage cap (plan §5.4.3): trim oldest beyond maxStoredMessages. When
+		// the subquery runs out of rows it returns NULL and `n < NULL` matches
+		// nothing — a short history simply is not trimmed.
+		this.state.storage.sql.exec(
+			'DELETE FROM game_room_chat WHERE n < (SELECT n FROM game_room_chat ORDER BY n DESC LIMIT 1 OFFSET ?)',
+			CHAT_CONFIG.maxStoredMessages,
+		);
+		const frame: RoomChatFrame = { v: ROOM_PROTOCOL_VERSION, type: 'chat', n: Number(inserted.n), label: attachment.label, text: sanitized.text, at: now };
+		for (const peer of this.state.getWebSockets()) {
+			const peerAttachment = socketAttachment(peer);
+			if (!peerAttachment) continue;
+			try { peer.send(JSON.stringify({ ...frame, mine: peerAttachment.principalHash === attachment.principalHash })); }
+			catch { try { peer.close(1011, 'Room delivery failed'); } catch { /* no-op */ } }
+		}
+	}
+
+	private handleChatDelete(socket: WebSocket, attachment: Attachment, n: number): void {
+		const row = this.state.storage.sql.exec<ChatRow>(
+			'SELECT n, label, principal_hash, text, created_at, removed FROM game_room_chat WHERE n = ?', n,
+		).toArray()[0];
+		const room = this.room();
+		if (!row || !room || row.removed) return this.reject(socket, 'not_allowed');
+		const isAuthor = row.principal_hash === attachment.principalHash;
+		const isHost = room.owner_hash === attachment.principalHash;
+		if (!isAuthor && !isHost) return this.reject(socket, 'not_allowed');
+		const source: 'host' | 'self' = isAuthor ? 'self' : 'host';
+		this.state.storage.sql.exec('UPDATE game_room_chat SET text = ?, removed = ? WHERE n = ?', '', source, n);
+		this.logChatAction(source === 'self' ? 'delete_self' : 'delete_host', attachment.principalHash, String(n));
+		this.broadcast({ v: ROOM_PROTOCOL_VERSION, type: 'chat_delete', n, source });
+	}
+
+	private handleKick(socket: WebSocket, attachment: Attachment, member: string): void {
+		const room = this.room();
+		if (!room || room.owner_hash !== attachment.principalHash) return this.reject(socket, 'not_allowed');
+		if (member === attachment.memberId) return this.reject(socket, 'invalid_target');
+		const target = this.state.storage.sql.exec<MemberRow>(
+			'SELECT principal_hash, member_id, reconnect_until FROM game_room_members WHERE member_id = ?', member,
+		).toArray()[0];
+		if (!target) return this.reject(socket, 'not_allowed');
+		this.state.storage.sql.exec('DELETE FROM game_room_members WHERE member_id = ?', member);
+		this.logChatAction('kick', attachment.principalHash, target.principal_hash);
+		for (const peer of this.state.getWebSockets()) {
+			const peerAttachment = socketAttachment(peer);
+			if (peerAttachment?.principalHash !== target.principal_hash) continue;
+			try { peer.close(4003, 'Kicked by host'); } catch { /* no-op */ }
+		}
+		this.broadcastMembers();
+		this.broadcastPresence();
+	}
+
+	private handleMute(socket: WebSocket, attachment: Attachment, member: string): void {
+		const room = this.room();
+		if (!room || room.owner_hash !== attachment.principalHash) return this.reject(socket, 'not_allowed');
+		if (member === attachment.memberId) return this.reject(socket, 'invalid_target');
+		const target = this.state.storage.sql.exec<MemberRow>(
+			'SELECT principal_hash, member_id, reconnect_until FROM game_room_members WHERE member_id = ?', member,
+		).toArray()[0];
+		if (!target) return this.reject(socket, 'not_allowed');
+		// Mute lasts for the room's remaining lifetime (rows die in alarm()).
+		// Plan §5.4 said "attachment flag", but an attachment is recreated on
+		// reconnect — a table is the only form that survives rejoin.
+		this.state.storage.sql.exec(
+			'INSERT INTO game_room_mutes (principal_hash, muted_at) VALUES (?, ?) ON CONFLICT(principal_hash) DO NOTHING',
+			target.principal_hash, Date.now(),
+		);
+		this.logChatAction('mute', attachment.principalHash, target.principal_hash);
+		this.broadcastMembers();
 	}
 
 	private connectedPrincipalHashes(): Set<string> {
@@ -191,9 +372,10 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		try {
 			text = typeof input === 'string' ? input : new TextDecoder('utf-8', { fatal: true }).decode(input);
 		} catch { try { socket.close(1003, 'Text JSON required'); } catch { /* no-op */ } return; }
+		// Plan §5.4.1: pre-parse abuse ceiling across all frame types; breach closes.
 		const second = Math.floor(now / 1000);
 		const nextCount = attachment.rateSecond === second ? attachment.rateCount + 1 : 1;
-		if (nextCount > ROOM_MAX_MESSAGES_PER_SECOND) {
+		if (nextCount > ROOM_MAX_GLOBAL_MESSAGES_PER_SECOND) {
 			try { socket.close(1013, 'Message rate exceeded'); } catch { /* no-op */ }
 			return;
 		}
@@ -205,6 +387,22 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		if (!parsed.ok) {
 			const closeCode = parsed.error === 'too_large' || parsed.error === 'state_too_large' ? 1009 : parsed.error === 'invalid_json' ? 1007 : 1008;
 			try { socket.close(closeCode, parsed.error.slice(0, 80)); } catch { /* no-op */ }
+			return;
+		}
+		if (parsed.message.type === 'chat') {
+			await this.handleChat(socket, attachment, parsed.message.text);
+			return;
+		}
+		if (parsed.message.type === 'chat_delete') {
+			this.handleChatDelete(socket, attachment, parsed.message.n);
+			return;
+		}
+		if (parsed.message.type === 'kick') {
+			this.handleKick(socket, attachment, parsed.message.member);
+			return;
+		}
+		if (parsed.message.type === 'mute') {
+			this.handleMute(socket, attachment, parsed.message.member);
 			return;
 		}
 		if (parsed.message.type === 'leave') {
@@ -270,6 +468,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			}
 			this.handoffHost();
 			this.broadcastPresence();
+			this.broadcastMembers();
 		}
 		try { socket.close(code || 1000, reason.slice(0, 120)); } catch { /* already closed */ }
 	}
@@ -289,6 +488,9 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			try { socket.close(4002, 'Room expired'); } catch { /* no-op */ }
 		}
 		this.state.storage.sql.exec('DELETE FROM game_room_members');
+		this.state.storage.sql.exec('DELETE FROM game_room_chat');
+		this.state.storage.sql.exec('DELETE FROM game_room_chat_log');
+		this.state.storage.sql.exec('DELETE FROM game_room_mutes');
 		this.state.storage.sql.exec('DELETE FROM game_room');
 	}
 }
@@ -296,5 +498,9 @@ export class GameRoom extends DurableObject<RoomEnv> {
 export const GAME_ROOM_LIMITS = {
 	ttlMs: ROOM_TTL_MS, reconnectGraceMs: ROOM_RECONNECT_GRACE_MS, capacity: ROOM_CAPACITY,
 	maxMessageBytes: ROOM_MAX_MESSAGE_BYTES, maxStateBytes: ROOM_MAX_STATE_BYTES, stateWriteIntervalMs: ROOM_STATE_WRITE_INTERVAL_MS,
-	maxMessagesPerSecond: ROOM_MAX_MESSAGES_PER_SECOND, protocolVersion: ROOM_PROTOCOL_VERSION,
+	maxGlobalMessagesPerSecond: ROOM_MAX_GLOBAL_MESSAGES_PER_SECOND, protocolVersion: ROOM_PROTOCOL_VERSION,
+	chat: {
+		enabled: CHAT_CONFIG.enabled, maxTextLength: CHAT_CONFIG.maxTextLength, maxStoredMessages: CHAT_CONFIG.maxStoredMessages,
+		burst: CHAT_CONFIG.rate.burst, refillMs: CHAT_CONFIG.rate.refillMs,
+	},
 };

@@ -31,7 +31,7 @@ This is the whole policy. Everything below is the detail.
 
 | Surface | Before | Now |
 | --- | --- | --- |
-| Room chat | Recorded decision: "no chat history" | **Allowed.** Bounded history is retained for the room's lifetime (≤2 h), survives reconnects, and is deleted with the room. Administrators may read it while the room exists (see `docs/CHAT-SYSTEM-PLAN.md`). |
+| Room chat | Recorded decision: "no chat history" | **Allowed — implemented (Phase B).** Bounded history is retained for the room's lifetime (≤2 h), survives reconnects, and is deleted with the room. Administrators may read it while the room exists (admin tooling ships with Phase C; see `docs/CHAT-SYSTEM-PLAN.md`). |
 | Message logging by admins | Not contemplated | **Allowed as a capability.** Each surface ships with a documented default and its own register entry. Where content logging is on, users must be able to tell from the UI. |
 | Private messaging | Was a contact form relayed to Discord/ntfy; no user content stored | **Allowed.** Account-to-account messages, attachments and read state may be stored for a bounded retention window, with admin-readable moderation paths. |
 | Paint canvas activity | Admin-visible, but explicitly *not* attributed: no accounts, no IPs, no pointer paths, no sticker images | **Attribution allowed** (session, and optionally account, plus the action detail the owner chooses), with the caveats in §6. |

@@ -5,6 +5,7 @@ import GameCard from '../components/GameCard.astro';
 import PageHeader from '../components/PageHeader.astro';
 import { GAMES } from '../data/games';
 import { NAMES_CONFIG } from '../config/names.config';
+import { CHAT_CONFIG } from '../config/chat.config';
 import Layout from '../layouts/Layout.astro';
 
 const standalone = GAMES.filter((game) => !game.labHref);
@@ -108,6 +109,19 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 				<p class="room-tools__name-note">Signed in: saved to your account. Playing as a guest: kept for {NAMES_CONFIG.guestProfiles.retentionDays} days, keyed by a digest of this browser's session cookie &mdash; not linked to an account.</p>
 				<p class="room-tools__name-status" data-profile-name-status role="status" aria-live="polite"></p>
 			</form>
+			{CHAT_CONFIG.enabled && (
+			<div class="room-tools__chat" data-chat-panel>
+				<p class="room-tools__chat-note">Plain text for everyone in the room. Messages are stored only while this room exists (up to 2 hours) and are deleted with the room &mdash; not encrypted, not permanent, and no links are turned into previews.</p>
+				<ol class="room-tools__chat-messages" data-chat-messages role="log" aria-live="polite" aria-label="Room chat messages"></ol>
+				<p class="room-tools__chat-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
+				<form class="room-tools__chat-form" data-chat-form>
+					<label for="chat-input">Message</label>
+					<input id="chat-input" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
+					<button class="player-tools__button player-tools__button--primary" type="submit" disabled>Send</button>
+				</form>
+				<ul class="room-tools__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
+			</div>
+			)}
 			<div class="room-tools__status">
 				<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
 				<div data-room-code-panel hidden><span>Share this room code privately:</span> <output data-room-code></output> <button class="player-tools__button player-tools__button--small" type="button" data-room-copy>Copy code</button> <button class="player-tools__button player-tools__button--small" type="button" data-room-leave disabled>Leave room</button></div>
@@ -208,6 +222,23 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	.room-tools__name input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
 	.room-tools__name-note, .room-tools__name-status { grid-column: 1 / -1; font-size: var(--text-small); }
 	.room-tools__name-status { min-height: 1.5em; color: var(--text-strong); }
+	.room-tools__chat { grid-column: 1 / -1; display: grid; gap: 0.55rem; padding-top: 0.9rem; border-top: 1px solid var(--glass-border); }
+	.room-tools__chat-note { font-size: var(--text-small); }
+	.room-tools__chat-messages { display: grid; gap: 0.4rem; max-height: 14rem; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+	.room-tools__chat-item { display: grid; grid-template-columns: auto 1fr auto; gap: 0.25rem 0.65rem; align-items: baseline; padding: 0.4rem 0.55rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); }
+	.room-tools__chat-meta { color: var(--text-muted); font-size: var(--text-micro); white-space: nowrap; }
+	.room-tools__chat-text { color: var(--text-strong); overflow-wrap: anywhere; }
+	.room-tools__chat-item--removed .room-tools__chat-text { color: var(--text-muted); font-style: italic; }
+	.room-tools__chat-actions { display: flex; gap: 0.35rem; }
+	.room-tools__chat-action { border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 0.15rem 0.45rem; color: var(--text-muted); background: transparent; font: inherit; font-size: var(--text-micro); cursor: pointer; }
+	.room-tools__chat-action:hover { border-color: var(--accent-strong); color: var(--text-strong); }
+	.room-tools__chat-status { min-height: 1.5em; margin: 0; color: var(--text-strong); font-size: var(--text-small); }
+	.room-tools__chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem 0.75rem; align-items: end; }
+	.room-tools__chat-form label { grid-column: 1 / -1; color: var(--text-strong); font-size: var(--text-small); }
+	.room-tools__chat-form input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
+	.room-tools__chat-form input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
+	.room-tools__chat-roster { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+	.room-tools__chat-roster li { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.55rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--text-micro); }
 	.room-tools__status { grid-column: 1 / -1; min-height: 1.5em; }
 	.room-tools__status output { margin-inline: 0.4rem; color: var(--text-strong); font-family: var(--font-mono, monospace); overflow-wrap: anywhere; user-select: all; }
 	.room-tools__status > div { margin-top: 0.35rem; }
@@ -230,7 +261,7 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	.games-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--grid-gap); }
 	@media (max-width: 800px) { .games-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 	@media (max-width: 560px) {
-		.games-grid, .player-tools__guest, .room-tools, .room-tools__forms, .room-tools__name { grid-template-columns: 1fr; }
+		.games-grid, .player-tools__guest, .room-tools, .room-tools__forms, .room-tools__name, .room-tools__chat-form { grid-template-columns: 1fr; }
 		.games-section-heading, .player-tools__head, .player-tools__saves-head { align-items: start; flex-direction: column; }
 		.player-tools__save { grid-template-columns: 1fr; }
 		.player-tools__choices { display: grid; grid-template-columns: 1fr; }

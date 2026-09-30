@@ -249,12 +249,14 @@ recovery procedure.
   full contract, retention, quotas and owner rollout.
 - Room codes and room state live in short-lived SQLite-backed `GameRoom`
   Durable Objects (maximum two-hour lifetime); game state is opaque and
-  untrusted, with no generic score/game-rule validation. **Chat history is
-  planned and permitted** ([`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md)):
-  room chat will live only inside the room's lifetime and be deleted with it,
-  so a room conversation never outlives the room. That supersedes the earlier
-  recorded "no chat history" position; the current code still has no chat.
-  See the Games operations/decision records for the exact message/state bounds
+  untrusted, with no generic score/game-rule validation. **Room chat is
+  implemented (chat plan Phase B, 2026-09-30)** and permitted
+  ([`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md)): bounded plain text lives
+  only inside the room's own Durable Object SQLite, survives reconnects as
+  history, and is deleted with the room by the same `alarm()` sweep — a room
+  conversation never outlives the room, and no chat row is ever written to KV
+  or D1. That supersedes the earlier recorded "no chat history" position. See
+  the Games operations/decision records for the exact message/state bounds
   and quota policy.
 - **Planned collection surfaces** (registered here when implemented, per the
   collection policy): a room registry that lets administrators list and read
@@ -369,7 +371,7 @@ with its retention and readership stated. Today's register:
 | Games account | Display name, optional public handle, digested recovery code/sessions, saves, scores | Until account deletion | Own account; admins see aggregates | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
 | Guest display names | Display name for this browser, stored keyed by a SHA-256 digest of the session cookie (the raw cookie value is never stored) | 30 days after the last change (config) | Own session only — never linked to an account; not browsable by admins | `/games/` rooms panel note + this row |
 | Account handles | Public handle + handle-change timestamp | Until account deletion | Public by exact match: handle and display name only, never a player ID | `/games/` account panel note + this row |
-| Room chat | **Planned** — bounded text, display label, opaque member ID | Room lifetime (≤2 h), deleted with the room | Room members; admins while the room exists | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
+| Room chat | Bounded plain text (≤250 code points after sanitising), display label (your display name or `Player`/`Guest` fallback, re-sanitised server-side), opaque per-room member ID, hashed principal, monotone message number, tombstone markers, host-action log | Room lifetime (≤2 h): deleted with the room by the DO `alarm()` sweep; trimmed to the newest 200 messages per room (`CHAT_CONFIG`) | Room members live; admins while the room exists (admin tooling is Phase C) | `/games/` room chat panel line + this row; account export states its exclusion explicitly (room-keyed, ≤2 h) |
 | Private messages | **Planned** — text, images, read watermark | Bounded window, default 30 days (config) | The two participants; admins per the configured visibility mode | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
 | Friends / blocks / presence | **Planned** — handles, edge states, ephemeral presence | Account lifetime; presence ephemeral | Own account; presence visible to accepted friends | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
 

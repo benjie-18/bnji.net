@@ -1,10 +1,14 @@
 # Chat, private messaging and friends — implementation plan
 
-**Status: living spec. Phase A (display names + account handles) is
-implemented as of 2026-09-30 (migration `0013_names.sql`,
-`src/server/display-name.ts`, `src/config/names.config.ts`,
-`POST/GET /api/profile/name`, `GET /api/players?handle=`, handle claim via
-`/api/games/account` `action: "set-handle"`); phases B–E are design only —
+**Status: living spec. Phase A (display names + account handles) and Phase B
+(room chat: delivery, history, rate limits, host moderation — DO tables,
+`CHAT_CONFIG`, protocol, panel) are implemented as of 2026-09-30
+(migration `0013_names.sql`, `src/server/display-name.ts`,
+`src/config/names.config.ts`, `POST/GET /api/profile/name`,
+`GET /api/players?handle=`, handle claim via `/api/games/account`
+`action: "set-handle"`; Phase B in `src/server/game-room-protocol.ts`,
+`src/server/game-room-do.ts`, `src/config/chat.config.ts`,
+`tests/workerd/room-chat.spec.ts`); phases C–E are design only —
 none of them is deployed.**
 Written 2026-09-30 (America/Toronto) from an audit of commit `48865d8`.
 
@@ -146,15 +150,18 @@ that a chat message leaves `revision` unchanged.
 
 ### 5.4 Rate limiting
 
-The current per-connection check (1 msg/s, evaluated before parsing, closes the
-socket with `1013`) cannot be shared with chat — a normal typing burst would
-kill the connection. New shape:
+~~The current per-connection check (1 msg/s, evaluated before parsing, closes
+the socket with `1013`) cannot be shared with chat — a normal typing burst would
+kill the connection.~~ **Implemented in Phase B as follows:**
 
-1. **Global abuse ceiling** (pre-parse, byte-bounded): raise to 8 msg/s,
-   close on breach. Still cheap, still first.
+1. **Global abuse ceiling** (pre-parse, byte-bounded): raised to 8 msg/s
+   (`CHAT_CONFIG.rate.globalPerSecond`), close on breach with `1013`. Still
+   cheap, still first — checked before parsing, so junk floods cost one
+   comparison.
 2. **Per-member chat budget**: token bucket in the socket attachment (burst 5,
    refill ~1 per 4 s ≈ 15/min sustained). Attachments survive hibernation, so
-   this costs zero storage reads.
+   this costs zero storage reads; a *reconnect* gets a fresh bucket, which is
+   the correct reset point (a new socket is a new connection).
 3. **Storage cap**: 200 rows/room, trimmed on insert.
 
 Zero KV writes. On Workers Free, KV allows 1,000 writes/day account-wide and
@@ -164,7 +171,10 @@ room create/join already spend some of it.
 
 - **Host controls**: remove a message (visible as "message removed"), kick a
   member (existing membership delete path), mute a member for the room's
-  remaining lifetime (attachment flag).
+  remaining lifetime. *(Phase B amendment: the mute flag lives in a
+  `game_room_mutes` DO table keyed by hashed principal, not in the socket
+  attachment — attachments die with the socket, so an attachment flag would
+  reset on every reconnect. The table is deleted with the room.)*
 - **Self-service**: delete own message (removes text, leaves a tombstone until
   room expiry so sequence numbers stay stable).
 - Every moderation action by the host is recorded in the room's own DO table
@@ -245,6 +255,10 @@ from inflating a count, matching `0004_board_moderation.sql`.
 player IDs: `sha256([a, b].sort().join(':'))`. This makes "the conversation
 between A and B" a single row no matter who initiates, and the DO name derives
 from the same digest, so no lookup race can create duplicates.
+
+> **Prepared for groups (owner decision 2026-09-30, not scheduled):** group
+> conversations will require this identity and the ≤2-member assumption in D4
+> to be redesigned first — see the owner addition in §9.4.
 
 ### 7.3 Delivery and fanout
 
@@ -369,12 +383,34 @@ Message editing, delete-for-everyone, conversation archiving/export, group
 chats, and link previews (a link preview fetches a URL the sender chose —
 that is a server-side request forgery and privacy surface, not a convenience).
 
+**Owner addition (2026-09-30, not scheduled):** the owner wants **group
+conversations (group chats)** added to this plan. They stay deferred until the
+owner schedules them; when they are, Phase D is the phase to adapt — §7.2's
+pair-digest conversation identity and D4's per-conversation DO both assume
+exactly two members and must generalize (multi-member identity, roster/fanout,
+per-group membership and moderation) *before* any D code lands. Do not start
+that work until it is scheduled.
+
 ### 9.5 What this means for account export/deletion
 
 Both already exist (`/api/games/account`, `/api/games/account/export`). They
 must be extended in the phase that adds each table, not afterwards — an export
 that silently omits the user's messages is a correctness bug under
 `DATA-COLLECTION-POLICY.md`.
+
+**Phase B note (2026-09-30, flagged tension):** `game_room_chat` and
+`game_room_chat_log` are the first tables added by a phase that *cannot* be
+gathered into the account export: they live inside ephemeral per-room DOs,
+are keyed to rooms rather than accounts (the only link is a hashed principal),
+and there is no room index until Phase C's `room_registry`. Because chat also
+cannot outlive its room (≤2 h — far shorter than any export/deletion
+round-trip), Phase B's export ships an explicit `roomChat: { included:
+false, reason }` section so the omission is declared, never silent, and
+account deletion needs no chat cascade (nothing account-linked survives the
+room). When `room_registry` exists, revisit whether deletion should sweep
+still-live rooms for the deleted account's hashed principal; exporting full
+room-chat history would additionally need a principal index across live rooms
+and is an owner decision if ever wanted.
 
 ## 10. Planned API surface
 

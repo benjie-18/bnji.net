@@ -3,7 +3,7 @@
 This is the owner-facing runbook. It answers one question: *after I pull, what
 do I have to do?*
 
-The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. The chat plan's Phase A adds one more additive migration, `0013_names.sql` (guest display names + account handles) — again no new binding, secret, or paid resource. For the full current Games rollout checklist, quotas, local
+The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. The chat plan's Phase A adds one more additive migration, `0013_names.sql` (guest display names + account handles) — again no new binding, secret, or paid resource. Phase B (room chat) adds **no migration and no binding**: its tables live inside the existing `GameRoom` DO's own SQLite and are created by the DO's init code. For the full current Games rollout checklist, quotas, local
 Worker testing, and rollback notes, see [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md).
 The migration command is safe to re-run; D1 applies only what is missing.
 

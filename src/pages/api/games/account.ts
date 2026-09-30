@@ -270,6 +270,16 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 		const data = {
 			format: 'bnji.game-account-export', version: 1, exportedAt: new Date().toISOString(),
 			account: { displayName: identity.display_name, handle: identity.handle ?? null, createdAt: Number(identity.created_at) },
+			// Room chat (chat plan Phase B) is deliberately explicit, never silent:
+			// its tables live inside ephemeral per-room Durable Objects, keyed to
+			// the room rather than to this account (a hashed principal is the only
+			// link, and there is no room index until the Phase C registry), so it
+			// cannot be gathered here — and it cannot outlive its room's ≤2 h
+			// lifetime anyway. See docs/DATA.md §11 and CHAT-SYSTEM-PLAN.md §9.5.
+			roomChat: {
+				included: false,
+				reason: 'Room chat lives at most 2 hours inside individual room instances. It is keyed to rooms, not to this account, and is deleted with its room — so it is never part of this export.',
+			},
 			saves: saves.map((row) => ({ gameId: row.game_id, slotId: row.slot_id, schemaVersion: Number(row.schema_version), revision: Number(row.revision), data: JSON.parse(row.data_json), updatedAt: Number(row.updated_at) })),
 			scores: scores.results.map((row) => ({ gameId: row.game_id, mode: row.mode_id, score: Number(row.score), tieBreak: row.tie_break === null ? null : Number(row.tie_break), achievedAt: Number(row.achieved_at), displayName: row.display_name, status: row.validation_state })),
 		};

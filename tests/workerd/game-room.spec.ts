@@ -24,127 +24,23 @@
  *   6. `alarm()` teardown closes sockets with 4002 and deletes the room rows
  *      — nothing outlives the room.
  *
- * Two current-behaviour quirks these tests must respect (both deliberately
- * scheduled for change by plan §5.4, so neither is asserted as desirable):
- *   - the per-connection ceiling is 1 msg/s and a same-second second message
- *     closes the socket with 1013 — sends on one socket are spaced >1 s apart;
+ * Shared helpers (SocketBox, createRoom, connect, sqlRows) live in
+ * `support.ts` and are reused by the Phase B chat spec. Two operational notes:
+ *   - plan §5.4 replaced the old 1 msg/s closing ceiling with an 8/s global
+ *     abuse limit plus a soft per-member token bucket (room-chat.spec.ts);
+ *     these baseline sends stay spaced >1 s apart, which is valid either way;
  *   - every `stub.fetch` body must be drained or workerd counts the stream as
  *     an active reference and refuses to evict the instance.
  */
-import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
+import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { GameRoom } from '../../src/server/game-room-do';
 import { registerRoomStateAuthority } from '../../src/server/room-authority';
 import { ROOM_CAPACITY, ROOM_TTL_MS } from '../../src/server/game-room-protocol';
+import { GAME, connect, createRoom, delay, HEADERS, PRINCIPAL_A, PRINCIPAL_B, principalHash, snapshotOf, SocketBox, sqlRows, stubFor, uniqueRoomCode } from './support';
 
-const GAME = 'bnji.glass-minesweeper';
-const PRINCIPAL_A = 'guest:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-const PRINCIPAL_B = 'guest:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-/** The current ceiling closes a socket on a second message within one wall-clock second. */
+/** Baseline sends stay >1 s apart (valid under both old and new rate rules). */
 const MSG_GAP_MS = 1_100;
-const HEADERS = (principal: string, extra: Record<string, string> = {}): Record<string, string> => ({
-	'x-bnji-verified-principal': principal,
-	...extra,
-});
-
-let roomSeq = 0;
-function uniqueRoomCode(): string {
-	// Same shape as production (22 base64url chars); uniqueness keeps the
-	// suite independent of cross-test storage isolation semantics.
-	roomSeq += 1;
-	const bytes = new Uint8Array(16);
-	crypto.getRandomValues(bytes);
-	let binary = '';
-	for (const byte of bytes) binary += String.fromCharCode(byte);
-	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').slice(0, 20) + roomSeq.toString(36).padStart(2, '0');
-}
-
-async function principalHash(principal: string): Promise<string> {
-	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(principal));
-	return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-type BoxFrame = { v?: number; type?: string; [key: string]: unknown };
-const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Collects one test client's inbound frames and its close event. */
-class SocketBox {
-	readonly frames: BoxFrame[] = [];
-	private used = new Set<number>();
-	private closedWith: { code: number; reason: string } | null = null;
-
-	constructor(socket: WebSocket) {
-		socket.addEventListener('message', (event) => {
-			try { this.frames.push(JSON.parse(String(event.data)) as BoxFrame); } catch { /* not JSON */ }
-		});
-		socket.addEventListener('close', (event) => {
-			this.closedWith = { code: event.code, reason: event.reason };
-		});
-		socket.accept();
-	}
-
-	/** First unconsumed frame matching `match`, or fail after `timeoutMs`. */
-	async next(match: (frame: BoxFrame) => boolean, timeoutMs = 5_000): Promise<BoxFrame> {
-		const deadline = Date.now() + timeoutMs;
-		for (;;) {
-			const index = this.frames.findIndex((frame, i) => !this.used.has(i) && match(frame));
-			if (index >= 0) {
-				this.used.add(index);
-				return this.frames[index];
-			}
-			if (Date.now() >= deadline) {
-				throw new Error(`timed out waiting for frame; saw: ${this.frames.map((frame) => String(frame.type)).join(', ') || '(none)'}`);
-			}
-			await delay(20);
-		}
-	}
-
-	async closed(timeoutMs = 5_000): Promise<{ code: number; reason: string }> {
-		const deadline = Date.now() + timeoutMs;
-		while (!this.closedWith) {
-			if (Date.now() >= deadline) throw new Error('timed out waiting for socket close');
-			await delay(20);
-		}
-		return this.closedWith;
-	}
-}
-
-function stubFor(code: string) {
-	const namespace = env.GAME_ROOMS;
-	return namespace.get(namespace.idFromName(code));
-}
-
-async function createRoom(code: string, principal: string, now = Date.now()): Promise<{ status: number; body: Record<string, unknown> }> {
-	const response = await stubFor(code).fetch(new Request('https://room.test/create', {
-		method: 'POST',
-		headers: HEADERS(principal, { 'content-type': 'application/json' }),
-		body: JSON.stringify({ gameId: GAME, now }),
-	}));
-	// Drain the body: an unread stream keeps an active reference on the
-	// instance, which a later evictDurableObject() refuses to break.
-	const text = await response.text();
-	return { status: response.status, body: (text ? JSON.parse(text) : {}) as Record<string, unknown> };
-}
-
-async function connect(code: string, principal: string): Promise<{ socket: WebSocket; box: SocketBox }> {
-	const response = await stubFor(code).fetch(new Request('https://room.test/ws', {
-		method: 'GET',
-		headers: HEADERS(principal, { upgrade: 'websocket' }),
-	}));
-	if (response.status !== 101) throw new Error(`expected 101 upgrade, got ${response.status}: ${await response.text()}`);
-	const socket = response.webSocket;
-	if (!socket) throw new Error('101 response carried no webSocket');
-	return { socket, box: new SocketBox(socket) };
-}
-
-/** Raw SQL reads/writes against the DO under test (storage seeding + asserts). */
-function sqlRows<T extends Record<string, SqlStorageValue>>(code: string, query: string, ...bindings: (string | number)[]): Promise<T[]> {
-	return runInDurableObject(stubFor(code), (_instance: GameRoom, state: DurableObjectState) =>
-		state.storage.sql.exec<T>(query, ...bindings).toArray(),
-	);
-}
-
-const snapshotOf = (frame: BoxFrame): boolean => frame.type === 'snapshot';
 
 describe('GameRoom — membership', () => {
 	it('authenticates itself: no header, no room; bad path, 404', async () => {

@@ -350,6 +350,10 @@ test('account export and authenticated admin metadata reveal neither credentials
 	const exportText = await exported.text();
 	assert.match(exportText, /bnji.game-account-export/);
 	assert.match(exportText, /private/);
+	// Chat plan Phase B: room chat states its exclusion explicitly (never silent).
+	const exportData = JSON.parse(exportText) as { roomChat?: { included: boolean; reason: string } };
+	assert.equal(exportData.roomChat?.included, false);
+	assert.match(String(exportData.roomChat?.reason), /deleted with its room/);
 	assert.doesNotMatch(exportText, new RegExp(`${playerId}|recoveryHash|tokenHash|bnji_ga|bnji_ps`));
 	const unauthorized = await adminGamesApi.GET(requestContext('/api/admin/games'));
 	assert.equal(unauthorized.status, 401);

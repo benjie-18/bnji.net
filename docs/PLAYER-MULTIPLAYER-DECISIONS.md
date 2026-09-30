@@ -17,8 +17,8 @@ Store versioned, game-agnostic JSON blobs in the existing D1 database. Contract:
 Choose one SQLite-backed Durable Object per unguessable room code, using the already-custom `src/worker.ts` entrypoint and Astro's Cloudflare handler. The Worker validates the browser's player context at HTTP/WebSocket upgrade and passes a server-derived principal to the private DO binding; the DO never trusts a client-supplied member ID. Use the recommended hibernation WebSocket API, maximum 8 concurrent members, a 4 KiB UTF-8 message bound, a small schema/versioned protocol, a per-connection message ceiling, CAS versions for shared opaque state, a short reconnect grace, and a hard room expiry. Persist only bounded room metadata/state and bounded room chat (see the amendment below). Invalid versions return a conflict snapshot, reconnect resumes only an unexpired room, and expired/full rooms fail explicitly. The server validates envelopes, size, membership and version only: it does **not** validate scores, turns, moves, game rules or client-supplied game state. A future game must supply its own authority/verifier.
 
 > **Amendment — 2026-09-30 (owner decision).** The original decision above
-> persisted "no chat history". That is superseded. Room chat is now planned and
-> permitted, stored inside the same Durable Object, deleted with the room,
+> persisted "no chat history". That is superseded. Room chat is now permitted
+> (implemented in chat plan Phase B, 2026-09-30), stored inside the same Durable Object, deleted with the room,
 > surviving reconnects for the room's lifetime. Chat does not travel through
 > the game-state envelope and never consults `room-authority.ts`; it is a
 > transport feature with its own validation, rate budget and admin-visible

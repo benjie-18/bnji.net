@@ -1,5 +1,9 @@
 import { connectGameRoom, createGameRoom, type RoomNotice } from './game-rooms';
 import { NAMES_CONFIG } from '../config/names.config';
+import { CHAT_CONFIG } from '../config/chat.config';
+
+type ChatFrame = { n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' };
+type MemberFrame = { memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean };
 
 export function mountGameRooms(root: HTMLElement): void {
 	const live = root.querySelector<HTMLElement>('[data-room-live]');
@@ -9,66 +13,161 @@ export function mountGameRooms(root: HTMLElement): void {
 	const leaveButton = root.querySelector<HTMLButtonElement>('[data-room-leave]');
 	let activeSocket: WebSocket | null = null;
 	let roomCode = '';
-
-	// Display-name setter (chat plan Phase A): guests set a session-scoped
-	// label, signed-in players rename the account — same endpoint both ways.
-	const nameForm = root.querySelector<HTMLFormElement>('[data-profile-name]');
-	const nameStatus = root.querySelector<HTMLElement>('[data-profile-name-status]');
-	const nameInput = nameForm?.querySelector<HTMLInputElement>('[name="displayName"]') ?? null;
-	function nameSay(message: string): void { if (nameStatus) nameStatus.textContent = message; }
-	async function loadProfileName(): Promise<void> {
-		try {
-			const response = await fetch('/api/profile/name', { credentials: 'same-origin', cache: 'no-store' });
-			if (!response.ok) return;
-			const data = await response.json() as { displayName?: string | null; scope?: string };
-			if (typeof data.displayName === 'string' && nameInput && !nameInput.value) nameInput.value = data.displayName;
-			if (data.displayName) nameSay(`Current name: ${data.displayName} · ${data.scope === 'account' ? 'account name' : 'guest name'}`);
-			else nameSay('No display name yet.');
-		} catch { nameSay('Display names load when online.'); }
-	}
-	nameForm?.addEventListener('submit', async (event) => {
-		event.preventDefault();
-		// Read before setBusy-style disabling: disabled controls drop out of FormData.
-		const displayName = nameInput?.value ?? '';
-		const submit = nameForm.querySelector<HTMLButtonElement>('button[type="submit"]');
-		if (submit) submit.disabled = true;
-		try {
-			const response = await fetch('/api/profile/name', {
-				method: 'POST', credentials: 'same-origin', cache: 'no-store',
-				headers: { 'content-type': 'application/json' }, body: JSON.stringify({ displayName }),
-			});
-			const data = await response.json().catch(() => ({})) as Record<string, unknown>;
-			if (!response.ok) {
-				nameSay(data.error === 'display_name_too_long' ? `Names are up to ${NAMES_CONFIG.displayName.maxLength} characters.`
-					: data.error === 'display_name_reserved' ? 'That name is reserved — pick another.'
-					: data.error === 'invalid_display_name' ? 'Use letters, numbers, spaces, and - _ . only.'
-					: data.error === 'rate_limited' ? `Too many name changes. Try again in ${Math.ceil(Number(data.retryAfter ?? 60) / 60)} minutes.`
-					: 'Could not save the name. Try again when online.');
-				return;
-			}
-			if (nameInput) nameInput.value = String(data.displayName ?? '');
-			nameSay(`Name saved: ${String(data.displayName ?? '')} · ${data.scope === 'account' ? 'account name' : `guest name, kept ${NAMES_CONFIG.guestProfiles.retentionDays} days`}.`);
-		} catch { nameSay('Could not reach the naming service. Try again when online.'); }
-		finally { if (submit) submit.disabled = false; }
-	});
-	void loadProfileName();
 	function say(message: string): void { if (live) live.textContent = message; }
+
+	// ------------------------------------------------------------- chat panel
+	const chatPanel = root.querySelector<HTMLElement>('[data-chat-panel]');
+	const chatList = root.querySelector<HTMLOListElement>('[data-chat-messages]');
+	const chatStatus = root.querySelector<HTMLElement>('[data-chat-status]');
+	const chatForm = root.querySelector<HTMLFormElement>('[data-chat-form]');
+	const chatInput = chatForm?.querySelector<HTMLInputElement>('[name="text"]') ?? null;
+	const chatSend = chatForm?.querySelector<HTMLButtonElement>('button[type="submit"]') ?? null;
+	const roster = root.querySelector<HTMLUListElement>('[data-chat-roster]');
+	const seenChat = new Map<number, HTMLElement>();
+	let isHost = false;
+	function chatSay(message: string): void { if (chatStatus) chatStatus.textContent = message; }
+	function setChatEnabled(enabled: boolean): void {
+		if (chatInput) chatInput.disabled = !enabled;
+		if (chatSend) chatSend.disabled = !enabled;
+	}
+	function clock(at: number): string {
+		return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+	}
+	function renderChat(frame: ChatFrame): void {
+		if (!chatList || seenChat.has(frame.n)) return;
+		const item = document.createElement('li');
+		item.className = 'room-tools__chat-item';
+		item.dataset.chatN = String(frame.n);
+		const meta = document.createElement('span');
+		meta.className = 'room-tools__chat-meta';
+		const body = document.createElement('span');
+		body.className = 'room-tools__chat-text';
+		const actions = document.createElement('span');
+		actions.className = 'room-tools__chat-actions';
+		item.appendChild(meta);
+		item.appendChild(body);
+		item.appendChild(actions);
+		chatList.appendChild(item);
+		seenChat.set(frame.n, item);
+		paintChat(item, frame);
+		chatList.scrollTop = chatList.scrollHeight;
+	}
+	function paintChat(item: HTMLElement, frame: ChatFrame): void {
+		const meta = item.querySelector<HTMLElement>(':scope > .room-tools__chat-meta');
+		const body = item.querySelector<HTMLElement>(':scope > .room-tools__chat-text');
+		const actions = item.querySelector<HTMLElement>(':scope > .room-tools__chat-actions');
+		if (!meta || !body || !actions) return;
+		actions.replaceChildren();
+		if (frame.removed) {
+			meta.textContent = frame.removed === 'host' ? 'Room host removed a message' : 'Message deleted';
+			body.textContent = 'message removed';
+			item.classList.add('room-tools__chat-item--removed');
+			return;
+		}
+		meta.textContent = `${frame.label} · ${clock(frame.at)}`;
+		body.textContent = frame.text;
+		item.classList.remove('room-tools__chat-item--removed');
+		if (frame.mine) actions.appendChild(chatAction('Delete', () => sendChatFrame({ v: 1, type: 'chat_delete', n: frame.n })));
+		else if (isHost) actions.appendChild(chatAction('Remove', () => sendChatFrame({ v: 1, type: 'chat_delete', n: frame.n })));
+	}
+	function chatAction(label: string, run: () => void): HTMLButtonElement {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'room-tools__chat-action';
+		button.textContent = label;
+		button.addEventListener('click', run);
+		return button;
+	}
+	function sendChatFrame(frame: Record<string, unknown>): boolean {
+		if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) { chatSay('Not connected to a room.'); return false; }
+		activeSocket.send(JSON.stringify(frame));
+		return true;
+	}
+	function renderRoster(members: MemberFrame[]): void {
+		if (!roster) return;
+		roster.replaceChildren();
+		for (const member of members) {
+			const item = document.createElement('li');
+			const name = document.createElement('span');
+			name.textContent = `${member.label}${member.isHost ? ' · host' : ''}${member.muted ? ' · muted' : ''}`;
+			item.appendChild(name);
+			if (isHost && !member.isSelf) {
+				item.appendChild(chatAction('Kick', () => sendChatFrame({ v: 1, type: 'kick', member: member.memberId })));
+				if (!member.muted) item.appendChild(chatAction('Mute', () => sendChatFrame({ v: 1, type: 'mute', member: member.memberId })));
+			}
+			roster.appendChild(item);
+		}
+		roster.hidden = members.length === 0;
+	}
+	function handleChatNotice(message: RoomNotice): boolean {
+		if (message.type === 'chat' && typeof message.n === 'number' && typeof message.text === 'string' && typeof message.label === 'string') {
+			renderChat({ n: message.n, label: message.label, text: message.text, at: message.at ?? Date.now(), mine: message.mine, removed: message.removed });
+			return true;
+		}
+		if (message.type === 'chat_history' && Array.isArray(message.messages)) {
+			for (const frame of message.messages) renderChat(frame);
+			return true;
+		}
+		if (message.type === 'chat_delete' && typeof message.n === 'number') {
+			const item = seenChat.get(message.n);
+			if (item) paintChat(item, { n: message.n, label: '', text: '', at: 0, removed: message.source === 'self' ? 'self' : 'host' });
+			return true;
+		}
+		if (message.type === 'chat_rejected') {
+			const error = message.error;
+			chatSay(error === 'rate_limited' ? `Slow down — try again in ${Math.max(1, Math.ceil(Number(message.retryAfterMs ?? 1_000) / 1_000))} seconds.`
+				: error === 'muted' ? 'You are muted in this room for its remaining lifetime.'
+				: error === 'chat_disabled' ? 'Chat is turned off right now.'
+				: error === 'invalid_text' ? `Messages are plain text up to ${CHAT_CONFIG.maxTextLength} characters.`
+				: error === 'invalid_target' ? 'That member cannot be controlled.'
+				: 'That action is not allowed in this room.');
+			return true;
+		}
+		if (message.type === 'members' && Array.isArray(message.members)) {
+			renderRoster(message.members as MemberFrame[]);
+			return true;
+		}
+		return false;
+	}
+	chatForm?.addEventListener('submit', (event) => {
+		event.preventDefault();
+		if (!chatInput) return;
+		const text = chatInput.value;
+		if (!sendChatFrame({ v: 1, type: 'chat', text })) return;
+		chatInput.value = '';
+	});
+	if (!CHAT_CONFIG.enabled && chatPanel) chatPanel.hidden = true;
+
 	function connect(code: string): void {
 		if (activeSocket && activeSocket.readyState < WebSocket.CLOSING) activeSocket.close(1000, 'Switching rooms');
 		roomCode = code;
 		if (codeInput) codeInput.value = code;
 		if (codePanel) codePanel.hidden = false;
 		if (codeOutput) codeOutput.value = code;
+		// Fresh room, fresh chat: history will repopulate from the snapshot burst.
+		seenChat.clear();
+		chatList?.replaceChildren();
+		roster?.replaceChildren();
+		if (roster) roster.hidden = true;
+		chatSay('Connecting to the room chat…');
 		activeSocket = connectGameRoom(code, (message: RoomNotice) => {
-			if (message.type === 'snapshot') say(`Connected to ${message.gameId ?? 'room'} · version ${message.revision ?? 0} · ${message.connectedMembers ?? 1} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'} No game adapter is registered, so game-state updates are disabled.`);
-			else if (message.type === 'presence') say(`Room connected · ${message.connectedMembers ?? 0} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'}`);
+			if (message.type === 'snapshot') {
+				isHost = Boolean(message.isHost);
+				say(`Connected to ${message.gameId ?? 'room'} · version ${message.revision ?? 0} · ${message.connectedMembers ?? 1} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'} No game adapter is registered, so game-state updates are disabled.`);
+				chatSay(CHAT_CONFIG.enabled ? 'Connected to chat. Messages are stored only while this room exists.' : 'Chat is turned off right now.');
+			}
+			else if (message.type === 'presence') {
+				isHost = Boolean(message.isHost);
+				say(`Room connected · ${message.connectedMembers ?? 0} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'}`);
+			}
 			else if (message.type === 'conflict') say(`Room state changed to version ${message.revision ?? 0}; reconnecting clients receive the latest snapshot.`);
 			else if (message.type === 'state_rejected') say(message.error === 'game_adapter_unavailable' ? 'No game adapter is registered; state changes are refused.' : 'The game authority rejected that state change.');
+			else handleChatNotice(message);
 		}, (state) => {
-			if (state === 'connecting') { if (leaveButton) leaveButton.disabled = true; say('Connecting to room…'); }
-			else if (state === 'connected') { if (leaveButton) leaveButton.disabled = false; say('Connected. Waiting for the room snapshot…'); }
-			else if (state === 'closed') { if (leaveButton) leaveButton.disabled = true; say('Room connection closed. Re-enter the code to reconnect while the room is active.'); }
-			else if (state === 'error') { if (leaveButton) leaveButton.disabled = true; say('Room connection failed. Check the code and connection, then try again.'); }
+			if (state === 'connecting') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); say('Connecting to room…'); }
+			else if (state === 'connected') { if (leaveButton) leaveButton.disabled = false; setChatEnabled(CHAT_CONFIG.enabled); }
+			else if (state === 'closed') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection closed. Re-enter the code to reconnect while the room is active.'); say('Room connection closed. Re-enter the code to reconnect while the room is active.'); }
+			else if (state === 'error') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection failed. Check the code and connection, then try again.'); say('Room connection failed. Check the code and connection, then try again.'); }
 		});
 	}
 	root.querySelector<HTMLFormElement>('[data-room-create]')?.addEventListener('submit', async (event) => {
