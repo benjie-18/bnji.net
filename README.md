@@ -21,7 +21,7 @@ bokeh) — both wrapped in a realistic liquid-glass surface system. Built with
 > | [`docs/DEPLOY.md`](./docs/DEPLOY.md) | Owner runbook: migrations, existing secrets, deployment and verification |
 > | [`docs/GAMES-DECISIONS.md`](./docs/GAMES-DECISIONS.md) | Games architecture decision and identity/verifier seams |
 > | [`docs/GAMES-OPERATIONS.md`](./docs/GAMES-OPERATIONS.md) | Games setup, privacy/retention, Cloudflare Free quotas and first-game recipe |
-> | [`docs/CHAT-SYSTEM-PLAN.md`](./docs/CHAT-SYSTEM-PLAN.md) | **Living plan:** room chat (Phases A–B implemented), moderation and admin visibility, private messaging with images, friends |
+> | [`docs/CHAT-SYSTEM-PLAN.md`](./docs/CHAT-SYSTEM-PLAN.md) | **Living plan:** room chat (Phases A–C implemented), private messaging with images, friends |
 > | [`docs/DATA-COLLECTION-POLICY.md`](./docs/DATA-COLLECTION-POLICY.md) | What the site may collect, retention, admin visibility and disclosure rules |
 > | [`docs/DEPENDENCY-POLICY.md`](./docs/DEPENDENCY-POLICY.md) | Dependency tiers, review process, and the infrastructure changes each one allows |
 >
@@ -29,12 +29,14 @@ bokeh) — both wrapped in a realistic liquid-glass surface system. Built with
 > identity copy is neutral placeholder text by design.
 >
 > **Status note (2026-09-30):** chat plan Phase A — display names (guest,
-> session-scoped) and public account handles with exact-match lookup — and
-> Phase B — in-room chat (bounded plain text, reconnect history, host
-> kick/mute/remove, per-member rate limiting, deleted with the room) — are
-> **implemented**. Admin-visible moderation, private messaging, friends and
-> presence are **planned, not implemented** — see
-> `docs/CHAT-SYSTEM-PLAN.md`. The Games room panel is a transport surface
+> session-scoped) and public account handles with exact-match lookup — Phase B
+> — in-room chat (bounded plain text, reconnect history, host kick/mute/remove,
+> per-member rate limiting, deleted with the room) — and Phase C — moderation
+> tooling (member reporting with snapshots that outlive the room, an `/admin`
+> Chat tab with live transcripts, delete/ban/kick/close, a report queue and
+> moderation log, blocklist/URL-strip triage config, account export/deletion
+> coverage) — are **implemented**. Private messaging, friends and presence are
+> **planned, not implemented** — see `docs/CHAT-SYSTEM-PLAN.md`. The Games room panel is a transport surface
 > with chat; it still has no playable game. The dependency rule changed on the same
 > date: dependencies are now permitted per tier under
 > `docs/DEPENDENCY-POLICY.md`, and the site may collect and retain chat history
@@ -124,9 +126,11 @@ npm run deploy     # publish to Cloudflare Workers
   (unique, exact-match lookup, changeable once every 30 days). Rooms also have
   plain-text chat: it survives reconnects as bounded history, is rate-limited,
   and is deleted with the room (≤2 hours) — the room's host can remove
-  messages and kick or mute members. Still planned: admin moderation with
-  admin-visible chat, live account-to-account direct
-  messages with images, and a friends system with presence. Full design,
+  messages and kick or mute members. Messages can be reported: snapshots are
+  kept in D1 for review after the room is gone, and `/admin` has a Chat tab
+  for live transcripts, deletes, bans and the report queue. Still planned:
+  live account-to-account direct messages with images, and a friends system
+  with presence. Full design,
   phases, schema sketches, quota math and open questions are in
   [`docs/CHAT-SYSTEM-PLAN.md`](./docs/CHAT-SYSTEM-PLAN.md); everything in that
   list beyond names/handles is not implemented yet.

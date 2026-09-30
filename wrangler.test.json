@@ -20,5 +20,8 @@
 				"GameRoom"
 			]
 		}
-	]
+	],
+	"vars": {
+		"ACCESS_SECRET": "workerd-test-secret"
+	}
 }

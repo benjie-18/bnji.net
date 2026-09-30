@@ -26,8 +26,23 @@ Choose one SQLite-backed Durable Object per unguessable room code, using the alr
 > [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md), and the phased
 > design — room chat, moderation tooling, admin visibility, guest and account
 > names, private messaging with images, and friends — is specified in
-> [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md). Nothing in that plan is
-> implemented yet; this note records the decision, not a delivery.
+> [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md). Phases A (names) and B (room
+> chat) are implemented; Phase C (moderation below) shipped the same day.
+>
+> **Phase C delivered (2026-09-30):** admin-visible moderation shipped — D1
+> `room_registry` (owner-approved §6.1 trade: the site is personal-use only,
+> the joinable-code exposure is accepted and documented), reported-message
+> snapshots that outlive the room, distinct-reporter counting, an Active bans
+> store with expiry (`chat_bans` — the plan's missing ban-store gap), a
+> moderation audit log, the `/admin` **Chat** tab (service-authenticated
+> transcript read with URL stripping; delete/ban/kick/close; report
+> resolve/dismiss/escalate), the §6.3 blocklist/URL-strip config (triage aid,
+> empty by default), the member-facing Report button with a D1 rate limit
+> (never KV), and the account export/deletion extension (`chatModeration`
+> section + keyed-row sweep). Service auth: `sha256('bnji-room-admin:v1:' +
+> ACCESS_SECRET)` in `x-bnji-room-admin`, failing closed on both sides.
+> Phases D and E are not started. See plan §6's implementation notes for the
+> full deviation list.
 
 This is a generic synchronization primitive, not a finished matchmaking/product surface. Rooms are private to participants who have the high-entropy room code; membership requires a validated guest or player session. Bound requests/messages and monitor the shared account quota; Free limits are ceilings, not a capacity promise. Independent local Worker verification (2026-09-29): room creation, matching-Origin WebSocket upgrades for two independent guest-cookie clients, distinct guest principals, stale-revision rejection at revision 0, unexpected disconnect reservation, same-cookie reconnect, fail-closed state rejection (`game_adapter_unavailable` because no game adapter is registered), explicit leave, and host handoff were exercised. No shared game-state revision was advanced. The local Worker used Wrangler/D1/DO emulation; direct local requests do not verify Cloudflare-edge IP-header replacement. This verifies local behavior only, not production deployment, remote DO migration, account-wide quotas under load, or a room's game rules.
 

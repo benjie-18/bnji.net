@@ -2,10 +2,13 @@
 import type { APIContext } from 'astro';
 import { serverEnvironment } from '../../../../../server/env';
 import type { D1Database } from '../../../../../server/game-store';
-import { roomNamespace, roomServiceFetch } from '../../../../../server/game-room-gateway';
+import { roomNamespace, roomPrincipal, roomServiceFetch } from '../../../../../server/game-room-gateway';
 import { clientIp } from '../../../../../server/security-helpers';
 import { rateLimit, type KvRateLimitStore } from '../../../../../server/ratelimit';
 import { appendPlayerCookies, PlayerContextStorageError, resolvePlayerContext } from '../../../../../server/player-context';
+import { sha256Hex } from '../../../../../server/player-store';
+import { CHAT_CONFIG } from '../../../../../config/chat.config';
+import { activeChatBan } from '../../../../../server/chat-moderation';
 
 export const prerender = false;
 function json(data: unknown, status = 400): Response {
@@ -33,6 +36,18 @@ export async function GET(context: APIContext): Promise<Response> {
 	if (!limit.allowed) {
 		const response = json({ error: 'rate_limited', retryAfter: limit.retryAfter }, 429);
 		response.headers.set('retry-after', String(limit.retryAfter)); appendPlayerCookies(response.headers, player); return response;
+	}
+	// Phase C: cross-room chat ban (plan §6.2 "ban the principal for a
+	// period"). Checked here so a banned principal never reaches the room;
+	// the kill switch covers it — chat disabled means no ban gate.
+	if (CHAT_CONFIG.enabled && db) {
+		try {
+			const bannedUntil = await activeChatBan(db, await sha256Hex(roomPrincipal(player)), Date.now());
+			if (bannedUntil) {
+				const response = json({ error: 'chat_banned', retryAfterMs: Math.max(1_000, bannedUntil - Date.now()) }, 403);
+				appendPlayerCookies(response.headers, player); return response;
+			}
+		} catch { /* D1 blip: joining is not blocked by a failed ban lookup */ }
 	}
 	try {
 		const response = await roomServiceFetch(env, code, player, '/ws', { method: 'GET', request: context.request });

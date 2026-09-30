@@ -2,7 +2,7 @@ import { connectGameRoom, createGameRoom, type RoomNotice } from './game-rooms';
 import { NAMES_CONFIG } from '../config/names.config';
 import { CHAT_CONFIG } from '../config/chat.config';
 
-type ChatFrame = { n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' };
+type ChatFrame = { n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' | 'admin' };
 type MemberFrame = { memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean };
 
 export function mountGameRooms(root: HTMLElement): void {
@@ -59,7 +59,8 @@ export function mountGameRooms(root: HTMLElement): void {
 		if (!meta || !body || !actions) return;
 		actions.replaceChildren();
 		if (frame.removed) {
-			meta.textContent = frame.removed === 'host' ? 'Room host removed a message' : 'Message deleted';
+			meta.textContent = frame.removed === 'admin' ? 'An administrator removed a message'
+				: frame.removed === 'host' ? 'Room host removed a message' : 'Message deleted';
 			body.textContent = 'message removed';
 			item.classList.add('room-tools__chat-item--removed');
 			return;
@@ -68,15 +69,40 @@ export function mountGameRooms(root: HTMLElement): void {
 		body.textContent = frame.text;
 		item.classList.remove('room-tools__chat-item--removed');
 		if (frame.mine) actions.appendChild(chatAction('Delete', () => sendChatFrame({ v: 1, type: 'chat_delete', n: frame.n })));
-		else if (isHost) actions.appendChild(chatAction('Remove', () => sendChatFrame({ v: 1, type: 'chat_delete', n: frame.n })));
+		else {
+			if (isHost) actions.appendChild(chatAction('Remove', () => sendChatFrame({ v: 1, type: 'chat_delete', n: frame.n })));
+			actions.appendChild(chatAction('Report', (button) => reportMessage(frame.n, button)));
+		}
 	}
-	function chatAction(label: string, run: () => void): HTMLButtonElement {
+	function chatAction(label: string, run: (button: HTMLButtonElement) => void): HTMLButtonElement {
 		const button = document.createElement('button');
 		button.type = 'button';
 		button.className = 'room-tools__chat-action';
 		button.textContent = label;
-		button.addEventListener('click', run);
+		button.addEventListener('click', () => run(button));
 		return button;
+	}
+	/** Plan §6.4 — POST /api/chat/report; the room snapshots the message, D1 keeps the evidence. */
+	async function reportMessage(n: number, button: HTMLButtonElement): Promise<void> {
+		if (!roomCode) return;
+		button.disabled = true;
+		try {
+			const response = await fetch('/api/chat/report', {
+				method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ code: roomCode, n }),
+			});
+			const body = await response.json().catch(() => ({})) as { error?: string };
+			if (response.ok) chatSay('Thanks — the message was sent to the moderators for review.');
+			else if (body.error === 'rate_limited') chatSay('You have reported a lot of messages lately — try again in a few minutes.');
+			else if (body.error === 'not_member') chatSay('You need to be in the room to report one of its messages.');
+			else if (body.error === 'message_not_found') chatSay('That message is no longer available to report.');
+			else if (body.error === 'chat_disabled') chatSay('Chat is turned off right now.');
+			else chatSay('The report could not be sent. Try again in a moment.');
+		} catch {
+			chatSay('The report could not be sent. Check your connection and try again.');
+		} finally {
+			button.disabled = false;
+		}
 	}
 	function sendChatFrame(frame: Record<string, unknown>): boolean {
 		if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) { chatSay('Not connected to a room.'); return false; }
@@ -119,6 +145,7 @@ export function mountGameRooms(root: HTMLElement): void {
 				: error === 'muted' ? 'You are muted in this room for its remaining lifetime.'
 				: error === 'chat_disabled' ? 'Chat is turned off right now.'
 				: error === 'invalid_text' ? `Messages are plain text up to ${CHAT_CONFIG.maxTextLength} characters.`
+			: error === 'blocked' ? `That message was blocked by this room's word filter.`
 				: error === 'invalid_target' ? 'That member cannot be controlled.'
 				: 'That action is not allowed in this room.');
 			return true;

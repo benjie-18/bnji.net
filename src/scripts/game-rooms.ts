@@ -1,7 +1,7 @@
 /** Thin browser client for the generic versioned room protocol; it never asserts game rules. */
 import { ROOM_MAX_OUTBOUND_FRAME_BYTES } from '../server/game-room-protocol';
 
-export type RoomChatNoticeFrame = { n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' };
+export type RoomChatNoticeFrame = { n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' | 'admin' };
 export type RoomNotice = {
 	v: number;
 	type: string;
@@ -19,7 +19,7 @@ export type RoomNotice = {
 	at?: number;
 	mine?: boolean;
 	removed?: 'host' | 'self';
-	source?: 'host' | 'self';
+	source?: 'host' | 'self' | 'admin';
 	messages?: RoomChatNoticeFrame[];
 	members?: Array<{ memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean }>;
 };

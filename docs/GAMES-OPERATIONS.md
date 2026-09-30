@@ -19,7 +19,7 @@
 
 ## Storage and score trust
 
-`migrations/0011_games.sql` adds `game_sessions` and `game_scores`; `migrations/0012_game_players_saves.sql` adds `game_players`, digested `game_player_sessions`, hashed-IP `game_auth_attempts`, and bounded JSON `game_saves` to the existing D1 database bound as `BOARD_DB`. `migrations/0013_names.sql` (chat plan Phase A) adds the `guest_profiles` table (display name keyed by `sha256(session id)`, fixed 30-day sweep) and the nullable unique `handle`/`handle_changed_at` columns on `game_players`. No new D1 database is needed. `wrangler.json` also binds one new SQLite-backed Durable Object class (`GAME_ROOMS` → `GameRoom`) through the Worker `game-rooms-v1` class migration; it uses no additional secret or third-party service.
+`migrations/0011_games.sql` adds `game_sessions` and `game_scores`; `migrations/0012_game_players_saves.sql` adds `game_players`, digested `game_player_sessions`, hashed-IP `game_auth_attempts`, and bounded JSON `game_saves` to the existing D1 database bound as `BOARD_DB`. `migrations/0013_names.sql` (chat plan Phase A) adds the `guest_profiles` table (display name keyed by `sha256(session id)`, fixed 30-day sweep) and the nullable unique `handle`/`handle_changed_at` columns on `game_players`. `migrations/0014_chat_moderation.sql` (chat plan Phase C) adds `room_registry`, `chat_reports`, `chat_reporters`, `chat_moderation_log` and `chat_bans`. No new D1 database is needed. `wrangler.json` also binds one new SQLite-backed Durable Object class (`GAME_ROOMS` → `GameRoom`) through the Worker `game-rooms-v1` class migration; it uses no additional secret beyond the existing `ACCESS_SECRET` (Phase C derives the DO admin service token from it — already provisioned for `/admin` sessions, passed to the class as a top-level Wrangler secret).
 
 - A game-session row stores anonymous `session_id`, per-tab `run_id`, reserved nullable `player_id`, stable `game_id`, start/end/last-seen timestamps, bounded active milliseconds, server-observed IP and user-agent, coarse browser/OS/device class, and client-reported screen/input class. `run_id` prevents two tabs sharing a guest cookie from racing one heartbeat row. SQL ensures a heartbeat updates at most once per 45 seconds and bounds each increment to the smaller of the client delta, 65 seconds, and elapsed server time. Hourly cleanup closes at most 50 stale unfinished runs per invocation after two idle minutes; a larger closure backlog drains across later triggers.
 - Client-provided screen/input classes are allowlisted coarse labels, not proof of hardware. IP/UA come from the request, with Cloudflare's `CF-Connecting-IP` header as the production source. The system does not collect precise GPS, referrer, key/input details, score-game replay, or audio/video.
@@ -121,10 +121,10 @@ Expected: `/games/` and guest account status return 200, leaderboard returns rea
 
 1. Review the exact changes and current Cloudflare Free quotas/pricing above; verify Workers Free plan, Cron-slot availability and healthy Worker/D1/DO/KV headroom. If headroom or Free status is uncertain, stop—do not enable billing or proceed on a paid plan.
 2. Back up existing D1 using the owner's Cloudflare export/Time Travel procedure. This coding task has **not** used production credentials, run remote migration, deployed, or altered production.
-3. Read pending history: `npx wrangler d1 migrations list bnji-board --remote`. Confirm only expected unapplied migrations. If applicable, migration files `0011_games.sql`, `0012_game_players_saves.sql` and `0013_names.sql` are additive; do not assume unrelated legacy migrations are safe.
-4. Apply the reviewed pending D1 migrations to the existing database: `npx wrangler d1 migrations apply bnji-board --remote`. Verify `d1_migrations` records `0013_names.sql` and the new/changed tables (`guest_profiles`, `game_players.handle`) exist before deploy. This creates no second D1 database.
+3. Read pending history: `npx wrangler d1 migrations list bnji-board --remote`. Confirm only expected unapplied migrations. If applicable, migration files `0011_games.sql`, `0012_game_players_saves.sql`, `0013_names.sql` and `0014_chat_moderation.sql` are additive; do not assume unrelated legacy migrations are safe.
+4. Apply the reviewed pending D1 migrations to the existing database: `npx wrangler d1 migrations apply bnji-board --remote`. Verify `d1_migrations` records `0013_names.sql` and `0014_chat_moderation.sql` and that the new/changed tables (`guest_profiles`, `game_players.handle`, `room_registry`, `chat_reports`, `chat_reporters`, `chat_moderation_log`, `chat_bans`) exist before deploy. This creates no second D1 database.
 5. Run `npm run check`, then deploy through the owner's existing Worker pipeline (or `npx wrangler deploy`). Deployment must include the `src/worker.ts` entrypoint, `GAME_ROOMS` binding, and Wrangler migration `game-rooms-v1`; Wrangler registers the new SQLite DO class. Confirm the Worker deploy completed on Workers Free and the UTC hourly trigger appears. Do not separately create a DO, class, namespace, secret, or paid product.
-6. Verify `/games/`, `GET /api/games/account` (guest response is 200 without internal ID/credential), `/api/games/leaderboard`, existing `/admin`, Games & play, retention configuration, and environment bindings. Confirm scheduled invocations run and dashboards show Worker requests, D1 rows read/written, KV writes, and DO requests/GB-s/SQLite rows/storage remain below shared Free quotas. Keep guest play usable.
+6. Verify `/games/`, `GET /api/games/account` (guest response is 200 without internal ID/credential), `/api/games/leaderboard`, existing `/admin` (including the new **Chat** tab: rooms list loads, a live room transcript opens, a report can be resolved), Games & play, retention configuration, and environment bindings. Confirm `ACCESS_SECRET` is set — without it the Chat tab's room transcript returns `503 admin_service_unconfigured` (fail-closed by design) while the rest of `/admin` still works. Confirm scheduled invocations run and dashboards show Worker requests, D1 rows read/written, KV writes, and DO requests/GB-s/SQLite rows/storage remain below shared Free quotas. Keep guest play usable.
 7. Optional production smoke: if the owner elects to exercise account/save/room after rollout, create a disposable test identity, keep its one-time recovery code and room code private/off logs, test a save and room reconnect, then delete the account and verify export/delete behavior. Do not use an owner's personal recovery credential as a test credential. This task has no production smoke result.
 8. Set retention in `/admin` only if the owner wants a value other than the default 60 days. Cutoff filtering is immediate; physical cleanup is bounded to 60 rows/table/hour, so deletion backlog can take longer. Do not increase cleanup caps to chase backlog without recomputing the shared D1 write budget.
 
@@ -132,7 +132,38 @@ Expected: `/games/` and guest account status return 200, leaderboard returns rea
 
 - **Optional:** local-only `.dev.vars` may contain existing admin development settings if needed. No new Worker secret is needed. Never commit it. Never ask users for or log recovery/session tokens.
 - **Optional:** the score verifier is intentionally absent until a game has a concrete authoritative scoring model. Add one only in server code; generic saves/rooms are not score or gameplay validation.
-- D1 `0011`/`0012` are additive and have no down migration; `game-rooms-v1` class registration is a forward Wrangler migration. A code rollback can redeploy the previous Worker while leaving unused D1 tables and the DO class in place. Do not drop identity/save tables if data exists or claim a rollback removes user data. Restore from owner-held backup/Time Travel only after reviewing effects on unrelated site data. Remain on Workers Free throughout.
+- D1 `0011`/`0012`/`0013`/`0014` are additive and have no down migration; `game-rooms-v1` class registration is a forward Wrangler migration. A code rollback can redeploy the previous Worker while leaving unused D1 tables and the DO class in place. Do not drop identity/save tables if data exists or claim a rollback removes user data. Restore from owner-held backup/Time Travel only after reviewing effects on unrelated site data. Remain on Workers Free throughout.
+
+## Room moderation (chat plan Phase C)
+
+The `/admin` panel gained a **Chat** tab (plan §6.2). What it can do, and what
+each action means operationally:
+
+| Panel / action | Effect | Notes |
+| --- | --- | --- |
+| Active rooms → **Open** | Streams the live transcript from the room's Durable Object over the service-authenticated `/admin/read` endpoint | Display view strips URLs when `filter.stripUrlsForAdmin` is on (stored text is untouched). Members list includes each principal hash. |
+| Active rooms → **Close** | Closes every socket (`4002 Room closed by administrator`), deletes every room table, removes the registry row | Irreversible; the room code stops working immediately. |
+| Transcript → **Delete** | Tombstones the message (`removed = 'admin'`, text blanked) and repaints every open client with `An administrator removed a message` | Logged in `chat_moderation_log`. |
+| Transcript → **Ban** | Adds `chat_bans` row for `moderation.defaultBanMinutes` (editable per call, clamped to `maxBanMinutes`) and kicks any live session (`4003`) | Banned principals cannot rejoin (`403 chat_banned` at `/ws`). Ban survives reconnects until expiry or unban. |
+| Transcript → **Kick** | Disconnects (`4003`) without banning; the principal can rejoin | Logged. |
+| Reports → **Resolve / Dismiss** | Sets report status + optional note | Both keep the snapshot until the retention sweep. |
+| Reports → **Ban author** | Escalation: bans the snapshot's `author_hash` and resolves the report | Works even after the room is gone — the snapshot is the evidence. |
+| Active bans → **Unban** | Deletes the ban row | |
+| Moderation log | Append-only audit: action, room code, hashes, detail | Hashed principals only; retained with the shared sweep (`trackingRetentionDays`). |
+
+Reporting (plan §6.4): members see a **Report** button on other people's
+messages; `POST /api/chat/report` asks the room to snapshot the message into
+D1 before the room can expire. Limits: `moderation.reportMaxPerWindow` per
+`reportWindowMs` per hashed IP, counted in D1 — a `429 rate_limited` is
+expected under abuse, not an error. The §6.3 blocklist/filter is a triage aid;
+empty by default; never describe it as protection.
+
+Retention: `room_registry` (expired rows), aged `chat_reports`/`chat_reporters`
+(> `trackingRetentionDays`), expired `chat_bans`, and aged
+`chat_moderation_log` are swept by the same hourly Cron as the tracking tables
+(budget: 19 DELETE statements per run). Account export includes a
+`chatModeration` section; account deletion removes every row keyed to the
+principal.
 
 ## First future game recipe
 

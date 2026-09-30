@@ -77,6 +77,9 @@ export const prerender = false;
 			<button class="admin__tab" type="button" data-tab="games" aria-selected="false">
 				Games &amp; play
 			</button>
+			<button class="admin__tab" type="button" data-tab="chat" aria-selected="false">
+				Chat
+			</button>
 			<button class="admin__tab" type="button" data-tab="settings" aria-selected="false">
 				Settings
 			</button>
@@ -243,6 +246,34 @@ export const prerender = false;
 			<div class="admin__card" data-glass style="margin-top: 1rem;">
 				<h2 class="admin__h2">Recent game sessions</h2>
 				<div class="admin__table-wrap" data-games-sessions />
+			</div>
+		</section>
+
+		<!-- Chat: rooms, transcript, reports, log (chat plan Phase C) -->
+		<section class="admin__panel" data-panel="chat" hidden>
+			<div class="admin__card" data-glass>
+				<h2 class="admin__h2">Active rooms</h2>
+				<p class="admin__hint">Rooms live at most 2 hours; chat text is deleted with the room. The word filter and URL stripping are triage aids, not guarantees. Reported messages keep a D1 snapshot after the room is gone.</p>
+				<div class="admin__table-wrap" data-chat-rooms />
+			</div>
+			<div class="admin__card" data-glass style="margin-top: 1rem;">
+				<h2 class="admin__h2">Room transcript</h2>
+				<p class="admin__hint" data-chat-transcript-meta>Open a room above to read its live transcript.</p>
+				<div class="admin__table-wrap" data-chat-members />
+				<div class="admin__table-wrap" data-chat-messages />
+				<div class="admin__table-wrap" data-chat-hostlog />
+			</div>
+			<div class="admin__card" data-glass style="margin-top: 1rem;">
+				<h2 class="admin__h2">Reports</h2>
+				<div data-chat-reports />
+			</div>
+			<div class="admin__card" data-glass style="margin-top: 1rem;">
+				<h2 class="admin__h2">Active bans</h2>
+				<div class="admin__table-wrap" data-chat-bans />
+			</div>
+			<div class="admin__card" data-glass style="margin-top: 1rem;">
+				<h2 class="admin__h2">Moderation log</h2>
+				<div class="admin__table-wrap" data-chat-log />
 			</div>
 		</section>
 

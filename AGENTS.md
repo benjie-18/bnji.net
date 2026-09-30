@@ -73,12 +73,18 @@ Section components are one concern each; pages compose them in order. Never
 build a monolithic page template with inline content — put content in
 `src/data/`, structure in components.
 
-Planned surfaces — private messaging with images, friends, presence
-and admin chat tooling — are specified in `docs/CHAT-SYSTEM-PLAN.md`, with the
-collection rules in `docs/DATA-COLLECTION-POLICY.md`. Room chat (plan Phase B)
-is now implemented; everything else in that list is **not**. Until a phase
-lands, public copy, `README.md` and this map must
-describe it as planned.
+Planned surfaces — private messaging with images and friends/presence — are
+specified in `docs/CHAT-SYSTEM-PLAN.md`, with the collection rules in
+`docs/DATA-COLLECTION-POLICY.md`. Room chat (plan Phase B) and admin chat
+tooling (plan Phase C: D1 moderation store, `/admin` Chat tab, service-auth
+`/admin/read` + `/admin/action` on the `GameRoom` DO, `POST /api/chat/report`)
+are now implemented; everything else in that list is **not**. Until a phase
+lands, public copy, `README.md` and this map must describe it as planned.
+Phase C test surface: `tests/chat-moderation.test.ts` (D1 store, §6.3 helpers,
+route guards) and `tests/workerd/room-moderation.spec.ts` (real DO service
+endpoints — needs `ACCESS_SECRET` in `wrangler.test.json`, which is already
+set); migration `0014_chat_moderation.sql` must be applied before the admin
+Chat tab can store anything.
 
 ## 3. Content rules
 

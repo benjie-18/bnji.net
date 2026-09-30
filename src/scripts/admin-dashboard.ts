@@ -19,7 +19,7 @@
 import { adminFetch, coalesce, formatTime, renderFacts, renderTable } from './admin';
 import { startAdminPlaylist } from './admin-playlist';
 
-type TabName = 'stats' | 'overview' | 'board' | 'playlist' | 'security' | 'games' | 'settings' | 'config';
+type TabName = 'stats' | 'overview' | 'board' | 'playlist' | 'security' | 'games' | 'chat' | 'settings' | 'config';
 
 type PaintActivity = {
 	id: number;
@@ -525,6 +525,254 @@ export function startAdminDashboard(): void {
 		}
 		table.appendChild(tbody);
 		container.appendChild(table);
+	}
+
+	/* --- chat (plan Phase C) ------------------------------------------------- */
+
+	type ChatRoom = { code: string; gameId: string; createdAt: number; expiresAt: number };
+	type ChatReport = {
+		id: number; roomCode: string; messageN: number; authorHash: string; label: string; text: string;
+		messageAt: number; reportCount: number; reportedAt: number; status: string; statusNote: string | null;
+	};
+	type ChatLogRow = { id: number; action: string; roomCode: string | null; messageN: number | null; targetHash: string | null; detail: string | null; createdAt: number };
+	type ChatBan = { principalHash: string; reason: string | null; createdAt: number; expiresAt: number };
+	type ChatTranscript = {
+		code: string;
+		read: {
+			room: { gameId: string; createdAt: number; expiresAt: number; revision: number; capacity: number };
+			chatEnabled: boolean;
+			members: Array<{ memberId: string; principalHash: string; label: string; isHost: boolean; connected: boolean; muted: boolean }>;
+			messages: Array<{ n: number; label: string; text: string; at: number; removed: string | null; flagged: boolean; authorHash: string }>;
+			hostLog: Array<{ action: string; target: string | null; at: number }>;
+		};
+	};
+
+	let openChatRoom: string | null = null;
+
+	function chatButton(label: string, run: () => void, disabled = false): HTMLButtonElement {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'glass-button glass-button--sm admin__action';
+		button.textContent = label;
+		button.disabled = disabled;
+		button.addEventListener('click', () => void run());
+		return button;
+	}
+
+	function actionGroup(...buttons: HTMLButtonElement[]): HTMLTableCellElement {
+		const cell = document.createElement('td');
+		const group = document.createElement('div');
+		group.className = 'admin__actions';
+		for (const button of buttons) group.appendChild(button);
+		cell.appendChild(group);
+		return cell;
+	}
+
+	/** Runs one moderation action and reloads the chat panels (and any open transcript). */
+	async function chatModerate(action: Record<string, unknown>, options: { reloadTranscript?: boolean } = {}): Promise<void> {
+		try {
+			await adminFetch<{ ok: boolean; status?: string; kicked?: boolean }>('/api/admin/chat/action', {
+				method: 'POST',
+				body: JSON.stringify(action),
+			});
+			say('Moderation action applied.');
+			await loadChat();
+			if (options.reloadTranscript !== false && openChatRoom) await loadChatRoom(openChatRoom, true);
+		} catch (error) {
+			const status = (error as { status?: number }).status;
+			fail(
+				status === 401 ? 'Your session expired. Sign in again.'
+					: status === 404 ? 'That room or report no longer exists.'
+						: 'The moderation action failed. Try again.',
+			);
+		}
+	}
+
+	async function loadChat(): Promise<void> {
+		type ChatDashboard = { rooms: ChatRoom[]; reports: ChatReport[]; log: ChatLogRow[]; bans: ChatBan[]; filter: { blocklist: string[]; stripUrlsForAdmin: boolean; enabled: boolean } };
+		const data = await guard(() => adminFetch<ChatDashboard>('/api/admin/chat/rooms'));
+		if (!data || active !== 'chat') return;
+		say(`${data.rooms.length} live room(s) · ${data.reports.filter((report) => report.status === 'open').length} open report(s) · filter ${data.filter.enabled ? (data.filter.blocklist.length ? `${data.filter.blocklist.length} term(s)` : 'blocklist empty') : 'off'}`);
+
+		// Active rooms
+		const roomsWrap = root.querySelector<HTMLElement>('[data-chat-rooms]')!;
+		roomsWrap.textContent = '';
+		if (data.rooms.length === 0) {
+			const p = document.createElement('p'); p.className = 'admin__empty'; p.textContent = 'No live rooms.'; roomsWrap.appendChild(p);
+		} else {
+			const table = document.createElement('table'); table.className = 'admin__table';
+			const thead = document.createElement('thead'); const hr = document.createElement('tr');
+			for (const label of ['Code', 'Game', 'Created', 'Expires', '']) { const th = document.createElement('th'); th.textContent = label; hr.appendChild(th); }
+			thead.appendChild(hr); table.appendChild(thead);
+			const tbody = document.createElement('tbody');
+			for (const room of data.rooms) {
+				const tr = document.createElement('tr');
+				const code = document.createElement('td'); code.className = 'is-mono'; code.textContent = room.code; tr.appendChild(code);
+				const game = document.createElement('td'); game.textContent = room.gameId; tr.appendChild(game);
+				const created = document.createElement('td'); created.className = 'is-mono'; created.textContent = formatTime(room.createdAt); tr.appendChild(created);
+				const expires = document.createElement('td'); expires.className = 'is-mono'; expires.textContent = formatTime(room.expiresAt); tr.appendChild(expires);
+				tr.appendChild(actionGroup(
+					chatButton('Open', () => { void loadChatRoom(room.code); }),
+					chatButton('Close', () => void chatModerate({ action: 'close_room', code: room.code })),
+				));
+				tbody.appendChild(tr);
+			}
+			table.appendChild(tbody); roomsWrap.appendChild(table);
+		}
+
+		// Reports queue
+		const reportsWrap = root.querySelector<HTMLElement>('[data-chat-reports]')!;
+		reportsWrap.textContent = '';
+		if (data.reports.length === 0) {
+			const p = document.createElement('p'); p.className = 'admin__empty'; p.textContent = 'No reports.'; reportsWrap.appendChild(p);
+		} else {
+			const table = document.createElement('table'); table.className = 'admin__table';
+			const thead = document.createElement('thead'); const hr = document.createElement('tr');
+			for (const label of ['When', 'Room · #', 'Message', 'Count', 'Status', 'Note', '']) { const th = document.createElement('th'); th.textContent = label; hr.appendChild(th); }
+			thead.appendChild(hr); table.appendChild(thead);
+			const tbody = document.createElement('tbody');
+			for (const report of data.reports) {
+				const tr = document.createElement('tr');
+				const when = document.createElement('td'); when.className = 'is-mono'; when.textContent = formatTime(report.reportedAt); tr.appendChild(when);
+				const where = document.createElement('td'); where.className = 'is-mono'; where.textContent = `${report.roomCode.slice(0, 6)}… · ${report.messageN}`; tr.appendChild(where);
+				// textContent, always: visitor-authored content.
+				const message = document.createElement('td'); message.textContent = `${report.label}: ${report.text}`; tr.appendChild(message);
+				const count = document.createElement('td'); count.className = 'is-mono'; count.textContent = String(report.reportCount); tr.appendChild(count);
+				const status = document.createElement('td');
+				const badge = document.createElement('span');
+				badge.className = `admin__badge admin__badge--${report.status === 'open' ? 'reported' : report.status === 'resolved' ? 'visible' : 'hidden'}`;
+				badge.textContent = report.status;
+				status.appendChild(badge); tr.appendChild(status);
+				const note = document.createElement('td');
+				const input = document.createElement('input');
+				input.className = 'admin__note'; input.type = 'text'; input.value = report.statusNote ?? '';
+				input.placeholder = 'reason…'; input.setAttribute('aria-label', `Moderator note for report ${report.id}`);
+				note.appendChild(input); tr.appendChild(note);
+				tr.appendChild(actionGroup(
+					chatButton('Resolve', () => void chatModerate({ action: 'report_resolve', id: report.id, note: input.value.trim() || undefined })),
+					chatButton('Dismiss', () => void chatModerate({ action: 'report_dismiss', id: report.id, note: input.value.trim() || undefined })),
+					chatButton('Ban author', () => void chatModerate({ action: 'report_escalate', id: report.id, note: input.value.trim() || undefined })),
+				));
+				tbody.appendChild(tr);
+			}
+			table.appendChild(tbody); reportsWrap.appendChild(table);
+		}
+
+		// Bans
+		const bansWrap = root.querySelector<HTMLElement>('[data-chat-bans]')!;
+		renderTable(
+			bansWrap,
+			[
+				{ label: 'Principal (hash)', get: (r) => r.principalHash, mono: true },
+				{ label: 'Reason', get: (r) => r.reason ?? '—' },
+				{ label: 'Expires', get: (r) => formatTime(Number(r.expiresAt)), mono: true },
+			],
+			data.bans as unknown as Record<string, unknown>[],
+			'No active chat bans.',
+		);
+
+		// Moderation log
+		const logWrap = root.querySelector<HTMLElement>('[data-chat-log]')!;
+		renderTable(
+			logWrap,
+			[
+				{ label: 'When', get: (r) => formatTime(Number(r.createdAt)), mono: true },
+				{ label: 'Action', get: (r) => r.action, mono: true },
+				{ label: 'Room', get: (r) => (r.roomCode ? String(r.roomCode).slice(0, 8) + '…' : '—'), mono: true },
+				{ label: 'Detail', get: (r) => r.detail ?? r.targetHash ?? '—' },
+			],
+			data.log as unknown as Record<string, unknown>[],
+			'No moderation actions logged.',
+		);
+
+		if (openChatRoom) await loadChatRoom(openChatRoom, true);
+	}
+
+	async function loadChatRoom(code: string, silent = false): Promise<void> {
+		if (active !== 'chat' && !silent) return;
+		openChatRoom = code;
+		const meta = root.querySelector<HTMLElement>('[data-chat-transcript-meta]')!;
+		try {
+			const data = await adminFetch<{ code: string; registry: { gameId: string; createdAt: number; expiresAt: number }; read: ChatTranscript['read'] }>(
+				`/api/admin/chat/room?code=${encodeURIComponent(code)}`,
+			);
+			if (active !== 'chat') return;
+			meta.textContent = `${data.code} · ${data.read.room.gameId} · expires ${formatTime(data.read.room.expiresAt)} · revision ${data.read.room.revision} · chat ${data.read.chatEnabled ? 'on' : 'off'}`;
+
+			// Members (ban actions need the principal hash the DO exposes).
+			const membersWrap = root.querySelector<HTMLElement>('[data-chat-members]')!;
+			membersWrap.textContent = '';
+			const membersTable = document.createElement('table'); membersTable.className = 'admin__table';
+			const mHead = document.createElement('thead'); const mhr = document.createElement('tr');
+			for (const label of ['Member', 'State', 'Principal (hash)', '']) { const th = document.createElement('th'); th.textContent = label; mhr.appendChild(th); }
+			mHead.appendChild(mhr); membersTable.appendChild(mHead);
+			const mBody = document.createElement('tbody');
+			for (const member of data.read.members) {
+				const tr = document.createElement('tr');
+				const name = document.createElement('td'); name.textContent = `${member.label}${member.isHost ? ' · host' : ''}`; tr.appendChild(name);
+				const state = document.createElement('td'); state.textContent = member.connected ? (member.muted ? 'connected · muted' : 'connected') : (member.muted ? 'away · muted' : 'away'); tr.appendChild(state);
+				const hash = document.createElement('td'); hash.className = 'is-mono'; hash.textContent = member.principalHash; tr.appendChild(hash);
+				tr.appendChild(actionGroup(
+					chatButton('Ban', () => void chatModerate({ action: 'ban', principalHash: member.principalHash, code })),
+					chatButton('Kick', () => void chatModerate({ action: 'kick', principalHash: member.principalHash, code }), member.isHost),
+				));
+				mBody.appendChild(tr);
+			}
+			membersTable.appendChild(mBody); membersWrap.appendChild(membersTable);
+
+			// Messages (URLs already stripped for display by the DO; flagged = blocklist hit).
+			const messagesWrap = root.querySelector<HTMLElement>('[data-chat-messages]')!;
+			messagesWrap.textContent = '';
+			if (data.read.messages.length === 0) {
+				const p = document.createElement('p'); p.className = 'admin__empty'; p.textContent = 'No messages in this room.'; messagesWrap.appendChild(p);
+			} else {
+				const table = document.createElement('table'); table.className = 'admin__table';
+				const thead = document.createElement('thead'); const hr = document.createElement('tr');
+				for (const label of ['#', 'When', 'Label', 'Message', '']) { const th = document.createElement('th'); th.textContent = label; hr.appendChild(th); }
+				thead.appendChild(hr); table.appendChild(thead);
+				const tbody = document.createElement('tbody');
+				for (const message of data.read.messages) {
+					const tr = document.createElement('tr');
+					const n = document.createElement('td'); n.className = 'is-mono'; n.textContent = String(message.n); tr.appendChild(n);
+					const when = document.createElement('td'); when.className = 'is-mono'; when.textContent = formatTime(message.at); tr.appendChild(when);
+					const label = document.createElement('td'); label.textContent = message.label; tr.appendChild(label);
+					const text = document.createElement('td');
+					const bodyText = message.removed ? `(${message.removed === 'admin' ? 'removed by administrator' : message.removed === 'host' ? 'removed by host' : 'deleted'})` : message.text;
+					if (message.flagged) {
+						// Workers-types redefines append/prepend — use appendChild only.
+						const flag = document.createElement('span');
+						flag.className = 'admin__badge admin__badge--reported';
+						flag.textContent = 'filter';
+						text.appendChild(flag);
+						text.appendChild(document.createTextNode(` ${bodyText}`));
+					} else {
+						text.textContent = bodyText;
+					}
+					tr.appendChild(text);
+					tr.appendChild(actionGroup(
+						chatButton('Delete', () => void chatModerate({ action: 'delete_message', code, n: message.n }), Boolean(message.removed)),
+					));
+					tbody.appendChild(tr);
+				}
+				table.appendChild(tbody); messagesWrap.appendChild(table);
+			}
+
+			// Room-local host log
+			renderTable(
+				root.querySelector<HTMLElement>('[data-chat-hostlog]')!,
+				[
+					{ label: 'When', get: (r) => formatTime(Number(r.at)), mono: true },
+					{ label: 'Action', get: (r) => r.action, mono: true },
+					{ label: 'Target', get: (r) => (r.target ? String(r.target).slice(0, 12) + '…' : '—'), mono: true },
+				],
+				data.read.hostLog as unknown as Record<string, unknown>[],
+				'No host actions in this room yet.',
+			);
+		} catch (error) {
+			openChatRoom = null;
+			meta.textContent = 'That room is no longer available.';
+			if ((error as { status?: number }).status !== 401) fail('The room transcript could not be loaded.');
+		}
 	}
 
 	/* --- configuration ------------------------------------------------------ */
@@ -1140,6 +1388,7 @@ export function startAdminDashboard(): void {
 			if (active === 'security') return loadSecurity();
 			if (active === 'games') return loadGames();
 			if (active === 'board') return loadBoard();
+			if (active === 'chat') return loadChat();
 			if (active === 'playlist') return playlist.load();
 			return loadConfig();
 		});

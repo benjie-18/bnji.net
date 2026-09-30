@@ -1,4 +1,5 @@
 /** Global game identity, opaque sessions, save CAS, and account lifecycle. */
+import { accountModerationStatements } from './chat-moderation';
 import type { D1Database } from './game-store';
 
 export const PLAYER_SESSION_COOKIE = 'bnji_ga';
@@ -194,10 +195,14 @@ export async function revokePlayerSession(db: D1Database, sessionHash: string, n
 
 export async function deletePlayerAccount(db: D1Database, playerId: string): Promise<void> {
 	if (!db.batch) throw new Error('atomic_player_batch_unavailable');
+	// Chat plan Phase C (§9.5): reported content, filed reports, chat bans and
+	// owned room-registry rows hang off the account's room principal.
+	const principalHash = await sha256Hex(`player:${playerId}`);
 	await db.batch([
 		db.prepare('DELETE FROM game_scores WHERE player_id = ?1').bind(playerId),
 		db.prepare('DELETE FROM game_sessions WHERE player_id = ?1').bind(playerId),
 		db.prepare('DELETE FROM game_players WHERE id = ?1').bind(playerId),
+		...accountModerationStatements(db, principalHash),
 	]);
 }
 

@@ -1,16 +1,16 @@
-/** Generic room coordination only. It validates membership/envelopes/revisions, never game rules or scores. Chat (plan Phase B) lives here as a transport feature: DO SQLite rows, socket-attachment rate buckets, and zero contact with `revision`/`state_json`. */
+/** Generic room coordination only. It validates membership/envelopes/revisions, never game rules or scores. Chat (plan Phase B) lives here as a transport feature: DO SQLite rows, socket-attachment rate buckets, and zero contact with `revision`/`state_json`. Phase C adds the service-authenticated `/admin/read` + `/admin/action` endpoints and the member-authenticated `/report` snapshot. */
 import { DurableObject } from 'cloudflare:workers';
 import { CHAT_CONFIG } from '../config/chat.config';
 import { sanitizeDisplayName } from './display-name';
 import {
-	consumeChatToken, packChatHistory, parseRoomClientMessage, parseRoomStateMessage, roomCanAdmitMember, roomIsExpired, roomReconnectIsAllowed,
-	ROOM_CAPACITY, ROOM_MAX_GLOBAL_MESSAGES_PER_SECOND, ROOM_MAX_MESSAGE_BYTES, ROOM_MAX_STATE_BYTES, ROOM_PROTOCOL_VERSION,
-	ROOM_RECONNECT_GRACE_MS, ROOM_STATE_WRITE_INTERVAL_MS, ROOM_TTL_MS, sanitizeChatText,
-	type RoomChatFrame, type RoomMemberFrame,
+	containsBlockedTerm, consumeChatToken, packChatHistory, parseRoomClientMessage, parseRoomStateMessage, roomAdminServiceToken, ROOM_ADMIN_HEADER,
+	roomCanAdmitMember, roomIsExpired, roomReconnectIsAllowed, ROOM_CAPACITY, ROOM_MAX_GLOBAL_MESSAGES_PER_SECOND, ROOM_MAX_MESSAGE_BYTES,
+	ROOM_MAX_STATE_BYTES, ROOM_PROTOCOL_VERSION, ROOM_RECONNECT_GRACE_MS, ROOM_STATE_WRITE_INTERVAL_MS, ROOM_TTL_MS, sanitizeChatText, stripUrlsForDisplay,
+	type RoomChatFrame, type RoomChatDeleteFrame, type RoomMemberFrame,
 } from './game-room-protocol';
 import { authorizeRoomStateTransition } from './room-authority';
 
-interface RoomEnv {}
+interface RoomEnv { ACCESS_SECRET?: string }
 type Principal = { key: string; hash: string };
 type Attachment = {
 	principalHash: string; memberId: string;
@@ -77,12 +77,37 @@ export class GameRoom extends DurableObject<RoomEnv> {
 	}
 
 	async fetch(request: Request): Promise<Response> {
+		const url = new URL(request.url);
+		// Phase C: service-authenticated admin endpoints carry NO visitor
+		// principal — they are only reachable from the Worker's admin routes.
+		if (url.pathname === '/admin/read' || url.pathname === '/admin/action') return this.adminFetch(request, url.pathname);
 		const principal = readPrincipal(request);
 		if (!principal) return json({ error: 'room_authentication_required' }, 401);
-		const url = new URL(request.url);
 		if (url.pathname === '/create' && request.method === 'POST') return this.createRoom(request, principal);
 		if (url.pathname === '/ws' && request.method === 'GET') return this.acceptConnection(request, principal);
+		if (url.pathname === '/report' && request.method === 'POST') return this.handleReport(request, principal);
 		return json({ error: 'not_found' }, 404);
+	}
+
+	/** Plan §6.2: the DO verifies a header derived from the Worker secret, never a client-supplied value. Fails closed with no secret configured. */
+	private async isAdminService(request: Request): Promise<boolean> {
+		const expected = await roomAdminServiceToken(this.env.ACCESS_SECRET);
+		if (!expected) return false;
+		const provided = request.headers.get(ROOM_ADMIN_HEADER) ?? '';
+		return provided.length === expected.length && provided === expected;
+	}
+	private async adminFetch(request: Request, pathname: string): Promise<Response> {
+		if (!(await this.isAdminService(request))) return json({ error: 'service_unauthorized' }, 403);
+		if (pathname === '/admin/read') {
+			if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+			return this.adminRead();
+		}
+		if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+		const text = await request.text();
+		if (text.length > 1_024) return json({ error: 'payload_too_large' }, 413);
+		let body: unknown;
+		try { body = JSON.parse(text || '{}'); } catch { return json({ error: 'invalid_json' }, 400); }
+		return this.adminAction(body);
 	}
 
 	private async principalHash(principal: string): Promise<string> {
@@ -183,7 +208,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		return rows.reverse().map((row) => ({
 			v: ROOM_PROTOCOL_VERSION, type: 'chat' as const, n: Number(row.n), label: row.label,
 			text: row.text, at: Number(row.created_at), mine: row.principal_hash === forHash,
-			...(row.removed ? { removed: row.removed as 'host' | 'self' } : {}),
+			...(row.removed ? { removed: row.removed as 'host' | 'self' | 'admin' } : {}),
 		}));
 	}
 	private sendMembers(socket: WebSocket, forHash: string): void {
@@ -226,6 +251,8 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		if (!CHAT_CONFIG.enabled) return this.reject(socket, 'chat_disabled');
 		const sanitized = sanitizeChatText(text);
 		if (!sanitized.ok) return this.reject(socket, 'invalid_text');
+		// Plan §6.3 — config-driven blocklist: a triage aid, not a guarantee.
+		if (containsBlockedTerm(sanitized.text, CHAT_CONFIG.filter.blocklist)) return this.reject(socket, 'blocked');
 		if (this.isMuted(attachment.principalHash)) return this.reject(socket, 'muted');
 		const now = Date.now();
 		const bucket = consumeChatToken(
@@ -256,6 +283,18 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		}
 	}
 
+	/** Tombstone + broadcast, shared by the host/self delete path and the admin delete action. */
+	private tombstoneMessage(n: number, source: RoomChatDeleteFrame['source'], actorHash: string, logAction: string): boolean {
+		const row = this.state.storage.sql.exec<ChatRow>(
+			'SELECT n, label, principal_hash, text, created_at, removed FROM game_room_chat WHERE n = ?', n,
+		).toArray()[0];
+		if (!row || row.removed) return false;
+		this.state.storage.sql.exec('UPDATE game_room_chat SET text = ?, removed = ? WHERE n = ?', '', source, n);
+		this.logChatAction(logAction, actorHash, String(n));
+		this.broadcast({ v: ROOM_PROTOCOL_VERSION, type: 'chat_delete', n, source } satisfies RoomChatDeleteFrame);
+		return true;
+	}
+
 	private handleChatDelete(socket: WebSocket, attachment: Attachment, n: number): void {
 		const row = this.state.storage.sql.exec<ChatRow>(
 			'SELECT n, label, principal_hash, text, created_at, removed FROM game_room_chat WHERE n = ?', n,
@@ -266,9 +305,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		const isHost = room.owner_hash === attachment.principalHash;
 		if (!isAuthor && !isHost) return this.reject(socket, 'not_allowed');
 		const source: 'host' | 'self' = isAuthor ? 'self' : 'host';
-		this.state.storage.sql.exec('UPDATE game_room_chat SET text = ?, removed = ? WHERE n = ?', '', source, n);
-		this.logChatAction(source === 'self' ? 'delete_self' : 'delete_host', attachment.principalHash, String(n));
-		this.broadcast({ v: ROOM_PROTOCOL_VERSION, type: 'chat_delete', n, source });
+		this.tombstoneMessage(n, source, attachment.principalHash, source === 'self' ? 'delete_self' : 'delete_host');
 	}
 
 	private handleKick(socket: WebSocket, attachment: Attachment, member: string): void {
@@ -350,6 +387,134 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			if (socket === except) continue;
 			try { socket.send(encoded); } catch { try { socket.close(1011, 'Room delivery failed'); } catch { /* no-op */ } }
 		}
+	}
+
+	// ------------------------------------------------- Phase C: moderation
+
+	/** Plan §6.2 transcript read: messages (URLs stripped for display when configured), members with principal hashes for ban actions, host log. */
+	private adminRead(): Response {
+		const room = this.room();
+		const now = Date.now();
+		if (!room) return json({ error: 'room_not_found' }, 404);
+		if (roomIsExpired(room.expires_at, now)) return json({ error: 'room_expired' }, 410);
+		const strip = CHAT_CONFIG.filter.stripUrlsForAdmin;
+		const blocklist = CHAT_CONFIG.filter.blocklist;
+		const messages = this.state.storage.sql.exec<ChatRow>(
+			'SELECT n, label, principal_hash, text, created_at, removed FROM game_room_chat ORDER BY n ASC LIMIT ?', CHAT_CONFIG.maxStoredMessages,
+		).toArray().map((row) => ({
+			n: Number(row.n), label: row.label,
+			// Raw text stays raw in storage and in the room; the strip is view-only.
+			text: strip ? stripUrlsForDisplay(row.text) : row.text,
+			at: Number(row.created_at), removed: row.removed ?? null,
+			flagged: !row.removed && containsBlockedTerm(row.text, blocklist),
+			authorHash: row.principal_hash,
+		}));
+		const muted = new Set(this.state.storage.sql.exec<{ principal_hash: string }>('SELECT principal_hash FROM game_room_mutes').toArray().map((row) => row.principal_hash));
+		const connected = new Map<string, string>();
+		for (const socket of this.state.getWebSockets()) {
+			const attachment = socketAttachment(socket);
+			if (attachment && socket.readyState === WebSocket.OPEN) connected.set(attachment.principalHash, attachment.label);
+		}
+		const members = this.state.storage.sql.exec<MemberRow>(
+			'SELECT principal_hash, member_id, reconnect_until FROM game_room_members ORDER BY joined_at ASC',
+		).toArray().map((member) => ({
+			memberId: member.member_id, principalHash: member.principal_hash,
+			label: connected.get(member.principal_hash) ?? '—',
+			isHost: room.owner_hash === member.principal_hash,
+			connected: connected.has(member.principal_hash),
+			muted: muted.has(member.principal_hash),
+		}));
+		const hostLog = this.state.storage.sql.exec<{ action: string; target: string | null; at: number }>(
+			'SELECT action, target, at FROM game_room_chat_log ORDER BY id DESC LIMIT 50',
+		).toArray().map((row) => ({ action: row.action, target: row.target, at: Number(row.at) }));
+		return json({
+			room: { gameId: room.game_id, createdAt: Number(room.created_at), expiresAt: Number(room.expires_at), revision: Number(room.revision), capacity: ROOM_CAPACITY },
+			chatEnabled: CHAT_CONFIG.enabled, members, messages, hostLog,
+		});
+	}
+
+	private adminAction(body: unknown): Response {
+		if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid_payload' }, 400);
+		const payload = body as Record<string, unknown>;
+		if (payload.type === 'delete_message') {
+			if (Object.keys(payload).length !== 2 || !Number.isSafeInteger(payload.n) || Number(payload.n) < 1) return json({ error: 'invalid_payload' }, 400);
+			if (!this.room()) return json({ error: 'room_not_found' }, 404);
+			const n = Number(payload.n);
+			if (!this.tombstoneMessage(n, 'admin', 'administrator', 'delete_admin')) return json({ error: 'message_not_found' }, 404);
+			return json({ ok: true, n });
+		}
+		if (payload.type === 'close_room') {
+			if (Object.keys(payload).length !== 1) return json({ error: 'invalid_payload' }, 400);
+			if (!this.room()) return json({ error: 'room_not_found' }, 404);
+			this.teardown('Room closed by administrator');
+			return json({ ok: true });
+		}
+		if (payload.type === 'kick') {
+			if (Object.keys(payload).length !== 2 || typeof payload.principalHash !== 'string' || !/^[a-f0-9]{64}$/.test(payload.principalHash)) return json({ error: 'invalid_payload' }, 400);
+			if (!this.room()) return json({ error: 'room_not_found' }, 404);
+			const hash = payload.principalHash;
+			const target = this.state.storage.sql.exec<MemberRow>(
+				'SELECT principal_hash, member_id, reconnect_until FROM game_room_members WHERE principal_hash = ?', hash,
+			).toArray()[0];
+			if (!target) return json({ ok: true, kicked: false });
+			this.state.storage.sql.exec('DELETE FROM game_room_members WHERE principal_hash = ?', hash);
+			this.logChatAction('kick_admin', 'administrator', hash);
+			for (const peer of this.state.getWebSockets()) {
+				if (socketAttachment(peer)?.principalHash !== hash) continue;
+				try { peer.close(4003, 'Removed by administrator'); } catch { /* no-op */ }
+			}
+			this.handoffHost();
+			this.broadcastMembers();
+			this.broadcastPresence();
+			return json({ ok: true, kicked: true });
+		}
+		return json({ error: 'invalid_action' }, 400);
+	}
+
+	/** Plan §6.4: the DO snapshots the message at report time so evidence survives the room. Persisted to D1 by the Worker route. */
+	private async handleReport(request: Request, principal: string): Promise<Response> {
+		const hash = await this.principalHash(principal);
+		const member = this.state.storage.sql.exec<MemberRow>(
+			'SELECT principal_hash, member_id, reconnect_until FROM game_room_members WHERE principal_hash = ?', hash,
+		).toArray()[0];
+		if (!member) return json({ error: 'not_member' }, 403);
+		const room = this.room();
+		const now = Date.now();
+		if (!room || roomIsExpired(room.expires_at, now)) return json({ error: 'room_expired' }, 410);
+		const text = await request.text();
+		if (text.length > 256) return json({ error: 'payload_too_large' }, 413);
+		let body: unknown;
+		try { body = JSON.parse(text || '{}'); } catch { return json({ error: 'invalid_json' }, 400); }
+		const payload = body as Record<string, unknown>;
+		if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+			Object.keys(payload).length !== 1 || !Object.hasOwn(payload, 'n') ||
+			!Number.isSafeInteger(payload.n) || Number(payload.n) < 1) return json({ error: 'invalid_payload' }, 400);
+		const row = this.state.storage.sql.exec<ChatRow>(
+			'SELECT n, label, principal_hash, text, created_at, removed FROM game_room_chat WHERE n = ?', Number(payload.n),
+		).toArray()[0];
+		// Removed messages hold no text; trimmed ones are gone — both are 404.
+		if (!row || row.removed) return json({ error: 'message_not_found' }, 404);
+		const author = this.state.storage.sql.exec<{ member_id: string }>(
+			'SELECT member_id FROM game_room_members WHERE principal_hash = ?', row.principal_hash,
+		).toArray()[0];
+		return json({
+			snapshot: {
+				authorHash: row.principal_hash, label: row.label, text: row.text,
+				messageAt: Number(row.created_at), memberId: author?.member_id ?? null,
+			},
+		});
+	}
+
+	/** Close every socket and delete every room table (alarm expiry and admin close share this). */
+	private teardown(reason: string): void {
+		for (const socket of this.state.getWebSockets()) {
+			try { socket.close(4002, reason); } catch { /* no-op */ }
+		}
+		this.state.storage.sql.exec('DELETE FROM game_room_members');
+		this.state.storage.sql.exec('DELETE FROM game_room_chat');
+		this.state.storage.sql.exec('DELETE FROM game_room_chat_log');
+		this.state.storage.sql.exec('DELETE FROM game_room_mutes');
+		this.state.storage.sql.exec('DELETE FROM game_room');
 	}
 
 	async webSocketMessage(socket: WebSocket, input: string | ArrayBuffer): Promise<void> {
@@ -484,14 +649,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			await this.state.storage.setAlarm(room.expires_at);
 			return;
 		}
-		for (const socket of this.state.getWebSockets()) {
-			try { socket.close(4002, 'Room expired'); } catch { /* no-op */ }
-		}
-		this.state.storage.sql.exec('DELETE FROM game_room_members');
-		this.state.storage.sql.exec('DELETE FROM game_room_chat');
-		this.state.storage.sql.exec('DELETE FROM game_room_chat_log');
-		this.state.storage.sql.exec('DELETE FROM game_room_mutes');
-		this.state.storage.sql.exec('DELETE FROM game_room');
+		this.teardown('Room expired');
 	}
 }
 

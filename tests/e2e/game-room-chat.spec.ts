@@ -108,6 +108,29 @@ test('room chat joins, renders history with dedupe and tombstones, sends frames,
 	await expect(list.locator('li')).toHaveCount(3);
 	await expect(list.getByRole('button', { name: 'Delete' })).toBeVisible();
 
+	// Phase C: someone else's message offers Report; the POST carries room + n.
+	let reportBody: unknown = null;
+	await page.route('**/api/chat/report', async (route) => {
+		reportBody = route.request().postDataJSON();
+		await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+	});
+	socket!.send(JSON.stringify({ v: 1, type: 'chat', n: 4, label: 'Mallory', text: 'report bait', at: Date.now(), mine: false }));
+	const reportRow = list.locator('li', { hasText: 'report bait' });
+	await reportRow.getByRole('button', { name: 'Report' }).click();
+	await expect(status).toContainText('sent to the moderators for review');
+	await expect.poll(() => reportBody).toEqual({ code: ROOM_CODE, n: 4 });
+
+	// Admin tombstone copy (source 'admin') paints over the row.
+	socket!.send(JSON.stringify({ v: 1, type: 'chat', n: 5, label: 'Mallory', text: 'bad link', at: Date.now(), mine: false }));
+	await expect(list.locator('li')).toHaveCount(5);
+	socket!.send(JSON.stringify({ v: 1, type: 'chat_delete', n: 5, source: 'admin' }));
+	await expect(list).toContainText('An administrator removed a message');
+	await expect(list).not.toContainText('bad link');
+
+	// Blocked-term rejection copy lands in the status line.
+	socket!.send(JSON.stringify({ v: 1, type: 'chat_rejected', error: 'blocked' }));
+	await expect(status).toContainText('word filter');
+
 	const results = await new AxeBuilder({ page })
 		.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
 		.analyze();

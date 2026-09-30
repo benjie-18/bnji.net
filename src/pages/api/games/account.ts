@@ -1,5 +1,6 @@
 /** Global player identity, one-time recovery credential, session controls, export and deletion. */
 import type { APIContext } from 'astro';
+import { exportFiledReports, exportReportsOnAccount, getChatBan } from '../../../server/chat-moderation';
 import { clientIp } from '../../../server/security-helpers';
 import { readBodyTextBounded } from '../../../server/read-body';
 import { serverEnvironment } from '../../../server/env';
@@ -257,7 +258,8 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 	const { db, player } = resolved;
 	if (!player.playerId) return responseWithContext({ error: 'authentication_required' }, 401, player);
 	try {
-		const [identity, saves, scores] = await Promise.all([
+		const principalHash = await sha256Hex(`player:${player.playerId}`);
+		const [identity, saves, scores, reportsOnMe, reportsFiled, ban] = await Promise.all([
 			db.prepare('SELECT display_name, handle, created_at FROM game_players WHERE id = ?1 LIMIT 1').bind(player.playerId)
 				.first<{ display_name: string; handle: string | null; created_at: number }>(),
 			readPlayerSaves(db, player.playerId),
@@ -265,6 +267,9 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 				`SELECT game_id, mode_id, score, tie_break, achieved_at, display_name, validation_state
 				 FROM game_scores WHERE player_id = ?1 ORDER BY achieved_at DESC LIMIT 2500`,
 			).bind(player.playerId).all<Record<string, unknown>>(),
+			exportReportsOnAccount(db, principalHash),
+			exportFiledReports(db, principalHash),
+			getChatBan(db, principalHash),
 		]);
 		if (!identity) return responseWithContext({ error: 'authentication_required' }, 401, player);
 		const data = {
@@ -273,12 +278,22 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 			// Room chat (chat plan Phase B) is deliberately explicit, never silent:
 			// its tables live inside ephemeral per-room Durable Objects, keyed to
 			// the room rather than to this account (a hashed principal is the only
-			// link, and there is no room index until the Phase C registry), so it
-			// cannot be gathered here — and it cannot outlive its room's ≤2 h
-			// lifetime anyway. See docs/DATA.md §11 and CHAT-SYSTEM-PLAN.md §9.5.
+			// link; the Phase C registry lists rooms but no member→room index
+			// exists), so live room text cannot be gathered here — and it cannot
+			// outlive its room's ≤2 h lifetime anyway. What moderation DOES hold
+			// in D1 — reported content, filed reports, bans — is exported below.
+			// See docs/DATA.md §11 and CHAT-SYSTEM-PLAN.md §9.5.
 			roomChat: {
 				included: false,
 				reason: 'Room chat lives at most 2 hours inside individual room instances. It is keyed to rooms, not to this account, and is deleted with its room — so it is never part of this export.',
+			},
+			chatModeration: {
+				reportsOnYourMessages: reportsOnMe.map((row) => ({
+					roomCode: row.roomCode, messageN: row.messageN, label: row.label, text: row.text,
+					messageAt: row.messageAt, reportCount: row.reportCount, reportedAt: row.reportedAt, status: row.status,
+				})),
+				reportsYouFiled: reportsFiled,
+				ban: ban ? { reason: ban.reason, createdAt: ban.createdAt, expiresAt: ban.expiresAt } : null,
 			},
 			saves: saves.map((row) => ({ gameId: row.game_id, slotId: row.slot_id, schemaVersion: Number(row.schema_version), revision: Number(row.revision), data: JSON.parse(row.data_json), updatedAt: Number(row.updated_at) })),
 			scores: scores.results.map((row) => ({ gameId: row.game_id, mode: row.mode_id, score: Number(row.score), tieBreak: row.tie_break === null ? null : Number(row.tie_break), achievedAt: Number(row.achieved_at), displayName: row.display_name, status: row.validation_state })),

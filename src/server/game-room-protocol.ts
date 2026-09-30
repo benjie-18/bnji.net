@@ -32,8 +32,8 @@ export type RoomMuteSend = { v: 1; type: 'mute'; member: string };
 export type RoomClientMessage = RoomStateMessage | RoomLeaveMessage | RoomChatSend | RoomChatDeleteSend | RoomKickSend | RoomMuteSend;
 
 /** Server→client chat frames. `n` is the per-room monotone sequence and the client's dedupe key; `mine` and `source` are per-socket computed. */
-export type RoomChatFrame = { v: 1; type: 'chat'; n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' };
-export type RoomChatDeleteFrame = { v: 1; type: 'chat_delete'; n: number; source: 'host' | 'self' };
+export type RoomChatFrame = { v: 1; type: 'chat'; n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' | 'admin' };
+export type RoomChatDeleteFrame = { v: 1; type: 'chat_delete'; n: number; source: 'host' | 'self' | 'admin' };
 export type RoomChatHistoryFrame = { v: 1; type: 'chat_history'; messages: RoomChatFrame[]; more: boolean };
 export type RoomChatRejectedFrame = { v: 1; type: 'chat_rejected'; error: string; retryAfterMs?: number };
 export type RoomMemberFrame = { v: 1; type: 'members'; members: Array<{ memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean }> };
@@ -184,4 +184,43 @@ export function packChatHistory(messages: RoomChatFrame[], chunkMessages: number
 	flush();
 	for (let index = 0; index < frames.length; index += 1) frames[index]!.more = index < frames.length - 1;
 	return frames;
+}
+
+// ------------------------------------------------------- Phase C (moderation)
+
+/**
+ * Service-authentication token for the DO's `/admin/*` endpoints (plan §6.2):
+ * derived from the Worker secret both sides already share — never a
+ * client-supplied value, and useless without the secret itself. Returns null
+ * when the secret is not configured; both the gateway and the DO treat that
+ * as "admin room reads unavailable" (fail closed, same as /admin without
+ * ACCESS_SECRET).
+ */
+export async function roomAdminServiceToken(secret: string | null | undefined): Promise<string | null> {
+	if (!secret) return null;
+	const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`bnji-room-admin:v1:${secret}`));
+	return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+/** Header carrying the service token (Worker → DO only; never from clients). */
+export const ROOM_ADMIN_HEADER = 'x-bnji-room-admin';
+
+/**
+ * Plan §6.3 blocklist check — a triage aid, not a guarantee. Case-insensitive
+ * substring match over the already-sanitised text; empty terms ignored so a
+ * config with `['']` is inert rather than blocking everything.
+ */
+export function containsBlockedTerm(text: string, blocklist: readonly string[]): boolean {
+	const haystack = text.toLowerCase();
+	return blocklist.some((term) => {
+		const needle = term.trim().toLowerCase();
+		return needle.length > 0 && haystack.includes(needle);
+	});
+}
+/**
+ * Plan §6.3 URL stripper — ADMIN TRANSCRIPT DISPLAY ONLY. Raw text in the
+ * database and what room members see are never altered; this exists so a
+ * moderator triaging a report cannot accidentally open a link a poster chose.
+ */
+export function stripUrlsForDisplay(text: string): string {
+	return text.replace(/\b(?:https?:\/\/|www\.)[^\s]+/gi, '[link]');
 }

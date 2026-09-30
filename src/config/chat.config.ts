@@ -25,6 +25,22 @@ export type ChatConfig = {
 		/** Pre-parse abuse ceiling across ALL frame types per connection; breach closes with 1013. */
 		globalPerSecond: number;
 	};
+	/** Plan §6.3 — a triage aid, NOT a guarantee (docs must say so). */
+	filter: {
+		/** Case-insensitive substring terms refused at send time; empty list = filter inert. */
+		blocklist: string[];
+		/** Replace URLs with `[link]` in the ADMIN transcript view only; raw text is untouched. */
+		stripUrlsForAdmin: boolean;
+	};
+	/** Plan §6.2/§6.4 — report throttling and ban bounds. */
+	moderation: {
+		/** D1 per-IP report budget (game_auth_attempts, prefix bnji-chat-report:). */
+		reportWindowMs: number;
+		reportMaxPerWindow: number;
+		/** Ban duration used when an action omits one; hard ceiling on any ban. */
+		defaultBanMinutes: number;
+		maxBanMinutes: number;
+	};
 };
 
 export const CHAT_CONFIG: ChatConfig = {
@@ -36,5 +52,17 @@ export const CHAT_CONFIG: ChatConfig = {
 		burst: 5,
 		refillMs: 4_000,
 		globalPerSecond: 8,
+	},
+	filter: {
+		// Owner-editable. Empty = no term filtering (the strip-URLs admin view
+		// behaviour is independent of this list).
+		blocklist: [],
+		stripUrlsForAdmin: true,
+	},
+	moderation: {
+		reportWindowMs: 10 * 60_000,
+		reportMaxPerWindow: 10,
+		defaultBanMinutes: 60,
+		maxBanMinutes: 60 * 24 * 7,
 	},
 };

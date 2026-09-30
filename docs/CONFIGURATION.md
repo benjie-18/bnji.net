@@ -137,6 +137,7 @@ and is the normal way to move an existing database forward.
 | 0011 | `games.sql` | Private per-game session runs and server-validated leaderboard rows. |
 | 0012 | `game_players_saves.sql` | Optional player identities, digested sessions, hashed-IP auth-attempt buckets, and bounded revisioned saves. |
 | 0013 | `names.sql` | Chat plan Phase A: `guest_profiles` (display name keyed by SHA-256 of the session id, fixed 30-day sweep) plus nullable unique `handle` / `handle_changed_at` columns on `game_players`. Additive; existing rows untouched, multiple NULL handles allowed. |
+| 0014 | `chat_moderation.sql` | Chat plan Phase C: `room_registry` (code/game/owner-hash/expiry — the owner-approved §6.1 trade), `chat_reports` (UNIQUE `(room_code, message_n)`, snapshot + status + note), `chat_reporters` (distinct-reporter PK), `chat_moderation_log` (admin audit), `chat_bans` (principal hash + reason + expiry). All additive; swept by the hourly retention Cron (budget 14 → 19 DELETE statements). |
 
 ⚠️ 0004 uses `ALTER TABLE … ADD COLUMN`, so it must run after 0001. The filename
 order D1 applies them in guarantees this — do not run the files by hand or
@@ -170,7 +171,7 @@ and touches no application code.
 
 | Name | Required? | Notes |
 | --- | --- | --- |
-| `ACCESS_SECRET` | **Yes, for `/admin`** | Signs admin session cookies. Without it `/admin` and every `/api/admin/*` route return `503` — they fail closed, deliberately. `wrangler secret put ACCESS_SECRET`. A random 32+ byte value is fine. |
+| `ACCESS_SECRET` | **Yes, for `/admin`** | Signs admin session cookies **and** derives the Phase C room-admin service token (`sha256('bnji-room-admin:v1:' + secret)`, header `x-bnji-room-admin`) that the DO verifies before `/admin/read` and `/admin/action` — one secret, two uses, both fail closed without it (`503 admin_service_unconfigured` at the gateway, `403 service_unauthorized` at the DO). `wrangler secret put ACCESS_SECRET`. A random 32+ byte value is fine; rotating it invalidates live admin sessions and immediately re-keys the service token (no other action needed). |
 | `ACCESS_TOKEN` | No | Legacy generic gate for `ACCESS_RULES`. The admin surface ignores it in favour of the DB-backed credential; keep it only if a non-admin `ACCESS_RULES` prefix needs it. |
 | `ACCESS_PASSWORD_SHA` | No | Same — generic HMAC rule support. |
 | `DISCORD_WEBHOOK_URL` / `NTFY_URL` | No | `/api/dm` delivery. Unset means the contact form returns `503` and says so. |
@@ -204,7 +205,7 @@ a removed message is never listed to a visitor; the admin API
 | `ACCESS_RULES` | PUBLIC | `src/config/access.config.ts` | Declare protected route prefixes + auth kind. **Empty by default: everything current stays public.** |
 | `ACCESS_TOKEN` | **SECRET** | Worker env | Bearer token for generic `auth: 'token'` rules. **Not** the admin token — see below. |
 | `ACCESS_PASSWORD_SHA` | **SECRET** | Worker env | sha256(hex) of the password for `auth: 'password'` rules. Store the hash, never the password. |
-| `ACCESS_SECRET` | **SECRET** | Worker env | HMAC key signing the session cookie. Required for admin sessions. |
+| `ACCESS_SECRET` | **SECRET** | Worker env | HMAC key signing the session cookie; also the input to the DO admin service token (Phase C). Required for admin sessions and admin room transcripts. |
 
 Honest limitations (also in `src/middleware.ts`): prerendered static pages
 cannot be protected — a private route must set `export const prerender = false;`
@@ -317,6 +318,11 @@ enforcement, and it is the plan §14 kill switch.
 | `historyChunkMessages` | same | 25 messages per `chat_history` frame, additionally byte-packed so no frame exceeds the 4,096-byte outbound guard the client enforces (`ROOM_MAX_OUTBOUND_FRAME_BYTES`). Sent after the snapshot on every accept. |
 | `rate.burst` / `rate.refillMs` | same | Per-member token bucket in the socket attachment: burst 5, then ~1 token per 4,000 ms (≈15/min sustained). Breaches get `chat_rejected rate_limited` with `retryAfterMs` — the socket stays open. Never written to KV (plan §5.4). |
 | `rate.globalPerSecond` | same | Pre-parse abuse ceiling: 8 frames/sec across **all** frame types per connection; the 9th closes the socket with 1013 before any parsing or SQL. |
+| `filter.enabled` | same (Phase C) | Master switch for the §6.3 filter blocks, default `true`. `false` = blocklist inert, display strips off. |
+| `filter.blocklist` | same (Phase C) | Lowercase phrases matched case-insensitively against sanitised message text before broadcast; a hit is a soft `chat_rejected blocked` (socket stays open). **Triage aid, not a guarantee** — the empty default is deliberate and the docs say so. |
+| `filter.stripUrlsForAdmin` | same (Phase C) | Admin transcript view only: raw text is stored raw, and the DO's `/admin/read` replaces `http(s)://…` and `www.…` runs with `[link]` so a click cannot leak the operator's IP. Off = admins read exact text. |
+| `moderation.reportWindowMs` / `reportMaxPerWindow` | same (Phase C) | Chat-report HTTP limit: `reportMaxPerWindow` (10) reports per `reportWindowMs` (10 min) per hashed IP, counted in D1 (`reserveAuthAttempt`, prefix `bnji-chat-report:`) — never KV. Breach → `429 rate_limited`. |
+| `moderation.defaultBanMinutes` / `maxBanMinutes` | same (Phase C) | Escalate action default 60 min, hard clamp `maxBanMinutes` (7 days = 10,080). Bans live in `chat_bans` and are enforced at `/ws` join time (`403 chat_banned`). |
 
 ## 9. Deployment — INFRA (change deliberately, never silently)
 
@@ -327,13 +333,14 @@ enforcement, and it is the plan §14 kill switch.
 | Env schema (secrets list) | `astro.config.mjs` (`env.schema`) | Declares which secrets exist; all optional so builds work unconfigured. |
 | D1 migrations, DO classes, bindings, R2 | `wrangler.json`, `migrations/` | **Allowed when planned and documented** (`docs/DEPLOY.md` + this file + `docs/DEPENDENCY-POLICY.md` §6). Each change is its own reviewed commit, and never weakens the `.gitignore` build-output exclusions. |
 
-**Planned config files (not implemented).** The chat plan adds
-`src/config/chat.config.ts` (room chat caps, message length, per-member budget,
-filter toggle), `src/config/dm.config.ts` (retention window, attachment limits,
-admin visibility mode, request/friend caps) and `src/config/friends.config.ts`
-(friend caps, discovery mode, presence visibility). They follow the existing
-rules: public policy only, limits in config rather than hard-coded, documented
-here when they land. See [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) §9.
+**Config files status (chat plan).** `src/config/chat.config.ts` is
+implemented (Phases B + C: chat caps, message length, per-member budget,
+filter, moderation limits — §8b above). Still planned: `src/config/dm.config.ts`
+(retention window, attachment limits, admin visibility mode, request/friend
+caps) and `src/config/friends.config.ts` (friend caps, discovery mode,
+presence visibility). They follow the existing rules: public policy only,
+limits in config rather than hard-coded, documented here when they land. See
+[`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) §9.
 
 ## 10. Replacing things safely — checklist
 

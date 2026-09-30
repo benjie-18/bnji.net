@@ -204,6 +204,10 @@ in the URL", and it is the price of admin-visible rooms. The alternative (no
 registry, DO pushes flagged content to D1) makes ordinary moderation
 impossible, so the registry is recommended.
 
+> **Owner-approved (2026-09-30):** the site is personal-use only; small gaps
+> of exactly this kind are acceptable. The registry trade-off above is
+> accepted as the price of admin-visible rooms — documented, not a blocker.
+
 ### 6.2 Admin surfaces (`/admin` → new **Chat** tab)
 
 | Panel | Reads | Actions |
@@ -220,6 +224,26 @@ The DO read endpoint is **service-authenticated**: only the Worker route may
 call it, and the DO verifies a header derived from a Worker secret, never a
 client-supplied value — same pattern as `x-bnji-verified-principal`.
 
+**Implemented in Phase C (deviations recorded, not silent):**
+
+- Service token = `sha256("bnji-room-admin:v1:" + ACCESS_SECRET)` in header
+  `x-bnji-room-admin`; the DO fails closed (403 `service_unauthorized`) with no
+  secret, and the gateway answers 503 `admin_service_unconfigured` so a missing
+  secret is loudly visible rather than silently broken.
+- The transcript panel gained **Kick** (disconnect without a ban) and the queue
+  gained an **Active bans** panel backed by a new `chat_bans` table — the plan
+  listed ban creation in §6.2/§6.4 but no ban *store* or unban path (gap
+  filled; see §9.1).
+- `close_room` also deletes the room's registry row (404-tolerant), so a
+  closed room never lingers in the Active rooms list.
+- Escalate = ban the reported message's author for
+  `moderation.defaultBanMinutes` (max `moderation.maxBanMinutes`); every
+  successful action writes `chat_moderation_log`.
+- Routes live on the Astro pages API (`src/pages/api/admin/chat/*`), not the
+  worker `index.ts` — the admin auth helpers (`isAdminRequest`, D1, session
+  cookies) all exist there; `roomServiceFetch` reaches the DO the same way
+  (`/admin/read`, `/admin/action`).
+
 ### 6.3 Server-side content filter
 
 Optional and config-driven (`src/config/chat.config.ts`): a small blocklist and
@@ -234,6 +258,17 @@ sequence number; the DO snapshots the message (text, label, author member ID)
 into D1 `chat_reports` at report time, so moderation evidence survives the
 room's expiry. Distinct-report counting per principal prevents one reporter
 from inflating a count, matching `0004_board_moderation.sql`.
+
+**Implemented in Phase C:** snapshots carry `author_hash` (sha256 of the
+principal, not the member ID — the member ID is room-scoped and useless for
+account export/deletion) plus label, text and message time; distinct reporters
+live in `chat_reporters` (PK `room_code + message_n + reporter_hash`). The
+HTTP layer mirrors the board's pattern (`senders` analogue): the report route
+uses D1 counter `reserveAuthAttempt` with prefix `bnji-chat-report:` (10 per
+10 minutes per hashed IP — never KV, per the standing no-KV rule), a
+same-origin check, and explicit errors: `not_member` (403), `message_not_found`
+(404), `room_expired` (410), `rate_limited` (429), `room_service_unavailable`
+(503).
 
 ## 7. Phase D — live private messaging (registered accounts)
 
@@ -346,8 +381,10 @@ processor and a new data-register entry.
 | `guest_profiles` | A | guest-session lifetime | keyed by session **digest** |
 | `player_handles` (or a column on `game_players`) | A | account lifetime | unique, exact-match search |
 | `room_registry` | C | 2 h + sweep | enables admin inspection (§6.1) |
-| `chat_reports` | C | shared retention sweep | content snapshot at report time |
-| `chat_moderation_log` | C | shared retention sweep | admin audit trail |
+| `chat_reports` | C | shared retention sweep (≤`trackingRetentionDays`) | content snapshot at report time (`author_hash` = sha256(principal)); UNIQUE `(room_code, message_n)` |
+| `chat_reporters` | C | with its report | PK `(room_code, message_n, reporter_hash)` — distinct-report counting |
+| `chat_bans` | C | until `expires_at` (≤`moderation.maxBanMinutes`) or manual unban; expired rows swept | principal hash + reason; blocks `/ws` join (403 `chat_banned`) |
+| `chat_moderation_log` | C | shared retention sweep | admin audit trail (action, hashes, detail — unlinkable to accounts) |
 | `dm_conversations` | D | account lifetime | canonical pair digest |
 | `dm_messages` | D | **default 30 days**, config | body text, sender, sequence, read watermark |
 | `dm_attachments` | D | with its message | fallback store if R2 is unavailable |
@@ -382,6 +419,17 @@ migration — permitted under `DEPENDENCY-POLICY.md` §6 and
 Message editing, delete-for-everyone, conversation archiving/export, group
 chats, and link previews (a link preview fetches a URL the sender chose —
 that is a server-side request forgery and privacy surface, not a convenience).
+
+**Phase C resolution (2026-09-30):** the export now includes a
+`chatModeration` section — `reportsOnYourMessages` (snapshots where your
+message was reported), `reportsYouFiled`, and `ban` — and account deletion
+sweeps every Phase C row keyed to the principal (`chat_reports.author_hash`,
+`chat_reporters.reporter_hash`, `chat_bans`, `room_registry.owner_hash`) inside
+its existing atomic batch. `chat_moderation_log` is deliberately kept: its rows
+are hashed-principal audit entries with no account link, same treatment as the
+board's moderator notes. Live room text still cannot be exported (room-keyed,
+≤2 h) — the `roomChat: { included: false, reason }` section stands, with its
+comment updated now that the registry exists.
 
 **Owner addition (2026-09-30, not scheduled):** the owner wants **group
 conversations (group chats)** added to this plan. They stay deferred until the
@@ -418,8 +466,8 @@ and is an owner decision if ever wanted.
 | --- | --- | --- |
 | `POST /api/profile/name` | A | player-context (guest or account) |
 | `GET/POST /api/chat/messages` (or WS frames on the existing room socket) | B | room membership |
-| `POST /api/chat/report` | C | room membership |
-| `GET /api/admin/chat/rooms`, `GET /api/admin/chat/room`, `POST /api/admin/chat/action` | C | admin guard |
+| `POST /api/chat/report` | C ✅ | room membership (DO snapshot → D1) |
+| `GET /api/admin/chat/rooms`, `GET /api/admin/chat/room`, `POST /api/admin/chat/action` | C ✅ | admin guard (pages API → DO `/admin/*` service endpoints) |
 | `GET /api/dm/conversations` | D | account |
 | `POST /api/dm/messages` | D | account + friendship |
 | `POST /api/dm/attachments` | D | account + friendship |
@@ -523,6 +571,17 @@ and deletion coverage, and cross-account authorisation for DMs (a stranger must
 not read a conversation). End-to-end two-browser-context tests belong in
 `tests/e2e/`, which cannot run in this sandbox (no Chromium binary) — run them
 locally before any deploy.
+
+> **Status (2026-09-30):** the harness above was adopted —
+> `@cloudflare/vitest-pool-workers` (Tier A) runs the DO suite
+> (`tests/workerd/*.spec.ts`), and the intro paragraph predates it. Phase C's
+> slice of the matrix: `tests/chat-moderation.test.ts` (D1 stores, §6.3
+> helpers, report/admin route guards, export + deletion assertions) and
+> `tests/workerd/room-moderation.spec.ts` (service auth 403/200, transcript
+> read, delete/kick/close handoffs, `/report` membership + snapshot, blocklist
+> rejection) — plus Report/admin-tombstone/blocked copy wiring in
+> `tests/e2e/game-room-chat.spec.ts` (local Playwright run required before
+> deploy).
 
 ## 14. Effort, order and rollback
 

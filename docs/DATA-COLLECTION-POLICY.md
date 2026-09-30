@@ -31,7 +31,7 @@ This is the whole policy. Everything below is the detail.
 
 | Surface | Before | Now |
 | --- | --- | --- |
-| Room chat | Recorded decision: "no chat history" | **Allowed — implemented (Phase B).** Bounded history is retained for the room's lifetime (≤2 h), survives reconnects, and is deleted with the room. Administrators may read it while the room exists (admin tooling ships with Phase C; see `docs/CHAT-SYSTEM-PLAN.md`). |
+| Room chat | Recorded decision: "no chat history" | **Allowed — implemented (Phase B).** Bounded history is retained for the room's lifetime (≤2 h), survives reconnects, and is deleted with the room. Administrators may read it while the room exists (admin tooling **shipped with Phase C**: Chat tab, service-authenticated transcript, report snapshots + bans in D1; see `docs/CHAT-SYSTEM-PLAN.md`). |
 | Message logging by admins | Not contemplated | **Allowed as a capability.** Each surface ships with a documented default and its own register entry. Where content logging is on, users must be able to tell from the UI. |
 | Private messaging | Was a contact form relayed to Discord/ntfy; no user content stored | **Allowed.** Account-to-account messages, attachments and read state may be stored for a bounded retention window, with admin-readable moderation paths. |
 | Paint canvas activity | Admin-visible, but explicitly *not* attributed: no accounts, no IPs, no pointer paths, no sticker images | **Attribution allowed** (session, and optionally account, plus the action detail the owner chooses), with the caveats in §6. |
@@ -63,10 +63,14 @@ This is the whole policy. Everything below is the detail.
 - Deletion must be **reachable by code** — the hourly sweep
   (`src/server/tracking-retention.ts`) is the established mechanism; a table
   that can only be cleaned by a manual `wrangler d1 execute` is incomplete.
-- **Account deletion must specify what it removes.** For chat, the plan
-  deliberately stores an opaque member ID rather than an account link for room
-  chat; for DMs, deletion should remove the account's messages or tombstone
-  them — the choice is a decision item in the chat plan, not an accident.
+- **Account deletion must specify what it removes.** For room chat, Phase C
+  resolved it: live room text is room-keyed and dies with the room (≤2 h),
+  while every D1 row keyed to the principal (report snapshots, filed reports,
+  bans, registry ownership) is swept by `deletePlayerAccount` and the export
+  carries a `chatModeration` section — `chat_moderation_log` is kept as
+  unlinkable-hash audit (documented, not silent). For DMs, deletion should
+  remove the account's messages or tombstone them — the choice is a decision
+  item for Phase D, not an accident.
 - Retention values are admin-editable where the existing
   `trackingRetentionDays` pattern already applies; they are a product setting,
   not a legal guarantee.
