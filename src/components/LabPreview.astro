@@ -22,24 +22,17 @@ const upcoming = EXPERIMENTS.filter((experiment) => experiment.status !== 'live'
 			label="LAB"
 			titleId="lab-title"
 			title="Interactive experiments"
+			description="Ideas and experiments I wanted to see come true"
 		/>
 
 		<GlassPanel pad="lg" reveal starReactive class="lab-panel">
 			<div class="lab-panel__text">
-				<p class="lab-panel__count">
-					<span class="lab-panel__number">{String(runnable).padStart(2, '0')}</span>
-					<span class="mono">runnable now</span>
-				</p>
 				<p class="lab-panel__copy">
-					Canvas starfields, a live bench for the glass tokens, pointer gravity, and
-					{upcoming > 0 ? ` ${upcoming} more ideas waiting for a weekend` : ' more ideas as they come'}.
+					Ideas and experiments I wanted to see come true
 				</p>
 				<div class="actions-stack lab-panel__actions">
-					<GlassButton href="/lab/" variant="primary" magnetic icon="flask">
+					<GlassButton href="/lab/" variant="primary" magnetic>
 						Enter the Lab
-					</GlassButton>
-					<GlassButton href="/projects/" variant="quiet" magnetic icon="arrow-right">
-						See what graduated
 					</GlassButton>
 				</div>
 			</div>

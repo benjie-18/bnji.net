@@ -64,8 +64,7 @@ const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
 		label="LAB"
 		titleId="page-title"
 		title="The Lab"
-		description="Prototypes that are allowed to be strange. Each one runs in its own frame, with its own animation loop, and pauses the moment it scrolls out of view."
-		meta={[`${runnable.length} runnable`, `${backlog.length} in the backlog`, 'Isolated by contract']}
+		description="Ideas and experiments I wanted to see come true"
 	/>
 
 	<div class="container lab-body" data-lab-root>
@@ -125,9 +124,11 @@ const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
 											{experiment.title}
 										</h2>
 									</div>
-									<Chip tone="live" dot>
-										{LAB_STATUS_LABEL[experiment.status]}
-									</Chip>
+									{LAB_STATUS_LABEL[experiment.status] && (
+										<Chip tone="live" dot>
+											{LAB_STATUS_LABEL[experiment.status]}
+										</Chip>
+									)}
 								</header>
 
 								<p class="lab-experiment__description">{experiment.description}</p>
@@ -155,38 +156,6 @@ const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
 			</div>
 		</div>
 
-		<!-- Backlog Section (Questions removed as directed) -->
-		<section class="lab-backlog" aria-labelledby="backlog-title">
-			<SectionHeading
-				label="BACKLOG"
-				titleId="backlog-title"
-				title="Not built yet"
-				description="Ideas and half-finished things. They live here so they are written down rather than half-implemented on the homepage."
-			/>
-
-			<div class="lab-backlog__list">
-				{
-					backlog.map((experiment, index) => (
-						<GlassPanel
-							variant="quiet"
-							radius="md"
-							pad="md"
-							reveal
-							revealDelay={index * 70}
-							class="backlog-item"
-						>
-							<div class="backlog-item__head">
-								<h3 class="backlog-item__title">{experiment.title}</h3>
-								<Chip tone={experiment.status === 'wip' ? 'soon' : 'idle'}>
-									{LAB_STATUS_LABEL[experiment.status]}
-								</Chip>
-							</div>
-							<p class="backlog-item__description">{experiment.description}</p>
-						</GlassPanel>
-					))
-				}
-			</div>
-		</section>
 	</div>
 </Layout>
 

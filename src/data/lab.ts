@@ -3,25 +3,12 @@
  *
  * /lab/ is the playground: interactive prototypes that are allowed to be
  * strange, but are not allowed to destabilize the rest of the site.
- *
- * ISOLATION CONTRACT (see AGENTS.md):
- *  1. An experiment owns its DOM subtree — it never queries outside its own
- *     <section data-lab-experiment>.
- *  2. It owns its rAF loops, and must stop them when out of view, when the tab
- *     is hidden, and when prefers-reduced-motion is set.
- *  3. It never writes to :root or global CSS custom properties. Tune your own
- *     element's inline styles instead (see GlassBench).
- *  4. It imports engines from src/scripts/ rather than copying them.
- *
- * Astro cannot import a component from a runtime string, so `component` is a
- * union of keys in the static import map at the top of src/pages/lab.astro.
- * Adding an experiment = new component + new entry here + one line in that map.
  */
 
 export type LabStatus = 'live' | 'wip' | 'idea';
 
 export const LAB_STATUS_LABEL: Record<LabStatus, string> = {
-	live: 'Runnable',
+	live: '',
 	wip: 'In progress',
 	idea: 'Idea',
 };
@@ -59,18 +46,15 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'fluid-sandbox',
 		title: 'Fluid Sandbox',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Real time customizable fluid physics simulation sandbox.',
 		tags: ['physics', 'simulation', 'interactive'],
 		status: 'live',
 		component: 'FluidSandbox',
-		question: 'Lorem ipsum dolor sit amet consectetur adipiscing elit?',
 	},
 	{
 		slug: 'piano-bars',
 		title: '3D Piano Bars',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Interactive 3d piano tiles in CSS.',
 		tags: ['3d', 'audio', 'interactive'],
 		status: 'live',
 		component: 'PianoBars',
@@ -78,8 +62,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'stack-game',
 		title: 'Isometric Stack',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Classic Stack game.',
 		tags: ['game', '3d', 'physics'],
 		status: 'live',
 		component: 'StackGame',
@@ -87,8 +70,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'iso-progress',
 		title: '3D Isometric Progress Bar',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: '3D progress bar in full CSS.',
 		tags: ['3d', 'tools', 'interactive'],
 		status: 'live',
 		component: 'IsoProgress',
@@ -96,8 +78,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'cursor-trails',
 		title: 'Trailing Cursor Laboratory',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Different interactive cursor effects.',
 		tags: ['particles', 'physics', 'interactive'],
 		status: 'live',
 		component: 'CursorTrails',
@@ -105,8 +86,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'voxel-map',
 		title: '3D Voxel Map Creator',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Super low budget minecraft (full CSS), voxel map sandbox.',
 		tags: ['3d', 'tools', 'interactive'],
 		status: 'live',
 		component: 'VoxelMap',
@@ -114,8 +94,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'glass-minesweeper',
 		title: 'Minesweeper',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Classic minesweeper with a couple settings.',
 		tags: ['game', 'interactive'],
 		status: 'live',
 		component: 'GlassMinesweeper',
@@ -123,8 +102,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'cps-counter',
 		title: 'CPS Counter',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Test for clicks per second.',
 		tags: ['benchmark', 'tools', 'interactive'],
 		status: 'live',
 		component: 'CpsCounter',
@@ -132,8 +110,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'starfield-tuner',
 		title: 'Starfield Tuner',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: "Custom CSS starfield background, used early on to create and tweak dark mode's background.",
 		tags: ['canvas', 'tools'],
 		status: 'live',
 		component: 'StarfieldTuner',
@@ -141,8 +118,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'glass-bench',
 		title: 'Liquid Glass Optical Laboratory',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Interactive reflection of the "liquid glass" clone used in UI.',
 		tags: ['tools', 'interactive'],
 		status: 'live',
 		component: 'GlassBench',
@@ -150,41 +126,15 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'orbit-field',
 		title: 'Orbit Field',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Basic particles and gravity test with cursor tracking.',
 		tags: ['particles', 'physics', 'canvas'],
 		status: 'live',
 		component: 'OrbitField',
 	},
 	{
-		slug: 'webgl-nebula',
-		title: 'WebGL Nebula',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-		tags: ['3d', 'canvas'],
-		status: 'wip',
-	},
-	{
-		slug: 'audio-reactive-sky',
-		title: 'Audio-Reactive Sky',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-		tags: ['audio', 'canvas'],
-		status: 'idea',
-	},
-	{
-		slug: 'minecraft-world-viewer',
-		title: 'Minecraft World Viewer',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-		tags: ['3d', 'tools'],
-		status: 'idea',
-	},
-	{
 		slug: 'bubble-pop',
 		title: 'Bubble Pop',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Pop bubbles. popopopopop',
 		tags: ['game', 'canvas', 'interactive'],
 		status: 'live',
 		component: 'BubblePop',
@@ -192,8 +142,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'memory-pairs',
 		title: 'Memory Pairs',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Classic memory pairs game.',
 		tags: ['game', 'interactive'],
 		status: 'live',
 		component: 'MemoryPairs',
@@ -201,8 +150,7 @@ export const EXPERIMENTS: Experiment[] = [
 	{
 		slug: 'reaction-timer',
 		title: 'Reaction Timer',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		description: 'Test for reaction time with random intervals.',
 		tags: ['benchmark', 'tools', 'interactive'],
 		status: 'live',
 		component: 'ReactionTimer',
