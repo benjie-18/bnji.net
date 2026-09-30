@@ -31,17 +31,10 @@ const { quality } = TOOL_IMAGE_CONFIG;
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
 			<p class="eyebrow"><span>01</span><span>/ IMAGE</span></p>
-			<h2 class="tool__title" id="image-converter-title">Image Converter &amp; Optimizer</h2>
+			<h2 class="tool__title" id="image-converter-title">Image converter and optimizer</h2>
 			<p class="tool__lead">
-				Convert between PNG, JPEG and WebP, resize while keeping the aspect ratio, and see the real
-				file-size change before you save. Decoding, resizing and encoding all happen in this tab — no
-				image is uploaded anywhere.
+				Convert between PNG, JPEG and WebP, resize while keeping the aspect ratio, and see the real file-size change before you save.
 			</p>
-			<ul class="tool__chips" role="list">
-				<li><Chip tone="live" dot>Runs locally</Chip></li>
-				<li><Chip>PNG · JPEG · WebP out</Chip></li>
-				<li><Chip>Optional resize</Chip></li>
-			</ul>
 		</header>
 
 		<div class="tool__body">
@@ -56,11 +49,10 @@ const { quality } = TOOL_IMAGE_CONFIG;
 						accept={IMAGE_INPUT_ACCEPT}
 						data-image-source
 					/>
-					<span class="tool-drop__prompt">Choose an image, or drop one here</span>
+					<span class="tool-drop__prompt">Choose or Drop an image here</span>
 				</label>
 				<p class="tool__hint" id="image-source-hint">
-					Reads raster images your browser can decode: PNG, JPEG, WebP, GIF, BMP or AVIF. Anything else
-					is rejected by name — this tool does not convert PDFs, documents, archives or video.
+					Reads raster images your browser can decode: PNG, JPEG, WebP, GIF, BMP or AVIF.
 				</p>
 
 				<figure class="tool__preview">

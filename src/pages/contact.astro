@@ -40,6 +40,21 @@ const CHANNELS = [
 	/>
 
 	<div class="container contact-body">
+		<GlassPanel pad="md" reveal class="discord-card">
+			<div class="discord-card__info">
+				<span class="channel__icon">
+					<Icon name="discord" size={18} />
+				</span>
+				<div>
+					<h2 class="channel__title">Discord</h2>
+					<p class="mono discord-card__value" data-copy-value>gizlyy</p>
+				</div>
+			</div>
+			<button class="glass-button glass-button--sm" type="button" data-copy-handle>
+				<span data-copy-text>Copy</span>
+			</button>
+		</GlassPanel>
+
 		<div class="contact-channels">
 			{
 				CHANNELS.map((channel, index) => (
@@ -60,8 +75,6 @@ const CHANNELS = [
 				))
 			}
 		</div>
-
-		<ContactSection detailed index="" />
 
 		<DirectMessage />
 	</div>
@@ -133,4 +146,42 @@ const CHANNELS = [
 		color: var(--text-faint);
 		border-block-end-color: transparent;
 	}
+
+	.discord-card {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.discord-card__info {
+		display: flex;
+		align-items: center;
+		gap: 0.85rem;
+	}
+
+	.discord-card__value {
+		margin: 0.1rem 0 0;
+		font-size: 0.92rem;
+		color: var(--accent);
+	}
 </style>
+
+<script>
+	const copyBtns = document.querySelectorAll<HTMLButtonElement>('[data-copy-handle]');
+	for (const btn of copyBtns) {
+		btn.addEventListener('click', async () => {
+			const container = btn.closest<HTMLElement>('.discord-card') ?? btn.parentElement;
+			const val = container?.querySelector<HTMLElement>('[data-copy-value]')?.textContent?.trim() ?? 'gizlyy';
+			const textSpan = btn.querySelector<HTMLElement>('[data-copy-text]') ?? btn;
+			try {
+				await navigator.clipboard.writeText(val);
+				textSpan.textContent = 'Copied ✓';
+				setTimeout(() => { textSpan.textContent = 'Copy'; }, 1600);
+			} catch {
+				textSpan.textContent = 'Copied ✓';
+				setTimeout(() => { textSpan.textContent = 'Copy'; }, 1600);
+			}
+		});
+	}
+</script>

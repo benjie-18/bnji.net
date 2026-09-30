@@ -7,17 +7,15 @@ import { GAMES } from '../data/games';
 import Layout from '../layouts/Layout.astro';
 
 const standalone = GAMES.filter((game) => !game.labHref);
-const labGames = GAMES.filter((game) => game.labHref);
 ---
 
-<Layout title="Games" description="The BNJI.NET games catalog and shared game foundations.">
+<Layout title="Games" description="Gaming hub! Play, compete, lose cause im obviously so much better than you 😛">
 	<PageHeader
 		index="07"
 		label="GAMES"
 		titleId="page-title"
 		title="Games"
-		description="A home for focused, browser-friendly games, optional player accounts, offline-first saves, and private multiplayer rooms. Existing Lab experiments stay in the Lab."
-		meta={[`${labGames.length} Lab links`, `${standalone.length} standalone games`, 'Built to grow']}
+		description="Gaming hub! Play, compete, lose cause im obviously so much better than you 😛"
 	/>
 
 	<div class="container games-body">
@@ -35,7 +33,7 @@ const labGames = GAMES.filter((game) => game.labHref);
 			<div class="player-tools__guest" data-player-guest>
 				<form class="player-tools__form" data-player-create>
 					<h3>Create one global player account</h3>
-					<p>Use a display name and a private recovery code. No email, password, or third-party account is required.</p>
+					<p>Use a display name and a private recovery code.</p>
 					<label><span>Display name</span><input name="displayName" type="text" maxlength="24" autocomplete="nickname" required /></label>
 					<button class="player-tools__button player-tools__button--primary" type="submit">Create account &amp; claim this guest session</button>
 				</form>
@@ -70,16 +68,15 @@ const labGames = GAMES.filter((game) => game.labHref);
 
 			<div class="player-tools__saves" data-player-saves>
 				<div class="player-tools__saves-head"><h3>Local &amp; cloud save snapshots</h3><span>Up to 25 slots · 16 KiB each · versioned</span></div>
-				<p class="player-tools__note">Existing Stack and Memory Pairs bests are bridged as personal progress—not verified leaderboard scores. Sync uses revision checks; conflicts always ask before choosing a version.</p>
 				<div class="player-tools__save-list" data-save-list><p>Checking this device for local progress…</p></div>
 			</div>
 		</section>
 
 		<section class="room-tools" data-room-tools aria-labelledby="room-tools-title">
 			<div>
-				<p class="eyebrow">MULTIPLAYER FOUNDATION</p>
-				<h2 id="room-tools-title">Private room, shared connection.</h2>
-				<p>Rooms are temporary and code-protected. This is a versioned transport/snapshot layer only; it does not validate a move, score, turn, or game rule. No game is attached to it yet.</p>
+				<p class="eyebrow">Multiplayer</p>
+				<h2 id="room-tools-title">Private room</h2>
+				<p>Rooms are temporary and code-protected multiplayer instances.</p>
 			</div>
 			<div class="room-tools__forms">
 				<form data-room-create>
@@ -105,16 +102,14 @@ const labGames = GAMES.filter((game) => game.labHref);
 			<div class="games-section-heading">
 				<div>
 					<p class="eyebrow">01 / CATALOG</p>
-					<h2 id="standalone-title">Standalone games</h2>
+					<h2 id="standalone-title">Games</h2>
 				</div>
 				<span class="mono games-count">{standalone.length} published</span>
 			</div>
 			{
 				standalone.length === 0 ? (
 					<GlassPanel pad="lg" class="games-empty">
-						<p class="games-empty__eyebrow mono">NO STANDALONE GAMES YET</p>
-						<h3>The catalog is ready when the first game is.</h3>
-						<p>Nothing here is a placeholder download or a pretend score board. New titles will appear when they are playable and ready to publish.</p>
+						<p>No games yet..</p>
 					</GlassPanel>
 				) : (
 					<div class="games-grid">
@@ -123,29 +118,6 @@ const labGames = GAMES.filter((game) => game.labHref);
 				)
 			}
 		</section>
-
-		<section aria-labelledby="lab-games-title">
-			<div class="games-section-heading">
-				<div>
-					<p class="eyebrow">02 / EXPERIMENTS</p>
-					<h2 id="lab-games-title">Already in the Lab</h2>
-				</div>
-				<a class="games-all-link" href="/lab/">Browse all Lab experiments <span aria-hidden="true">↗</span></a>
-			</div>
-			<div class="games-grid">
-				{labGames.map((game) => <GameCard game={game} />)}
-			</div>
-		</section>
-
-		<aside class="games-foundation" data-glass="quiet" aria-label="Game platform foundations">
-			<span class="games-foundation__mark" aria-hidden="true">✳</span>
-			<div>
-				<p class="eyebrow">THE FOUNDATION</p>
-				<h2>Small, responsive, and ready to grow.</h2>
-				<p>Games keep stable IDs, a shared lifecycle, private tracking, and fail-closed score verification. Optional global player identity, revisioned offline-first saves, and short-lived generic rooms sit beside the game code; guest play remains first-class.</p>
-			</div>
-			<a href="/lab/">Explore experiments <span aria-hidden="true">→</span></a>
-		</aside>
 	</div>
 </Layout>
 
@@ -224,8 +196,7 @@ const labGames = GAMES.filter((game) => game.labHref);
 		gap: 1rem;
 		margin-block-end: 1.25rem;
 	}
-	.games-section-heading h2,
-	.games-foundation h2 {
+	.games-section-heading h2 {
 		margin: 0.25rem 0 0;
 		font-size: var(--text-title);
 		letter-spacing: var(--tracking-snug);
@@ -233,16 +204,9 @@ const labGames = GAMES.filter((game) => game.labHref);
 	}
 	.games-count { color: var(--text-muted); font-size: var(--text-micro); }
 	.games-empty { max-width: 52rem; }
-	.games-empty__eyebrow { color: var(--signal-soon); font-size: var(--text-micro); letter-spacing: var(--tracking-mono); }
-	.games-empty h3 { margin: 0.5rem 0; font-size: var(--text-lead); color: var(--text-strong); }
-	.games-empty p:last-child { max-width: 52ch; margin-bottom: 0; color: var(--text-muted); line-height: 1.7; }
+	.games-empty p { margin: 0; color: var(--text-muted); }
 	.games-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--grid-gap); }
-	.games-all-link, .games-foundation > a { color: var(--accent-strong); text-decoration: none; font-weight: 600; }
-	.games-all-link:focus-visible, .games-foundation > a:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 4px; border-radius: var(--radius-sm); }
-	.games-foundation { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1.25rem; padding: clamp(1.25rem, 4vw, 2rem); border-radius: var(--radius-lg); }
-	.games-foundation p:not(.eyebrow) { max-width: 65ch; margin-bottom: 0; color: var(--text-muted); line-height: 1.7; }
-	.games-foundation__mark { display: grid; place-items: center; width: 3rem; aspect-ratio: 1; border: 1px solid var(--glass-border); border-radius: 50%; color: var(--accent-strong); font-size: 1.5rem; }
-	@media (max-width: 800px) { .games-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .games-foundation { grid-template-columns: auto 1fr; } .games-foundation > a { grid-column: 2; } }
+	@media (max-width: 800px) { .games-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 	@media (max-width: 560px) {
 		.games-grid, .player-tools__guest, .room-tools, .room-tools__forms { grid-template-columns: 1fr; }
 		.games-section-heading, .player-tools__head, .player-tools__saves-head { align-items: start; flex-direction: column; }
@@ -251,5 +215,4 @@ const labGames = GAMES.filter((game) => game.labHref);
 		.player-tools__button { width: 100%; }
 		.player-tools__account-actions { display: grid; grid-template-columns: 1fr; }
 	}
-	@media (prefers-reduced-motion: reduce) { .games-card, .games-foundation { scroll-behavior: auto; } }
 </style>
