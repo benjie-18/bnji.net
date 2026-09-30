@@ -142,7 +142,7 @@ The inner loop while iterating, then the full gate before calling it done:
 ```bash
 npm run build          # must pass, no new warnings
 npm exec -- tsc        # must be clean (typecheck only)
-npm test               # the behaviour suite (node:test) — no browser needed
+npm test               # the behaviour suite (node:test) + the DO suite (vitest/workerd) — no browser needed
 npm run check          # the gate: build + tsc + wrangler deploy --dry-run
 ```
 

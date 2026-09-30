@@ -1,0 +1,24 @@
+{
+	"name": "bnji-net-test",
+	"compatibility_date": "2026-09-14",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"main": "tests/workerd/worker.ts",
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "GAME_ROOMS",
+				"class_name": "GameRoom"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "game-rooms-v1",
+			"new_sqlite_classes": [
+				"GameRoom"
+			]
+		}
+	]
+}

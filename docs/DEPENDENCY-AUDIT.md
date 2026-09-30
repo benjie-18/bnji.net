@@ -41,3 +41,40 @@ npm audit --omit=dev  0 vulnerabilities
 ```
 
 Re-run these commands after dependency changes; advisory databases and package versions change over time.
+
+## Chat harness addition: Vitest Workers pool (2026-09-30)
+
+**Checked:** 2026-09-30 (America/Toronto), Node 22 / npm 11 (the lockfile was
+regenerated with npm 11 because npm 10.9.8's arborist crashes on the vitest 4
+peer graph; `npm ci` with any npm reads it back normally).
+
+Added as **Tier A dev-only** dependencies per
+[`DEPENDENCY-POLICY.md`](./DEPENDENCY-POLICY.md) §5 (the plan's recommended
+harness, [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) §13):
+
+- `vitest@4.1.11` (pinned to the pool's `^4.1.0` peer range),
+- `@cloudflare/vitest-pool-workers@0.22.0`.
+
+Neither ships to browsers or the deployed Worker: `wrangler deploy --dry-run`
+reports `Total Upload: 1091.09 KiB / gzip: 277.16 KiB` — byte-identical to the
+baseline recorded in [`DEPENDENCY-POLICY.md`](./DEPENDENCY-POLICY.md) §4.
+
+The pool pins `miniflare`/`wrangler` as hard dependencies at versions whose
+transitive `sharp` (< 0.35.4) and `undici` (≤ 7.29.0) advisories npm flagged.
+Rather than accept five dev-only highs or `audit fix --force` (which would have
+downgraded the pool to 0.8.30), `package.json` scopes an `overrides` entry to
+the `@cloudflare/vitest-pool-workers` subtree only — `miniflare` 5.20260930.0-alpha
+(whose own `sharp` 0.35.4 / `undici` 7.29.1 are clean), plus `sharp` 0.35.4 and
+`undici` 7.29.1 — so the production Wrangler/Astro toolchain keeps its own
+pinned versions. The Worker runtime used by the tests is workerd 1.20260930.2
+with `compatibility_date` 2026-09-14, matching production.
+
+Install scripts follow the repository's `allowScripts` list; the new entries
+(`esbuild@0.25.12`, `esbuild@0.28.1`, `workerd@1.20260815.1`,
+`workerd@1.20260926.1`, `workerd@1.20260930.2`) are the exact versions in the
+lockfile. Current results:
+
+```text
+npm audit             0 vulnerabilities
+npm audit --omit=dev  0 vulnerabilities
+```
