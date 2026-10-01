@@ -134,20 +134,27 @@ export class Presence extends DurableObject<PresenceEnv> {
 
 	async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
 		const attachment = socketAttachment(socket);
-		try { socket.close(code || 1000, reason.slice(0, 120)); } catch { /* already closed */ }
-		this.announceOffline(attachment);
+		try { socket.close(code || 1000, String(reason ?? '').slice(0, 120)); } catch { /* already closed */ }
+		this.announceOffline(attachment, socket);
 	}
 
 	async webSocketError(socket: WebSocket): Promise<void> {
 		const attachment = socketAttachment(socket);
 		try { socket.close(1011, 'presence connection error'); } catch { /* already closed */ }
-		this.announceOffline(attachment);
+		this.announceOffline(attachment, socket);
 	}
 
-	/** Offline only when NO other tab still holds the same handle. */
-	private announceOffline(attachment: Attachment | null): void {
+	/**
+	 * Offline only when NO other tab still holds the same handle. The closing
+	 * socket itself is skipped explicitly: depending on timing the runtime can
+	 * still list it in getWebSockets() while this handler runs — matching it
+	 * would swallow the announcement (self-match bug caught by the local
+	 * two-client smoke against wrangler dev).
+	 */
+	private announceOffline(attachment: Attachment | null, closing: WebSocket): void {
 		if (!attachment?.handle) return;
 		for (const socket of this.state.getWebSockets()) {
+			if (socket === closing) continue;
 			const other = socketAttachment(socket);
 			if (other?.handle === attachment.handle) return; // another tab keeps them online
 		}
