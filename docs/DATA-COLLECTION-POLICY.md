@@ -34,10 +34,9 @@ This is the whole policy. Everything below is the detail.
 | Room chat | Recorded decision: "no chat history" | **Allowed — implemented (Phase B).** Bounded history is retained for the room's lifetime (≤2 h), survives reconnects, and is deleted with the room. Administrators may read it while the room exists (admin tooling **shipped with Phase C**: Chat tab, service-authenticated transcript, report snapshots + bans in D1; see `docs/CHAT-SYSTEM-PLAN.md`). |
 | Message logging by admins | Not contemplated | **Allowed as a capability.** Each surface ships with a documented default and its own register entry. |
 | Private messaging | Was a contact form relayed to Discord/ntfy | **Allowed.** Account-to-account messages, attachments and read state may be stored for a bounded retention window, with admin-readable moderation paths. |
-| Paint canvas activity | Admin-visible and attributed to IP - stickers images may be stored and logged
-| **Attribution allowed** (session, and optionally account, plus the action detail the owner chooses), with the caveats in §6. |
+| Paint canvas activity | Admin-visible, original guardrails excluded IPs/stickers | **Attribution allowed** (session, optionally account, IP; sticker images may be stored and logged), plus the action detail the owner chooses — with the caveats in §6 and a register row per extension. |
 | Games telemetry | Private, coarse, bounded | Unchanged policy-wise; existing retention rules still apply. |
-| Identity | Hashed credentials, Full IPs allowed |
+| Identity | Hashed credentials, digested IPs only | **Full IPs allowed** (owner, 2026-09-30): raw IP storage is permitted where the §11 register row documents the surface and its retention; existing surfaces stay hashed until their row changes. |
 
 ## 3. What does not change
 

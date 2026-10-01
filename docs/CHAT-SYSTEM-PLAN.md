@@ -29,7 +29,7 @@ are the rules this plan is allowed to spend.
 | 1 | Display names for registered accounts and guests | Rooms, chat, DMs, Paint | Account: permanent. Guest: session-scoped | A |
 | 2 | Room chat | `/games/` private rooms | **Ephemeral: lives and dies with the room (≤2 h), survives reconnects** | B |
 | 3 | Moderation tooling + admin-visible chat | `/admin` | Room-lifetime; reports bounded by the shared retention sweep | C |
-| 4 | Live private messaging, account↔account, with images | New `/messages/` | Bounded retention window (default 30 days), not permanent | D |
+| 4 | Live private messaging, account↔account, with images | New `/messages/` | Bounded retention window (default 60 days, owner answer 2026-09-30), not permanent | D |
 | 5 | Friends system | New `/friends/` | Permanent while both accounts exist; cascades on deletion | E |
 | 6 | Presence + unread notifications | Header badge | Ephemeral | E |
 
@@ -276,7 +276,7 @@ same-origin check, and explicit errors: `not_member` (403), `message_not_found`
 
 - `/messages/` lists conversations with unread counts; opening one connects a
   hibernating WebSocket for live delivery.
-- Messages persist in D1 for the retention window (default 30 days), so an
+- Messages persist in D1 for the retention window (default 60 days — owner answer 2026-09-30), so an
   offline recipient sees them on next sign-in; "session-based" in the sense
   that nothing is promised forever, not that history vanishes when a tab
   closes.
@@ -386,7 +386,7 @@ processor and a new data-register entry.
 | `chat_bans` | C | until `expires_at` (≤`moderation.maxBanMinutes`) or manual unban; expired rows swept | principal hash + reason; blocks `/ws` join (403 `chat_banned`) |
 | `chat_moderation_log` | C | shared retention sweep | admin audit trail (action, hashes, detail — unlinkable to accounts) |
 | `dm_conversations` | D | account lifetime | canonical pair digest |
-| `dm_messages` | D | **default 30 days**, config | body text, sender, sequence, read watermark |
+| `dm_messages` | D | **default 60 days** (owner answer 2026-09-30), config | body text, sender, sequence, read watermark |
 | `dm_attachments` | D | with its message | fallback store if R2 is unavailable |
 | `player_friends` / `player_blocks` | E | account lifetime | cascade on account deletion |
 | `room_chat_archive` (only if D14 is enabled) | C+ | configurable | opt-in per room, disclosed in-room |
@@ -607,25 +607,27 @@ path. Images (Phase D) can be disabled independently of text messaging.
 
 ## 15. Open questions for the owner
 
-1. **Admins and DM content (D10).** Metadata + on-report snapshots (recommended)
-   or full content logging from day one? If full logging is chosen, the DM
-   composer needs a visible line saying so — otherwise the first friend who
-   finds out will be right to be annoyed.
-2. **Retention window for DMs.** 30 days recommended; 7 days if you want
-   "live-ish", 90 if history matters more than storage.
-3. **R2 vs D1 for images (D6).** R2 is the better long-term store, but enabling
-   it needs a payment method on file and its Free-account binding availability
-   must be confirmed in the dashboard. D1 base64 is proven here and free, with
-   a ~1.4 MB ceiling.
-4. **Guest names (D3).** Session-scoped in D1 as planned, or cookie-only if you
-   want guests to be completely absent from the database.
-5. **Handles (D8).** One global handle per account is simple and enables friend
-   search; it is also the first permanently public identifier the site has.
-   Confirm that is acceptable versus invite-links-only.
-6. **Paint attribution (§6 of the data policy).** Which extensions do you
-   actually want — account attribution, action detail, or full replay? They are
-   very different storage and privacy propositions and should be decided
-   before that work is scheduled.
+All six questions are answered; the questions stay as the record of what was
+asked, each with the owner's decision.
+
+1. **Admins and DM content (D10).** — **Resolved 2026-09-30: plan default.**
+   Metadata plus on-report snapshots; full-content logging stays off. (If that
+   ever changes, the DM composer must say so at the point of use.)
+2. **Retention window for DMs.** — **Resolved 2026-09-30: 60 days** (owner
+   picked 60 over the 30-day recommendation; `docs/DATA.md` §11 updated).
+3. **R2 vs D1 for images (D6).** — **Resolved 2026-09-30: try R2 only if it
+   costs nothing.** Never enable billing or create a bucket without asking the
+   owner first; D1 base64 (proven, free, ~1.4 MB ceiling) is the shipping path
+   while R2 stays unavailable.
+4. **Guest names (D3).** — **Resolved 2026-09-30: D1, session-scoped** as
+   planned (`guest_profiles`, keyed by session digest) — shipped in Phase A.
+5. **Handles (D8).** — **Resolved 2026-09-30: one global handle per account**,
+   exact-match search — shipped in Phase A.
+6. **Paint attribution (§6 of the data policy).** — **Resolved 2026-09-30:
+   account/session attribution only**, plus the action detail the owner
+   chooses; no full replay. (Data policy §2 records the wider permission the
+   owner added: full IPs and stored sticker images are *allowed*, each needing
+   its own register row before it ships.)
 
 ## 16. What this plan does not do
 
