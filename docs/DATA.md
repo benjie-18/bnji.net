@@ -249,7 +249,16 @@ recovery procedure.
   full contract, retention, quotas and owner rollout.
 - Room codes and room state live in short-lived SQLite-backed `GameRoom`
   Durable Objects (maximum two-hour lifetime); game state is opaque and
-  untrusted, with no generic score/game-rule validation. **Room chat is
+  untrusted, with no generic score/game-rule validation. Registered per-game
+  authorities shape that state server-side (chess moves; PvP Minesweeper
+  phases with votes, per-board mine placements, per-player click lists and a
+  per-room win tally) — all of it lives only in the room's own SQLite and is
+  deleted with the room, never written to KV or D1. Broadcast redaction keeps
+  incoming minefields out of every outgoing frame, and the DO's
+  `/game/verify_win` answers the Worker score route with a yes/no for one
+  round (mode + winner hash only, nothing stored). PvP Minesweeper wins and
+  Stack scores land as ordinary server-validated `game_scores` rows keyed by
+  game/mode. **Room chat is
   implemented (chat plan Phase B, 2026-09-30)** and permitted
   ([`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md)): bounded plain text lives
   only inside the room's own Durable Object SQLite, survives reconnects as

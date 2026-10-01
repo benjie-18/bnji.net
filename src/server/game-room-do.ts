@@ -8,9 +8,10 @@ import {
 	ROOM_MAX_STATE_BYTES, ROOM_PROTOCOL_VERSION, ROOM_RECONNECT_GRACE_MS, ROOM_STATE_WRITE_INTERVAL_MS, ROOM_TTL_MS, sanitizeChatText, stripUrlsForDisplay,
 	type RoomChatFrame, type RoomChatDeleteFrame, type RoomMemberFrame,
 } from './game-room-protocol';
-import { authorizeRoomStateTransition } from './room-authority';
-// Side effect: registers the `bnji.chess` room authority inside this isolate.
+import { authorizeGameAction, authorizeRoomStateTransition, redactGameState, verifyRoundWin, type GameActionRequest } from './room-authority';
+// Side effect: registers the game authorities/adapters inside this isolate.
 import './game-adapters/chess';
+import './game-adapters/pvp-minesweeper';
 
 interface RoomEnv { ACCESS_SECRET?: string }
 type Principal = { key: string; hash: string };
@@ -52,6 +53,16 @@ function socketAttachment(socket: WebSocket): Attachment | null {
 }
 
 export class GameRoom extends DurableObject<RoomEnv> {
+	/**
+	 * Game-action token bucket (games plan): actions persist room state but
+	 * do NOT spend the 5s state-frame budget. Burst 16 covers a full-room
+	 * simultaneous vote/placement; refill is one action per second. Reset on
+	 * hibernation only loosens the bound by one burst — the pre-parse frame
+	 * ceiling still applies.
+	 */
+	private actionTokens = 16;
+	private actionTokensAt = Date.now();
+
 	private readonly state: DurableObjectState;
 	constructor(state: DurableObjectState, env: RoomEnv) {
 		super(state, env);
@@ -88,6 +99,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		if (url.pathname === '/create' && request.method === 'POST') return this.createRoom(request, principal);
 		if (url.pathname === '/ws' && request.method === 'GET') return this.acceptConnection(request, principal);
 		if (url.pathname === '/report' && request.method === 'POST') return this.handleReport(request, principal);
+		if (url.pathname === '/game/verify_win' && request.method === 'POST') return this.verifyWin(request, principal);
 		return json({ error: 'not_found' }, 404);
 	}
 
@@ -358,7 +370,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 	private snapshot(room = this.room(), principalHash?: string): Record<string, unknown> {
 		return {
 			v: ROOM_PROTOCOL_VERSION, type: 'snapshot', gameId: room?.game_id ?? '', revision: room?.revision ?? 0,
-			state: this.decodeState(room?.state_json ?? '{}'), connectedMembers: this.connectedCount(),
+			state: redactGameState(room?.game_id ?? '', (this.decodeState(room?.state_json ?? '{}') ?? {}) as Record<string, unknown>), connectedMembers: this.connectedCount(),
 			isHost: Boolean(room && principalHash && room.owner_hash === principalHash), hasHost: Boolean(room?.owner_hash),
 		};
 	}
@@ -578,6 +590,10 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			try { socket.close(1000, 'Left room'); } catch { /* no-op */ }
 			return;
 		}
+		if (parsed.message.type === 'action') {
+			await this.handleGameAction(socket, attachment, parsed.message, now, room);
+			return;
+		}
 		const value = parsed.message;
 		if (value.baseRevision !== room.revision) {
 			socket.send(JSON.stringify({ ...this.snapshot(room, attachment.principalHash), type: 'conflict' }));
@@ -614,9 +630,104 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			return;
 		}
 		this.broadcast({
-			v: ROOM_PROTOCOL_VERSION, type: 'state', revision: updated.revision, state: this.decodeState(updated.state_json),
+			v: ROOM_PROTOCOL_VERSION, type: 'state', revision: updated.revision, state: redactGameState(room.game_id, (this.decodeState(updated.state_json) ?? {}) as Record<string, unknown>),
 			connectedMembers: this.connectedCount(),
 		});
+	}
+
+	/** Live-or-grace members with their trusted hashes — context for game action handlers. */
+	private memberContext(now: number): Array<{ memberId: string; principalHash: string }> {
+		return this.state.storage.sql.exec<{ member_id: string; principal_hash: string }>(
+			'SELECT member_id, principal_hash FROM game_room_members WHERE reconnect_until IS NULL OR reconnect_until >= ?',
+			now,
+		).toArray().map((row) => ({ memberId: row.member_id, principalHash: row.principal_hash }));
+	}
+
+	/**
+	 * Game actions: validated by the game's registered handler, persisted as
+	 * a revision bump WITHOUT the 5s state-frame write budget, broadcast to
+	 * the whole room. Denied actions answer the actor only.
+	 */
+	private async handleGameAction(socket: WebSocket, attachment: Attachment, message: { action: string; payload: Record<string, unknown> }, now: number, room: RoomRow): Promise<void> {
+		const elapsed = now - this.actionTokensAt;
+		const refill = elapsed > 0 ? Math.floor(elapsed / 1000) : 0;
+		if (refill > 0) {
+			this.actionTokens = Math.min(16, this.actionTokens + refill);
+			this.actionTokensAt += refill * 1000;
+		}
+		if (this.actionTokens < 1) {
+			socket.send(JSON.stringify({ v: ROOM_PROTOCOL_VERSION, type: 'action_rejected', error: 'rate_limited', retryAfterMs: 1000 }));
+			return;
+		}
+		this.actionTokens -= 1;
+		const request: GameActionRequest = {
+			gameId: room.game_id,
+			actor: { principalHash: attachment.principalHash, memberId: attachment.memberId, isHost: room.owner_hash === attachment.principalHash },
+			action: message.action,
+			payload: message.payload,
+			currentState: (this.decodeState(room.state_json) ?? {}) as Record<string, unknown>,
+			now,
+			members: this.memberContext(now),
+			hasHost: Boolean(room.owner_hash),
+		};
+		const decision = await authorizeGameAction(request);
+		if (!decision.allowed) {
+			socket.send(JSON.stringify({ v: ROOM_PROTOCOL_VERSION, type: 'action_rejected', error: decision.error ?? 'game_action_rejected' }));
+			return;
+		}
+		const authorized = parseRoomStateMessage(JSON.stringify({ v: ROOM_PROTOCOL_VERSION, type: 'state', baseRevision: room.revision, state: decision.state }));
+		if (!authorized.ok) {
+			socket.send(JSON.stringify({ v: ROOM_PROTOCOL_VERSION, type: 'action_rejected', error: 'game_adapter_invalid_state' }));
+			return;
+		}
+		const updated = this.state.storage.sql.exec<{ revision: number; state_json: string }>(
+			`UPDATE game_room SET revision = revision + 1, state_json = ?
+			 WHERE id = 1 AND revision = ? AND expires_at > ? RETURNING revision, state_json`,
+			authorized.stateJson, room.revision, now,
+		).toArray()[0];
+		if (!updated) {
+			const latest = this.room();
+			socket.send(JSON.stringify({ ...this.snapshot(latest, attachment.principalHash), type: 'conflict' }));
+			return;
+		}
+		if (decision.reply) {
+			// Actor-only: private per-player views (a racer's own minefield)
+			// must never ride the broadcast that every socket receives.
+			socket.send(JSON.stringify({ v: ROOM_PROTOCOL_VERSION, type: 'action_result', action: message.action, revision: updated.revision, reply: decision.reply }));
+		}
+		this.broadcast({
+			v: ROOM_PROTOCOL_VERSION, type: 'action', action: message.action, actor: attachment.memberId,
+			revision: updated.revision, state: redactGameState(room.game_id, (this.decodeState(updated.state_json) ?? {}) as Record<string, unknown>),
+			connectedMembers: this.connectedCount(),
+		});
+	}
+
+	/**
+	 * Leaderboard attestation (`/game/verify_win`): the Worker scores route
+	 * asks this DO whether the caller's principal won a given round. Trusted
+	 * because only Worker code can reach DO fetch; the principal header is
+	 * derived by the gateway route, never by a client.
+	 */
+	private async verifyWin(request: Request, principal: string): Promise<Response> {
+		const room = this.room();
+		const now = Date.now();
+		if (!room || roomIsExpired(room.expires_at, now)) return json({ error: 'room_expired' }, 410);
+		const text = await request.text();
+		if (text.length > 512) return json({ error: 'payload_too_large' }, 413);
+		let body: unknown;
+		try { body = JSON.parse(text || '{}'); } catch { return json({ error: 'invalid_json' }, 400); }
+		const payload = (body && typeof body === 'object' && !Array.isArray(body) ? body : null) as Record<string, unknown> | null;
+		if (!payload) return json({ error: 'invalid_payload' }, 400);
+		const gameId = typeof payload.gameId === 'string' ? payload.gameId : '';
+		const round = payload.round;
+		if (!gameId || !Number.isSafeInteger(round) || Number(round) < 1) return json({ error: 'invalid_payload' }, 400);
+		if (room.game_id !== gameId) return json({ ok: false, error: 'wrong_game' }, 404);
+		const hash = await this.principalHash(principal);
+		const state = (this.decodeState(room.state_json) ?? {}) as Record<string, unknown>;
+		const result = verifyRoundWin(gameId, state, { principalHash: hash, round: Number(round) });
+		if (!result) return json({ ok: false, error: 'unsupported_game' }, 404);
+		if (!result.ok) return json({ ok: false, error: 'not_winner' }, 404);
+		return json({ ok: true, mode: result.mode });
 	}
 
 	async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {

@@ -21,15 +21,19 @@ export const ROOM_MAX_GLOBAL_MESSAGES_PER_SECOND = CHAT_CONFIG.rate.globalPerSec
  * chunks, rosters) must stay under it. Named so both ends share one value.
  */
 export const ROOM_MAX_OUTBOUND_FRAME_BYTES = 4_096;
+/** Game-action frames (plan: multiplayer games) carry a bounded, validated payload. */
+export const ROOM_MAX_ACTION_PAYLOAD_BYTES = 2_048;
 export const ROOM_PROTOCOL_VERSION = 1;
 
 export type RoomStateMessage = { v: 1; type: 'state'; baseRevision: number; state: Record<string, unknown> };
+/** Client→server game action: validated by the game's registered handler, never a raw state proposal. */
+export type RoomActionSend = { v: 1; type: 'action'; action: string; payload: Record<string, unknown> };
 export type RoomLeaveMessage = { v: 1; type: 'leave' };
 export type RoomChatSend = { v: 1; type: 'chat'; text: string };
 export type RoomChatDeleteSend = { v: 1; type: 'chat_delete'; n: number };
 export type RoomKickSend = { v: 1; type: 'kick'; member: string };
 export type RoomMuteSend = { v: 1; type: 'mute'; member: string };
-export type RoomClientMessage = RoomStateMessage | RoomLeaveMessage | RoomChatSend | RoomChatDeleteSend | RoomKickSend | RoomMuteSend;
+export type RoomClientMessage = RoomStateMessage | RoomActionSend | RoomLeaveMessage | RoomChatSend | RoomChatDeleteSend | RoomKickSend | RoomMuteSend;
 
 /** Server→client chat frames. `n` is the per-room monotone sequence and the client's dedupe key; `mine` and `source` are per-socket computed. */
 export type RoomChatFrame = { v: 1; type: 'chat'; n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' | 'admin' };
@@ -38,7 +42,7 @@ export type RoomChatHistoryFrame = { v: 1; type: 'chat_history'; messages: RoomC
 export type RoomChatRejectedFrame = { v: 1; type: 'chat_rejected'; error: string; retryAfterMs?: number };
 export type RoomMemberFrame = { v: 1; type: 'members'; members: Array<{ memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean }> };
 
-export type RoomMessageError = 'too_large' | 'invalid_json' | 'invalid_message' | 'unsupported_version' | 'invalid_state' | 'state_too_large';
+export type RoomMessageError = 'too_large' | 'invalid_json' | 'invalid_message' | 'unsupported_version' | 'invalid_state' | 'state_too_large' | 'action_too_large';
 export type RoomMessageResult =
 	| { ok: true; message: RoomClientMessage; stateJson?: string }
 	| { ok: false; error: RoomMessageError };
@@ -91,6 +95,15 @@ export function parseRoomClientMessage(text: string): RoomMessageResult {
 		return exactKeys(message, ['v', 'type', 'member']) && typeof message.member === 'string' && /^[a-f0-9]{24}$/.test(message.member)
 			? { ok: true, message: { v: ROOM_PROTOCOL_VERSION, type: message.type, member: message.member } }
 			: { ok: false, error: 'invalid_message' };
+	}
+	if (message.type === 'action') {
+		if (!exactKeys(message, ['v', 'type', 'action', 'payload']) || typeof message.action !== 'string' || !/^[a-z][a-z0-9_]{0,31}$/.test(message.action)) return { ok: false, error: 'invalid_message' };
+		const payload = message.payload;
+		if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !validJson(payload)) return { ok: false, error: 'invalid_message' };
+		let payloadJson: string;
+		try { payloadJson = JSON.stringify(payload); } catch { return { ok: false, error: 'invalid_message' }; }
+		if (new TextEncoder().encode(payloadJson).byteLength > ROOM_MAX_ACTION_PAYLOAD_BYTES) return { ok: false, error: 'action_too_large' };
+		return { ok: true, message: { v: ROOM_PROTOCOL_VERSION, type: 'action', action: message.action, payload: payload as Record<string, unknown> } };
 	}
 	if (message.type !== 'state' || !exactKeys(message, ['v', 'type', 'baseRevision', 'state']) ||
 		!Number.isSafeInteger(message.baseRevision) || Number(message.baseRevision) < 0) return { ok: false, error: 'invalid_message' };

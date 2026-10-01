@@ -8,7 +8,7 @@
  * in sync when registering a new adapter; the adapter tests fail loudly if a
  * game reaches production without both halves.
  */
-export const REGISTERED_ADAPTER_GAMES: readonly string[] = ['bnji.chess'];
+export const REGISTERED_ADAPTER_GAMES: readonly string[] = ['bnji.chess', 'bnji.pvp-minesweeper'];
 
 export function hasRegisteredAdapter(gameId: string | undefined): boolean {
 	return typeof gameId === 'string' && REGISTERED_ADAPTER_GAMES.includes(gameId);
