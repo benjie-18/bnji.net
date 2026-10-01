@@ -428,16 +428,33 @@ npx wrangler d1 create bnji-board-preview                # paste id into preview
 npx wrangler d1 migrations apply bnji-board-preview --remote
 ```
 
-**The `SESSION` gotcha (error 10021).** Preview deployments also merge an
-account-side *Preview base configuration* that is edited in the dashboard, not
-in this repo. A stray `SESSION` KV binding existed there with no namespace
-selected, so every preview deploy failed with `binding SESSION of type
-kv_namespace must have a namespace_id specified [code: 10021]`. **Nothing in
-this codebase reads `env.SESSION`** (sessions live in D1 and cookies —
-§5.3/§6a). If that error ever reappears: remove the offending binding in the
-dashboard under **Workers → bnjibot → Previews → Base configuration** (the
-CLI manages base-config *secrets* only), or bypass the base config entirely
-with `npx wrangler preview --ignore-base-config`.
+**The `SESSION` gotcha (error 10021).** Whenever Astro sessions are enabled,
+`@astrojs/cloudflare` appends a `SESSION` KV binding *with no id* to the
+generated `dist/server/wrangler.json` — both at the top level and inside
+`previews` (see `cloudflareConfigCustomizer` in the adapter: it adds one
+whenever `needsSessionKVBinding` is true). A normal `wrangler deploy` happily
+auto-provisions the namespace, but a Preview does not, so every preview deploy
+failed with `binding SESSION of type kv_namespace must have a namespace_id
+specified [code: 10021]`.
+
+**Nothing in this codebase reads `Astro.session` or `env.SESSION`** (sessions
+live in D1 and cookies — §5.3/§6a), so sessions are turned off in
+`astro.config.mjs` with a top-level `session: false`. Position matters: the
+adapter reads `config.session`, so the same key nested inside `cloudflare({…})`
+would be silently ignored. The check is a build and a grep:
+
+```bash
+npm run build
+grep SESSION dist/server/wrangler.json   # must print nothing
+```
+
+The generated config should keep only `BOARD_KV` and `BOARD_DB`, with the
+`previews` block still pointing at the preview-only resources above. If
+`SESSION` ever reappears *despite* `session: false`, the account-side
+*Preview base configuration* (edited in the dashboard, not in this repo) has
+its own stray binding: remove it under **Workers → bnjibot → Previews → Base
+configuration** (the CLI manages base-config *secrets* only), or bypass the
+base config entirely with `npx wrangler preview --ignore-base-config`.
 
 **Config files status (chat plan).** `src/config/chat.config.ts` is
 implemented (Phases B + C: chat caps, message length, per-member budget,
