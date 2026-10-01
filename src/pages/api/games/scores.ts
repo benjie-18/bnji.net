@@ -8,6 +8,8 @@ import { appendPlayerCookies, PlayerContextStorageError, resolvePlayerContext, t
 import { insertValidatedScore, type D1Database } from '../../../server/game-store';
 import { getScoreVerifier } from '../../../server/score-verifiers';
 import { serverEnvironment } from '../../../server/env';
+// Side effect: registers the `bnji.chess` score verifier in this isolate.
+import '../../../server/game-adapters/chess';
 
 export const prerender = false;
 const RATE_WINDOW_MS = 60_000;

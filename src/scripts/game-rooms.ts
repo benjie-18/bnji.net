@@ -22,6 +22,8 @@ export type RoomNotice = {
 	source?: 'host' | 'self' | 'admin';
 	messages?: RoomChatNoticeFrame[];
 	members?: Array<{ memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean }>;
+	/** Game state payload on snapshot/conflict/state frames; shape is per-game. */
+	state?: unknown;
 };
 export async function createGameRoom(gameId: string): Promise<{ roomCode: string; expiresAt: number; capacity: number }> {
 	const response = await fetch('/api/games/rooms', {

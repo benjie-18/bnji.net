@@ -521,7 +521,8 @@ test('games catalog and navigation have a real empty state and preserve Lab owne
 	assert.match(footer, /aria-label="Site"/);
 	assert.doesNotMatch(page, /components\/lab\//);
 	assert.equal(new Set(GAMES.map((game) => game.id)).size, GAMES.length);
-	assert.equal(new Set(GAMES.flatMap((game) => game.modes ?? [])).size, 1);
+	// Catalog mode vocabulary: Lab experiments share `default`; chess scores `fastest-mate`.
+	assert.deepEqual([...new Set(GAMES.flatMap((game) => game.modes ?? []))].sort(), ['default', 'fastest-mate']);
 });
 
 test('catalog construction rejects duplicate, malformed, and misleading entries instead of silently overwriting IDs', () => {

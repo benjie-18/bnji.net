@@ -86,11 +86,11 @@ export function stubFor(code: string) {
 	return namespace.get(namespace.idFromName(code));
 }
 
-export async function createRoom(code: string, principal: string, now = Date.now()): Promise<{ status: number; body: Record<string, unknown> }> {
+export async function createRoom(code: string, principal: string, now = Date.now(), gameId = GAME): Promise<{ status: number; body: Record<string, unknown> }> {
 	const response = await stubFor(code).fetch(new Request('https://room.test/create', {
 		method: 'POST',
 		headers: HEADERS(principal, { 'content-type': 'application/json' }),
-		body: JSON.stringify({ gameId: GAME, now }),
+		body: JSON.stringify({ gameId, now }),
 	}));
 	// Drain the body: an unread stream keeps an active reference on the
 	// instance, which a later evictDurableObject() refuses to break.

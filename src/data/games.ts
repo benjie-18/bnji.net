@@ -107,6 +107,15 @@ export const GAMES = defineGameCatalog([
 		capabilities: ['keyboard', 'touch', 'pointer', 'canvas-2d'],
 		modes: ['default'],
 	},
+	{
+		id: 'bnji.chess',
+		title: 'Chess',
+		description: 'Play a full game in a private room with server-validated moves, or practise both sides locally. Fastest checkmate claims the leaderboard.',
+		status: 'available',
+		href: '/games/chess/',
+		capabilities: ['keyboard', 'pointer'],
+		modes: ['fastest-mate'],
+	},
 ] as const);
 
 const GAME_BY_ID = new Map<string, Game>(GAMES.map((game) => [game.id, game]));

@@ -1,11 +1,18 @@
 import { connectGameRoom, createGameRoom, type RoomNotice } from './game-rooms';
 import { NAMES_CONFIG } from '../config/names.config';
 import { CHAT_CONFIG } from '../config/chat.config';
+import { hasRegisteredAdapter } from '../data/game-adapters';
+
+/** Optional bridge so a game page can observe/send on the SAME room socket. */
+export type RoomObserver = {
+	onFrame?: (message: RoomNotice) => void;
+	onSocket?: (socket: WebSocket | null) => void;
+};
 
 type ChatFrame = { n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' | 'admin' };
 type MemberFrame = { memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean };
 
-export function mountGameRooms(root: HTMLElement): void {
+export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): void {
 	const live = root.querySelector<HTMLElement>('[data-room-live]');
 	const codePanel = root.querySelector<HTMLElement>('[data-room-code-panel]');
 	const codeOutput = root.querySelector<HTMLOutputElement>('[data-room-code]');
@@ -237,9 +244,10 @@ export function mountGameRooms(root: HTMLElement): void {
 		if (roster) roster.hidden = true;
 		chatSay('Connecting to the room chat…');
 		activeSocket = connectGameRoom(code, (message: RoomNotice) => {
+			observer.onFrame?.(message);
 			if (message.type === 'snapshot') {
 				isHost = Boolean(message.isHost);
-				say(`Connected to ${message.gameId ?? 'room'} · version ${message.revision ?? 0} · ${message.connectedMembers ?? 1} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'} No game adapter is registered, so game-state updates are disabled.`);
+				say(`Connected to ${message.gameId ?? 'room'} · version ${message.revision ?? 0} · ${message.connectedMembers ?? 1} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'} ${hasRegisteredAdapter(message.gameId) ? 'Game rules are validated on the server.' : 'No game adapter is registered, so game-state updates are disabled.'}`);
 				chatSay(CHAT_CONFIG.enabled ? 'Connected to chat. Messages are stored only while this room exists.' : 'Chat is turned off right now.');
 			}
 			else if (message.type === 'presence') {
@@ -250,6 +258,7 @@ export function mountGameRooms(root: HTMLElement): void {
 			else if (message.type === 'state_rejected') say(message.error === 'game_adapter_unavailable' ? 'No game adapter is registered; state changes are refused.' : 'The game authority rejected that state change.');
 			else handleChatNotice(message);
 		}, (state) => {
+			observer.onSocket?.(state === 'connected' ? activeSocket : null);
 			if (state === 'connecting') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); say('Connecting to room…'); }
 			else if (state === 'connected') { if (leaveButton) leaveButton.disabled = false; setChatEnabled(CHAT_CONFIG.enabled); }
 			else if (state === 'closed') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection closed. Re-enter the code to reconnect while the room is active.'); say('Room connection closed. Re-enter the code to reconnect while the room is active.'); }

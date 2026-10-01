@@ -9,6 +9,8 @@ import {
 	type RoomChatFrame, type RoomChatDeleteFrame, type RoomMemberFrame,
 } from './game-room-protocol';
 import { authorizeRoomStateTransition } from './room-authority';
+// Side effect: registers the `bnji.chess` room authority inside this isolate.
+import './game-adapters/chess';
 
 interface RoomEnv { ACCESS_SECRET?: string }
 type Principal = { key: string; hash: string };
