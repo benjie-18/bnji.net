@@ -139,6 +139,9 @@ test('account creation sends the display name typed before the submit handler di
 });
 
 test('Bubble Pop cancels its animation frame while the tab is hidden and resumes when visible', async ({ page, context }) => {
+	// Three page loads, a capability probe and resume polls under a loaded
+	// parallel run do not fit the default 30s budget.
+	test.setTimeout(60_000);
 	await page.addInitScript(() => {
 		const canvasGetContext = HTMLCanvasElement.prototype.getContext;
 		HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
@@ -182,7 +185,9 @@ test('Bubble Pop cancels its animation frame while the tab is hidden and resumes
 	expect(await page.evaluate(() => (window as Window & { __bubblePopDraws?: number }).__bubblePopDraws ?? 0)).toBe(stoppedAt);
 
 	await page.bringToFront();
-	await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
-	await expect.poll(() => page.evaluate(() => (window as Window & { __bubblePopDraws?: number }).__bubblePopDraws ?? 0)).toBeGreaterThan(stoppedAt);
+	// Resume-side polls get an explicit budget: under a loaded parallel run the
+	// default 5s expect timeout is not enough for visibility + rAF to settle.
+	await expect.poll(() => page.evaluate(() => document.visibilityState), { timeout: 10_000 }).toBe('visible');
+	await expect.poll(() => page.evaluate(() => (window as Window & { __bubblePopDraws?: number }).__bubblePopDraws ?? 0), { timeout: 10_000 }).toBeGreaterThan(stoppedAt);
 	await background.close();
 });
