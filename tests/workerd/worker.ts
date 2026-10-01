@@ -9,3 +9,4 @@
  */
 export { GameRoom } from '../../src/server/game-room-do';
 export { DMConversation } from '../../src/server/dm-conversation-do';
+export { Presence } from '../../src/server/presence-do';

@@ -3,17 +3,17 @@
 This is the owner-facing runbook. It answers one question: *after I pull, what
 do I have to do?*
 
-The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. The chat plan's Phase A adds one more additive migration, `0013_names.sql` (guest display names + account handles) — again no new binding, secret, or paid resource. Phase B (room chat) adds **no migration and no binding**: its tables live inside the existing `GameRoom` DO's own SQLite and are created by the DO's init code. Phase C (moderation tooling) adds one additive migration, `0014_chat_moderation.sql` (five D1 tables: room registry, reports, reporters, moderation log, bans) and **no new binding or secret**: the DO's service-authenticated admin endpoints derive their token from the existing `ACCESS_SECRET` (same value as admin sessions), which `wrangler.json` already passes to the `GameRoom` class as a top-level secret. Phase D (live private messaging) adds one additive migration, `0015_dm.sql` (five D1 tables: `dm_conversations`, `dm_messages`, `dm_attachments`, `dm_reports`, `dm_reporters`) and **one new SQLite Durable Object class, `DMConversation`**, under Wrangler migration tag `dm-conversations-v1` with the `DM_CONVERSATIONS` binding — still no new secret, no new database, no R2 bucket and no paid resource (images ship as D1 base64 per the owner's answer on plan D6). For the full current Games rollout checklist, quotas, local
+The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. The chat plan's Phase A adds one more additive migration, `0013_names.sql` (guest display names + account handles) — again no new binding, secret, or paid resource. Phase B (room chat) adds **no migration and no binding**: its tables live inside the existing `GameRoom` DO's own SQLite and are created by the DO's init code. Phase C (moderation tooling) adds one additive migration, `0014_chat_moderation.sql` (five D1 tables: room registry, reports, reporters, moderation log, bans) and **no new binding or secret**: the DO's service-authenticated admin endpoints derive their token from the existing `ACCESS_SECRET` (same value as admin sessions), which `wrangler.json` already passes to the `GameRoom` class as a top-level secret. Phase D (live private messaging) adds one additive migration, `0015_dm.sql` (five D1 tables: `dm_conversations`, `dm_messages`, `dm_attachments`, `dm_reports`, `dm_reporters`) and **one new SQLite Durable Object class, `DMConversation`**, under Wrangler migration tag `dm-conversations-v1` with the `DM_CONVERSATIONS` binding — still no new secret, no new database, no R2 bucket and no paid resource (images ship as D1 base64 per the owner's answer on plan D6). Phase E (friends, presence, notifications) adds one additive migration, `0016_friends.sql` (two D1 tables: `player_friends`, `player_blocks`) and **one new SQLite Durable Object class, `Presence`**, under Wrangler migration tag `presence-v1` with the `PRESENCE` binding — the DO holds sockets and attachments only, writes nothing durable, and never touches KV. For the full current Games rollout checklist, quotas, local
 Worker testing, and rollback notes, see [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md).
 The migration command is safe to re-run; D1 applies only what is missing.
 
 > **Upcoming — friends and presence (chat plan Phase E).**
 > Phases A–D of [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) have landed with
 > their own rows below (names/handles `0013`, moderation `0014`, DM tables
-> `0015`, and the `GameRoom` + `DMConversation` SQLite classes). Still to come:
-> D1 migrations (friends/blocks), the `Presence` Durable Object class, worker
-> config-file changes, and possibly an R2 bucket for DM images if the owner
-> ever provisions one (plan D6 stays D1 base64 until then).
+> `0015`, friends/blocks `0016`, and the `GameRoom`, `DMConversation` +
+> `Presence` SQLite classes). Still to come: nothing on the chat plan's
+> critical path — possibly an R2 bucket for DM images if the owner ever
+> provisions one (plan D6 stays D1 base64 until then).
 > Under [`DEPENDENCY-POLICY.md`](./DEPENDENCY-POLICY.md) §6 each of those is a
 > **separate owner decision** with its own rollout row here before it ships.
 > Nothing in this section is provisioned today, and no action is required until
@@ -27,10 +27,10 @@ The migration command is safe to re-run; D1 applies only what is missing.
 
 | Area | Change | Owner action |
 | --- | --- | --- |
-| D1 | Additive migrations `0011_games.sql` (sessions/scores), `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves), `0013_names.sql` (guest display names, account handles) and `0014_chat_moderation.sql` (Phase C: room registry, reports, reporters, moderation log, bans) and `0015_dm.sql` (Phase D: `dm_conversations`, `dm_messages`, `dm_attachments`, `dm_reports`, `dm_reporters`) | Apply only pending migrations to existing `bnji-board` after backup |
-| Worker / Durable Objects | Astro HTTP handler, hourly retention Cron, SQLite class `GameRoom` (migration `game-rooms-v1`) and SQLite class `DMConversation` (migration `dm-conversations-v1`, binding `DM_CONVERSATIONS`) | Deploy `src/worker.ts`; Wrangler applies the new class migration; confirm trigger and both bindings |
+| D1 | Additive migrations `0011_games.sql` (sessions/scores), `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves), `0013_names.sql` (guest display names, account handles) and `0014_chat_moderation.sql` (Phase C: room registry, reports, reporters, moderation log, bans) and `0015_dm.sql` (Phase D: `dm_conversations`, `dm_messages`, `dm_attachments`, `dm_reports`, `dm_reporters`) and `0016_friends.sql` (Phase E: `player_friends`, `player_blocks`) | Apply only pending migrations to existing `bnji-board` after backup |
+| Worker / Durable Objects | Astro HTTP handler, hourly retention Cron, SQLite class `GameRoom` (migration `game-rooms-v1`) and SQLite class `DMConversation` (migration `dm-conversations-v1`, binding `DM_CONVERSATIONS`) and SQLite class `Presence` (migration `presence-v1`, binding `PRESENCE`) | Deploy `src/worker.ts`; Wrangler applies the new class migrations; confirm trigger and all three bindings |
 | Admin | Games & play view and configurable raw tracking retention | No new credential; existing `/admin` guard applies |
-| Secrets/resources | No new secret, paid product, or third-party service; Phase D adds only the free `DM_CONVERSATIONS` DO binding (no R2) | None |
+| Secrets/resources | No new secret, paid product, or third-party service; Phases D+E add only the free `DM_CONVERSATIONS` and `PRESENCE` DO bindings (no R2) | None |
 
 The full current checklist—including local Worker/Durable Object verification, Free quotas, privacy, score-verifier setup and rollback—is in
 [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md). The rest of this document
@@ -56,7 +56,7 @@ migrations have run in its own `d1_migrations` table, so this command applies
 npx wrangler d1 migrations apply bnji-board --remote
 ```
 
-The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql`, `0012_game_players_saves.sql`, `0013_names.sql`, `0014_chat_moderation.sql` and `0015_dm.sql` (unless earlier ones were applied already). Review the list before continuing. If legacy migrations also
+The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql`, `0012_game_players_saves.sql`, `0013_names.sql`, `0014_chat_moderation.sql`, `0015_dm.sql` and `0016_friends.sql` (unless earlier ones were applied already). Review the list before continuing. If legacy migrations also
 appear, confirm that is expected for the target database; migration `0001`
 should not be assumed harmless merely because it uses `CREATE TABLE IF NOT
 EXISTS`—review the database state and backup first.

@@ -14,6 +14,10 @@
 			{
 				"name": "DM_CONVERSATIONS",
 				"class_name": "DMConversation"
+			},
+			{
+				"name": "PRESENCE",
+				"class_name": "Presence"
 			}
 		]
 	},
@@ -28,6 +32,12 @@
 			"tag": "dm-conversations-v1",
 			"new_sqlite_classes": [
 				"DMConversation"
+			]
+		},
+		{
+			"tag": "presence-v1",
+			"new_sqlite_classes": [
+				"Presence"
 			]
 		}
 	],
