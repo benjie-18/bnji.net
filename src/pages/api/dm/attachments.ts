@@ -16,7 +16,7 @@ import { DM_CONFIG } from '../../../config/dm.config';
 import { validateImageUpload } from '../../../server/image-sniff';
 import { readBodyTextBounded } from '../../../server/read-body';
 import {
-	requireDmAccount, requireDmEnabled, requireDmImagesEnabled, requireDmNotBanned, requireDmRate, resolveDmContext, resolveDmConversation,
+	requireDmAccount, requireDmEnabled, requireDmFriendship, requireDmImagesEnabled, requireDmNotBanned, requireDmRate, resolveDmContext, resolveDmConversation,
 } from '../../../server/dm-routes';
 import { createAttachment } from '../../../server/dm-store';
 
@@ -49,6 +49,12 @@ export async function POST(context: APIContext): Promise<Response> {
 
 	const outcome = await resolveDmConversation(resolved.db, resolved.player, { conversation: payload.conversation });
 	if (!outcome.ok) return resolved.finish({ error: outcome.error }, outcome.status);
+
+	const gatePartnerId = outcome.side === 'lo' ? outcome.conv.memberHi : outcome.conv.memberLo;
+	{
+		const gate = await requireDmFriendship(resolved, gatePartnerId);
+		if (gate) return gate;
+	}
 
 	const validated = validateImageUpload(payload.data);
 	if (!validated.ok) {

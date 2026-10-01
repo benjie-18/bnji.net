@@ -2,6 +2,7 @@
 import type { APIContext } from 'astro';
 import { exportFiledReports, exportReportsOnAccount, getChatBan } from '../../../server/chat-moderation';
 import { exportDmData } from '../../../server/dm-store';
+import { exportFriendData } from '../../../server/friend-store';
 import { exportDmReportsFiled, exportDmReportsOnAccount } from '../../../server/dm-reports';
 import { clientIp } from '../../../server/security-helpers';
 import { readBodyTextBounded } from '../../../server/read-body';
@@ -261,7 +262,7 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 	if (!player.playerId) return responseWithContext({ error: 'authentication_required' }, 401, player);
 	try {
 		const principalHash = await sha256Hex(`player:${player.playerId}`);
-		const [identity, saves, scores, reportsOnMe, reportsFiled, ban, dms, dmReportsOnMe, dmReportsFiled] = await Promise.all([
+		const [identity, saves, scores, reportsOnMe, reportsFiled, ban, dms, dmReportsOnMe, dmReportsFiled, friendships] = await Promise.all([
 			db.prepare('SELECT display_name, handle, created_at FROM game_players WHERE id = ?1 LIMIT 1').bind(player.playerId)
 				.first<{ display_name: string; handle: string | null; created_at: number }>(),
 			readPlayerSaves(db, player.playerId),
@@ -275,6 +276,7 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 			exportDmData(db, player.playerId),
 			exportDmReportsOnAccount(db, principalHash),
 			exportDmReportsFiled(db, principalHash),
+			exportFriendData(db, player.playerId),
 		]);
 		if (!identity) return responseWithContext({ error: 'authentication_required' }, 401, player);
 		const data = {
@@ -312,6 +314,15 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 				attachmentBytesOmitted: dms.attachmentBytesOmitted,
 				reportsOnYourMessages: dmReportsOnMe,
 				reportsYouFiled: dmReportsFiled,
+			},
+			// Phase E (plan §9.5): friendships/blocks are account-linked rows,
+			// private to this account (§8.1) — exported with handle labels only.
+			friends: {
+				included: true,
+				friends: friendships.friends,
+				incoming: friendships.incoming,
+				outgoing: friendships.outgoing,
+				blocked: friendships.blocked,
 			},
 			saves: saves.map((row) => ({ gameId: row.game_id, slotId: row.slot_id, schemaVersion: Number(row.schema_version), revision: Number(row.revision), data: JSON.parse(row.data_json), updatedAt: Number(row.updated_at) })),
 			scores: scores.results.map((row) => ({ gameId: row.game_id, mode: row.mode_id, score: Number(row.score), tieBreak: row.tie_break === null ? null : Number(row.tie_break), achievedAt: Number(row.achieved_at), displayName: row.display_name, status: row.validation_state })),

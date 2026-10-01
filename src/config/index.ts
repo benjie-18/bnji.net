@@ -30,4 +30,5 @@ export { DM_INTEGRATION, type DmIntegrationConfig } from './integrations.config'
 export { BOARD_CONFIG, type BoardConfig } from './board.config';
 export { NAMES_CONFIG, type NamesConfig } from './names.config';
 export { CHAT_CONFIG, type ChatConfig } from './chat.config';
+export { FRIENDS_CONFIG } from './friends.config';
 export { ACCESS_RULES, THEME_CONFIG, INTRO_CONFIG, type RouteAccessRule } from './access.config';

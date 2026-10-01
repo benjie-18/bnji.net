@@ -71,6 +71,8 @@ const ERROR_COPY: Record<string, string> = {
 	storage_unavailable: 'The server is unavailable right now.',
 	storage_unconfigured: 'The server is unavailable right now.',
 	dm_service_unavailable: 'Live messaging is unavailable — refresh in a moment.',
+	not_friends: 'You can only message friends — send a friend request from the Friends page first.',
+	blocked: 'You cannot message this account.',
 };
 
 function copyFor(error: unknown): string {

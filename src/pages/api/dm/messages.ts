@@ -25,7 +25,7 @@ import {
 } from '../../../server/dm-store';
 import {
 	isValidConversationId, resolveDmContext, requireDmAccount, requireDmEnabled, requireDmImagesEnabled,
-	requireDmNotBanned, requireDmRate, resolveDmConversation,
+	requireDmFriendship, requireDmNotBanned, requireDmRate, resolveDmConversation,
 } from '../../../server/dm-routes';
 import { readBodyTextBounded } from '../../../server/read-body';
 
@@ -114,6 +114,12 @@ export async function POST(context: APIContext): Promise<Response> {
 
 	const outcome = await resolveDmConversation(resolved.db, resolved.player, payload);
 	if (!outcome.ok) return resolved.finish({ error: outcome.error }, outcome.status);
+
+	const gatePartnerId = outcome.side === 'lo' ? outcome.conv.memberHi : outcome.conv.memberLo;
+	{
+		const gate = await requireDmFriendship(resolved, gatePartnerId);
+		if (gate) return gate;
+	}
 
 	let message;
 	try {

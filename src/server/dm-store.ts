@@ -132,6 +132,23 @@ export async function ensureConversation(db: D1Database, a: string, b: string, n
  * unread = messages past my watermark from them that are not hidden for me,
  * and a last-message preview (body trimmed to 140 code points).
  */
+/**
+ * Phase E §8.3: one number for the in-app badge — total unread across my
+ * conversations, same definition as listConversations' per-row `unread`
+ * (past my watermark, from them, not hidden for me).
+ */
+export async function countUnreadDmMessages(db: D1Database, playerId: string): Promise<number> {
+	const row = await db.prepare(
+		`SELECT COUNT(*) AS n FROM dm_messages um
+		 JOIN dm_conversations c ON c.id = um.conv_id
+		 WHERE (c.member_lo = ?1 OR c.member_hi = ?1)
+		   AND um.n > CASE WHEN c.member_lo = ?1 THEN c.read_seq_lo ELSE c.read_seq_hi END
+		   AND um.sender <> ?1
+		   AND (um.hidden_for & CASE WHEN c.member_lo = ?1 THEN 1 ELSE 2 END) = 0`,
+	).bind(playerId).first<{ n: number }>();
+	return Number(row?.n ?? 0);
+}
+
 export async function listConversations(db: D1Database, playerId: string, limit = 50): Promise<ConversationListItem[]> {
 	const capped = Math.min(100, Math.max(1, limit));
 	const mySideSql = `CASE WHEN c.member_lo = ?1 THEN 'lo' ELSE 'hi' END`;

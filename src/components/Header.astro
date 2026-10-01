@@ -118,6 +118,12 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 		     triggers, so the markup here is just the button. The theme toggle
 		     that used to live here moved INTO the overlay (settings store). -->
 		<div class="nav-tools">
+			<!-- Phase E (chat plan §8.3): in-app notification badge — unread DMs +
+			     pending friend requests, polled by scripts/notifications-ui.ts.
+			     Hidden until the API reports a real count: no unwired claims. -->
+			<a class="nav-badge" href="/friends/" data-notif-badge hidden aria-label="Notifications">
+				<span class="nav-badge__count" data-notif-count>0</span>
+			</a>
 			<button
 				class="settings-gear"
 				type="button"
@@ -224,6 +230,27 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 	/* The gear wears exactly the language the theme toggle used to: a 34px
 	   glass-rimmed round button (tokens, so both themes), lift on hover,
 	   accent outline on keyboard focus. */
+	/* Phase E §8.3: header notification badge (messages + friend requests). */
+	.nav-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-inline-size: 20px;
+		block-size: 20px;
+		padding-inline: 5px;
+		border: 1px solid var(--glass-border-strong);
+		border-radius: 999px;
+		background: var(--glass-bg-raised);
+		color: var(--text-strong, #fff);
+		font-size: 0.62rem;
+		font-weight: 700;
+		line-height: 1;
+		text-decoration: none;
+	}
+	.nav-badge[hidden] { display: none; }
+	.nav-badge:hover,
+	.nav-badge:focus-visible { border-color: var(--glass-border); color: var(--text-strong, #fff); }
+
 	.settings-gear {
 		display: inline-flex;
 		align-items: center;

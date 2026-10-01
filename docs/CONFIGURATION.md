@@ -101,7 +101,7 @@ irrelevant here.
 | `BOARD_CONFIG.provider` | PUBLIC | `src/config/board.config.ts` | `'d1' \| 'rest'` preference. **No in-memory production fallback**: an unconfigured store returns an honest `503 storage_unconfigured` instead of silently losing messages. |
 | `maxTextLength: 250` | PUBLIC | same | Enforced server-side in `/api/board` with **422 `text_too_long`** — long posts are rejected, never truncated. |
 | other limits (`maxImageBytes`, `allowedImageTypes`, `postCooldownSeconds`, `hourlyPostLimit`, `pollIntervalMs`, visible-count range) | PUBLIC | same | Abuse/size policy; the server re-validates everything. |
-| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | The existing `bnji-board` database ID and binding are already configured; do not create/replace it for Games. Owner-operated deployments should review pending migrations and apply them with `npx wrangler d1 migrations apply bnji-board --remote`. Local development uses `--local`. Schema: the thirteen files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
+| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | The existing `bnji-board` database ID and binding are already configured; do not create/replace it for Games. Owner-operated deployments should review pending migrations and apply them with `npx wrangler d1 migrations apply bnji-board --remote`. Local development uses `--local`. Schema: the sixteen files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
 | `BOARD_KV` KV binding | **INFRA** | `wrangler.json` | Shared rate limiting (see below). `npx wrangler kv namespace create BOARD_KV`, paste the id (same placeholder rule). |
 | `BOARD_REST_URL`, `BOARD_REST_TOKEN` | **SECRET** | Worker env | Optional external JSON API provider (`provider: 'rest'`). |
 
@@ -115,7 +115,7 @@ exact but adds deployment infra for no practical gain here. If KV is missing
 entirely, rate limiting **fails open** with a console warning — it is an abuse
 throttle, not authentication.
 
-### 5.1 D1 schema — thirteen migrations, one database
+### 5.1 D1 schema — sixteen migrations, one database
 
 There is **one** D1 database (`bnji-board`, bound twice: see the note below). The
 migrations are cumulative and tracked by D1 in its own `d1_migrations` table, so
@@ -138,6 +138,8 @@ and is the normal way to move an existing database forward.
 | 0012 | `game_players_saves.sql` | Optional player identities, digested sessions, hashed-IP auth-attempt buckets, and bounded revisioned saves. |
 | 0013 | `names.sql` | Chat plan Phase A: `guest_profiles` (display name keyed by SHA-256 of the session id, fixed 30-day sweep) plus nullable unique `handle` / `handle_changed_at` columns on `game_players`. Additive; existing rows untouched, multiple NULL handles allowed. |
 | 0014 | `chat_moderation.sql` | Chat plan Phase C: `room_registry` (code/game/owner-hash/expiry — the owner-approved §6.1 trade), `chat_reports` (UNIQUE `(room_code, message_n)`, snapshot + status + note), `chat_reporters` (distinct-reporter PK), `chat_moderation_log` (admin audit), `chat_bans` (principal hash + reason + expiry). All additive; swept by the hourly retention Cron (budget 14 → 19 DELETE statements). |
+| 0015 | `dm.sql` | Chat plan Phase D: `dm_conversations`, `dm_messages`, `dm_attachments` (D1 base64 image bytes, the owner-approved plan D6 path), `dm_reports`, `dm_reporters`. 60-day message retention swept by the hourly Cron (budget → 19 DELETE statements). Additive. |
+| 0016 | `friends.sql` | Chat plan Phase E: `player_friends` (canonical pair `player_a < player_b`, state pending/accepted/declined, `requested_by` for mutual auto-accept) + `player_blocks`. Additive; rows cascade with account deletion (§9.5). |
 
 ⚠️ 0004 uses `ALTER TABLE … ADD COLUMN`, so it must run after 0001. The filename
 order D1 applies them in guarantees this — do not run the files by hand or
@@ -348,6 +350,34 @@ migration `dm-conversations-v1`) is infrastructure, documented in
 | `images.maxDecodedBytes` | same | 1,400,000 bytes decoded — the board's documented D1 base64 ceiling under D1's 2 MB row limit (plan D6; R2 stays unprovisioned per the owner's answer). Checked before AND after decode. |
 | `images.maxEdge` | same | 1,600 px — the bound the CLIENT normalises to through `<canvas>` before upload (also strips EXIF/GPS, plan §7.4 step 1). |
 | `images.allowedTypes` | same | `image/png`, `image/jpeg`, `image/webp` after server-side magic-byte sniffing. **No SVG** (script vector) and never the client's declared MIME. |
+
+## 8d. Friends, presence & notifications — PUBLIC (chat plan Phase E)
+
+`src/config/friends.config.ts` (`FRIENDS_CONFIG`, re-exported from
+`src/config/index.ts`) holds the whole Phase E policy: the §14 rollback
+switch for the feature, the §8.1 caps, and the D1 rate budgets that back
+friend requests, decisions and presence connects (never KV — plan §11). The
+`Presence` class binding (`PRESENCE`, Wrangler migration `presence-v1`) is
+infrastructure, documented in [`DEPLOY.md`](./DEPLOY.md); the DO stores
+nothing durable, so it has no config of its own. The in-app badge on every
+page polls `GET /api/notifications` at `notificationsPollMs` — counts only,
+in-app only (push/email are deferred by plan §8.3).
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `enabled` | `src/config/friends.config.ts` | Master switch, default `true`. `false` = every `/api/friends`, `/api/presence` and badge poll answers `friends_disabled`, and **the DM friendship gate releases** (`/api/dm/*` returns to Phase D's open behaviour) — plan §14's rollback for E without touching room chat or DM itself. |
+| `maxFriends` | same | 500 accepted friends (plan §8.1). Over → `409 friends_limit` at request time. |
+| `maxPendingOutgoing` | same | 100 unanswered outgoing requests (§8.1). Over → `409 pending_limit`. |
+| `requestsPerMinute` | same | 20 friend-request POSTs/min per account, D1 counter prefix `bnji-friend-request:` (never KV). Breach → `429 rate_limited` + `retry-after`. |
+| `decisionsPerMinute` | same | 60 accept/decline/block/remove/unblock/min per account, prefix `bnji-friend-decision:`. |
+| `presenceConnectsPerMinute` | same | 30 presence socket connects/min per account, prefix `bnji-presence-ws:`. Breach → `429 rate_limited`. |
+| `notificationsPollMs` | same | 60,000 ms — the header badge's poll interval while a page is visible (§8.3). Client-side only; the server never pushes badge counts. |
+
+The DM routes read `FRIENDS_CONFIG.enabled` too: with it on, `POST
+/api/dm/conversations`, `POST /api/dm/messages` and `POST
+/api/dm/attachments` answer `403 not_friends` (or `403 blocked`) unless the
+pair are accepted friends and unblocked — owner answer D7, enforced from
+Phase E. Reads, media and the conversation socket stay membership-gated.
 
 ## 9. Deployment — INFRA (change deliberately, never silently)
 

@@ -13,7 +13,7 @@
 import type { APIContext } from 'astro';
 import { DM_CONFIG } from '../../../config/dm.config';
 import {
-	requireDmAccount, requireDmEnabled, requireDmNotBanned, requireDmRate, resolveDmContext, resolveDmConversation,
+	requireDmAccount, requireDmEnabled, requireDmFriendship, requireDmNotBanned, requireDmRate, resolveDmContext, resolveDmConversation,
 } from '../../../server/dm-routes';
 import { listConversations } from '../../../server/dm-store';
 import { readBodyTextBounded } from '../../../server/read-body';
@@ -57,6 +57,13 @@ export async function POST(context: APIContext): Promise<Response> {
 
 	const outcome = await resolveDmConversation(resolved.db, resolved.player, payload);
 	if (!outcome.ok) return resolved.finish({ error: outcome.error }, outcome.status);
+
+	const gatePartnerId = outcome.side === 'lo' ? outcome.conv.memberHi : outcome.conv.memberLo;
+	{
+		const gate = await requireDmFriendship(resolved, gatePartnerId);
+		if (gate) return gate;
+	}
+
 	if (!outcome.conv.lastMessageAt) {
 		// Resolved-by-handle with no row yet: return the derived identity so the
 		// composer can open, but keep the actual INSERT for the first message

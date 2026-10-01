@@ -103,6 +103,16 @@ function playerIdByName(db: { raw: ReturnType<typeof createTestD1>['raw'] }, dis
 	return row!.id;
 }
 
+/** Phase E (plan D7 answer): open/send by handle now requires accepted friendship. */
+function makeFriends(db: { raw: ReturnType<typeof createTestD1>['raw'] }, nameA: string, nameB: string): void {
+	const a = playerIdByName(db, nameA);
+	const b = playerIdByName(db, nameB);
+	const [lo, hi] = a < b ? [a, b] : [b, a];
+	db.raw.prepare(
+		"INSERT INTO player_friends (player_a, player_b, state, requested_by, created_at, updated_at) VALUES (?, ?, 'accepted', ?, ?, ?)",
+	).run(lo, hi, a, Date.now(), Date.now());
+}
+
 /** 1×1 PNG header + padding — magic-byte validation never decodes pixels. */
 const PNG_BASE64 = btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52));
 const GIF_BASE64 = btoa('GIF89a-not-allowed');
@@ -246,6 +256,7 @@ test('export: conversations + history as me/them, hidden flag, bounded image byt
 	const bob = await createAccount(GUEST_B, 'Bob Export', '203.0.113.11');
 	void pushes;
 	await claimHandle(bob.cookie, 'bob_export', '203.0.113.11');
+	makeFriends(db, 'Alice Export', 'Bob Export');
 	const open = await conversationsApi.POST(requestContext('/api/dm/conversations', { method: 'POST', cookie: alice.cookie, body: { handle: 'bob_export' } }));
 	assert.equal(open.status, 200, await open.clone().text());
 	const conversationId = ((await open.json()) as { conversation: { id: string } }).conversation.id;
@@ -286,6 +297,7 @@ test('account deletion cascades conversations, messages, attachments and keyed r
 	const alice = await createAccount(GUEST_A, 'Alice Delete', '203.0.113.20');
 	const bob = await createAccount(GUEST_B, 'Bob Delete', '203.0.113.21');
 	await claimHandle(bob.cookie, 'bob_delete', '203.0.113.21');
+	makeFriends(db, 'Alice Delete', 'Bob Delete');
 	const open = await conversationsApi.POST(requestContext('/api/dm/conversations', { method: 'POST', cookie: alice.cookie, body: { handle: 'bob_delete' } }));
 	const conversationId = ((await open.json()) as { conversation: { id: string } }).conversation.id;
 	await messagesApi.POST(requestContext('/api/dm/messages', { method: 'POST', cookie: alice.cookie, body: { conversation: conversationId, body: 'soon gone' } }));
@@ -310,6 +322,7 @@ test('DM routes: membership, auth gates, vocabulary, kill switches', async () =>
 	const bob = await createAccount(GUEST_B, 'Bob', '203.0.113.31');
 	const carol = await createAccount(GUEST_C, 'Carol', '203.0.113.32');
 	await claimHandle(bob.cookie, 'bob_dm', '203.0.113.31');
+	makeFriends(db, 'Alice', 'Bob');
 
 	// Guest: no account → 401 on every surface.
 	const guestList = await conversationsApi.GET(requestContext('/api/dm/conversations', { cookie: 'bnji_ps=99999999999999999999999999999999' }));

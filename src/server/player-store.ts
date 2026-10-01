@@ -1,6 +1,7 @@
 /** Global game identity, opaque sessions, save CAS, and account lifecycle. */
 import { accountModerationStatements } from './chat-moderation';
 import { dmAccountStatements } from './dm-store';
+import { friendAccountStatements } from './friend-store';
 import type { D1Database } from './game-store';
 
 export const PLAYER_SESSION_COOKIE = 'bnji_ga';
@@ -208,6 +209,10 @@ export async function deletePlayerAccount(db: D1Database, playerId: string): Pro
 		// whole — messages and attachments with them — plus DM report rows keyed
 		// to this principal (the hashed audit log stays, same as Phase C).
 		...dmAccountStatements(db, playerId, principalHash),
+		// Chat plan Phase E (§9.5): friendships and blocks hang off the
+		// account rows themselves, so they leave with the account — including
+		// the other side of each pair (its rows cascade on pair match).
+		...friendAccountStatements(db, playerId),
 	]);
 }
 

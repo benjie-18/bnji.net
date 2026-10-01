@@ -216,6 +216,16 @@ test('the full local flow: boot → start by handle → open → send → live f
 	const bob = await createAccount(GUEST_TWO, 'Test Two', '203.0.113.2');
 	await claimHandle(alice, 'test1', '203.0.113.1');
 	await claimHandle(bob, 'test2', '203.0.113.2');
+	// Phase E (plan D7 answer): open-by-handle is friends-only from E on —
+	// establish the accepted pair exactly like the friends flow would.
+	{
+		const ids = db.raw.prepare("SELECT id FROM game_players WHERE display_name IN ('Test One', 'Test Two')").all() as Array<{ id: string }>;
+		assert.equal(ids.length, 2);
+		const [a, b] = ids.map((row) => row.id).sort();
+		db.raw.prepare(
+			"INSERT INTO player_friends (player_a, player_b, state, requested_by, created_at, updated_at) VALUES (?, ?, 'accepted', ?, ?, ?)",
+		).run(a, b, a, Date.now(), Date.now());
+	}
 	activeCookie = alice;
 
 	const dom = await mountFreshDom();

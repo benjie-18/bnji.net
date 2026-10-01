@@ -20,6 +20,8 @@ import {
 	ensureConversation, getConversation, sideOf, type ConversationRow,
 } from './dm-store';
 import type { DmSide } from './dm-protocol';
+import { FRIENDS_CONFIG } from '../config/friends.config';
+import { friendGateState } from './friend-store';
 
 export function dmJson(data: unknown, status = 200): Response {
 	return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
@@ -54,6 +56,36 @@ export async function resolveDmContext(context: APIContext, options: { origin?: 
 		return response;
 	};
 	return { db, player, finish };
+}
+
+/** Phase E friends switch (plan §14 rollback for E). */
+export function requireFriendsEnabled(context: DmRouteContext): Response | null {
+	if (!FRIENDS_CONFIG.enabled) return context.finish({ error: 'friends_disabled' }, 403);
+	return null;
+}
+
+/**
+ * Phase E D7 gate: open/send/attachments are friends-only from E onwards
+ * (owner answer on plan D7: "open between accounts now, tightens to
+ * friends-only in E"). `blocked` answers when a block exists either way —
+ * sharper copy than not_friends, never reveals who blocked (§8.1 keeps
+ * blocks unlisted); plain not_friends otherwise. Reads, media and the
+ * socket stay membership-gated (plan §8/§10) — existing conversations keep
+ * working only if the pair is still friends; a block removes the
+ * friendship, so sends die for BOTH sides as §8.1 requires.
+ */
+export async function requireDmFriendship(context: DmRouteContext, partnerId: string): Promise<Response | null> {
+	if (!FRIENDS_CONFIG.enabled) return null;
+	const playerId = context.player.playerId;
+	if (!playerId || playerId === partnerId) return null;
+	try {
+		const state = await friendGateState(context.db, playerId, partnerId);
+		if (state === 'blocked') return context.finish({ error: 'blocked' }, 403);
+		if (state !== 'friends') return context.finish({ error: 'not_friends' }, 403);
+	} catch {
+		return context.finish({ error: 'storage_unavailable' }, 503);
+	}
+	return null;
 }
 
 /** Account-only product (plan §7.1): guests never get a conversation. */
