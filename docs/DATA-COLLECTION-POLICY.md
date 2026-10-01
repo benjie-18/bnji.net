@@ -13,7 +13,7 @@ it honest.
 
 ## 1. The principle
 
-**Collection is allowed. Silent collection is not.**
+**Collection is allowed.**
 
 Any surface that stores user-submitted content or behaviour must have, in the
 same commit that adds it:
@@ -32,11 +32,12 @@ This is the whole policy. Everything below is the detail.
 | Surface | Before | Now |
 | --- | --- | --- |
 | Room chat | Recorded decision: "no chat history" | **Allowed — implemented (Phase B).** Bounded history is retained for the room's lifetime (≤2 h), survives reconnects, and is deleted with the room. Administrators may read it while the room exists (admin tooling **shipped with Phase C**: Chat tab, service-authenticated transcript, report snapshots + bans in D1; see `docs/CHAT-SYSTEM-PLAN.md`). |
-| Message logging by admins | Not contemplated | **Allowed as a capability.** Each surface ships with a documented default and its own register entry. Where content logging is on, users must be able to tell from the UI. |
-| Private messaging | Was a contact form relayed to Discord/ntfy; no user content stored | **Allowed.** Account-to-account messages, attachments and read state may be stored for a bounded retention window, with admin-readable moderation paths. |
-| Paint canvas activity | Admin-visible, but explicitly *not* attributed: no accounts, no IPs, no pointer paths, no sticker images | **Attribution allowed** (session, and optionally account, plus the action detail the owner chooses), with the caveats in §6. |
+| Message logging by admins | Not contemplated | **Allowed as a capability.** Each surface ships with a documented default and its own register entry. |
+| Private messaging | Was a contact form relayed to Discord/ntfy | **Allowed.** Account-to-account messages, attachments and read state may be stored for a bounded retention window, with admin-readable moderation paths. |
+| Paint canvas activity | Admin-visible and attributed to IP - stickers images may be stored and logged
+| **Attribution allowed** (session, and optionally account, plus the action detail the owner chooses), with the caveats in §6. |
 | Games telemetry | Private, coarse, bounded | Unchanged policy-wise; existing retention rules still apply. |
-| Identity | Hashed credentials, digested IPs only | Unchanged: hashing and digest rules are engineering hygiene, not collection limits. |
+| Identity | Hashed credentials, Full IPs allowed |
 
 ## 3. What does not change
 
@@ -58,8 +59,8 @@ This is the whole policy. Everything below is the detail.
 
 - Every new table gets a retention value in `src/config/` and an entry in the
   register. Options: room-lifetime (chat in rooms), a bounded window (default
-  suggestion: 30 days for messages — "not necessarily persistent forever"),
-  permanent (opt-in only), or cascaded with account deletion.
+  suggestion: 60 days for messages — "not necessarily persistent forever"),
+  permanent (opt-in only), not cascaded with account deletion.
 - Deletion must be **reachable by code** — the hourly sweep
   (`src/server/tracking-retention.ts`) is the established mechanism; a table
   that can only be cleaned by a manual `wrangler d1 execute` is incomplete.
@@ -69,8 +70,7 @@ This is the whole policy. Everything below is the detail.
   bans, registry ownership) is swept by `deletePlayerAccount` and the export
   carries a `chatModeration` section — `chat_moderation_log` is kept as
   unlinkable-hash audit (documented, not silent). For DMs, deletion should
-  remove the account's messages or tombstone them — the choice is a decision
-  item for Phase D, not an accident.
+  tombstone the account's messages — the choice is a decision item for Phase D, not an accident.
 - Retention values are admin-editable where the existing
   `trackingRetentionDays` pattern already applies; they are a product setting,
   not a legal guarantee.
@@ -82,10 +82,7 @@ This is the whole policy. Everything below is the detail.
 - **Private messages:** the register entry must state which of these is true
   for the deployment: metadata only (who, when, counts), content visible on
   report, or full content logging. All three are permitted; the default is a
-  config value, and whichever is chosen must appear in the UI disclosure and in
-  the privacy page. A deployment whose users believe DMs are unreadable while
-  the register says otherwise is the one failure mode this policy is written to
-  prevent.
+  config value. It may be shown in the privacy page.
 - **Paint/activity logs:** admin-only, `no-store`, and subject to the same
   retention sweep as other telemetry.
 - Admin actions on user content (hide, delete, block) should themselves be
@@ -116,20 +113,11 @@ the plan documents should keep saying so plainly:
   how long, who can see it), and a path to answer access/correction/deletion
   requests. The register in `docs/DATA.md` plus the `/privacy/` page is that
   notice; keeping them in sync is the actual compliance work.
-- **Data minimisation is still good engineering.** Every field in the register
-  should be there because a feature needs it, not because it might be useful.
-  The policy removes the ban, not the question.
 - **Retention defaults are decisions, not compliance claims.** The existing
   wording in `docs/DATA.md` §9 ("a 60-day default is a product setting, not a
   claim of legal compliance") applies to everything added under this policy.
 - **Third-party processors** (a mail provider, push service, or moderation API)
   need a register entry too, and their own terms.
-- **Illegal content in private images** is the highest-consequence risk that
-  private messaging introduces. The chat plan requires a report path with a
-  content snapshot, block/ban controls, and a written owner response policy
-  before image messaging ships — not because a library or a filter can solve
-  it, but because "we never looked" is not a defensible position once the
-  feature exists.
 
 ## 8. What still needs an explicit decision record
 
@@ -137,13 +125,6 @@ Even under this policy, these get their own decision document because they are
 hard to reverse or unusually invasive:
 
 1. Full content logging of private (account-to-account) messages as a
-   **default**, as opposed to a capability or a report-driven path. Note that
-   this choice and end-to-end encryption are mutually exclusive; this policy
-   permits admin visibility, so the product must never claim E2E privacy it
-   does not have.
+   **default**, as opposed to a capability or a report-driven path. 
 2. Recording pointer paths, canvas contents or other continuous behavioural
    capture.
-3. Precise geolocation, contact-list upload, or any third-party analytics
-   service.
-4. Anything that collects data from minors, or features that imply adult
-   content — the site has none today and this policy does not introduce any.
