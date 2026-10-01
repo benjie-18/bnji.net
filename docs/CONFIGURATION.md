@@ -385,7 +385,7 @@ Phase E. Reads, media and the conversation socket stay membership-gated.
 | Adapter options | `astro.config.mjs` | `prerenderEnvironment: "node"`. |
 | Env schema (secrets list) | `astro.config.mjs` (`env.schema`) | Declares which secrets exist; all optional so builds work unconfigured. |
 | D1 migrations, DO classes, bindings, R2 | `wrangler.json`, `migrations/` | **Allowed when planned and documented** (`docs/DEPLOY.md` + this file + `docs/DEPENDENCY-POLICY.md` §6). Each change is its own reviewed commit, and never weakens the `.gitignore` build-output exclusions. |
-| Workers Previews bindings | `wrangler.json` → `previews` | Required for `npx wrangler preview` / Workers Builds preview builds; see §9.1. Mirrors the production storage bindings — nothing new is provisioned. |
+| Workers Previews bindings | `wrangler.json` → `previews` | Required for `npx wrangler preview` / Workers Builds preview builds; see §9.1. D1 and KV point at preview-only resources, never production; see §9.1. |
 
 ### 9.1 Workers Previews — the `previews` block (added 2026-10-01)
 
@@ -401,8 +401,8 @@ The block binds exactly what the Worker reads at runtime and nothing else:
 
 | Binding in `previews` | Resource it points at | Isolation |
 | --- | --- | --- |
-| `BOARD_DB` (D1) | the production `bnji-board` database id | **Shared with production.** A Preview's test posts, scores and DMs land in the real tables (admin-deletable). Previews never auto-apply migrations, so schema stays whatever production has. |
-| `BOARD_KV` (KV) | the production rate-limit namespace id | **Shared with production.** Only `rl:*` fixed-window counters with TTLs — low-risk by nature (§5). |
+| `BOARD_DB` (D1) | the preview-only `bnji-board-preview` database | **Isolated from production.** A Preview's test posts, scores and DMs land in this separate database. Previews never auto-apply migrations, so **every new file in `migrations/` must also be applied here**: `npx wrangler d1 migrations apply bnji-board-preview --remote`. |
+| `BOARD_KV` (KV) | the preview-only `bnji-board-preview-kv` namespace | **Isolated from production.** Holds only the Preview's own `rl:*` rate-limit counters (§5). |
 | `GAME_ROOMS`, `DM_CONVERSATIONS`, `PRESENCE` (Durable Objects) | the same three classes | **Isolated automatically.** Each Preview gets its own DO namespace and storage; the bindings are declared only because the routes read them from `env`. |
 
 Deliberately **not** in the block: Cron Triggers, routes and the asset
@@ -415,14 +415,17 @@ with `npx wrangler preview secret put ACCESS_SECRET --name <preview>`).
 Without `ACCESS_SECRET`, `/admin` in a Preview fails closed with `503`
 exactly as in production (§5.3) — that is the design, not a break.
 
-**Upgrading to fully isolated Previews** (owner decision, no urgency): create
-preview-only resources and swap the ids **inside the `previews` block only** —
-production ids at the top level stay untouched:
+**Preview-only resources (provisioned 2026-10-01).** The `previews` block uses
+its own D1 database (`bnji-board-preview`) and KV namespace
+(`bnji-board-preview-kv`); the top-level production ids are untouched and must
+never be copied into `previews`. The database was created and migrated up to
+`0016_friends.sql` through a one-off GitHub Actions workflow (since removed).
+To recreate them by hand:
 
 ```bash
-npx wrangler kv namespace create BOARD_KV_PREVIEW   # paste id into previews.kv_namespaces
-npx wrangler d1 create bnji-board-preview           # paste id into previews.d1_databases
-npx wrangler d1 migrations apply bnji-board-preview --remote   # before first preview deploy
+npx wrangler kv namespace create bnji-board-preview-kv   # paste id into previews.kv_namespaces
+npx wrangler d1 create bnji-board-preview                # paste id into previews.d1_databases
+npx wrangler d1 migrations apply bnji-board-preview --remote
 ```
 
 **The `SESSION` gotcha (error 10021).** Preview deployments also merge an

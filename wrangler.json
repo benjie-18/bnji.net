@@ -72,14 +72,14 @@
 		"d1_databases": [
 			{
 				"binding": "BOARD_DB",
-				"database_name": "bnji-board",
-				"database_id": "4a121806-46a2-4d19-ae17-e06e5ad794f3"
+				"database_name": "bnji-board-preview",
+				"database_id": "1c71da3f-0a6e-4347-af0a-85303d3ed352"
 			}
 		],
 		"kv_namespaces": [
 			{
 				"binding": "BOARD_KV",
-				"id": "593c5c160a1c44e78f81dc9aaa857e9c"
+				"id": "73caa06123e144d899c2eb167f8dc211"
 			}
 		],
 		"durable_objects": {
