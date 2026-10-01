@@ -101,9 +101,9 @@ export const GAMES = defineGameCatalog([
 	{
 		id: 'bnji.isometric-stack',
 		title: 'Isometric Stack',
-		description: 'A stacking experiment hosted in the Lab.',
+		description: 'Drop alternating blocks at one fixed speed and hold your combo — the tallest verified run takes the leaderboard.',
 		status: 'available',
-		labHref: '/lab/#stack-game',
+		href: '/games/stack/',
 		capabilities: ['keyboard', 'touch', 'pointer', 'canvas-2d'],
 		modes: ['default'],
 	},
@@ -115,6 +115,15 @@ export const GAMES = defineGameCatalog([
 		href: '/games/chess/',
 		capabilities: ['keyboard', 'pointer'],
 		modes: ['fastest-mate'],
+	},
+	{
+		id: 'bnji.pvp-minesweeper',
+		title: 'PvP Minesweeper',
+		description: "Two or more rivals vote a difficulty, plant mines on each other's boards, then race to clear the board they received. Wins count per difficulty.",
+		status: 'available',
+		href: '/games/pvp-minesweeper/',
+		capabilities: ['keyboard', 'touch', 'pointer'],
+		modes: ['quick', 'normal', 'hard'],
 	},
 ] as const);
 

@@ -234,6 +234,8 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 	function connect(code: string): void {
 		if (activeSocket && activeSocket.readyState < WebSocket.CLOSING) activeSocket.close(1000, 'Switching rooms');
 		roomCode = code;
+		// Games (e.g. PvP Minesweeper claims) read the active room code from the panel root.
+		root.dataset.roomCode = code;
 		if (codeInput) codeInput.value = code;
 		if (codePanel) codePanel.hidden = false;
 		if (codeOutput) codeOutput.value = code;

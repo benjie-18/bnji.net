@@ -22,8 +22,13 @@ export type RoomNotice = {
 	source?: 'host' | 'self' | 'admin';
 	messages?: RoomChatNoticeFrame[];
 	members?: Array<{ memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean }>;
-	/** Game state payload on snapshot/conflict/state frames; shape is per-game. */
+	/** Game state payload on snapshot/conflict/state/action frames; shape is per-game. */
 	state?: unknown;
+	/** Game-action broadcast (authoritative handler result): actor + action name. */
+	action?: string;
+	actor?: string;
+	/** Actor-only `action_result` payload (e.g. a racer's private field view). */
+	reply?: unknown;
 };
 export async function createGameRoom(gameId: string): Promise<{ roomCode: string; expiresAt: number; capacity: number }> {
 	const response = await fetch('/api/games/rooms', {
