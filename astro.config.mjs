@@ -12,6 +12,17 @@ import { SITE } from "./src/data/site.ts";
 // https://astro.build/config
 export default defineConfig({
 	site: SITE.url,
+	// Astro sessions are OFF. Nothing here reads `Astro.session`: the admin
+	// cookie (§5.3) and the `bnji_ps` profile key are hand-rolled in D1 and
+	// cookies. Left enabled, @astrojs/cloudflare injects an id-less `SESSION`
+	// KV binding into the generated dist/server/wrangler.json — at the top
+	// level AND inside `previews` — and a Preview deploy then fails with
+	// `binding SESSION of type kv_namespace must have a namespace_id
+	// specified [code: 10021]`. Keep this at the TOP LEVEL of the config: the
+	// adapter reads `config.session`, so the same key inside `cloudflare({...})`
+	// is silently ignored. Verify with:
+	//   npm run build && grep SESSION dist/server/wrangler.json  # no output
+	session: false,
 	// Secret schema for astro:env/server. Every entry is OPTIONAL so builds,
 	// previews and the Node prerender environment work with zero configuration;
 	// owners set real values with `wrangler secret put <NAME>`. Values are
