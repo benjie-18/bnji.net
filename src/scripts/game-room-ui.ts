@@ -25,6 +25,64 @@ export function mountGameRooms(root: HTMLElement): void {
 	const roster = root.querySelector<HTMLUListElement>('[data-chat-roster]');
 	const seenChat = new Map<number, HTMLElement>();
 	let isHost = false;
+
+	// --------------------------------------------------- profile name (plan §4)
+	// GET the current label so the form reflects the server's truth; POST edits
+	// with a plain-language status — never a raw error code.
+	const nameForm = root.querySelector<HTMLFormElement>('[data-profile-name]');
+	const nameInput = nameForm?.querySelector<HTMLInputElement>('[name="displayName"]') ?? null;
+	const nameStatus = root.querySelector<HTMLElement>('[data-profile-name-status]');
+	const scopeLabel = (scope: unknown): string => (scope === 'account' ? 'account name' : 'guest name');
+	const paintNameStatus = (displayName: string | null, scope: unknown): void => {
+		if (nameInput && displayName) nameInput.value = displayName;
+		if (nameStatus && displayName) nameStatus.textContent = `Current name: ${displayName} · ${scopeLabel(scope)}`;
+	};
+	if (nameForm) {
+		void (async () => {
+			try {
+				const response = await fetch('/api/profile/name', { credentials: 'same-origin', cache: 'no-store' });
+				if (!response.ok) throw new Error('load_failed');
+				const data = await response.json() as { displayName?: string | null; scope?: string };
+				paintNameStatus(typeof data.displayName === 'string' && data.displayName ? data.displayName : null, data.scope);
+			} catch {
+				if (nameStatus) nameStatus.textContent = 'Your current name could not be loaded.';
+			}
+		})();
+		nameForm.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			if (!nameInput || !nameStatus) return;
+			const displayName = nameInput.value.trim();
+			if (!displayName) { nameStatus.textContent = 'Type a name first.'; return; }
+			const submit = nameForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+			if (submit) submit.disabled = true;
+			nameInput.disabled = true;
+			try {
+				const response = await fetch('/api/profile/name', {
+					method: 'POST', credentials: 'same-origin', cache: 'no-store',
+					headers: { 'content-type': 'application/json' }, body: JSON.stringify({ displayName }),
+				});
+				const data = await response.json().catch(() => ({})) as { displayName?: string; scope?: string; error?: string; retryAfter?: number };
+				if (!response.ok) {
+					nameStatus.textContent = data.error === 'display_name_reserved' ? 'That name is reserved — pick another.'
+						: data.error === 'display_name_too_long' ? `That name is too long — ${NAMES_CONFIG.displayName.maxLength} characters maximum.`
+						: data.error === 'invalid_display_name' ? `That name can't be used — pick another.`
+						: data.error === 'rate_limited' ? `Too many attempts. Try again in ${Math.ceil(Number(data.retryAfter ?? 60) / 60)} minutes.`
+						: 'Could not save the name. Try again when online.';
+					return;
+				}
+				const saved = typeof data.displayName === 'string' && data.displayName ? data.displayName : displayName;
+				nameStatus.textContent = scopeLabel(data.scope) === 'guest name'
+					? `Name saved: ${saved} · guest name, kept ${NAMES_CONFIG.guestProfiles.retentionDays} days`
+					: `Name saved: ${saved} · account name`;
+				nameInput.value = saved;
+			} catch {
+				nameStatus.textContent = 'Could not reach the server. Try again when online.';
+			} finally {
+				nameInput.disabled = false;
+				if (submit) submit.disabled = false;
+			}
+		});
+	}
 	function chatSay(message: string): void { if (chatStatus) chatStatus.textContent = message; }
 	function setChatEnabled(enabled: boolean): void {
 		if (chatInput) chatInput.disabled = !enabled;
@@ -136,7 +194,8 @@ export function mountGameRooms(root: HTMLElement): void {
 		}
 		if (message.type === 'chat_delete' && typeof message.n === 'number') {
 			const item = seenChat.get(message.n);
-			if (item) paintChat(item, { n: message.n, label: '', text: '', at: 0, removed: message.source === 'self' ? 'self' : 'host' });
+			const removed: 'self' | 'admin' | 'host' = message.source === 'self' || message.source === 'admin' ? message.source : 'host';
+			if (item) paintChat(item, { n: message.n, label: '', text: '', at: 0, removed });
 			return true;
 		}
 		if (message.type === 'chat_rejected') {

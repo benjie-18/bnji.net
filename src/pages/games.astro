@@ -191,7 +191,7 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	.player-tools__button:hover { border-color: var(--accent-strong); }
 	.player-tools__button:disabled { opacity: 0.55; cursor: wait; }
 	.player-tools__button--primary { border-color: var(--accent-strong); color: var(--text-inverse, #10121a); background: var(--accent-strong); }
-	.player-tools__button--danger { color: var(--signal-danger, #b3314b); }
+	.player-tools__button--danger { color: var(--danger); }
 	.player-tools__account-actions, .player-tools__choices { display: flex; flex-wrap: wrap; gap: 0.6rem; }
 	.player-tools__note { margin: 0; font-size: var(--text-small); }
 	.player-tools__recovery { display: grid; gap: 0.8rem; padding: 1rem; border: 1px solid var(--signal-soon); border-radius: var(--radius-md); }
@@ -205,7 +205,7 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	.player-tools__save p { margin: 0.2rem 0 0; color: var(--text-muted); font-size: var(--text-small); }
 	.player-tools__state { color: var(--text-muted); font-size: var(--text-small); }
 	.player-tools__state--saved { color: var(--accent-strong); }
-	.player-tools__state--conflict { color: var(--signal-danger, #b3314b); font-weight: 700; }
+	.player-tools__state--conflict { color: var(--danger); font-weight: 700; }
 	.player-tools__choices { grid-column: 1 / -1; }
 	.room-tools { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: 1rem 2rem; padding: clamp(1.1rem, 3vw, 1.7rem); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--glass-bg); }
 	.room-tools h2 { margin: 0.25rem 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
