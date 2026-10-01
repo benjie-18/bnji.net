@@ -204,7 +204,7 @@ test('attachment claim: single use, correct uploader, claim+insert atomic', asyn
 	assert.equal(duplicate, null, 'the same attachment cannot be sent twice');
 	const state = db.raw.prepare('SELECT last_seq, read_seq_hi FROM dm_conversations WHERE id = ?').get(conv.id) as { last_seq: number; read_seq_hi: number };
 	assert.equal(state.last_seq, 2, 'the refused send burned no sequence number');
-	assert.equal(state.read_seq_hi, 2, 'the refused send left the watermark at the real message');
+	assert.equal(state.read_seq_hi, 0, 'sending never moves your own read watermark (only explicit reads do — §7.1)');
 	assert.equal((db.raw.prepare('SELECT COUNT(*) AS n FROM dm_messages').get() as { n: number }).n, 2);
 });
 

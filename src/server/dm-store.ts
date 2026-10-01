@@ -183,8 +183,11 @@ export async function listConversations(db: D1Database, playerId: string, limit 
  * Append the next message. Two statements, both individually atomic:
  * the conversation's `last_seq` increments with RETURNING (a single
  * read-modify-write, so concurrent senders cannot collide on n), then the
- * message row inserts with that n. The sender's own read watermark advances
- * with it — nobody accrues unread for their own messages.
+ * message row inserts with that n. Read watermarks are NEVER touched here:
+ * they move only on an explicit read (§7.1) — unread already excludes the
+ * sender's own rows, and advancing on send would both swallow the partner's
+ * unread and flip the seen indicator to true before they ever opened the
+ * thread (bug caught by tests/dm-client.test.ts, 2026-10-01).
  */
 export async function appendMessage(db: D1Database, input: {
 	conv: ConversationRow; sender: string; body: string; imageId: string | null; now?: number;
@@ -196,11 +199,8 @@ export async function appendMessage(db: D1Database, input: {
 	await db.prepare(
 		'INSERT OR IGNORE INTO dm_conversations (id, member_lo, member_hi, created_at) VALUES (?1, ?2, ?3, ?4)',
 	).bind(input.conv.id, input.conv.memberLo, input.conv.memberHi, input.conv.createdAt).run();
-	const watermarkColumn = side === 'lo' ? 'read_seq_lo' : 'read_seq_hi';
 	const advanced = await db.prepare(
-		`UPDATE dm_conversations SET last_seq = last_seq + 1, last_message_at = ?2,
-			${watermarkColumn} = CASE WHEN last_seq + 1 > ${watermarkColumn} THEN last_seq + 1 ELSE ${watermarkColumn} END
-		 WHERE id = ?1 RETURNING last_seq`,
+		'UPDATE dm_conversations SET last_seq = last_seq + 1, last_message_at = ?2 WHERE id = ?1 RETURNING last_seq',
 	).bind(input.conv.id, now).first<{ last_seq: number }>();
 	if (!advanced) throw new Error('dm_conversation_unavailable');
 	const n = Number(advanced.last_seq);
@@ -227,11 +227,9 @@ export async function appendMessageClaimingAttachment(db: D1Database, input: {
 	await db.prepare(
 		'INSERT OR IGNORE INTO dm_conversations (id, member_lo, member_hi, created_at) VALUES (?1, ?2, ?3, ?4)',
 	).bind(input.conv.id, input.conv.memberLo, input.conv.memberHi, input.conv.createdAt).run();
-	const watermarkColumn = side === 'lo' ? 'read_seq_lo' : 'read_seq_hi';
 	// Claim FIRST with a sentinel: a lost race or a double-submit 409 must
-	// consume no sequence number and never advance the sender's watermark
-	// (that path is the common case, not a rare race). The sweep treats a
-	// stranded `-1` row as a claimed orphan.
+	// consume no sequence number (that path is the common case, not a rare
+	// race). The sweep treats a stranded `-1` row as a claimed orphan.
 	const claimed = await db.prepare(
 		'UPDATE dm_attachments SET claimed_n = -1 WHERE id = ? AND conv_id = ? AND uploader = ? AND claimed_n IS NULL',
 	).bind(input.imageId, input.conv.id, input.sender).run();
@@ -240,9 +238,7 @@ export async function appendMessageClaimingAttachment(db: D1Database, input: {
 	let n = -1;
 	try {
 		advanced = await db.prepare(
-			`UPDATE dm_conversations SET last_seq = last_seq + 1, last_message_at = ?2,
-				${watermarkColumn} = CASE WHEN last_seq + 1 > ${watermarkColumn} THEN last_seq + 1 ELSE ${watermarkColumn} END
-			 WHERE id = ?1 RETURNING last_seq`,
+			'UPDATE dm_conversations SET last_seq = last_seq + 1, last_message_at = ?2 WHERE id = ?1 RETURNING last_seq',
 		).bind(input.conv.id, now).first<{ last_seq: number }>();
 		if (!advanced) throw new Error('dm_conversation_unavailable');
 		n = Number(advanced.last_seq);
