@@ -112,7 +112,10 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 			{CHAT_CONFIG.enabled && (
 			<div class="room-tools__chat" data-chat-panel>
 				<p class="room-tools__chat-note">Plain text for everyone in the room. Messages are stored only while this room exists (up to 2 hours) and are deleted with the room &mdash; not encrypted, not permanent, and no links are turned into previews. You can report another member's message; reported messages are kept for review after the room is gone.</p>
-				<ol class="room-tools__chat-messages" data-chat-messages role="log" aria-live="polite" aria-label="Room chat messages"></ol>
+				<!-- aria-live announces new messages. Deliberately no role="log": it would
+				     override the <ol>'s implicit list role and break every <li>'s semantics
+				     (axe "listitem"). The status line below carries the announcements text. -->
+				<ol class="room-tools__chat-messages" data-chat-messages aria-live="polite" aria-label="Room chat messages"></ol>
 				<p class="room-tools__chat-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
 				<form class="room-tools__chat-form" data-chat-form>
 					<label for="chat-input">Message</label>
