@@ -1,0 +1,200 @@
+---
+/**
+ * `/games/stack/` — the Lab isometric stack game as a Games catalog entry:
+ * one fixed speed, GameShell lifecycle, and a server-verified leaderboard
+ * claim for reconstructable runs.
+ */
+import GameShell from '../../components/GameShell.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import Layout from '../../layouts/Layout.astro';
+
+const instructions =
+	'Press Space or tap the tower to drop the moving block. Land it squarely on the slab below — ' +
+	'consecutive perfect drops raise your combo, every offset trims the slab, and a full miss ends the run. ' +
+	'The speed never changes; only your timing does. Your best verified run can be claimed to the leaderboard.';
+---
+
+<Layout title="Isometric Stack" description="Isometric Stack on bnji.net — one fixed speed, combo-perfect drops, and a server-verified leaderboard.">
+	<PageHeader
+		index="07"
+		label="GAMES / ISOMETRIC STACK"
+		titleId="page-title"
+		title="Isometric Stack"
+		description="Build the tallest glass tower you can at one fixed speed. Perfect drops stack a combo; one bad miss ends the run."
+	/>
+
+	<div class="container stack-body">
+		<GameShell gameId="bnji.isometric-stack" title="Isometric Stack" instructions={instructions} initialState="ready">
+			<div class="stack-layout">
+				<div class="stack-side" data-glass>
+					<p class="stack-mode">One fixed speed · leaderboard mode</p>
+					<p class="stack-status" data-stack-status role="status" aria-live="polite" aria-atomic="true">Loading the tower…</p>
+					<div class="stack-scores">
+						<div class="stack-score">
+							<span class="stack-label">Score</span>
+							<span class="stack-value mono" data-stack-score>0</span>
+						</div>
+						<div class="stack-score">
+							<span class="stack-label">Best</span>
+							<span class="stack-value mono" data-stack-best>0</span>
+						</div>
+					</div>
+					<p class="stack-combo mono" data-stack-combo hidden>COMBO ×<span data-stack-combo-count>1</span></p>
+					<div class="stack-actions">
+						<button type="button" class="stack-button" data-stack-reset>Reset</button>
+						<button type="button" class="stack-button" data-stack-sound aria-pressed="false">Sound off</button>
+						<button type="button" class="stack-button stack-button--primary" data-stack-claim-open hidden>Claim leaderboard score</button>
+					</div>
+				</div>
+
+				<div class="stack-viewport">
+					<canvas class="stack-canvas" data-stack-canvas width="640" height="520" aria-label="Isometric stack tower canvas — Space or tap drops a block" role="img"></canvas>
+					<div class="stack-overlay" data-stack-overlay>
+						<div class="stack-overlay-card">
+							<h3 class="stack-overlay-title mono">ISO STACK</h3>
+							<p class="stack-overlay-desc">Tap or press Space to drop layers. Align blocks cleanly to maintain the tower surface.</p>
+							<button class="stack-button stack-button--primary" type="button" data-stack-start>Start game</button>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="stack-results" slot="results">
+				<p class="stack-results__note" data-stack-result-note></p>
+				<form class="stack-claim" data-stack-claim hidden>
+					<h3>Claim leaderboard score</h3>
+					<p class="stack-claim__note" data-stack-claim-note></p>
+					<label for="stack-claim-name">Display name</label>
+					<input id="stack-claim-name" name="displayName" type="text" maxlength="24" autocomplete="nickname" required />
+					<button type="submit" class="stack-button stack-button--primary">Submit run claim</button>
+					<p class="stack-claim__status" data-stack-claim-status role="status" aria-live="polite"></p>
+				</form>
+				<div class="stack-results__actions">
+					<button type="button" class="stack-button stack-button--primary" data-stack-results-again>Play again</button>
+					<button type="button" class="stack-button" data-stack-results-back>Back to the tower</button>
+				</div>
+			</div>
+		</GameShell>
+	</div>
+</Layout>
+
+<script>
+	import { initGameShells } from '../../scripts/game-shell';
+	import { mountGameLifecycle, mountGameSession } from '../../scripts/game-runtime';
+	import { createStackGame } from '../../scripts/games/stack';
+
+	initGameShells();
+	const stack = createStackGame();
+	const shell = document.querySelector<HTMLElement>('[data-game-shell]');
+	if (shell) mountGameLifecycle(shell, stack.module);
+	if (shell) mountGameSession(shell, 'bnji.isometric-stack');
+</script>
+
+<style>
+	.stack-body {
+		display: grid;
+		gap: clamp(1.5rem, 4vw, 3rem);
+		padding-block: 0 6rem;
+	}
+	.stack-layout {
+		display: grid;
+		gap: clamp(1rem, 2.5vw, 1.75rem);
+		grid-template-columns: minmax(13rem, 0.8fr) auto;
+		align-items: start;
+	}
+	@media (max-width: 900px) {
+		.stack-layout { grid-template-columns: 1fr; }
+	}
+	.stack-side {
+		display: grid;
+		gap: 0.85rem;
+		align-content: start;
+		padding: 1rem;
+		border-radius: var(--radius-lg, 16px);
+	}
+	.stack-mode {
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.14em;
+		color: var(--text-muted, #9aa3b2);
+	}
+	.stack-status { font-weight: 600; min-height: 2.4em; }
+	.stack-scores { display: flex; gap: 1.25rem; }
+	.stack-score { display: grid; gap: 0.15rem; }
+	.stack-label {
+		font-size: 0.72rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--text-muted, #9aa3b2);
+	}
+	.stack-value { font-size: 1.6rem; font-weight: 600; }
+	.stack-combo {
+		margin: 0;
+		padding: 0.3rem 0.7rem;
+		border-radius: 999px;
+		align-self: start;
+		justify-self: start;
+		background: rgba(110 168 254 / 0.18);
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
+		font-size: 0.85rem;
+	}
+	.stack-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+	.stack-button {
+		padding: 0.45rem 0.9rem;
+		border-radius: 999px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.stack-button:hover:not(:disabled) { background: rgba(255 255 255 / 0.08); }
+	.stack-button--primary { background: var(--accent, #6ea8fe); border-color: transparent; color: #0b1020; font-weight: 600; }
+	.stack-viewport {
+		position: relative;
+		border-radius: var(--radius-lg, 16px);
+		overflow: hidden;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.2));
+		background: rgba(8 12 24 / 0.45);
+	}
+	.stack-canvas { display: block; width: 100%; height: auto; touch-action: manipulation; cursor: pointer; }
+	.stack-overlay {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		background: rgba(5 8 18 / 0.66);
+		backdrop-filter: blur(6px);
+	}
+	.stack-overlay[hidden] { display: none; }
+	.stack-overlay-card {
+		display: grid;
+		gap: 0.75rem;
+		justify-items: center;
+		text-align: center;
+		padding: 1.25rem;
+	}
+	.stack-overlay-title { margin: 0; letter-spacing: 0.2em; }
+	.stack-overlay-desc { margin: 0; max-width: 26rem; color: var(--text-muted, #9aa3b2); font-size: 0.92rem; }
+	.stack-results { display: grid; gap: 0.9rem; justify-items: start; }
+	.stack-results__note { font-weight: 600; }
+	.stack-results__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+	.stack-claim {
+		display: grid;
+		gap: 0.5rem;
+		justify-items: start;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--glass-border, rgba(255 255 255 / 0.12));
+		width: min(100%, 26rem);
+	}
+	.stack-claim h3 { font-size: 1rem; margin: 0; }
+	.stack-claim__note, .stack-claim__status { font-size: 0.85rem; color: var(--text-muted, #9aa3b2); margin: 0; }
+	.stack-claim input {
+		padding: 0.5rem 0.7rem;
+		border-radius: 10px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.16));
+		background: rgba(0 0 0 / 0.25);
+		color: inherit;
+		font: inherit;
+		width: 100%;
+	}
+</style>

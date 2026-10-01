@@ -1,0 +1,123 @@
+---
+/**
+ * Private-room controls + chat for a game page, wired by `mountGameRooms`
+ * (same hooks as the Games page — one room socket carries chat AND game
+ * state). Self-contained styles: this component ships on pages that do not
+ * load the Games page's scoped CSS.
+ */
+import { CHAT_CONFIG } from '../config/chat.config';
+import { NAMES_CONFIG } from '../config/names.config';
+interface Props {
+	/** Fixed room context for pages that host exactly one game. */
+	gameId: string;
+}
+const { gameId } = Astro.props;
+---
+
+<section class="room-panel" data-room-tools aria-labelledby="room-panel-title">
+	<div class="room-panel__head">
+		<div>
+			<p class="eyebrow">MULTIPLAYER</p>
+			<h2 id="room-panel-title">Private room</h2>
+		</div>
+		<p class="room-panel__intro">Rooms are temporary and code-protected — share the code only with players you want in your game. Up to 2 hours, then everything is deleted with the room.</p>
+	</div>
+
+	<div class="room-panel__forms">
+		<form data-room-create>
+			<input type="hidden" name="gameId" value={gameId} />
+			<label for="room-create-submit">Start a chess room</label>
+			<button id="room-create-submit" class="room-panel__button room-panel__button--primary" type="submit">Create a room</button>
+		</form>
+		<form data-room-join>
+			<label for="room-code-input">Join with a code</label>
+			<input id="room-code-input" name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" placeholder="22-character room code" required />
+			<button class="room-panel__button" type="submit">Join or reconnect</button>
+		</form>
+	</div>
+
+	<form class="room-panel__name" data-profile-name>
+		<label for="chess-profile-display-name">Your display name</label>
+		<input id="chess-profile-display-name" name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required />
+		<button class="room-panel__button" type="submit">Save name</button>
+		<p class="room-panel__note">Signed in: saved to your account. As a guest: kept for {NAMES_CONFIG.guestProfiles.retentionDays} days, keyed by a digest of this browser's session cookie &mdash; not linked to an account.</p>
+		<p class="room-panel__note" data-profile-name-status role="status" aria-live="polite"></p>
+	</form>
+
+	{CHAT_CONFIG.enabled && (
+		<div class="room-panel__chat" data-chat-panel>
+			<p class="room-panel__note">Plain text for everyone in the room. Messages live only while this room exists (up to 2 hours) and are deleted with it &mdash; not encrypted, not permanent, no link previews. You can report another member's message; reports are kept for review after the room is gone.</p>
+			<!-- Deliberately no role="log": it would override the <ol>'s implicit list role (axe "listitem"). -->
+			<ol class="room-panel__chat-messages" data-chat-messages aria-live="polite" aria-label="Room chat messages"></ol>
+			<p class="room-panel__chat-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
+			<form class="room-panel__chat-form" data-chat-form>
+				<label for="chess-chat-input">Message</label>
+				<input id="chess-chat-input" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
+				<button class="room-panel__button room-panel__button--primary" type="submit" disabled>Send</button>
+			</form>
+			<ul class="room-panel__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
+		</div>
+	)}
+
+	<div class="room-panel__status">
+		<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
+		<div data-room-code-panel hidden>
+			<span>Share this room code privately:</span>
+			<output data-room-code></output>
+			<button class="room-panel__button room-panel__button--small" type="button" data-room-copy>Copy code</button>
+			<button class="room-panel__button room-panel__button--small" type="button" data-room-leave disabled>Leave room</button>
+		</div>
+	</div>
+</section>
+
+<style>
+	.room-panel {
+		display: grid;
+		gap: 1.25rem;
+		padding: clamp(1.25rem, 3vw, 2rem);
+		border-radius: var(--radius-lg, 18px);
+		background: var(--glass-bg, rgba(255 255 255 / 0.05));
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.12));
+	}
+	.room-panel__head { display: grid; gap: 0.5rem; }
+	.room-panel__intro { color: var(--text-muted, #9aa3b2); max-width: 60ch; }
+	.room-panel h2 { font-size: clamp(1.2rem, 2.4vw, 1.6rem); }
+	.room-panel__forms { display: flex; flex-wrap: wrap; gap: 1.25rem; }
+	.room-panel__forms form { display: grid; gap: 0.45rem; align-content: start; }
+	.room-panel label { font-size: 0.85rem; color: var(--text-muted, #9aa3b2); }
+	.room-panel input[type='text'] {
+		padding: 0.55rem 0.7rem;
+		border-radius: 10px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.16));
+		background: var(--glass-input-bg, rgba(0 0 0 / 0.25));
+		color: inherit;
+		min-width: 15rem;
+		font: inherit;
+	}
+	.room-panel__button {
+		padding: 0.5rem 0.95rem;
+		border-radius: 999px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+		justify-self: start;
+	}
+	.room-panel__button:hover:not(:disabled) { background: rgba(255 255 255 / 0.08); }
+	.room-panel__button:disabled { opacity: 0.5; cursor: not-allowed; }
+	.room-panel__button--primary { background: var(--accent, #6ea8fe); border-color: transparent; color: #0b1020; font-weight: 600; }
+	.room-panel__button--small { padding: 0.25rem 0.65rem; font-size: 0.82rem; }
+	.room-panel__note { font-size: 0.82rem; color: var(--text-muted, #9aa3b2); max-width: 64ch; }
+	.room-panel__name { display: grid; gap: 0.45rem; justify-items: start; }
+	.room-panel__chat { display: grid; gap: 0.6rem; }
+	.room-panel__chat-messages { list-style: none; display: grid; gap: 0.35rem; max-height: 14rem; overflow-y: auto; padding: 0; margin: 0; }
+	.room-panel__chat-messages :global(li) { display: grid; gap: 0.1rem; padding: 0.35rem 0.55rem; border-radius: 8px; background: rgba(255 255 255 / 0.05); font-size: 0.9rem; }
+	.room-panel__chat-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+	.room-panel__chat-form input { flex: 1 1 14rem; }
+	.room-panel__chat-roster { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; padding: 0; margin: 0; font-size: 0.85rem; }
+	.room-panel__chat-roster :global(li) { padding: 0.15rem 0.55rem; border-radius: 999px; background: rgba(255 255 255 / 0.08); }
+	.room-panel__status { display: grid; gap: 0.5rem; font-size: 0.92rem; }
+	.room-panel__status [data-room-code-panel] { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+	.room-panel__status output { font-family: var(--font-mono, monospace); font-weight: 600; letter-spacing: 0.06em; }
+</style>

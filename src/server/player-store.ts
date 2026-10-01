@@ -1,4 +1,7 @@
 /** Global game identity, opaque sessions, save CAS, and account lifecycle. */
+import { accountModerationStatements } from './chat-moderation';
+import { dmAccountStatements } from './dm-store';
+import { friendAccountStatements } from './friend-store';
 import type { D1Database } from './game-store';
 
 export const PLAYER_SESSION_COOKIE = 'bnji_ga';
@@ -73,8 +76,22 @@ export async function readPlayerBySessionHash(db: D1Database, tokenHash: string,
 	).bind(tokenHash, now).first<PlayerRow>();
 }
 
-export async function reserveAuthAttempt(db: D1Database, ipHash: string, now = Date.now()): Promise<{ allowed: boolean; retryAfter: number }> {
-	const windowStart = now - AUTH_WINDOW_MS;
+/**
+ * One shared, increment-only per-IP attempt counter (game_auth_attempts).
+ * Defaults to the login window (15 min / 8 attempts); callers outside the
+ * login flow — handle claim and handle search (chat plan Phase A) — pass
+ * their own limits from NAMES_CONFIG with a distinguishable ip_hash prefix
+ * so spaces cannot spend each other's budget.
+ */
+export async function reserveAuthAttempt(
+	db: D1Database,
+	ipHash: string,
+	now = Date.now(),
+	limits?: { windowMs?: number; maxAttempts?: number },
+): Promise<{ allowed: boolean; retryAfter: number }> {
+	const windowMs = limits?.windowMs ?? AUTH_WINDOW_MS;
+	const maxAttempts = limits?.maxAttempts ?? AUTH_MAX_ATTEMPTS;
+	const windowStart = now - windowMs;
 	const row = await db.prepare(
 		`INSERT INTO game_auth_attempts (ip_hash, window_started_at, attempts, updated_at)
 		 VALUES (?1, ?2, 1, ?2)
@@ -85,8 +102,8 @@ export async function reserveAuthAttempt(db: D1Database, ipHash: string, now = D
 		 RETURNING attempts, window_started_at`,
 	).bind(ipHash, now, windowStart).first<{ attempts: number; window_started_at: number }>();
 	if (!row) throw new Error('auth_attempt_counter_unavailable');
-	if (Number(row.attempts) <= AUTH_MAX_ATTEMPTS) return { allowed: true, retryAfter: 0 };
-	return { allowed: false, retryAfter: Math.max(1, Math.ceil((Number(row.window_started_at) + AUTH_WINDOW_MS - now) / 1000)) };
+	if (Number(row.attempts) <= maxAttempts) return { allowed: true, retryAfter: 0 };
+	return { allowed: false, retryAfter: Math.max(1, Math.ceil((Number(row.window_started_at) + windowMs - now) / 1000)) };
 }
 
 export async function checkPlayerLoginLockout(db: D1Database, ipHash: string, now = Date.now()): Promise<{ locked: boolean; retryAfter: number }> {
@@ -180,10 +197,22 @@ export async function revokePlayerSession(db: D1Database, sessionHash: string, n
 
 export async function deletePlayerAccount(db: D1Database, playerId: string): Promise<void> {
 	if (!db.batch) throw new Error('atomic_player_batch_unavailable');
+	// Chat plan Phase C (§9.5): reported content, filed reports, chat bans and
+	// owned room-registry rows hang off the account's room principal.
+	const principalHash = await sha256Hex(`player:${playerId}`);
 	await db.batch([
 		db.prepare('DELETE FROM game_scores WHERE player_id = ?1').bind(playerId),
 		db.prepare('DELETE FROM game_sessions WHERE player_id = ?1').bind(playerId),
 		db.prepare('DELETE FROM game_players WHERE id = ?1').bind(playerId),
+		...accountModerationStatements(db, principalHash),
+		// Chat plan Phase D (§9.5): conversations this account belongs to leave
+		// whole — messages and attachments with them — plus DM report rows keyed
+		// to this principal (the hashed audit log stays, same as Phase C).
+		...dmAccountStatements(db, playerId, principalHash),
+		// Chat plan Phase E (§9.5): friendships and blocks hang off the
+		// account rows themselves, so they leave with the account — including
+		// the other side of each pair (its rows cascade on pair match).
+		...friendAccountStatements(db, playerId),
 	]);
 }
 
@@ -271,6 +300,65 @@ export function validateSaveData(value: unknown): { ok: true; json: string } | {
 	};
 	if (!visit(value, 0)) return { ok: false, error: 'invalid_save_data' };
 	return { ok: true, json };
+}
+
+export type SetHandleResult =
+	| { ok: true; handle: string }
+	| { ok: false; error: 'handle_taken' | 'handle_cooldown'; retryAfter: number };
+
+/**
+ * Claim or change the one global account handle (chat plan Phase A).
+ * Rules, in order:
+ *   - idempotent re-submit of the owned handle always succeeds (and must not
+ *     restart the cooldown clock — otherwise the clock is meaningless);
+ *   - first claim (handle NULL) is never cooldown-blocked;
+ *   - a different handle inside cooldownDays is refused with retryAfter;
+ *   - uniqueness is pre-checked for a friendly error, and the UNIQUE index on
+ *     game_players(handle) is the final arbiter if two accounts race.
+ * Format validation (isValidHandle) happens at the route, before this call.
+ */
+export async function setPlayerHandle(
+	db: D1Database,
+	input: { playerId: string; handle: string; now: number; cooldownDays: number },
+): Promise<SetHandleResult> {
+	const current = await db.prepare(
+		'SELECT handle, handle_changed_at FROM game_players WHERE id = ?1 LIMIT 1',
+	).bind(input.playerId).first<{ handle: string | null; handle_changed_at: number | null }>();
+	if (!current) throw new Error('player_not_found');
+	if (current.handle === input.handle) return { ok: true, handle: input.handle };
+	const changedAt = current.handle_changed_at === null ? null : Number(current.handle_changed_at);
+	const cooldownMs = input.cooldownDays * 86_400_000;
+	if (changedAt !== null && input.now < changedAt + cooldownMs) {
+		return { ok: false, error: 'handle_cooldown', retryAfter: Math.max(1, Math.ceil((changedAt + cooldownMs - input.now) / 1000)) };
+	}
+	const taken = await db.prepare(
+		'SELECT 1 AS present FROM game_players WHERE handle = ?1 AND id <> ?2 LIMIT 1',
+	).bind(input.handle, input.playerId).first<{ present: number }>();
+	if (taken) return { ok: false, error: 'handle_taken', retryAfter: 0 };
+	try {
+		const update = await db.prepare(
+			'UPDATE game_players SET handle = ?1, handle_changed_at = ?2, updated_at = ?2 WHERE id = ?3',
+		).bind(input.handle, input.now, input.playerId).run();
+		// Zero rows means the account vanished between the read and the write —
+		// that is a storage error, not a successful claim.
+		if (Number(update?.meta?.changes ?? 0) === 0) throw new Error('player_not_found');
+	} catch (error) {
+		// Lost a race to the UNIQUE index → taken; anything else is storage.
+		if (/unique|constraint/i.test(String(error))) return { ok: false, error: 'handle_taken', retryAfter: 0 };
+		throw error;
+	}
+	return { ok: true, handle: input.handle };
+}
+
+/** Exact-match handle lookup for discovery (chat plan §4: no directory, no prefix search). */
+export async function findPlayerByHandle(
+	db: D1Database,
+	handle: string,
+): Promise<{ handle: string; display_name: string } | null> {
+	const row = await db.prepare(
+		'SELECT handle, display_name FROM game_players WHERE handle = ?1 LIMIT 1',
+	).bind(handle).first<{ handle: string; display_name: string }>();
+	return row ?? null;
 }
 
 export const PLAYER_AUTH_WINDOW_MS = AUTH_WINDOW_MS;

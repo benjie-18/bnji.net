@@ -1,6 +1,18 @@
 import { connectGameRoom, createGameRoom, type RoomNotice } from './game-rooms';
+import { NAMES_CONFIG } from '../config/names.config';
+import { CHAT_CONFIG } from '../config/chat.config';
+import { hasRegisteredAdapter } from '../data/game-adapters';
 
-export function mountGameRooms(root: HTMLElement): void {
+/** Optional bridge so a game page can observe/send on the SAME room socket. */
+export type RoomObserver = {
+	onFrame?: (message: RoomNotice) => void;
+	onSocket?: (socket: WebSocket | null) => void;
+};
+
+type ChatFrame = { n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' | 'admin' };
+type MemberFrame = { memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean };
+
+export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): void {
 	const live = root.querySelector<HTMLElement>('[data-room-live]');
 	const codePanel = root.querySelector<HTMLElement>('[data-room-code-panel]');
 	const codeOutput = root.querySelector<HTMLOutputElement>('[data-room-code]');
@@ -9,22 +21,250 @@ export function mountGameRooms(root: HTMLElement): void {
 	let activeSocket: WebSocket | null = null;
 	let roomCode = '';
 	function say(message: string): void { if (live) live.textContent = message; }
+
+	// ------------------------------------------------------------- chat panel
+	const chatPanel = root.querySelector<HTMLElement>('[data-chat-panel]');
+	const chatList = root.querySelector<HTMLOListElement>('[data-chat-messages]');
+	const chatStatus = root.querySelector<HTMLElement>('[data-chat-status]');
+	const chatForm = root.querySelector<HTMLFormElement>('[data-chat-form]');
+	const chatInput = chatForm?.querySelector<HTMLInputElement>('[name="text"]') ?? null;
+	const chatSend = chatForm?.querySelector<HTMLButtonElement>('button[type="submit"]') ?? null;
+	const roster = root.querySelector<HTMLUListElement>('[data-chat-roster]');
+	const seenChat = new Map<number, HTMLElement>();
+	let isHost = false;
+
+	// --------------------------------------------------- profile name (plan §4)
+	// GET the current label so the form reflects the server's truth; POST edits
+	// with a plain-language status — never a raw error code.
+	const nameForm = root.querySelector<HTMLFormElement>('[data-profile-name]');
+	const nameInput = nameForm?.querySelector<HTMLInputElement>('[name="displayName"]') ?? null;
+	const nameStatus = root.querySelector<HTMLElement>('[data-profile-name-status]');
+	const scopeLabel = (scope: unknown): string => (scope === 'account' ? 'account name' : 'guest name');
+	const paintNameStatus = (displayName: string | null, scope: unknown): void => {
+		if (nameInput && displayName) nameInput.value = displayName;
+		if (nameStatus && displayName) nameStatus.textContent = `Current name: ${displayName} · ${scopeLabel(scope)}`;
+	};
+	if (nameForm) {
+		void (async () => {
+			try {
+				const response = await fetch('/api/profile/name', { credentials: 'same-origin', cache: 'no-store' });
+				if (!response.ok) throw new Error('load_failed');
+				const data = await response.json() as { displayName?: string | null; scope?: string };
+				paintNameStatus(typeof data.displayName === 'string' && data.displayName ? data.displayName : null, data.scope);
+			} catch {
+				if (nameStatus) nameStatus.textContent = 'Your current name could not be loaded.';
+			}
+		})();
+		nameForm.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			if (!nameInput || !nameStatus) return;
+			const displayName = nameInput.value.trim();
+			if (!displayName) { nameStatus.textContent = 'Type a name first.'; return; }
+			const submit = nameForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+			if (submit) submit.disabled = true;
+			nameInput.disabled = true;
+			try {
+				const response = await fetch('/api/profile/name', {
+					method: 'POST', credentials: 'same-origin', cache: 'no-store',
+					headers: { 'content-type': 'application/json' }, body: JSON.stringify({ displayName }),
+				});
+				const data = await response.json().catch(() => ({})) as { displayName?: string; scope?: string; error?: string; retryAfter?: number };
+				if (!response.ok) {
+					nameStatus.textContent = data.error === 'display_name_reserved' ? 'That name is reserved — pick another.'
+						: data.error === 'display_name_too_long' ? `That name is too long — ${NAMES_CONFIG.displayName.maxLength} characters maximum.`
+						: data.error === 'invalid_display_name' ? `That name can't be used — pick another.`
+						: data.error === 'rate_limited' ? `Too many attempts. Try again in ${Math.ceil(Number(data.retryAfter ?? 60) / 60)} minutes.`
+						: 'Could not save the name. Try again when online.';
+					return;
+				}
+				const saved = typeof data.displayName === 'string' && data.displayName ? data.displayName : displayName;
+				nameStatus.textContent = scopeLabel(data.scope) === 'guest name'
+					? `Name saved: ${saved} · guest name, kept ${NAMES_CONFIG.guestProfiles.retentionDays} days`
+					: `Name saved: ${saved} · account name`;
+				nameInput.value = saved;
+			} catch {
+				nameStatus.textContent = 'Could not reach the server. Try again when online.';
+			} finally {
+				nameInput.disabled = false;
+				if (submit) submit.disabled = false;
+			}
+		});
+	}
+	function chatSay(message: string): void { if (chatStatus) chatStatus.textContent = message; }
+	function setChatEnabled(enabled: boolean): void {
+		if (chatInput) chatInput.disabled = !enabled;
+		if (chatSend) chatSend.disabled = !enabled;
+	}
+	function clock(at: number): string {
+		return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+	}
+	function renderChat(frame: ChatFrame): void {
+		if (!chatList || seenChat.has(frame.n)) return;
+		const item = document.createElement('li');
+		item.className = 'room-tools__chat-item';
+		item.dataset.chatN = String(frame.n);
+		const meta = document.createElement('span');
+		meta.className = 'room-tools__chat-meta';
+		const body = document.createElement('span');
+		body.className = 'room-tools__chat-text';
+		const actions = document.createElement('span');
+		actions.className = 'room-tools__chat-actions';
+		item.appendChild(meta);
+		item.appendChild(body);
+		item.appendChild(actions);
+		chatList.appendChild(item);
+		seenChat.set(frame.n, item);
+		paintChat(item, frame);
+		chatList.scrollTop = chatList.scrollHeight;
+	}
+	function paintChat(item: HTMLElement, frame: ChatFrame): void {
+		const meta = item.querySelector<HTMLElement>(':scope > .room-tools__chat-meta');
+		const body = item.querySelector<HTMLElement>(':scope > .room-tools__chat-text');
+		const actions = item.querySelector<HTMLElement>(':scope > .room-tools__chat-actions');
+		if (!meta || !body || !actions) return;
+		actions.replaceChildren();
+		if (frame.removed) {
+			meta.textContent = frame.removed === 'admin' ? 'An administrator removed a message'
+				: frame.removed === 'host' ? 'Room host removed a message' : 'Message deleted';
+			body.textContent = 'message removed';
+			item.classList.add('room-tools__chat-item--removed');
+			return;
+		}
+		meta.textContent = `${frame.label} · ${clock(frame.at)}`;
+		body.textContent = frame.text;
+		item.classList.remove('room-tools__chat-item--removed');
+		if (frame.mine) actions.appendChild(chatAction('Delete', () => sendChatFrame({ v: 1, type: 'chat_delete', n: frame.n })));
+		else {
+			if (isHost) actions.appendChild(chatAction('Remove', () => sendChatFrame({ v: 1, type: 'chat_delete', n: frame.n })));
+			actions.appendChild(chatAction('Report', (button) => reportMessage(frame.n, button)));
+		}
+	}
+	function chatAction(label: string, run: (button: HTMLButtonElement) => void): HTMLButtonElement {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'room-tools__chat-action';
+		button.textContent = label;
+		button.addEventListener('click', () => run(button));
+		return button;
+	}
+	/** Plan §6.4 — POST /api/chat/report; the room snapshots the message, D1 keeps the evidence. */
+	async function reportMessage(n: number, button: HTMLButtonElement): Promise<void> {
+		if (!roomCode) return;
+		button.disabled = true;
+		try {
+			const response = await fetch('/api/chat/report', {
+				method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ code: roomCode, n }),
+			});
+			const body = await response.json().catch(() => ({})) as { error?: string };
+			if (response.ok) chatSay('Thanks — the message was sent to the moderators for review.');
+			else if (body.error === 'rate_limited') chatSay('You have reported a lot of messages lately — try again in a few minutes.');
+			else if (body.error === 'not_member') chatSay('You need to be in the room to report one of its messages.');
+			else if (body.error === 'message_not_found') chatSay('That message is no longer available to report.');
+			else if (body.error === 'chat_disabled') chatSay('Chat is turned off right now.');
+			else chatSay('The report could not be sent. Try again in a moment.');
+		} catch {
+			chatSay('The report could not be sent. Check your connection and try again.');
+		} finally {
+			button.disabled = false;
+		}
+	}
+	function sendChatFrame(frame: Record<string, unknown>): boolean {
+		if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) { chatSay('Not connected to a room.'); return false; }
+		activeSocket.send(JSON.stringify(frame));
+		return true;
+	}
+	function renderRoster(members: MemberFrame[]): void {
+		if (!roster) return;
+		roster.replaceChildren();
+		for (const member of members) {
+			const item = document.createElement('li');
+			const name = document.createElement('span');
+			name.textContent = `${member.label}${member.isHost ? ' · host' : ''}${member.muted ? ' · muted' : ''}`;
+			item.appendChild(name);
+			if (isHost && !member.isSelf) {
+				item.appendChild(chatAction('Kick', () => sendChatFrame({ v: 1, type: 'kick', member: member.memberId })));
+				if (!member.muted) item.appendChild(chatAction('Mute', () => sendChatFrame({ v: 1, type: 'mute', member: member.memberId })));
+			}
+			roster.appendChild(item);
+		}
+		roster.hidden = members.length === 0;
+	}
+	function handleChatNotice(message: RoomNotice): boolean {
+		if (message.type === 'chat' && typeof message.n === 'number' && typeof message.text === 'string' && typeof message.label === 'string') {
+			renderChat({ n: message.n, label: message.label, text: message.text, at: message.at ?? Date.now(), mine: message.mine, removed: message.removed });
+			return true;
+		}
+		if (message.type === 'chat_history' && Array.isArray(message.messages)) {
+			for (const frame of message.messages) renderChat(frame);
+			return true;
+		}
+		if (message.type === 'chat_delete' && typeof message.n === 'number') {
+			const item = seenChat.get(message.n);
+			const removed: 'self' | 'admin' | 'host' = message.source === 'self' || message.source === 'admin' ? message.source : 'host';
+			if (item) paintChat(item, { n: message.n, label: '', text: '', at: 0, removed });
+			return true;
+		}
+		if (message.type === 'chat_rejected') {
+			const error = message.error;
+			chatSay(error === 'rate_limited' ? `Slow down — try again in ${Math.max(1, Math.ceil(Number(message.retryAfterMs ?? 1_000) / 1_000))} seconds.`
+				: error === 'muted' ? 'You are muted in this room for its remaining lifetime.'
+				: error === 'chat_disabled' ? 'Chat is turned off right now.'
+				: error === 'invalid_text' ? `Messages are plain text up to ${CHAT_CONFIG.maxTextLength} characters.`
+			: error === 'blocked' ? `That message was blocked by this room's word filter.`
+				: error === 'invalid_target' ? 'That member cannot be controlled.'
+				: 'That action is not allowed in this room.');
+			return true;
+		}
+		if (message.type === 'members' && Array.isArray(message.members)) {
+			renderRoster(message.members as MemberFrame[]);
+			return true;
+		}
+		return false;
+	}
+	chatForm?.addEventListener('submit', (event) => {
+		event.preventDefault();
+		if (!chatInput) return;
+		const text = chatInput.value;
+		if (!sendChatFrame({ v: 1, type: 'chat', text })) return;
+		chatInput.value = '';
+	});
+	if (!CHAT_CONFIG.enabled && chatPanel) chatPanel.hidden = true;
+
 	function connect(code: string): void {
 		if (activeSocket && activeSocket.readyState < WebSocket.CLOSING) activeSocket.close(1000, 'Switching rooms');
 		roomCode = code;
+		// Games (e.g. PvP Minesweeper claims) read the active room code from the panel root.
+		root.dataset.roomCode = code;
 		if (codeInput) codeInput.value = code;
 		if (codePanel) codePanel.hidden = false;
 		if (codeOutput) codeOutput.value = code;
+		// Fresh room, fresh chat: history will repopulate from the snapshot burst.
+		seenChat.clear();
+		chatList?.replaceChildren();
+		roster?.replaceChildren();
+		if (roster) roster.hidden = true;
+		chatSay('Connecting to the room chat…');
 		activeSocket = connectGameRoom(code, (message: RoomNotice) => {
-			if (message.type === 'snapshot') say(`Connected to ${message.gameId ?? 'room'} · version ${message.revision ?? 0} · ${message.connectedMembers ?? 1} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'} No game adapter is registered, so game-state updates are disabled.`);
-			else if (message.type === 'presence') say(`Room connected · ${message.connectedMembers ?? 0} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'}`);
+			observer.onFrame?.(message);
+			if (message.type === 'snapshot') {
+				isHost = Boolean(message.isHost);
+				say(`Connected to ${message.gameId ?? 'room'} · version ${message.revision ?? 0} · ${message.connectedMembers ?? 1} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'} ${hasRegisteredAdapter(message.gameId) ? 'Game rules are validated on the server.' : 'No game adapter is registered, so game-state updates are disabled.'}`);
+				chatSay(CHAT_CONFIG.enabled ? 'Connected to chat. Messages are stored only while this room exists.' : 'Chat is turned off right now.');
+			}
+			else if (message.type === 'presence') {
+				isHost = Boolean(message.isHost);
+				say(`Room connected · ${message.connectedMembers ?? 0} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'}`);
+			}
 			else if (message.type === 'conflict') say(`Room state changed to version ${message.revision ?? 0}; reconnecting clients receive the latest snapshot.`);
 			else if (message.type === 'state_rejected') say(message.error === 'game_adapter_unavailable' ? 'No game adapter is registered; state changes are refused.' : 'The game authority rejected that state change.');
+			else handleChatNotice(message);
 		}, (state) => {
-			if (state === 'connecting') { if (leaveButton) leaveButton.disabled = true; say('Connecting to room…'); }
-			else if (state === 'connected') { if (leaveButton) leaveButton.disabled = false; say('Connected. Waiting for the room snapshot…'); }
-			else if (state === 'closed') { if (leaveButton) leaveButton.disabled = true; say('Room connection closed. Re-enter the code to reconnect while the room is active.'); }
-			else if (state === 'error') { if (leaveButton) leaveButton.disabled = true; say('Room connection failed. Check the code and connection, then try again.'); }
+			observer.onSocket?.(state === 'connected' ? activeSocket : null);
+			if (state === 'connecting') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); say('Connecting to room…'); }
+			else if (state === 'connected') { if (leaveButton) leaveButton.disabled = false; setChatEnabled(CHAT_CONFIG.enabled); }
+			else if (state === 'closed') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection closed. Re-enter the code to reconnect while the room is active.'); say('Room connection closed. Re-enter the code to reconnect while the room is active.'); }
+			else if (state === 'error') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection failed. Check the code and connection, then try again.'); say('Room connection failed. Check the code and connection, then try again.'); }
 		});
 	}
 	root.querySelector<HTMLFormElement>('[data-room-create]')?.addEventListener('submit', async (event) => {

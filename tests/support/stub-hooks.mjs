@@ -30,6 +30,16 @@ export async function resolve(specifier, context, next) {
 				// Try the next candidate; the original error is rethrown below.
 			}
 		}
+		// Directory imports (src/data/profiles → …/profiles/index.ts): Node's
+		// ESM resolver rejects bare directories, but the source targets
+		// bundler resolution where they are index files.
+		for (const extension of EXTENSIONS) {
+			try {
+				return await next(`${specifier}/index${extension}`, context);
+			} catch {
+				// Last resort — rethrow the original resolution error below.
+			}
+		}
 		throw error;
 	}
 }

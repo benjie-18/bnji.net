@@ -94,7 +94,7 @@ test('account creation stores only credential/session digests and safely claims 
 	assert.equal((db.raw.prepare('SELECT player_id FROM game_scores WHERE session_id = ?').get(GUEST_C) as { player_id: string | null }).player_id, null, 'account creation must not claim another guest score');
 	const status = await accountApi.GET(requestContext('/api/games/account', { cookie }));
 	const statusText = await status.text();
-	assert.deepEqual(JSON.parse(statusText), { authenticated: true, displayName: 'Player One', saveCount: 0 });
+	assert.deepEqual(JSON.parse(statusText), { authenticated: true, displayName: 'Player One', saveCount: 0, handle: null });
 	assert.doesNotMatch(statusText, /playerId|sessionId|recoveryHash|tokenHash|BNJI-/i);
 });
 
@@ -350,6 +350,18 @@ test('account export and authenticated admin metadata reveal neither credentials
 	const exportText = await exported.text();
 	assert.match(exportText, /bnji.game-account-export/);
 	assert.match(exportText, /private/);
+	// Chat plan Phase B: room chat states its exclusion explicitly (never silent).
+	const exportData = JSON.parse(exportText) as {
+		roomChat?: { included: boolean; reason: string };
+		chatModeration?: { reportsOnYourMessages: unknown[]; reportsYouFiled: unknown[]; ban: unknown };
+	};
+	assert.equal(exportData.roomChat?.included, false);
+	assert.match(String(exportData.roomChat?.reason), /deleted with its room/);
+	// Phase C: moderation rows keyed to the principal travel with the export.
+	assert.ok(exportData.chatModeration, 'chatModeration section is always present');
+	assert.deepEqual(exportData.chatModeration.reportsOnYourMessages, []);
+	assert.deepEqual(exportData.chatModeration.reportsYouFiled, []);
+	assert.equal(exportData.chatModeration.ban, null);
 	assert.doesNotMatch(exportText, new RegExp(`${playerId}|recoveryHash|tokenHash|bnji_ga|bnji_ps`));
 	const unauthorized = await adminGamesApi.GET(requestContext('/api/admin/games'));
 	assert.equal(unauthorized.status, 401);

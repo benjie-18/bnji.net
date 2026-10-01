@@ -249,22 +249,34 @@ recovery procedure.
   full contract, retention, quotas and owner rollout.
 - Room codes and room state live in short-lived SQLite-backed `GameRoom`
   Durable Objects (maximum two-hour lifetime); game state is opaque and
-  untrusted, with no generic score/game-rule validation. **Chat history is
-  planned and permitted** ([`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md)):
-  room chat will live only inside the room's lifetime and be deleted with it,
-  so a room conversation never outlives the room. That supersedes the earlier
-  recorded "no chat history" position; the current code still has no chat.
-  See the Games operations/decision records for the exact message/state bounds
+  untrusted, with no generic score/game-rule validation. Registered per-game
+  authorities shape that state server-side (chess moves; PvP Minesweeper
+  phases with votes, per-board mine placements, per-player click lists and a
+  per-room win tally) — all of it lives only in the room's own SQLite and is
+  deleted with the room, never written to KV or D1. Broadcast redaction keeps
+  incoming minefields out of every outgoing frame, and the DO's
+  `/game/verify_win` answers the Worker score route with a yes/no for one
+  round (mode + winner hash only, nothing stored). PvP Minesweeper wins and
+  Stack scores land as ordinary server-validated `game_scores` rows keyed by
+  game/mode. **Room chat is
+  implemented (chat plan Phase B, 2026-09-30)** and permitted
+  ([`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md)): bounded plain text lives
+  only inside the room's own Durable Object SQLite, survives reconnects as
+  history, and is deleted with the room by the same `alarm()` sweep — a room
+  conversation never outlives the room, and no chat row is ever written to KV
+  or D1. That supersedes the earlier recorded "no chat history" position. See
+  the Games operations/decision records for the exact message/state bounds
   and quota policy.
 - **Planned collection surfaces** (registered here when implemented, per the
-  collection policy): guest display names keyed by session digest; a room
-  registry that lets administrators list and read active rooms; report
-  snapshots and a moderation audit log; account-to-account private messages
-  with images under a bounded retention window; friendships, blocks and
-  presence; and optional Paint attribution. None of these exist yet, and none
-  may ship without the register entry, the config value for retention, and the
-  privacy-page line described in
-  [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md) §1.
+  collection policy): a room registry that lets administrators list and read
+  active rooms; report snapshots and a moderation audit log; account-to-account
+  private messages with images under a bounded retention window; friendships,
+  blocks and presence; and optional Paint attribution. None of these exist
+  yet, and none may ship without the register entry, the config value for
+  retention, and the privacy-page line described in
+  [`DATA-COLLECTION-POLICY.md`](./DATA-COLLECTION-POLICY.md) §1. (Guest display
+  names and account handles were the first surfaces on this list to land; they
+  are now live and registered in §11 below.)
 
 ## 10. Shared Paint canvas
 
@@ -365,10 +377,14 @@ with its retention and readership stated. Today's register:
 | Profile analytics | View/react/click counts keyed by ephemeral session cookie | 60 days default | Admins only (aggregates public) | [`PROFILES.md`](./PROFILES.md) |
 | Security events | Request metadata, device fingerprint, hashed IP | 60 days default | Admins only | [`PROFILES.md`](./PROFILES.md) |
 | Games tracking | Anonymous run rows, coarse device class, server-observed IP/UA | `trackingRetentionDays` | Admins only | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
-| Games account | Display name, digested recovery code/sessions, saves, scores | Until account deletion | Own account; admins see aggregates | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
-| Room chat | **Planned** — bounded text, display label, opaque member ID | Room lifetime (≤2 h), deleted with the room | Room members; admins while the room exists | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
-| Private messages | **Planned** — text, images, read watermark | Bounded window, default 30 days (config) | The two participants; admins per the configured visibility mode | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
-| Friends / blocks / presence | **Planned** — handles, edge states, ephemeral presence | Account lifetime; presence ephemeral | Own account; presence visible to accepted friends | `docs/CHAT-SYSTEM-PLAN.md` (to be added here when implemented) |
+| Games account | Display name, optional public handle, digested recovery code/sessions, saves, scores | Until account deletion | Own account; admins see aggregates | [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md) |
+| Guest display names | Display name for this browser, stored keyed by a SHA-256 digest of the session cookie (the raw cookie value is never stored) | 30 days after the last change (config) | Own session only — never linked to an account; not browsable by admins | `/games/` rooms panel note + this row |
+| Account handles | Public handle + handle-change timestamp | Until account deletion | Public by exact match: handle and display name only, never a player ID | `/games/` account panel note + this row |
+| Room chat | Bounded plain text (≤250 code points after sanitising), display label (your display name or `Player`/`Guest` fallback, re-sanitised server-side), opaque per-room member ID, hashed principal, monotone message number, tombstone markers, host-action log | Room lifetime (≤2 h): deleted with the room by the DO `alarm()` sweep; trimmed to the newest 200 messages per room (`CHAT_CONFIG`) | Room members live; admins while the room exists (Chat tab, Phase C, reads via the service-authenticated DO transcript — display view strips URLs when `filter.stripUrlsForAdmin` is on) | `/games/` room chat panel line + this row; account export states its exclusion explicitly (room-keyed, ≤2 h) |
+| Chat moderation (D1) | Reported-message snapshots (`author_hash` = sha256(principal), display label, text, message time), report metadata (count, status `open`/`resolved`/`dismissed`, moderator note), distinct-reporter hashes, ban rows (principal hash, reason, expiry), moderation log (action, room code, hashes, detail), room registry (code, game, owner hash, timestamps) | Reports/log/registry: hourly sweep, hard cap `trackingRetentionDays` (default 60 days) and room lifetime for the registry; bans: until `expires_at` (max `moderation.maxBanMinutes`) or manual unban | Admins only (Chat tab). Log rows carry hashed principals with no account link | `/games/` room chat panel ("messages can be reported") + this row; account export includes `chatModeration` (reports on your messages, reports you filed, your ban); account deletion removes rows keyed to you |
+| Chat report rate limit | Hashed-IP attempt counter (`bnji-chat-report:` prefix, D1 `auth_attempts`) | `moderation.reportWindowMs` (10 min) | Server only | `/games/` room chat panel copy implies nothing; counted only on submit |
+| Private messages | Account-to-account conversation rows (canonical pair digest), sanitised message text, optional image bytes as D1 base64 (PNG/JPEG/WebP, sniffed server-side, ≤1.4 MB decoded — never a client-declared type, never SVG), per-member read watermark, delete-for-me flags; DM report snapshots with hashed author/reporter | Messages + attachments: `DM_CONFIG.retentionDays` = **60 days** (hourly sweep); unclaimed uploads 1 hour; report snapshots: shared `trackingRetentionDays` sweep; conversations: until account deletion (cascade) | The two participants (REST + their live conversation socket). Moderators see message content **only as a report snapshot** in the admin Chat tab (owner answer D10: metadata + on-report, no full-content logging); `chat_bans` block sending and receiving. Player IDs never leave the server — the API renders sender as me/them and partners as handle + display label only | `/messages/` disclosure line ("stored for N days… moderators only read a message if it is reported… not end-to-end encryption") + this row; account export includes `directMessages` (conversations, history, bounded image bytes, reports both directions); account deletion removes conversations, messages, attachments and DM report rows keyed to you |
+| Friends / blocks / presence | `player_friends` rows (canonical pair, state pending/accepted/declined, requester, timestamps), `player_blocks` rows; Presence socket attachments (own handle + accepted-friend handle list — in-memory only, no durable record) | Friend/block rows: until account deletion (they cascade with the account, §9.5); presence: ephemeral — exists only while a page holds a socket | Own account only: friend lists are private, no admin surface reads these tables; online state visible to accepted friends only (the route mints that visibility, §8.1) | `/friends/` disclosure paragraph ("stored while your account exists… visible only to accepted friends… nothing is emailed or pushed… friend list is private") + this row; account export includes `friends`; account deletion removes friend/block rows keyed to you |
 
 Rules for this table: no row may say "permanent" by omission; every row's
 retention value lives in `src/config/`; and any surface whose stored fields

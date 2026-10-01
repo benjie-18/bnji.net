@@ -56,7 +56,7 @@ tiny, the design coherent and the deployment boring.
 
 | Path                     | Purpose                                                                 |
 | ------------------------ | ----------------------------------------------------------------------- |
-| `src/config/*.ts`        | All owner-facing configuration: music source, DM provider, board policy, ACCESS_RULES, theme + intro defaults (these SEED the visitor settings store in `src/scripts/settings.ts`; runtime values live there, persisted in localStorage `bnji-settings-v1`, controlled from the Settings overlay). Public values only. |
+| `src/config/*.ts`        | All owner-facing configuration: music source, DM provider, board policy, names policy (display-name/handle limits), ACCESS_RULES, theme + intro defaults (these SEED the visitor settings store in `src/scripts/settings.ts`; runtime values live there, persisted in localStorage `bnji-settings-v1`, controlled from the Settings overlay). Public values only. |
 | `src/server/*.ts`        | Server-only modules: board stores (d1/rest), KV rate limiter, access primitives, env access. Never imported by client code. |
 | `src/middleware.ts`      | Route-guard enforcement for ACCESS_RULES (SSR routes only; honest about static limits). |
 | `src/pages/api/*`        | API boundaries: `/api/board`, `/api/dm`. `prerender = false`; validation, sanitization, rate limits live here. |
@@ -73,11 +73,18 @@ Section components are one concern each; pages compose them in order. Never
 build a monolithic page template with inline content — put content in
 `src/data/`, structure in components.
 
-Planned surfaces — room chat, private messaging with images, friends, presence
-and admin chat tooling — are specified in `docs/CHAT-SYSTEM-PLAN.md`, with the
-collection rules in `docs/DATA-COLLECTION-POLICY.md`. **None of it is
-implemented.** Until a phase lands, public copy, `README.md` and this map must
-describe it as planned.
+Planned surfaces — private messaging with images and friends/presence — are
+specified in `docs/CHAT-SYSTEM-PLAN.md`, with the collection rules in
+`docs/DATA-COLLECTION-POLICY.md`. Room chat (plan Phase B) and admin chat
+tooling (plan Phase C: D1 moderation store, `/admin` Chat tab, service-auth
+`/admin/read` + `/admin/action` on the `GameRoom` DO, `POST /api/chat/report`)
+are now implemented; everything else in that list is **not**. Until a phase
+lands, public copy, `README.md` and this map must describe it as planned.
+Phase C test surface: `tests/chat-moderation.test.ts` (D1 store, §6.3 helpers,
+route guards) and `tests/workerd/room-moderation.spec.ts` (real DO service
+endpoints — needs `ACCESS_SECRET` in `wrangler.test.json`, which is already
+set); migration `0014_chat_moderation.sql` must be applied before the admin
+Chat tab can store anything.
 
 ## 3. Content rules
 
@@ -142,7 +149,7 @@ The inner loop while iterating, then the full gate before calling it done:
 ```bash
 npm run build          # must pass, no new warnings
 npm exec -- tsc        # must be clean (typecheck only)
-npm test               # the behaviour suite (node:test) — no browser needed
+npm test               # the behaviour suite (node:test) + the DO suite (vitest/workerd) — no browser needed
 npm run check          # the gate: build + tsc + wrangler deploy --dry-run
 ```
 

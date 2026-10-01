@@ -3,15 +3,17 @@
 This is the owner-facing runbook. It answers one question: *after I pull, what
 do I have to do?*
 
-The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. For the full current Games rollout checklist, quotas, local
+The Games foundation has additive D1 migrations `0011_games.sql` (tracking/scores) and `0012_game_players_saves.sql` (players/sessions/auth throttling/saves), an hourly retention Cron Trigger, and a new SQLite Durable Object class (`GameRoom`) for generic rooms. It reuses the existing D1/KV; there is no new database, bucket, secret, third-party service, or credential to provision. The chat plan's Phase A adds one more additive migration, `0013_names.sql` (guest display names + account handles) — again no new binding, secret, or paid resource. Phase B (room chat) adds **no migration and no binding**: its tables live inside the existing `GameRoom` DO's own SQLite and are created by the DO's init code. Phase C (moderation tooling) adds one additive migration, `0014_chat_moderation.sql` (five D1 tables: room registry, reports, reporters, moderation log, bans) and **no new binding or secret**: the DO's service-authenticated admin endpoints derive their token from the existing `ACCESS_SECRET` (same value as admin sessions), which `wrangler.json` already passes to the `GameRoom` class as a top-level secret. Phase D (live private messaging) adds one additive migration, `0015_dm.sql` (five D1 tables: `dm_conversations`, `dm_messages`, `dm_attachments`, `dm_reports`, `dm_reporters`) and **one new SQLite Durable Object class, `DMConversation`**, under Wrangler migration tag `dm-conversations-v1` with the `DM_CONVERSATIONS` binding — still no new secret, no new database, no R2 bucket and no paid resource (images ship as D1 base64 per the owner's answer on plan D6). Phase E (friends, presence, notifications) adds one additive migration, `0016_friends.sql` (two D1 tables: `player_friends`, `player_blocks`) and **one new SQLite Durable Object class, `Presence`**, under Wrangler migration tag `presence-v1` with the `PRESENCE` binding — the DO holds sockets and attachments only, writes nothing durable, and never touches KV. For the full current Games rollout checklist, quotas, local
 Worker testing, and rollback notes, see [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md).
 The migration command is safe to re-run; D1 applies only what is missing.
 
-> **Upcoming, not yet scheduled — chat, private messaging and friends.**
-> The plan in [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) will add D1
-> migrations (names/handles, room registry, reports, DM conversations/messages,
-> friends), up to two Durable Object classes (`DMConversation`, `Presence`),
-> worker config-file changes, and possibly an R2 bucket for image storage.
+> **Upcoming — friends and presence (chat plan Phase E).**
+> Phases A–D of [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) have landed with
+> their own rows below (names/handles `0013`, moderation `0014`, DM tables
+> `0015`, friends/blocks `0016`, and the `GameRoom`, `DMConversation` +
+> `Presence` SQLite classes). Still to come: nothing on the chat plan's
+> critical path — possibly an R2 bucket for DM images if the owner ever
+> provisions one (plan D6 stays D1 base64 until then).
 > Under [`DEPENDENCY-POLICY.md`](./DEPENDENCY-POLICY.md) §6 each of those is a
 > **separate owner decision** with its own rollout row here before it ships.
 > Nothing in this section is provisioned today, and no action is required until
@@ -25,10 +27,10 @@ The migration command is safe to re-run; D1 applies only what is missing.
 
 | Area | Change | Owner action |
 | --- | --- | --- |
-| D1 | Additive migrations `0011_games.sql` (sessions/scores) and `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves) | Apply only pending migrations to existing `bnji-board` after backup |
-| Worker / Durable Objects | Astro HTTP handler, hourly retention Cron, SQLite class `GameRoom` under Wrangler migration `game-rooms-v1` | Deploy `src/worker.ts`; Wrangler applies the new class migration; confirm trigger and binding |
+| D1 | Additive migrations `0011_games.sql` (sessions/scores), `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves), `0013_names.sql` (guest display names, account handles) and `0014_chat_moderation.sql` (Phase C: room registry, reports, reporters, moderation log, bans) and `0015_dm.sql` (Phase D: `dm_conversations`, `dm_messages`, `dm_attachments`, `dm_reports`, `dm_reporters`) and `0016_friends.sql` (Phase E: `player_friends`, `player_blocks`) | Apply only pending migrations to existing `bnji-board` after backup |
+| Worker / Durable Objects | Astro HTTP handler, hourly retention Cron, SQLite class `GameRoom` (migration `game-rooms-v1`) and SQLite class `DMConversation` (migration `dm-conversations-v1`, binding `DM_CONVERSATIONS`) and SQLite class `Presence` (migration `presence-v1`, binding `PRESENCE`) | Deploy `src/worker.ts`; Wrangler applies the new class migrations; confirm trigger and all three bindings |
 | Admin | Games & play view and configurable raw tracking retention | No new credential; existing `/admin` guard applies |
-| Secrets/resources | No new binding, paid product, third-party service, or secret | None |
+| Secrets/resources | No new secret, paid product, or third-party service; Phases D+E add only the free `DM_CONVERSATIONS` and `PRESENCE` DO bindings (no R2) | None |
 
 The full current checklist—including local Worker/Durable Object verification, Free quotas, privacy, score-verifier setup and rollback—is in
 [`GAMES-OPERATIONS.md`](./GAMES-OPERATIONS.md). The rest of this document
@@ -54,7 +56,7 @@ migrations have run in its own `d1_migrations` table, so this command applies
 npx wrangler d1 migrations apply bnji-board --remote
 ```
 
-The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql` and `0012_game_players_saves.sql` (unless `0011` was applied earlier). Review the list before continuing. If legacy migrations also
+The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql`, `0012_game_players_saves.sql`, `0013_names.sql`, `0014_chat_moderation.sql`, `0015_dm.sql` and `0016_friends.sql` (unless earlier ones were applied already). Review the list before continuing. If legacy migrations also
 appear, confirm that is expected for the target database; migration `0001`
 should not be assumed harmless merely because it uses `CREATE TABLE IF NOT
 EXISTS`—review the database state and backup first.
@@ -83,10 +85,16 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `site_settings` | Dynamic site configuration | Dynamic key-value store for `/admin` → Configuration hot-swapping, including game/security raw tracking retention |
 | `game_sessions` | Games & play admin view | Anonymous guest/game/run totals, bounded visible active time and private device/IP metadata |
 | `game_scores` | Leaderboard foundation | Server-validated only, one guest-session personal best per game/mode, top 500 per mode |
-| `game_players` | Optional global game identity | Opaque ID; recovery-code digest only; no email/password |
+| `game_players` | Optional global game identity | Opaque ID; recovery-code digest only; no email/password. `0013_names.sql` adds the nullable unique `handle` (`[a-z0-9_]{3,20}`) + `handle_changed_at` columns; existing rows untouched, NULL until claimed |
 | `game_player_sessions` | Player authentication | Random session-token digests, expiry/revocation; FK cascade on delete |
 | `game_auth_attempts` | Recovery-code sign-in throttling | Hashed IP only; bounded age cleanup |
 | `game_saves` | Cross-device progress | Versioned JSON, ≤16 KiB/save, max 25 slots/player, revision CAS |
+| `guest_profiles` | `/games/` guest display names (chat plan Phase A) | One row per visitor session, keyed by `sha256(session id)`; display name only; swept hourly on a fixed 30-day window; no raw session values |
+| `dm_conversations` | `/messages/` (chat plan Phase D) | One row per pair, id = `sha256([a,b].sort().join(':'))` over player IDs, canonical members + per-side read watermark; account lifetime |
+| `dm_messages` | `/messages/` (chat plan Phase D) | Plain text + optional attachment id, monotone per-conversation sequence, `hidden_for` delete-for-me bits; swept hourly at `DM_CONFIG.retentionDays` (default 60 days) |
+| `dm_attachments` | `/messages/` images (chat plan Phase D) | Base64 image bytes (≤1.4 MB decoded, sniffed PNG/JPEG/WebP), claimed by exactly one message; purged with the message or when an upload is never claimed |
+| `dm_reports` | DM report flow (chat plan Phase D, plan §12.5) | Content snapshot at report time, hashed author/reporter, status open/resolved/dismissed; shared retention sweep |
+| `dm_reporters` | DM report de-duplication | Distinct-report counting per conversation message, hashed reporter; with its report |
 
 Migration `0004` added four columns to the existing `board_messages`:
 `report_count`, `reported_at`, `status_note`, `moderated_at`. Migration `0006`
@@ -125,7 +133,9 @@ the hashed credential in D1, not by that variable.
 ## 4. Deploy
 
 Pushes to `main` build and deploy automatically through Cloudflare Workers
-Builds. If you deploy by hand instead:
+Builds. Pushes to other branches build **Workers Previews**, configured by the
+`previews` block in `wrangler.json` — see CONFIGURATION.md §9.1 before
+changing any binding. If you deploy by hand instead:
 
 ```bash
 npm run build
@@ -184,9 +194,15 @@ Then, in a browser:
 
 ```bash
 npm ci
-npx wrangler d1 migrations apply bnji-board --local
-npx wrangler dev --local --port 8788
+npm run preview
 ```
+
+`npm run preview` is one command and does the whole local flow: `astro build`,
+then `wrangler d1 migrations apply bnji-board --local` (**pending migrations
+only — already-applied ones are never rerun**), then `wrangler dev`. The
+duplicate `bnji_board` remote binding was removed 2026-10-01
+(CONFIGURATION.md §5.2), so no `--local` flag or `CLOUDFLARE_API_TOKEN` is
+needed for local development anymore.
 
 Create `.dev.vars` for local secrets. It is gitignored — never commit it.
 
@@ -194,8 +210,8 @@ Create `.dev.vars` for local secrets. It is gitignored — never commit it.
 ACCESS_SECRET=<any random string>
 ```
 
-`--local` is required while the duplicate `bnji_board` binding exists in
-`wrangler.json`; see CONFIGURATION.md §5.2. Use `--local` for local development and never let a local command target the remote `bnji_board` binding.
+Prefer raw commands? `npx wrangler d1 migrations apply bnji-board --local`
+then `npx wrangler dev --port 8788` is equivalent.
 
 ---
 
@@ -207,5 +223,5 @@ ACCESS_SECRET=<any random string>
 | `/admin` is `503` | `ACCESS_SECRET` not set | `npx wrangler secret put ACCESS_SECRET` |
 | `/admin` is `401` with the right token | Token rotated, or row out of sync | `/api/admin/board` etc. need a session; sign in again. If the token is lost, reseed — see `docs/ADMIN.md` |
 | Board page loads but posts fail `503 storage_unavailable` | `BOARD_DB` binding or DB missing | Check the binding id in `wrangler.json`, then re-apply migrations |
-| `npx wrangler dev` demands a `CLOUDFLARE_API_TOKEN` | The `bnji_board` remote binding | Add `--local`, or delete that binding block |
+| `npx wrangler dev` demands a `CLOUDFLARE_API_TOKEN` | Stale checkout still carrying the old `bnji_board` remote binding | Pull current `wrangler.json` (the binding was deleted 2026-10-01, CONFIGURATION §5.2); a plain `npm run preview` is then fully local |
 | Login says "too many attempts" | Rate limit: 10 failed attempts per 15 min per IP | Wait it out. It is a real limit, not a bug |

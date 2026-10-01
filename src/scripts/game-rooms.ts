@@ -1,5 +1,35 @@
 /** Thin browser client for the generic versioned room protocol; it never asserts game rules. */
-export type RoomNotice = { v: number; type: string; gameId?: string; revision?: number; connectedMembers?: number; retryAfterMs?: number; isHost?: boolean; hasHost?: boolean; error?: string };
+import { ROOM_MAX_OUTBOUND_FRAME_BYTES } from '../server/game-room-protocol';
+
+export type RoomChatNoticeFrame = { n: number; label: string; text: string; at: number; mine?: boolean; removed?: 'host' | 'self' | 'admin' };
+export type RoomNotice = {
+	v: number;
+	type: string;
+	gameId?: string;
+	revision?: number;
+	connectedMembers?: number;
+	retryAfterMs?: number;
+	isHost?: boolean;
+	hasHost?: boolean;
+	error?: string;
+	// Chat (plan Phase B)
+	n?: number;
+	label?: string;
+	text?: string;
+	at?: number;
+	mine?: boolean;
+	removed?: 'host' | 'self';
+	source?: 'host' | 'self' | 'admin';
+	messages?: RoomChatNoticeFrame[];
+	members?: Array<{ memberId: string; label: string; isHost: boolean; isSelf: boolean; muted: boolean }>;
+	/** Game state payload on snapshot/conflict/state/action frames; shape is per-game. */
+	state?: unknown;
+	/** Game-action broadcast (authoritative handler result): actor + action name. */
+	action?: string;
+	actor?: string;
+	/** Actor-only `action_result` payload (e.g. a racer's private field view). */
+	reply?: unknown;
+};
 export async function createGameRoom(gameId: string): Promise<{ roomCode: string; expiresAt: number; capacity: number }> {
 	const response = await fetch('/api/games/rooms', {
 		method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ gameId }),
@@ -17,7 +47,8 @@ export function connectGameRoom(code: string, onNotice: (message: RoomNotice) =>
 	onStatus('connecting');
 	socket.addEventListener('open', () => onStatus('connected'));
 	socket.addEventListener('message', (event) => {
-		if (typeof event.data !== 'string' || event.data.length > 4_096) return;
+		// Named constant shared with the DO's history packer: oversized frames are silently dropped.
+		if (typeof event.data !== 'string' || event.data.length > ROOM_MAX_OUTBOUND_FRAME_BYTES) return;
 		try {
 			const message = JSON.parse(event.data) as RoomNotice;
 			if (message && message.v === 1 && typeof message.type === 'string') onNotice(message);

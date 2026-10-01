@@ -1,0 +1,240 @@
+---
+/**
+ * `/games/pvp-minesweeper/` — 2–8 player mine-laying race: vote the
+ * difficulty (5s), place mines on the opponents' boards simultaneously,
+ * then race to clear the board you received. A mine hit is instant
+ * elimination — the field's designer scores the kill. The room DO runs the
+ * phases and attests wins for the per-difficulty leaderboard.
+ */
+import GameShell from '../../components/GameShell.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import RoomPanel from '../../components/RoomPanel.astro';
+import Layout from '../../layouts/Layout.astro';
+
+const instructions =
+	'Create a room below and invite at least one other player. Everyone votes the difficulty (5 seconds), then each player lays mines on the opponents boards at the same time — you cannot see the mines coming your way. ' +
+	'When the race opens, click cells to clear your received board; opening a flood reveals the whole pocket. Hit a mine and you are out instantly — whoever designed that field scores the kill. ' +
+	'Round ends with a 5-second results screen that reveals every minefield. Wins are tracked per difficulty on the leaderboard and verified by the room server.';
+---
+
+<Layout title="PvP Minesweeper" description="PvP Minesweeper on bnji.net — private-room mine-laying races with server-attested wins per difficulty (quick, normal, hard).">
+	<PageHeader
+		index="08"
+		label="GAMES / PVP MINESWEEPER"
+		titleId="page-title"
+		title="PvP Minesweeper"
+		description="Two or more players lay mines on each other's boards, then race to clear the board they received. One mine hit ends your round."
+	/>
+
+	<div class="container ms-body">
+		<GameShell gameId="bnji.pvp-minesweeper" title="PvP Minesweeper" instructions={instructions} initialState="ready">
+			<div class="ms-layout">
+				<div class="ms-side" data-glass>
+					<p class="ms-phase" data-ms-phase>Not connected</p>
+					<p class="ms-status" data-ms-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
+					<p class="ms-countdown" data-ms-countdown></p>
+					<p class="ms-wins" data-ms-wins></p>
+
+					<div data-ms-panel="lobby" hidden>
+						<p class="ms-hint">The host starts the next round. Everyone in the room votes the difficulty next.</p>
+						<button type="button" class="ms-button ms-button--primary" data-ms-start hidden>Start round</button>
+					</div>
+
+					<div data-ms-panel="vote" hidden>
+						<p class="ms-hint">Vote now — the window closes in <span data-ms-countdown>5.0s</span>. Ties go to normal, then quick, then hard.</p>
+						<div class="ms-actions">
+							<button type="button" class="ms-button" data-ms-vote="quick">Quick · 6×6 · 5</button>
+							<button type="button" class="ms-button" data-ms-vote="normal">Normal · 9×9 · 10</button>
+							<button type="button" class="ms-button" data-ms-vote="hard">Hard · 14×14 · 20</button>
+						</div>
+					</div>
+
+					<div data-ms-panel="place" hidden>
+						<p class="ms-hint">Lay mines on each opponent's board — they will not see them. Budgets are shared from the round total; lock in when every board is full.</p>
+						<div class="ms-targets" data-ms-targets></div>
+						<p class="ms-place-count" data-ms-place-count></p>
+						<button type="button" class="ms-button ms-button--primary" data-ms-place-submit>Lock in my minefields</button>
+					</div>
+
+					<div data-ms-panel="race" hidden>
+						<p class="ms-race-note" data-ms-race-note></p>
+					</div>
+
+					<p class="ms-note">Minefields stay hidden until the results screen. Actions bypass the 5-second room sync budget, so the race reacts instantly.</p>
+				</div>
+
+				<div class="ms-board-wrap">
+					<div class="ms-board" data-ms-board role="group" aria-label="Minesweeper board"></div>
+				</div>
+			</div>
+
+			<div class="ms-results" slot="results">
+				<p class="ms-results__note" data-ms-result-note></p>
+				<form class="ms-claim" data-ms-claim hidden>
+					<h3>Claim your win</h3>
+					<p class="ms-claim__note" data-ms-claim-note></p>
+					<label for="ms-claim-name">Display name</label>
+					<input id="ms-claim-name" name="displayName" type="text" maxlength="24" autocomplete="nickname" required />
+					<button type="submit" class="ms-button ms-button--primary">Submit win claim</button>
+					<p class="ms-claim__status" data-ms-claim-status role="status" aria-live="polite"></p>
+				</form>
+				<button type="button" class="ms-button" data-ms-results-back>Back to the room</button>
+			</div>
+		</GameShell>
+
+		<RoomPanel gameId="bnji.pvp-minesweeper" />
+	</div>
+</Layout>
+
+<script>
+	import { initGameShells } from '../../scripts/game-shell';
+	import { mountGameLifecycle, mountGameSession } from '../../scripts/game-runtime';
+	import { mountGameRooms } from '../../scripts/game-room-ui';
+	import { createPvpMinesweeperGame } from '../../scripts/games/pvp-minesweeper';
+
+	initGameShells();
+	const mines = createPvpMinesweeperGame();
+	const shell = document.querySelector<HTMLElement>('[data-game-shell]');
+	if (shell) mountGameLifecycle(shell, mines.module);
+	if (shell) mountGameSession(shell, 'bnji.pvp-minesweeper');
+	const rooms = document.querySelector<HTMLElement>('[data-room-tools]');
+	if (rooms) mountGameRooms(rooms, { onFrame: mines.onFrame, onSocket: mines.onSocket });
+</script>
+
+<style>
+	.ms-body {
+		display: grid;
+		gap: clamp(1.5rem, 4vw, 3rem);
+		padding-block: 0 6rem;
+	}
+	.ms-layout {
+		display: grid;
+		gap: clamp(1rem, 2.5vw, 1.75rem);
+		grid-template-columns: minmax(15rem, 1fr) auto;
+		align-items: start;
+	}
+	@media (max-width: 900px) {
+		.ms-layout { grid-template-columns: 1fr; }
+	}
+	.ms-side {
+		display: grid;
+		gap: 0.85rem;
+		align-content: start;
+		padding: 1rem;
+		border-radius: var(--radius-lg, 16px);
+	}
+	.ms-phase {
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.14em;
+		color: var(--text-muted, #9aa3b2);
+	}
+	.ms-status { font-weight: 600; min-height: 2.4em; }
+	.ms-countdown {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: 1.1rem;
+		color: var(--accent, #6ea8fe);
+		min-height: 1.2em;
+	}
+	.ms-wins, .ms-hint, .ms-note, .ms-race-note, .ms-place-count {
+		font-size: 0.88rem;
+		color: var(--text-muted, #9aa3b2);
+	}
+	.ms-actions, .ms-targets { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+	.ms-button {
+		padding: 0.45rem 0.9rem;
+		border-radius: 999px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.ms-button:hover:not(:disabled) { background: rgba(255 255 255 / 0.08); }
+	.ms-button:disabled { opacity: 0.55; cursor: not-allowed; }
+	.ms-button--primary { background: var(--accent, #6ea8fe); border-color: transparent; color: #0b1020; font-weight: 600; }
+	.ms-target {
+		padding: 0.35rem 0.8rem;
+		border-radius: 999px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+	.ms-target.is-active {
+		background: var(--accent, #6ea8fe);
+		border-color: transparent;
+		color: #0b1020;
+		font-weight: 600;
+	}
+	.ms-board-wrap { justify-self: center; }
+	.ms-board {
+		display: grid;
+		grid-template-columns: repeat(var(--ms-size, 6), clamp(1.7rem, 6vw, 3rem));
+		grid-template-rows: repeat(var(--ms-size, 6), clamp(1.7rem, 6vw, 3rem));
+		gap: 2px;
+		padding: 6px;
+		border-radius: 12px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.2));
+		background: rgba(0 0 0 / 0.35);
+	}
+	.ms-cell {
+		display: grid;
+		place-items: center;
+		border: 0;
+		padding: 0;
+		border-radius: 4px;
+		font-size: clamp(0.8rem, 3vw, 1.1rem);
+		font-weight: 700;
+		line-height: 1;
+		cursor: pointer;
+		position: relative;
+	}
+	.ms-cell.is-hidden {
+		background: rgba(255 255 255 / 0.16);
+		box-shadow: inset 0 -2px 0 rgba(0 0 0 / 0.25);
+	}
+	.ms-cell.is-hidden:hover { background: rgba(255 255 255 / 0.26); }
+	.ms-cell.is-revealed { background: rgba(0 0 0 / 0.32); cursor: default; color: var(--text, #e8ecf4); }
+	.ms-cell.is-editor.is-revealed { cursor: pointer; }
+	.ms-cell.is-pending { animation: ms-pulse 0.7s ease-in-out infinite alternate; }
+	.ms-cell[data-value='1'] { color: #6ea8fe; }
+	.ms-cell[data-value='2'] { color: #63d4a0; }
+	.ms-cell[data-value='3'] { color: #ff8f8f; }
+	.ms-cell[data-value='4'] { color: #c7a6ff; }
+	.ms-cell[data-value='5'], .ms-cell[data-value='6'], .ms-cell[data-value='7'], .ms-cell[data-value='8'] { color: #ffcf6b; }
+	.ms-cell.is-mine { background: rgba(255 107 107 / 0.22); color: #ff8f8f; cursor: default; }
+	.ms-cell.is-boom { background: rgba(255 107 107 / 0.55); color: #fff; }
+	.ms-cell.is-armed { background: rgba(255 207 107 / 0.35); color: #ffcf6b; }
+	.ms-cell:focus-visible { outline: 3px solid var(--accent, #6ea8fe); outline-offset: 1px; z-index: 1; }
+	@keyframes ms-pulse {
+		from { background: rgba(255 255 255 / 0.16); }
+		to { background: rgba(110 168 254 / 0.55); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ms-cell.is-pending { animation: none; background: rgba(110 168 254 / 0.45); }
+	}
+	.ms-results { display: grid; gap: 0.9rem; justify-items: start; }
+	.ms-results__note { font-weight: 600; }
+	.ms-claim {
+		display: grid;
+		gap: 0.5rem;
+		justify-items: start;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--glass-border, rgba(255 255 255 / 0.12));
+		width: min(100%, 26rem);
+	}
+	.ms-claim h3 { font-size: 1rem; }
+	.ms-claim__note, .ms-claim__status { font-size: 0.85rem; color: var(--text-muted, #9aa3b2); }
+	.ms-claim input {
+		padding: 0.5rem 0.7rem;
+		border-radius: 10px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.16));
+		background: rgba(0 0 0 / 0.25);
+		color: inherit;
+		font: inherit;
+		width: 100%;
+	}
+</style>

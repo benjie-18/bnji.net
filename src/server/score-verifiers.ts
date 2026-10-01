@@ -3,6 +3,7 @@
  * absent validators fail closed and cannot create a score row.
  */
 import type { PlayerContext } from './player-context';
+import type { GameRoomNamespace } from './game-room-gateway';
 
 export type ScoreClaim = {
 	gameId: string;
@@ -13,8 +14,15 @@ export type ScoreClaim = {
 	idempotencyKey: string;
 	proof: unknown;
 };
-export type VerifiedScore = { score: number; tieBreak: number | null };
-export type ScoreVerifier = (claim: ScoreClaim, player: Pick<PlayerContext, 'sessionId' | 'playerId'>) => Promise<VerifiedScore | null>;
+/**
+ * `increment: true` marks an attested per-round win: the route recomputes
+ * `score` as (current stored best for this player/game/mode) + 1 instead of
+ * trusting a client-supplied total. The verifier still decides eligibility.
+ */
+export type VerifiedScore = { score: number; tieBreak: number | null; increment?: true };
+/** Optional runtime the route passes (room namespace for DO attestations); absent in unit tests. */
+export type ScoreRuntime = { GAME_ROOMS?: GameRoomNamespace };
+export type ScoreVerifier = (claim: ScoreClaim, player: Pick<PlayerContext, 'sessionId' | 'playerId'>, runtime?: ScoreRuntime) => Promise<VerifiedScore | null>;
 
 const verifiers = new Map<string, ScoreVerifier>();
 

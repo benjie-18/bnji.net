@@ -438,6 +438,13 @@ test('retention sweep drains bounded tracking batches and prunes account securit
 		security.run('game', `203.0.113.${index % 250}`, old);
 		paint.run(old, index + 1, `${(index + 1).toString(16).padStart(8, '0')}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`, '{}');
 	}
+	// Guest display names: exactly full batches on their own 30-day window, plus
+	// one row past the tracking window but inside the guest window that must survive.
+	const guest = db.raw.prepare('INSERT INTO guest_profiles (session_hash, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)');
+	for (let index = 0; index < maxRows; index += 1) {
+		guest.run((index + 1).toString(16).padStart(64, 'a'), 'Old Guest', now - 31 * day, now - 31 * day - index);
+	}
+	guest.run('b'.repeat(64), 'Recent Guest', now - 10 * day, now - 10 * day);
 
 	const queries: string[] = [];
 	const deleteLimits: number[] = [];
@@ -457,11 +464,17 @@ test('retention sweep drains bounded tracking batches and prunes account securit
 	await runRetentionSweep({ BOARD_DB: instrumentedDb });
 	assert.equal(queries.length, MAX_RETENTION_SWEEP_QUERIES);
 	assert.ok(queries.length < 50, 'the maximum scheduled sweep stays below D1 Free per-invocation query limit');
-	assert.deepEqual(deleteLimits, [50, 50, 50, 50, 50, 50, 10, 10, 10, 10]);
+	// Phase C: five more bounded deletes (registry, reports, reporters, log, bans).
+	// Phase D: five more (dm_messages, orphaned/unclaimed attachments, dm_reports, dm_reporters).
+	assert.deepEqual(deleteLimits, [50, 50, 50, 50, 50, 50, 10, 10, 10, 10, 50, 10, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]);
 	for (const table of ['game_sessions', 'game_scores', 'security_events', 'board_paint_activity']) {
 		const timestamp = table === 'game_sessions' ? 'last_seen_at' : table === 'game_scores' ? 'achieved_at' : 'created_at';
 		assert.equal((db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${timestamp} < ?`).get(now - 7 * day) as { n: number }).n, 0, `${table} drains 60 expired rows`);
 	}
+	const guests = db.raw.prepare('SELECT session_hash, updated_at FROM guest_profiles').all() as { session_hash: string; updated_at: number }[];
+	assert.equal(guests.length, 1, 'one guest profile survives');
+	assert.equal(guests[0].session_hash, 'b'.repeat(64));
+	assert.equal(guests[0].updated_at, now - 10 * day);
 });
 
 test('admin games data is protected and displays private session/device details only after authentication', async () => {
@@ -508,7 +521,8 @@ test('games catalog and navigation have a real empty state and preserve Lab owne
 	assert.match(footer, /aria-label="Site"/);
 	assert.doesNotMatch(page, /components\/lab\//);
 	assert.equal(new Set(GAMES.map((game) => game.id)).size, GAMES.length);
-	assert.equal(new Set(GAMES.flatMap((game) => game.modes ?? [])).size, 1);
+	// Catalog mode vocabulary: Lab experiments share `default`; chess scores `fastest-mate`; PvP Minesweeper ranks per difficulty.
+	assert.deepEqual([...new Set(GAMES.flatMap((game) => game.modes ?? []))].sort(), ['default', 'fastest-mate', 'hard', 'normal', 'quick']);
 });
 
 test('catalog construction rejects duplicate, malformed, and misleading entries instead of silently overwriting IDs', () => {

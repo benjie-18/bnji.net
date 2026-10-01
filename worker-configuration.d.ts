@@ -7,6 +7,8 @@ interface __BaseEnv_Env {
 	bnji_board: D1Database;
 	ASSETS: Fetcher;
 	GAME_ROOMS: DurableObjectNamespace<import("./src/worker").GameRoom>;
+	DM_CONVERSATIONS: DurableObjectNamespace<import("./src/worker").DMConversation>;
+	PRESENCE: DurableObjectNamespace<import("./src/worker").Presence>;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

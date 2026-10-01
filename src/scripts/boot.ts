@@ -24,6 +24,7 @@ import {
 	initNavToggle,
 } from './interactions';
 import { initMusicPlayer } from './music';
+import { initNotificationsBadge } from './notifications-ui';
 import { initNavScrollState, initParallax, initReveal } from './scroll';
 import { initSettings } from './settings';
 import { initSettingsOverlay } from './settings-overlay';
@@ -65,6 +66,8 @@ export function boot(): void {
 	start('parallax', initParallax);
 	// Global traffic & interaction telemetry
 	start('telemetry', initTelemetry);
+	// Phase E §8.3: header badge polls /api/notifications while pages are open.
+	start('notifications-badge', initNotificationsBadge);
 	// The tool is a no-op on every other page: the init bails unless its
 	// subtree is in the document, so it costs one querySelector elsewhere.
 	start('image-converter', initImageConverter);

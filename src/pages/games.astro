@@ -4,9 +4,12 @@ import GlassPanel from '../components/GlassPanel.astro';
 import GameCard from '../components/GameCard.astro';
 import PageHeader from '../components/PageHeader.astro';
 import { GAMES } from '../data/games';
+import { NAMES_CONFIG } from '../config/names.config';
+import { CHAT_CONFIG } from '../config/chat.config';
 import Layout from '../layouts/Layout.astro';
 
 const standalone = GAMES.filter((game) => !game.labHref);
+const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG.handle.maxLength}}`;
 ---
 
 <Layout title="Games" description="Gaming hub! Play, compete, lose cause im obviously so much better than you 😛">
@@ -34,7 +37,7 @@ const standalone = GAMES.filter((game) => !game.labHref);
 				<form class="player-tools__form" data-player-create>
 					<h3>Create one global player account</h3>
 					<p>Use a display name and a private recovery code.</p>
-					<label><span>Display name</span><input name="displayName" type="text" maxlength="24" autocomplete="nickname" required /></label>
+					<label><span>Display name</span><input name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required /></label>
 					<button class="player-tools__button player-tools__button--primary" type="submit">Create account &amp; claim this guest session</button>
 				</form>
 				<form class="player-tools__form" data-player-login>
@@ -45,6 +48,13 @@ const standalone = GAMES.filter((game) => !game.labHref);
 			</div>
 
 			<div class="player-tools__account" data-player-account hidden>
+				<form class="player-tools__form" data-player-handle>
+					<h3>Public handle</h3>
+					<label><span>Handle</span><input name="handle" type="text" minlength={NAMES_CONFIG.handle.minLength} maxlength={NAMES_CONFIG.handle.maxLength} pattern={handlePattern} autocomplete="username" spellcheck="false" placeholder="your_handle" /></label>
+					<button class="player-tools__button" type="submit">Save handle</button>
+					<p class="player-tools__note">Your handle is public: anyone who knows it can look you up and see your display name. You can change it once every {NAMES_CONFIG.handle.changeCooldownDays} days.</p>
+					<p class="player-tools__note" data-handle-status role="status" aria-live="polite"></p>
+				</form>
 				<div class="player-tools__account-actions">
 					<button class="player-tools__button" type="button" data-player-sync>Sync saves</button>
 					<button class="player-tools__button" type="button" data-rotate-recovery>Rotate recovery code</button>
@@ -92,6 +102,29 @@ const standalone = GAMES.filter((game) => !game.labHref);
 					<button class="player-tools__button" type="submit">Join or reconnect</button>
 				</form>
 			</div>
+			<form class="room-tools__name" data-profile-name>
+				<label for="profile-display-name">Your display name</label>
+				<input id="profile-display-name" name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required />
+				<button class="player-tools__button" type="submit">Save name</button>
+				<p class="room-tools__name-note">Signed in: saved to your account. Playing as a guest: kept for {NAMES_CONFIG.guestProfiles.retentionDays} days, keyed by a digest of this browser's session cookie &mdash; not linked to an account.</p>
+				<p class="room-tools__name-status" data-profile-name-status role="status" aria-live="polite"></p>
+			</form>
+			{CHAT_CONFIG.enabled && (
+			<div class="room-tools__chat" data-chat-panel>
+				<p class="room-tools__chat-note">Plain text for everyone in the room. Messages are stored only while this room exists (up to 2 hours) and are deleted with the room &mdash; not encrypted, not permanent, and no links are turned into previews. You can report another member's message; reported messages are kept for review after the room is gone.</p>
+				<!-- aria-live announces new messages. Deliberately no role="log": it would
+				     override the <ol>'s implicit list role and break every <li>'s semantics
+				     (axe "listitem"). The status line below carries the announcements text. -->
+				<ol class="room-tools__chat-messages" data-chat-messages aria-live="polite" aria-label="Room chat messages"></ol>
+				<p class="room-tools__chat-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
+				<form class="room-tools__chat-form" data-chat-form>
+					<label for="chat-input">Message</label>
+					<input id="chat-input" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
+					<button class="player-tools__button player-tools__button--primary" type="submit" disabled>Send</button>
+				</form>
+				<ul class="room-tools__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
+			</div>
+			)}
 			<div class="room-tools__status">
 				<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
 				<div data-room-code-panel hidden><span>Share this room code privately:</span> <output data-room-code></output> <button class="player-tools__button player-tools__button--small" type="button" data-room-copy>Copy code</button> <button class="player-tools__button player-tools__button--small" type="button" data-room-leave disabled>Leave room</button></div>
@@ -161,7 +194,7 @@ const standalone = GAMES.filter((game) => !game.labHref);
 	.player-tools__button:hover { border-color: var(--accent-strong); }
 	.player-tools__button:disabled { opacity: 0.55; cursor: wait; }
 	.player-tools__button--primary { border-color: var(--accent-strong); color: var(--text-inverse, #10121a); background: var(--accent-strong); }
-	.player-tools__button--danger { color: var(--signal-danger, #b3314b); }
+	.player-tools__button--danger { color: var(--danger); }
 	.player-tools__account-actions, .player-tools__choices { display: flex; flex-wrap: wrap; gap: 0.6rem; }
 	.player-tools__note { margin: 0; font-size: var(--text-small); }
 	.player-tools__recovery { display: grid; gap: 0.8rem; padding: 1rem; border: 1px solid var(--signal-soon); border-radius: var(--radius-md); }
@@ -175,7 +208,7 @@ const standalone = GAMES.filter((game) => !game.labHref);
 	.player-tools__save p { margin: 0.2rem 0 0; color: var(--text-muted); font-size: var(--text-small); }
 	.player-tools__state { color: var(--text-muted); font-size: var(--text-small); }
 	.player-tools__state--saved { color: var(--accent-strong); }
-	.player-tools__state--conflict { color: var(--signal-danger, #b3314b); font-weight: 700; }
+	.player-tools__state--conflict { color: var(--danger); font-weight: 700; }
 	.player-tools__choices { grid-column: 1 / -1; }
 	.room-tools { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: 1rem 2rem; padding: clamp(1.1rem, 3vw, 1.7rem); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--glass-bg); }
 	.room-tools h2 { margin: 0.25rem 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
@@ -186,6 +219,29 @@ const standalone = GAMES.filter((game) => !game.labHref);
 	.room-tools__forms label, .room-tools__status span { color: var(--text-strong); font-size: var(--text-small); }
 	.room-tools__forms select, .room-tools__forms input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
 	.room-tools__forms select:focus-visible, .room-tools__forms input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
+	.room-tools__name { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem 0.75rem; align-items: end; padding-top: 0.9rem; border-top: 1px solid var(--glass-border); }
+	.room-tools__name label { display: grid; gap: 0.35rem; color: var(--text-strong); font-size: var(--text-small); }
+	.room-tools__name input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
+	.room-tools__name input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
+	.room-tools__name-note, .room-tools__name-status { grid-column: 1 / -1; font-size: var(--text-small); }
+	.room-tools__name-status { min-height: 1.5em; color: var(--text-strong); }
+	.room-tools__chat { grid-column: 1 / -1; display: grid; gap: 0.55rem; padding-top: 0.9rem; border-top: 1px solid var(--glass-border); }
+	.room-tools__chat-note { font-size: var(--text-small); }
+	.room-tools__chat-messages { display: grid; gap: 0.4rem; max-height: 14rem; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+	.room-tools__chat-item { display: grid; grid-template-columns: auto 1fr auto; gap: 0.25rem 0.65rem; align-items: baseline; padding: 0.4rem 0.55rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); }
+	.room-tools__chat-meta { color: var(--text-muted); font-size: var(--text-micro); white-space: nowrap; }
+	.room-tools__chat-text { color: var(--text-strong); overflow-wrap: anywhere; }
+	.room-tools__chat-item--removed .room-tools__chat-text { color: var(--text-muted); font-style: italic; }
+	.room-tools__chat-actions { display: flex; gap: 0.35rem; }
+	.room-tools__chat-action { border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 0.15rem 0.45rem; color: var(--text-muted); background: transparent; font: inherit; font-size: var(--text-micro); cursor: pointer; }
+	.room-tools__chat-action:hover { border-color: var(--accent-strong); color: var(--text-strong); }
+	.room-tools__chat-status { min-height: 1.5em; margin: 0; color: var(--text-strong); font-size: var(--text-small); }
+	.room-tools__chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem 0.75rem; align-items: end; }
+	.room-tools__chat-form label { grid-column: 1 / -1; color: var(--text-strong); font-size: var(--text-small); }
+	.room-tools__chat-form input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
+	.room-tools__chat-form input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
+	.room-tools__chat-roster { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+	.room-tools__chat-roster li { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.55rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--text-micro); }
 	.room-tools__status { grid-column: 1 / -1; min-height: 1.5em; }
 	.room-tools__status output { margin-inline: 0.4rem; color: var(--text-strong); font-family: var(--font-mono, monospace); overflow-wrap: anywhere; user-select: all; }
 	.room-tools__status > div { margin-top: 0.35rem; }
@@ -208,7 +264,7 @@ const standalone = GAMES.filter((game) => !game.labHref);
 	.games-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--grid-gap); }
 	@media (max-width: 800px) { .games-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 	@media (max-width: 560px) {
-		.games-grid, .player-tools__guest, .room-tools, .room-tools__forms { grid-template-columns: 1fr; }
+		.games-grid, .player-tools__guest, .room-tools, .room-tools__forms, .room-tools__name, .room-tools__chat-form { grid-template-columns: 1fr; }
 		.games-section-heading, .player-tools__head, .player-tools__saves-head { align-items: start; flex-direction: column; }
 		.player-tools__save { grid-template-columns: 1fr; }
 		.player-tools__choices { display: grid; grid-template-columns: 1fr; }

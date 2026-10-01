@@ -2,12 +2,13 @@
 import type { APIContext } from 'astro';
 import { getGame } from '../../../data/games';
 import { serverEnvironment } from '../../../server/env';
-import { roomNamespace, roomServiceFetch } from '../../../server/game-room-gateway';
+import { roomNamespace, roomPrincipal, roomServiceFetch } from '../../../server/game-room-gateway';
 import { clientIp } from '../../../server/security-helpers';
 import { readBodyTextBounded } from '../../../server/read-body';
 import { rateLimit, type KvRateLimitStore } from '../../../server/ratelimit';
 import type { D1Database } from '../../../server/game-store';
 import { appendPlayerCookies, PlayerContextStorageError, resolvePlayerContext } from '../../../server/player-context';
+import { sha256Hex } from '../../../server/player-store';
 
 export const prerender = false;
 function json(data: unknown, status = 200): Response {
@@ -53,6 +54,16 @@ export async function POST(context: APIContext): Promise<Response> {
 			method: 'POST', body: JSON.stringify({ gameId, now: Date.now() }), request: context.request,
 		});
 		const data = await internal.json().catch(() => ({ error: 'room_service_unavailable' })) as Record<string, unknown>;
+		if (internal.ok) {
+			// Phase C room registry (plan §6.1): best-effort — a failed insert
+			// never fails an already-created room, it only hides it from /admin.
+			const ownerHash = await sha256Hex(roomPrincipal(player));
+			const expiresAt = typeof data.expiresAt === 'number' ? data.expiresAt : Date.now();
+			try {
+				await db?.prepare('INSERT OR IGNORE INTO room_registry (code, game_id, owner_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
+					.bind(code, gameId, ownerHash, Date.now(), expiresAt).run();
+			} catch { /* registry is an admin aid, not the room of record */ }
+		}
 		const response = json(internal.ok ? { roomCode: code, gameId, expiresAt: data.expiresAt, capacity: data.capacity, protocolVersion: 1 } : data, internal.status);
 		appendPlayerCookies(response.headers, player);
 		return response;

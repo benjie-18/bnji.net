@@ -1,4 +1,9 @@
 /** Shared dynamic retention policy and bounded expiry sweeps for private engagement rows. */
+import { NAMES_CONFIG } from '../config/names.config';
+import { purgeChatModerationRows } from './chat-moderation';
+import { DM_CONFIG } from '../config/dm.config';
+import { purgeDmRows } from './dm-store';
+
 type D1Statement = {
 	bind(...values: (string | number)[]): D1Statement;
 	first<T>(column?: string): Promise<T | null>;
@@ -13,8 +18,8 @@ export const MAX_TRACKING_RETENTION_DAYS = 365;
 export const MAX_RETENTION_ROWS_PER_TABLE = 50;
 /** A smaller catch-up batch runs only for tables whose primary batch was full. */
 export const MAX_RETENTION_ROWS_PER_TABLE_CATCH_UP = 10;
-/** Settings read + stale-session close + two security prunes + four primary deletes + four catch-up deletes. */
-export const MAX_RETENTION_SWEEP_QUERIES = 12;
+/** Settings read + stale-session close + two security prunes + four primary deletes + four catch-up deletes + guest-profile primary + guest-profile catch-up + five chat-moderation purges (registry, reports, reporters, log, bans — plan Phase C). */
+export const MAX_RETENTION_SWEEP_QUERIES = 24; // 19 pre-DM + 5 Phase D bounded deletes
 const DAY_MS = 86_400_000;
 
 function clampRetentionDays(value: number): number {
@@ -102,12 +107,34 @@ export async function purgeExpiredPlayerSecurityRows(
 }
 
 /**
+ * Guest display names (chat plan Phase A) follow their own fixed window —
+ * NAMES_CONFIG.guestProfiles.retentionDays — not the admin-configurable
+ * tracking window: a guest name must outlive no session by more than 30 days
+ * regardless of how the board's retention slider is set. Same bounded
+ * 50 + 10 batch shape as the tracking tables.
+ */
+export async function purgeExpiredGuestProfiles(
+	db: RetentionDb,
+	cutoff: number,
+	limit = MAX_RETENTION_ROWS_PER_TABLE,
+): Promise<number> {
+	const boundedLimit = Number.isInteger(limit) ? Math.min(MAX_RETENTION_ROWS_PER_TABLE, Math.max(1, limit)) : MAX_RETENTION_ROWS_PER_TABLE;
+	const result = await db.prepare(
+		`DELETE FROM guest_profiles WHERE session_hash IN (
+			SELECT session_hash FROM guest_profiles WHERE updated_at < ?1 ORDER BY updated_at ASC, session_hash ASC LIMIT ?2
+		)`,
+	).bind(cutoff, boundedLimit).run();
+	return Number((result as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0);
+}
+
+/**
  * One invocation deletes up to 60 expired rows per tracking table: a 50-row
  * primary batch plus a 10-row catch-up batch only when the primary batch was
  * full. Two additional 50-row batches prune expired/revoked player sessions
- * and stale IP throttle buckets. At most 12 D1 statements run, well below D1's
- * 50-query invocation ceiling. The row-write budget is documented with the
- * shared Free-plan headroom in docs/GAMES-OPERATIONS.md.
+ * and stale IP throttle buckets, and one bounded batch (plus catch-up) expires
+ * guest display names on their fixed 30-day window. At most 14 D1 statements
+ * run, well below D1's 50-query invocation ceiling. The row-write budget is
+ * documented with the shared Free-plan headroom in docs/GAMES-OPERATIONS.md.
  */
 export async function runRetentionSweep(env: Record<string, unknown>): Promise<void> {
 	const db = env.BOARD_DB as RetentionDb | undefined;
@@ -122,7 +149,20 @@ export async function runRetentionSweep(env: Record<string, unknown>): Promise<v
 		await Promise.all(tables
 			.filter((_table, index) => firstPass[index] === MAX_RETENTION_ROWS_PER_TABLE)
 			.map((table) => purgeExpiredTrackingRows(db, table, cutoff, MAX_RETENTION_ROWS_PER_TABLE_CATCH_UP)));
-
+		// Guest display names: fixed window, independent of the tracking slider.
+		const guestCutoff = Date.now() - NAMES_CONFIG.guestProfiles.retentionDays * DAY_MS;
+		const guestPass = await purgeExpiredGuestProfiles(db, guestCutoff);
+		if (guestPass === MAX_RETENTION_ROWS_PER_TABLE) {
+			await purgeExpiredGuestProfiles(db, guestCutoff, MAX_RETENTION_ROWS_PER_TABLE_CATCH_UP);
+		}
+		// Phase C: registry + bans expire on their own clocks; reports,
+		// reporter de-dup rows and the audit log follow the shared window.
+		await purgeChatModerationRows(db, { now: Date.now(), cutoff });
+		// Phase D: DM messages follow DM_CONFIG.retentionDays (owner answer:
+		// 60 days); DM report evidence follows the shared tracking window like
+		// every other moderation snapshot (plan §9.1/§9.3).
+		const dmMessageCutoff = Date.now() - DM_CONFIG.retentionDays * DAY_MS;
+		await purgeDmRows(db, { now: Date.now(), messageCutoff: dmMessageCutoff, reportCutoff: cutoff });
 	} catch {
 		// Cron failures are visible in Worker invocation logs but contain no visitor data.
 		console.error('[bnji] tracking retention sweep failed');

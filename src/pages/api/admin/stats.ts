@@ -172,6 +172,35 @@ export async function GET(context: APIContext): Promise<Response> {
 				})
 		: null;
 
+	/* --- site-wide tracking (profile_views + security_events) ------------- */
+	// Three read-only windows over tables that already exist: a 7-day path
+	// leaderboard, a 30-minute live pulse, and 30 days of referring HOSTS
+	// from page-view rows (hosts only — full referrer URLs can carry
+	// personal browsing paths and the dashboard only needs the source site).
+	// Absent on store failure, per this endpoint's "no invented numbers" rule.
+	const LIVE_WINDOW_MS = 30 * 60_000;
+	const siteHost = new URL(context.request.url).hostname;
+	const excludeHosts = [siteHost, siteHost.startsWith('www.') ? siteHost.slice(4) : `www.${siteHost}`];
+	let site: unknown = null;
+	if (profileStore && securityStore) {
+		try {
+			const [topPaths, live, referrers] = await Promise.all([
+				profileStore.getTopPaths(now - 7 * DAY_MS, 10),
+				profileStore.getLiveActivity(now - LIVE_WINDOW_MS, 10),
+				securityStore.topReferrers(now - 30 * DAY_MS, 8, excludeHosts),
+			]);
+			site = {
+				topPaths,
+				live,
+				referrers,
+				windows: { topPathsDays: 7, liveMinutes: 30, referrersDays: 30 },
+				note: 'Views: one per session per day (profile_views). Referrers: page-view rows from security_events, grouped to hosts.',
+			};
+		} catch (error) {
+			console.warn('[bnji] stats: site tracking failed', error);
+		}
+	}
+
 	/* --- secret codes ----------------------------------------------------- */
 	const secretCodes = secretCodeStore
 		? await secretCodeStore.getCodeStats().catch((error) => {
@@ -189,6 +218,7 @@ export async function GET(context: APIContext): Promise<Response> {
 		generatedAt: now,
 		traffic,
 		timeSeries,
+		site,
 		engagement,
 		board,
 		security,

@@ -1,0 +1,48 @@
+{
+	"name": "bnji-net-test",
+	"compatibility_date": "2026-09-14",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"main": "tests/workerd/worker.ts",
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "GAME_ROOMS",
+				"class_name": "GameRoom"
+			},
+			{
+				"name": "DM_CONVERSATIONS",
+				"class_name": "DMConversation"
+			},
+			{
+				"name": "PRESENCE",
+				"class_name": "Presence"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "game-rooms-v1",
+			"new_sqlite_classes": [
+				"GameRoom"
+			]
+		},
+		{
+			"tag": "dm-conversations-v1",
+			"new_sqlite_classes": [
+				"DMConversation"
+			]
+		},
+		{
+			"tag": "presence-v1",
+			"new_sqlite_classes": [
+				"Presence"
+			]
+		}
+	],
+	"vars": {
+		"ACCESS_SECRET": "workerd-test-secret"
+	},
+	"d1_databases": []
+}

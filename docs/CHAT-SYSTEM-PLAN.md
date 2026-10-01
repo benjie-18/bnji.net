@@ -1,6 +1,15 @@
 # Chat, private messaging and friends — implementation plan
 
-**Status: PLAN ONLY. Nothing in this document is implemented.**
+**Status: living spec. Phase A (display names + account handles) and Phase B
+(room chat: delivery, history, rate limits, host moderation — DO tables,
+`CHAT_CONFIG`, protocol, panel) are implemented as of 2026-09-30
+(migration `0013_names.sql`, `src/server/display-name.ts`,
+`src/config/names.config.ts`, `POST/GET /api/profile/name`,
+`GET /api/players?handle=`, handle claim via `/api/games/account`
+`action: "set-handle"`; Phase B in `src/server/game-room-protocol.ts`,
+`src/server/game-room-do.ts`, `src/config/chat.config.ts`,
+`tests/workerd/room-chat.spec.ts`); phases C–E are design only —
+none of them is deployed.**
 Written 2026-09-30 (America/Toronto) from an audit of commit `48865d8`.
 
 This plan is authorised by an explicit owner decision that overrides the
@@ -20,7 +29,7 @@ are the rules this plan is allowed to spend.
 | 1 | Display names for registered accounts and guests | Rooms, chat, DMs, Paint | Account: permanent. Guest: session-scoped | A |
 | 2 | Room chat | `/games/` private rooms | **Ephemeral: lives and dies with the room (≤2 h), survives reconnects** | B |
 | 3 | Moderation tooling + admin-visible chat | `/admin` | Room-lifetime; reports bounded by the shared retention sweep | C |
-| 4 | Live private messaging, account↔account, with images | New `/messages/` | Bounded retention window (default 30 days), not permanent | D |
+| 4 | Live private messaging, account↔account, with images | New `/messages/` | Bounded retention window (default 60 days, owner answer 2026-09-30), not permanent | D |
 | 5 | Friends system | New `/friends/` | Permanent while both accounts exist; cascades on deletion | E |
 | 6 | Presence + unread notifications | Header badge | Ephemeral | E |
 
@@ -56,7 +65,7 @@ except the ones marked **hard to reverse**.
 | D4 | DM transport | Per-conversation DO / per-player inbox DO / polling | **Per-conversation DO** (≤2 members), mirroring `GameRoom`; polling as a degrade path |
 | D5 | DM persistence | DO SQLite / D1 / none | **D1 `dm_messages`** with a retention window; D1 is the durable record, the DO is only live fanout |
 | D6 | DM images | R2 / D1 base64 / none | **R2 if a Free-account binding is confirmed**, else D1 base64 (board precedent, ≤1.4 MB). Verify R2 binding availability first — sources conflict and enabling R2 needs a payment method |
-| D7 | Who may DM whom | Anyone / friends only / message requests | **Friends only**, with one "message request" from a non-friend as a follow-up if the phase overruns |
+| D7 | Who may DM whom | Anyone / friends only / message requests | **Friends only**, with one "message request" from a non-friend as a follow-up if the phase overruns. **Resolved 2026-09-30 (flagged sequencing tension: the friends tables are Phase E) — Phase D ships open between any two registered accounts, rate-limited and handle-exact; Phase E flips the gate to friends-only and adds blocks**  — **E flipped the gate: open/send/attachments now answer 403 `not_friends` (or `blocked`), blocks remove the friendship so sends die for both sides** |
 | D8 | Friend discovery | Handle search / invite links / both | **Unique handle, exact-match search** + invite link. No directory, no suggestions |
 | D9 | Presence | Global DO hub / per-conversation only / none | **One `Presence` DO (`idFromName('global')`)**, friends-only visibility, hibernating sockets |
 | D10 | Admin visibility into DMs | metadata only / on report / full content | **On report by default, full logging available as a config value** — see §8.3 and Q3. Whichever is set must be disclosed in the UI |
@@ -141,15 +150,18 @@ that a chat message leaves `revision` unchanged.
 
 ### 5.4 Rate limiting
 
-The current per-connection check (1 msg/s, evaluated before parsing, closes the
-socket with `1013`) cannot be shared with chat — a normal typing burst would
-kill the connection. New shape:
+~~The current per-connection check (1 msg/s, evaluated before parsing, closes
+the socket with `1013`) cannot be shared with chat — a normal typing burst would
+kill the connection.~~ **Implemented in Phase B as follows:**
 
-1. **Global abuse ceiling** (pre-parse, byte-bounded): raise to 8 msg/s,
-   close on breach. Still cheap, still first.
+1. **Global abuse ceiling** (pre-parse, byte-bounded): raised to 8 msg/s
+   (`CHAT_CONFIG.rate.globalPerSecond`), close on breach with `1013`. Still
+   cheap, still first — checked before parsing, so junk floods cost one
+   comparison.
 2. **Per-member chat budget**: token bucket in the socket attachment (burst 5,
    refill ~1 per 4 s ≈ 15/min sustained). Attachments survive hibernation, so
-   this costs zero storage reads.
+   this costs zero storage reads; a *reconnect* gets a fresh bucket, which is
+   the correct reset point (a new socket is a new connection).
 3. **Storage cap**: 200 rows/room, trimmed on insert.
 
 Zero KV writes. On Workers Free, KV allows 1,000 writes/day account-wide and
@@ -159,7 +171,10 @@ room create/join already spend some of it.
 
 - **Host controls**: remove a message (visible as "message removed"), kick a
   member (existing membership delete path), mute a member for the room's
-  remaining lifetime (attachment flag).
+  remaining lifetime. *(Phase B amendment: the mute flag lives in a
+  `game_room_mutes` DO table keyed by hashed principal, not in the socket
+  attachment — attachments die with the socket, so an attachment flag would
+  reset on every reconnect. The table is deleted with the room.)*
 - **Self-service**: delete own message (removes text, leaves a tombstone until
   room expiry so sequence numbers stay stable).
 - Every moderation action by the host is recorded in the room's own DO table
@@ -189,6 +204,10 @@ in the URL", and it is the price of admin-visible rooms. The alternative (no
 registry, DO pushes flagged content to D1) makes ordinary moderation
 impossible, so the registry is recommended.
 
+> **Owner-approved (2026-09-30):** the site is personal-use only; small gaps
+> of exactly this kind are acceptable. The registry trade-off above is
+> accepted as the price of admin-visible rooms — documented, not a blocker.
+
 ### 6.2 Admin surfaces (`/admin` → new **Chat** tab)
 
 | Panel | Reads | Actions |
@@ -205,6 +224,26 @@ The DO read endpoint is **service-authenticated**: only the Worker route may
 call it, and the DO verifies a header derived from a Worker secret, never a
 client-supplied value — same pattern as `x-bnji-verified-principal`.
 
+**Implemented in Phase C (deviations recorded, not silent):**
+
+- Service token = `sha256("bnji-room-admin:v1:" + ACCESS_SECRET)` in header
+  `x-bnji-room-admin`; the DO fails closed (403 `service_unauthorized`) with no
+  secret, and the gateway answers 503 `admin_service_unconfigured` so a missing
+  secret is loudly visible rather than silently broken.
+- The transcript panel gained **Kick** (disconnect without a ban) and the queue
+  gained an **Active bans** panel backed by a new `chat_bans` table — the plan
+  listed ban creation in §6.2/§6.4 but no ban *store* or unban path (gap
+  filled; see §9.1).
+- `close_room` also deletes the room's registry row (404-tolerant), so a
+  closed room never lingers in the Active rooms list.
+- Escalate = ban the reported message's author for
+  `moderation.defaultBanMinutes` (max `moderation.maxBanMinutes`); every
+  successful action writes `chat_moderation_log`.
+- Routes live on the Astro pages API (`src/pages/api/admin/chat/*`), not the
+  worker `index.ts` — the admin auth helpers (`isAdminRequest`, D1, session
+  cookies) all exist there; `roomServiceFetch` reaches the DO the same way
+  (`/admin/read`, `/admin/action`).
+
 ### 6.3 Server-side content filter
 
 Optional and config-driven (`src/config/chat.config.ts`): a small blocklist and
@@ -220,13 +259,24 @@ into D1 `chat_reports` at report time, so moderation evidence survives the
 room's expiry. Distinct-report counting per principal prevents one reporter
 from inflating a count, matching `0004_board_moderation.sql`.
 
+**Implemented in Phase C:** snapshots carry `author_hash` (sha256 of the
+principal, not the member ID — the member ID is room-scoped and useless for
+account export/deletion) plus label, text and message time; distinct reporters
+live in `chat_reporters` (PK `room_code + message_n + reporter_hash`). The
+HTTP layer mirrors the board's pattern (`senders` analogue): the report route
+uses D1 counter `reserveAuthAttempt` with prefix `bnji-chat-report:` (10 per
+10 minutes per hashed IP — never KV, per the standing no-KV rule), a
+same-origin check, and explicit errors: `not_member` (403), `message_not_found`
+(404), `room_expired` (410), `rate_limited` (429), `room_service_unavailable`
+(503).
+
 ## 7. Phase D — live private messaging (registered accounts)
 
 ### 7.1 Product
 
 - `/messages/` lists conversations with unread counts; opening one connects a
   hibernating WebSocket for live delivery.
-- Messages persist in D1 for the retention window (default 30 days), so an
+- Messages persist in D1 for the retention window (default 60 days — owner answer 2026-09-30), so an
   offline recipient sees them on next sign-in; "session-based" in the sense
   that nothing is promised forever, not that history vanishes when a tab
   closes.
@@ -240,6 +290,10 @@ from inflating a count, matching `0004_board_moderation.sql`.
 player IDs: `sha256([a, b].sort().join(':'))`. This makes "the conversation
 between A and B" a single row no matter who initiates, and the DO name derives
 from the same digest, so no lookup race can create duplicates.
+
+> **Prepared for groups (owner decision 2026-09-30, not scheduled):** group
+> conversations will require this identity and the ≤2-member assumption in D4
+> to be redesigned first — see the owner addition in §9.4.
 
 ### 7.3 Delivery and fanout
 
@@ -278,8 +332,19 @@ browser rather than in a Worker-side image library.
 - Image uploads additionally limited per hour per account.
 - Blocked accounts cannot send, cannot open conversations, and their existing
   conversations are hidden, not deleted.
+- **Phase D interim (owner answer 2026-09-30):** with friends/blocks still in
+  Phase E, the enforcement that ships in D is the Phase C `chat_bans` row — a
+  banned principal gets `403 chat_banned` on every DM route. `player_blocks`
+  and conversation hiding arrive with Phase E, which also flips D7 to
+  friends-only.
 
 ## 8. Phase E — friends, presence, notifications
+
+Phase E is implemented as of 2026-10-01: `migrations/0016_friends.sql`,
+`/friends/` + `GET/POST/DELETE /api/friends`, the `Presence` DO behind
+`GET /api/presence`, the in-app badge via `GET /api/notifications`, and the
+D7 friends-only gate on DM open/send/attachments — with tests at the node,
+workerd and (locally-run) Playwright tiers.
 
 ### 8.1 Schema
 
@@ -327,10 +392,12 @@ processor and a new data-register entry.
 | `guest_profiles` | A | guest-session lifetime | keyed by session **digest** |
 | `player_handles` (or a column on `game_players`) | A | account lifetime | unique, exact-match search |
 | `room_registry` | C | 2 h + sweep | enables admin inspection (§6.1) |
-| `chat_reports` | C | shared retention sweep | content snapshot at report time |
-| `chat_moderation_log` | C | shared retention sweep | admin audit trail |
+| `chat_reports` | C | shared retention sweep (≤`trackingRetentionDays`) | content snapshot at report time (`author_hash` = sha256(principal)); UNIQUE `(room_code, message_n)` |
+| `chat_reporters` | C | with its report | PK `(room_code, message_n, reporter_hash)` — distinct-report counting |
+| `chat_bans` | C | until `expires_at` (≤`moderation.maxBanMinutes`) or manual unban; expired rows swept | principal hash + reason; blocks `/ws` join (403 `chat_banned`) |
+| `chat_moderation_log` | C | shared retention sweep | admin audit trail (action, hashes, detail — unlinkable to accounts) |
 | `dm_conversations` | D | account lifetime | canonical pair digest |
-| `dm_messages` | D | **default 30 days**, config | body text, sender, sequence, read watermark |
+| `dm_messages` | D | **default 60 days** (owner answer 2026-09-30), config | body text, sender, sequence, read watermark |
 | `dm_attachments` | D | with its message | fallback store if R2 is unavailable |
 | `player_friends` / `player_blocks` | E | account lifetime | cascade on account deletion |
 | `room_chat_archive` (only if D14 is enabled) | C+ | configurable | opt-in per room, disclosed in-room |
@@ -364,6 +431,25 @@ Message editing, delete-for-everyone, conversation archiving/export, group
 chats, and link previews (a link preview fetches a URL the sender chose —
 that is a server-side request forgery and privacy surface, not a convenience).
 
+**Phase C resolution (2026-09-30):** the export now includes a
+`chatModeration` section — `reportsOnYourMessages` (snapshots where your
+message was reported), `reportsYouFiled`, and `ban` — and account deletion
+sweeps every Phase C row keyed to the principal (`chat_reports.author_hash`,
+`chat_reporters.reporter_hash`, `chat_bans`, `room_registry.owner_hash`) inside
+its existing atomic batch. `chat_moderation_log` is deliberately kept: its rows
+are hashed-principal audit entries with no account link, same treatment as the
+board's moderator notes. Live room text still cannot be exported (room-keyed,
+≤2 h) — the `roomChat: { included: false, reason }` section stands, with its
+comment updated now that the registry exists.
+
+**Owner addition (2026-09-30, not scheduled):** the owner wants **group
+conversations (group chats)** added to this plan. They stay deferred until the
+owner schedules them; when they are, Phase D is the phase to adapt — §7.2's
+pair-digest conversation identity and D4's per-conversation DO both assume
+exactly two members and must generalize (multi-member identity, roster/fanout,
+per-group membership and moderation) *before* any D code lands. Do not start
+that work until it is scheduled.
+
 ### 9.5 What this means for account export/deletion
 
 Both already exist (`/api/games/account`, `/api/games/account/export`). They
@@ -371,20 +457,41 @@ must be extended in the phase that adds each table, not afterwards — an export
 that silently omits the user's messages is a correctness bug under
 `DATA-COLLECTION-POLICY.md`.
 
+**Phase B note (2026-09-30, flagged tension):** `game_room_chat` and
+`game_room_chat_log` are the first tables added by a phase that *cannot* be
+gathered into the account export: they live inside ephemeral per-room DOs,
+are keyed to rooms rather than accounts (the only link is a hashed principal),
+and there is no room index until Phase C's `room_registry`. Because chat also
+cannot outlive its room (≤2 h — far shorter than any export/deletion
+round-trip), Phase B's export ships an explicit `roomChat: { included:
+false, reason }` section so the omission is declared, never silent, and
+account deletion needs no chat cascade (nothing account-linked survives the
+room). When `room_registry` exists, revisit whether deletion should sweep
+still-live rooms for the deleted account's hashed principal; exporting full
+room-chat history would additionally need a principal index across live rooms
+and is an owner decision if ever wanted.
+
 ## 10. Planned API surface
 
 | Route | Phase | Auth |
 | --- | --- | --- |
 | `POST /api/profile/name` | A | player-context (guest or account) |
 | `GET/POST /api/chat/messages` (or WS frames on the existing room socket) | B | room membership |
-| `POST /api/chat/report` | C | room membership |
-| `GET /api/admin/chat/rooms`, `GET /api/admin/chat/room`, `POST /api/admin/chat/action` | C | admin guard |
-| `GET /api/dm/conversations` | D | account |
-| `POST /api/dm/messages` | D | account + friendship |
-| `POST /api/dm/attachments` | D | account + friendship |
-| `GET /api/dm/media/:id` | D | account + conversation membership |
-| `GET/POST/DELETE /api/friends` | E | account |
-| `GET /api/presence` (WS) | E | account |
+| `POST /api/chat/report` | C ✅ | room membership (DO snapshot → D1) |
+| `GET /api/admin/chat/rooms`, `GET /api/admin/chat/room`, `POST /api/admin/chat/action` | C ✅ | admin guard (pages API → DO `/admin/*` service endpoints) |
+| `GET /api/dm/conversations` | D ✅ | account |
+| `POST /api/dm/conversations` (open by exact handle — the composer's entry, D8) | D ✅ | account + friendship (enforced since E) |
+| `GET /api/dm/messages` (history pull: `after` catch-up / `before` scrollback / newest page — §7.3's reconnect) | D ✅ | account + conversation membership |
+| `POST /api/dm/messages` | D ✅ | account + friendship (enforced since E per D7's resolved answer — 403 `not_friends`/`blocked`) |
+| `POST /api/dm/attachments` | D ✅ | account + friendship (enforced since E) |
+| `GET /api/dm/media/:id` | D ✅ | account + conversation membership |
+| `GET /api/dm/ws` (live-frame socket upgrade) | D ✅ | account + conversation membership |
+| `POST /api/dm/read` (read watermark, §7.1) | D ✅ | account + conversation membership |
+| `POST /api/dm/hide` (delete-for-me, D12) | D ✅ | account + conversation membership |
+| `POST /api/dm/report` (§12.5's report path — owner: gate filled inside D) | D ✅ | account, non-author member |
+| `GET/POST/DELETE /api/friends` | E ✅ | account |
+| `GET /api/presence` (WS) | E ✅ | account (route mints handle + accepted-friend handles; the DO re-validates shapes) |
+| `GET /api/notifications` (in-app badge counts, §8.3) | E ✅ | account |
 
 Every route: `prerender = false`, same-origin check on mutations, bounded body
 reads (`readBodyTextBounded`), explicit error vocabulary, `no-store` on
@@ -442,6 +549,12 @@ process, not a filter: a report path, a block/ban path, and a written owner
 response policy — required before image messaging ships
 (`DATA-COLLECTION-POLICY.md` §7).
 
+**Phase D resolution (2026-09-30, owner: fill the gate inside D):** all three
+exist as of Phase D — `POST /api/dm/report` snapshots into `dm_reports`
+(admin Chat tab, shared audit log), `chat_bans` is enforced on every DM route
+(escalate action included), and the written response policy is drafted in
+`DATA-COLLECTION-POLICY.md` §9 for the owner's review before deploy.
+
 ### 12.6 No end-to-end encryption, and the UI must not imply it
 
 Admin-visible chat and E2E encryption are mutually exclusive. This plan chooses
@@ -483,6 +596,17 @@ not read a conversation). End-to-end two-browser-context tests belong in
 `tests/e2e/`, which cannot run in this sandbox (no Chromium binary) — run them
 locally before any deploy.
 
+> **Status (2026-09-30):** the harness above was adopted —
+> `@cloudflare/vitest-pool-workers` (Tier A) runs the DO suite
+> (`tests/workerd/*.spec.ts`), and the intro paragraph predates it. Phase C's
+> slice of the matrix: `tests/chat-moderation.test.ts` (D1 stores, §6.3
+> helpers, report/admin route guards, export + deletion assertions) and
+> `tests/workerd/room-moderation.spec.ts` (service auth 403/200, transcript
+> read, delete/kick/close handoffs, `/report` membership + snapshot, blocklist
+> rejection) — plus Report/admin-tombstone/blocked copy wiring in
+> `tests/e2e/game-room-chat.spec.ts` (local Playwright run required before
+> deploy).
+
 ## 14. Effort, order and rollback
 
 | Phase | Work | Estimate |
@@ -507,25 +631,27 @@ path. Images (Phase D) can be disabled independently of text messaging.
 
 ## 15. Open questions for the owner
 
-1. **Admins and DM content (D10).** Metadata + on-report snapshots (recommended)
-   or full content logging from day one? If full logging is chosen, the DM
-   composer needs a visible line saying so — otherwise the first friend who
-   finds out will be right to be annoyed.
-2. **Retention window for DMs.** 30 days recommended; 7 days if you want
-   "live-ish", 90 if history matters more than storage.
-3. **R2 vs D1 for images (D6).** R2 is the better long-term store, but enabling
-   it needs a payment method on file and its Free-account binding availability
-   must be confirmed in the dashboard. D1 base64 is proven here and free, with
-   a ~1.4 MB ceiling.
-4. **Guest names (D3).** Session-scoped in D1 as planned, or cookie-only if you
-   want guests to be completely absent from the database.
-5. **Handles (D8).** One global handle per account is simple and enables friend
-   search; it is also the first permanently public identifier the site has.
-   Confirm that is acceptable versus invite-links-only.
-6. **Paint attribution (§6 of the data policy).** Which extensions do you
-   actually want — account attribution, action detail, or full replay? They are
-   very different storage and privacy propositions and should be decided
-   before that work is scheduled.
+All six questions are answered; the questions stay as the record of what was
+asked, each with the owner's decision.
+
+1. **Admins and DM content (D10).** — **Resolved 2026-09-30: plan default.**
+   Metadata plus on-report snapshots; full-content logging stays off. (If that
+   ever changes, the DM composer must say so at the point of use.)
+2. **Retention window for DMs.** — **Resolved 2026-09-30: 60 days** (owner
+   picked 60 over the 30-day recommendation; `docs/DATA.md` §11 updated).
+3. **R2 vs D1 for images (D6).** — **Resolved 2026-09-30: try R2 only if it
+   costs nothing.** Never enable billing or create a bucket without asking the
+   owner first; D1 base64 (proven, free, ~1.4 MB ceiling) is the shipping path
+   while R2 stays unavailable.
+4. **Guest names (D3).** — **Resolved 2026-09-30: D1, session-scoped** as
+   planned (`guest_profiles`, keyed by session digest) — shipped in Phase A.
+5. **Handles (D8).** — **Resolved 2026-09-30: one global handle per account**,
+   exact-match search — shipped in Phase A.
+6. **Paint attribution (§6 of the data policy).** — **Resolved 2026-09-30:
+   account/session attribution only**, plus the action detail the owner
+   chooses; no full replay. (Data policy §2 records the wider permission the
+   owner added: full IPs and stored sticker images are *allowed*, each needing
+   its own register row before it ships.)
 
 ## 16. What this plan does not do
 

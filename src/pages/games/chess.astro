@@ -1,0 +1,191 @@
+---
+/**
+ * `/games/chess/` — the first standalone catalog game: local practice
+ * (hot-seat against the shared engine) plus private-room play where every
+ * move is replayed by the `bnji.chess` authority inside the GameRoom DO.
+ */
+import GameShell from '../../components/GameShell.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import RoomPanel from '../../components/RoomPanel.astro';
+import Layout from '../../layouts/Layout.astro';
+
+const instructions =
+	'Click a piece, then a highlighted square to move. Promotion is automatic (queen). ' +
+	'Practice both sides locally, or create a private room below to play a friend — the server validates every move. ' +
+	'A fastest checkmate can be claimed to the leaderboard. Pause stops input while the board stays visible.';
+---
+
+<Layout title="Chess" description="Chess on bnji.net — server-validated private-room games and local practice, with a fastest-mate leaderboard.">
+	<PageHeader
+		index="07"
+		label="GAMES / CHESS"
+		titleId="page-title"
+		title="Chess"
+		description="Full chess rules — castling, en passant, promotion, draws — validated server-side. Play locally or in a private room with a friend."
+	/>
+
+	<div class="container chess-body">
+		<GameShell gameId="bnji.chess" title="Chess" instructions={instructions} initialState="ready">
+			<div class="chess-layout">
+				<div class="chess-side" data-glass>
+					<p class="chess-mode" data-chess-mode>Practice mode</p>
+					<p class="chess-status" data-chess-status role="status" aria-live="polite" aria-atomic="true">Loading the board…</p>
+					<p class="chess-seats" data-chess-seats></p>
+					<div class="chess-actions">
+						<button type="button" class="chess-button" data-chess-reset>New practice game</button>
+						<button type="button" class="chess-button chess-button--danger" data-chess-resign hidden>Resign from room</button>
+						<button type="button" class="chess-button chess-button--primary" data-chess-claim-open hidden>Claim leaderboard score</button>
+					</div>
+				</div>
+
+				<div class="chess-board-wrap">
+					<div class="chess-board" data-chess-board role="group" aria-label="Chess board, White at the bottom"></div>
+				</div>
+
+				<div class="chess-moves" data-glass>
+					<h3>Moves</h3>
+					<ol data-chess-moves aria-label="Move list"></ol>
+				</div>
+			</div>
+			<div class="chess-results" slot="results">
+				<p class="chess-results__note" data-chess-result-note></p>
+				<form class="chess-claim" data-chess-claim hidden>
+					<h3>Claim leaderboard score</h3>
+					<p class="chess-claim__note" data-chess-claim-note></p>
+					<label for="chess-claim-name">Display name</label>
+					<input id="chess-claim-name" name="displayName" type="text" maxlength="24" autocomplete="nickname" required />
+					<button type="submit" class="chess-button chess-button--primary">Submit checkmate claim</button>
+					<p class="chess-claim__status" data-chess-claim-status role="status" aria-live="polite"></p>
+				</form>
+				<button type="button" class="chess-button" data-chess-results-back>Back to the board</button>
+			</div>
+		</GameShell>
+
+		<RoomPanel gameId="bnji.chess" />
+	</div>
+</Layout>
+
+<script>
+	import { initGameShells } from '../../scripts/game-shell';
+	import { mountGameLifecycle, mountGameSession } from '../../scripts/game-runtime';
+	import { mountGameRooms } from '../../scripts/game-room-ui';
+	import { createChessGame } from '../../scripts/games/chess';
+
+	initGameShells();
+	const chess = createChessGame();
+	const shell = document.querySelector<HTMLElement>('[data-game-shell]');
+	if (shell) mountGameLifecycle(shell, chess.module);
+	if (shell) mountGameSession(shell, 'bnji.chess');
+	const rooms = document.querySelector<HTMLElement>('[data-room-tools]');
+	if (rooms) mountGameRooms(rooms, { onFrame: chess.onFrame, onSocket: chess.onSocket });
+</script>
+
+<style>
+	.chess-body {
+		display: grid;
+		gap: clamp(1.5rem, 4vw, 3rem);
+		padding-block: 0 6rem;
+	}
+	.chess-layout {
+		display: grid;
+		gap: clamp(1rem, 2.5vw, 1.75rem);
+		grid-template-columns: minmax(14rem, 1fr) auto minmax(9rem, 0.7fr);
+		align-items: start;
+	}
+	@media (max-width: 900px) {
+		.chess-layout { grid-template-columns: 1fr; }
+	}
+	.chess-side {
+		display: grid;
+		gap: 0.85rem;
+		align-content: start;
+		padding: 1rem;
+		border-radius: var(--radius-lg, 16px);
+	}
+	.chess-mode {
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.14em;
+		color: var(--text-muted, #9aa3b2);
+	}
+	.chess-status { font-weight: 600; min-height: 2.4em; }
+	.chess-seats { font-size: 0.88rem; color: var(--text-muted, #9aa3b2); }
+	.chess-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+	.chess-button {
+		padding: 0.45rem 0.9rem;
+		border-radius: 999px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.chess-button:hover:not(:disabled) { background: rgba(255 255 255 / 0.08); }
+	.chess-button--primary { background: var(--accent, #6ea8fe); border-color: transparent; color: #0b1020; font-weight: 600; }
+	.chess-button--danger { border-color: var(--danger, #ff6b6b); color: var(--danger, #ff6b6b); }
+	.chess-results { display: grid; gap: 0.9rem; justify-items: start; }
+	.chess-results__note { font-weight: 600; }
+	.chess-claim { display: grid; gap: 0.5rem; justify-items: start; padding-top: 0.5rem; border-top: 1px solid var(--glass-border, rgba(255 255 255 / 0.12)); width: min(100%, 26rem); }
+	.chess-claim h3 { font-size: 1rem; }
+	.chess-claim__note, .chess-claim__status { font-size: 0.85rem; color: var(--text-muted, #9aa3b2); }
+	.chess-claim input {
+		padding: 0.5rem 0.7rem;
+		border-radius: 10px;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.16));
+		background: rgba(0 0 0 / 0.25);
+		color: inherit;
+		font: inherit;
+		width: 100%;
+	}
+	.chess-board-wrap { justify-self: center; }
+	.chess-board {
+		display: grid;
+		grid-template-columns: repeat(8, clamp(2.1rem, 7vw, 3.4rem));
+		grid-template-rows: repeat(8, clamp(2.1rem, 7vw, 3.4rem));
+		border-radius: 10px;
+		overflow: hidden;
+		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.2));
+	}
+	.chess-square {
+		display: grid;
+		place-items: center;
+		border: 0;
+		padding: 0;
+		cursor: pointer;
+		font-size: clamp(1.35rem, 5vw, 2.2rem);
+		line-height: 1;
+		position: relative;
+	}
+	.chess-square.is-light { background: #cfd8e6; }
+	.chess-square.is-dark { background: #4f6280; }
+	.chess-square.is-white { color: #f7f9fc; text-shadow: 0 1px 2px #1b2436, 0 0 1px #1b2436; }
+	.chess-square.is-black { color: #171d29; }
+	.chess-square.is-selected { outline: 3px solid var(--accent, #6ea8fe); outline-offset: -3px; }
+	.chess-square.is-target::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: radial-gradient(circle, rgba(110 168 254 / 0.85) 26%, transparent 28%);
+		pointer-events: none;
+	}
+	.chess-square:focus-visible { outline: 3px solid var(--accent, #6ea8fe); outline-offset: -3px; z-index: 1; }
+	.chess-moves {
+		display: grid;
+		gap: 0.5rem;
+		align-content: start;
+		padding: 0.9rem 1rem;
+		border-radius: var(--radius-lg, 16px);
+	}
+	.chess-moves h3 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted, #9aa3b2); }
+	.chess-moves ol {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.25rem;
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: 0.88rem;
+		max-height: 18rem;
+		overflow-y: auto;
+	}
+</style>

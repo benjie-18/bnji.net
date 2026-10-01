@@ -1,9 +1,11 @@
 /** Astro HTTP entrypoint plus the hourly free-plan retention sweep. */
 import { handle } from '@astrojs/cloudflare/handler';
+import { DMConversation } from './server/dm-conversation-do';
 import { GameRoom } from './server/game-room-do';
+import { Presence } from './server/presence-do';
 import { runRetentionSweep } from './server/tracking-retention';
 
-export { GameRoom };
+export { DMConversation, GameRoom, Presence };
 
 export default {
 	fetch: handle,

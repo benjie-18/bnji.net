@@ -8,6 +8,9 @@ import { appendPlayerCookies, PlayerContextStorageError, resolvePlayerContext, t
 import { insertValidatedScore, type D1Database } from '../../../server/game-store';
 import { getScoreVerifier } from '../../../server/score-verifiers';
 import { serverEnvironment } from '../../../server/env';
+// Side effect: registers the score verifiers (`bnji.chess`, `bnji.pvp-minesweeper`) in this isolate.
+import '../../../server/game-adapters/chess';
+import '../../../server/game-adapters/pvp-minesweeper';
 
 export const prerender = false;
 const RATE_WINDOW_MS = 60_000;
@@ -81,14 +84,23 @@ export async function POST(context: APIContext): Promise<Response> {
 		proof: body.proof,
 	};
 	try {
-		const verified = await verifier(claim, { sessionId: player.sessionId, playerId: player.playerId });
+		const verified = await verifier(claim, { sessionId: player.sessionId, playerId: player.playerId }, { GAME_ROOMS: (env as { GAME_ROOMS?: import('../../../server/game-room-gateway').GameRoomNamespace }).GAME_ROOMS });
 		if (!verified || !validInteger(verified.score, 1_000_000_000) || (verified.tieBreak !== null && !validInteger(verified.tieBreak, 1_000_000_000))) {
 			return json({ error: 'score_rejected' }, 422, player);
+		}
+		let finalScore = verified.score;
+		if (verified.increment === true) {
+			// Attested win: the stored best IS the verified win count — never a client total.
+			const current = await db.prepare(
+				"SELECT score FROM game_scores WHERE session_id = ?1 AND game_id = ?2 AND mode_id = ?3 AND validation_state = 'validated' LIMIT 1",
+			).bind(player.sessionId, gameId, modeId).first<{ score: number }>();
+			finalScore = Number(current?.score ?? 0) + 1;
+			if (!validInteger(finalScore, 1_000_000_000)) return json({ error: 'score_rejected' }, 422, player);
 		}
 		const outcome = await insertValidatedScore(db, {
 			gameId,
 			modeId,
-			score: verified.score,
+			score: finalScore,
 			tieBreak: verified.tieBreak,
 			achievedAt: Date.now(),
 			sessionId: player.sessionId,
@@ -98,7 +110,7 @@ export async function POST(context: APIContext): Promise<Response> {
 		});
 		if (outcome === 'duplicate') return json({ ok: true, duplicate: true }, 200, player);
 		if (outcome === 'not-best') return json({ ok: true, leaderboardEligible: false, reason: 'not_a_personal_or_top_500_best' }, 202, player);
-		return json({ ok: true, score: verified.score, tieBreak: verified.tieBreak }, 201, player);
+		return json({ ok: true, score: finalScore, tieBreak: verified.tieBreak }, 201, player);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : '';
 		if (message === 'idempotency_key_conflict' || message.includes('UNIQUE constraint failed: game_scores.session_id, game_scores.idempotency_key')) {

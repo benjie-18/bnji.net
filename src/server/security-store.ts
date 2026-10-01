@@ -174,6 +174,14 @@ export interface SecurityStore {
 
 	/** Aggregate counts for the admin overview. Admin-only. */
 	summarize(): Promise<SecuritySummary>;
+
+	/**
+	 * Top referring HOSTS behind page views since `since` (admin-only).
+	 * Only the host survives this method — full referrer URLs can carry
+	 * personal browsing paths, and the dashboard only needs the source site.
+	 * Hosts in `excludeHosts` (our own hostnames) are dropped.
+	 */
+	topReferrers(since: number, limit: number, excludeHosts: string[]): Promise<{ host: string; count: number }[]>;
 }
 
 /* --- retention config ----------------------------------------------------- */
@@ -496,6 +504,37 @@ function createD1SecurityStore(db: D1Database): SecurityStore {
 				uniqueDevices: Number(uniqueDevicesRow ?? 0),
 				last24h: Number(last24hRow ?? 0),
 			};
+		},
+
+		async topReferrers(since, limit, excludeHosts) {
+			// Raw URL groups first (cheap SQL), then collapse to hosts in JS —
+			// SQLite has no host() function and the dashboard only shows hosts.
+			const { results } = await db
+				.prepare(
+					`SELECT referrer, COUNT(*) AS n
+					 FROM security_events
+					 WHERE created_at >= ?1 AND endpoint = 'page-view'
+					   AND referrer IS NOT NULL AND referrer <> ''
+					 GROUP BY referrer ORDER BY n DESC LIMIT 300`,
+				)
+				.bind(since)
+				.all<{ referrer: string; n: number }>();
+			const excluded = new Set(excludeHosts.map((host) => host.toLowerCase()));
+			const byHost = new Map<string, number>();
+			for (const row of results) {
+				let host = '';
+				try {
+					host = new URL(String(row.referrer)).host.toLowerCase();
+				} catch {
+					continue;
+				}
+				if (!host || excluded.has(host)) continue;
+				byHost.set(host, (byHost.get(host) ?? 0) + Number(row.n));
+			}
+			return [...byHost.entries()]
+				.map(([host, count]) => ({ host, count }))
+				.sort((a, b) => b.count - a.count || a.host.localeCompare(b.host))
+				.slice(0, Math.min(50, Math.max(1, limit)));
 		},
 	};
 }

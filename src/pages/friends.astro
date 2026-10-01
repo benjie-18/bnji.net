@@ -1,0 +1,156 @@
+---
+/**
+ * BNJI.NET — chat plan Phase E (plan §8.1, §8.3): friends & presence page.
+ *
+ * Account-only surface: requests by exact handle, accept/decline/cancel,
+ * remove, block/unblock, and online dots for accepted friends (fed by the
+ * Presence socket the client opens — the server decides who sees whom,
+ * §8.1). Surfaces reuse the site's glass language directly: every panel is
+ * a `data-glass` element (styles/glass.css) and the submit control is a
+ * GlassButton, so this page cannot drift from the rest of the site.
+ * The disclosure below is the phase's plain-language copy (§9.5/§11 wording
+ * mirrored): rows live with the account, nothing is emailed or pushed.
+ */
+import Layout from '../layouts/Layout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import GlassButton from '../components/GlassButton.astro';
+---
+
+<Layout title="Friends" description="Friend requests, presence and blocks between accounts on bnji.net.">
+	<PageHeader
+		index="11"
+		label="FRIENDS"
+		titleId="page-title"
+		title="Friends"
+		description="Requests, friends and who is around right now."
+	/>
+
+	<div class="container friends-body" data-friends-root>
+		<p class="friends-status" data-friends-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
+
+		<section class="friends-panel" data-friends-signin data-glass="raised" hidden>
+			<h2>Friends are for accounts</h2>
+			<p>
+				Friend requests and presence belong to a registered account so they stay attached
+				to whoever owns them. <a href="/games/">Create one on the Games page</a> (or sign
+				in there with your recovery code), then come back.
+			</p>
+		</section>
+
+		<section class="friends-panel" data-friends-signed-in data-glass="raised" hidden>
+			<p class="friends-disclosure">
+				Friend requests, friendships and blocks are stored while your account exists —
+				delete the account and they leave with it (they appear in your account export too).
+				Which friends are online shows only to accepted friends, and only while someone has
+				a page open; nothing is emailed or pushed. Your friend list is private: nobody else
+				can see it.
+			</p>
+
+			<form class="friends-request" data-friends-request-form>
+				<label for="friends-request-handle">Send a request by exact handle</label>
+				<div class="friends-request__row">
+					<input id="friends-request-handle" name="handle" type="text" placeholder="exact handle"
+						pattern="[a-z0-9_]{3,20}" minlength="3" maxlength="20" autocomplete="off"
+						autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go"
+						required data-friends-request-handle />
+					<GlassButton type="submit" variant="primary">Send request</GlassButton>
+				</div>
+				<p class="friends-hint">Handles are matched exactly — no directory, no suggestions. They accept, decline or block; a mutual request becomes friends automatically.</p>
+			</form>
+
+			<div class="friends-grid">
+				<section class="friends-section" data-glass="quiet" aria-labelledby="friends-incoming-title">
+					<h2 id="friends-incoming-title">Requests</h2>
+					<ul class="friends-list" data-friends-list="incoming" role="list"></ul>
+					<p class="friends-empty" data-friends-empty="incoming" hidden>No pending requests.</p>
+				</section>
+
+				<section class="friends-section" data-glass="quiet" aria-labelledby="friends-title">
+					<h2 id="friends-title">Friends</h2>
+					<ul class="friends-list" data-friends-list="friends" role="list"></ul>
+					<p class="friends-empty" data-friends-empty="friends" hidden>No friends yet — send a request above.</p>
+				</section>
+
+				<section class="friends-section" data-glass="quiet" aria-labelledby="friends-outgoing-title">
+					<h2 id="friends-outgoing-title">Sent</h2>
+					<ul class="friends-list" data-friends-list="outgoing" role="list"></ul>
+					<p class="friends-empty" data-friends-empty="outgoing" hidden>No requests waiting for a reply.</p>
+				</section>
+
+				<section class="friends-section" data-glass="quiet" aria-labelledby="friends-blocked-title">
+					<h2 id="friends-blocked-title">Blocked</h2>
+					<ul class="friends-list" data-friends-list="blocked" role="list"></ul>
+					<p class="friends-empty" data-friends-empty="blocked" hidden>Nobody is blocked.</p>
+				</section>
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<script>
+	import { mountFriends } from '../scripts/friends-ui';
+	const root = document.querySelector<HTMLElement>('[data-friends-root]');
+	if (root) void mountFriends(root);
+</script>
+
+<style>
+	.friends-body { display: grid; gap: 1rem; padding-block: 1rem 3rem; }
+	.friends-status { min-height: 1.25rem; margin: 0; color: var(--text-muted); font-size: var(--text-small); }
+	.friends-status[data-tone='error'] { color: var(--danger); }
+
+	/* The surface itself comes from [data-glass] (glass.css) — only layout. */
+	.friends-panel { padding: clamp(1.15rem, 2.4vw, 1.75rem); }
+	.friends-panel[hidden] { display: none; }
+	.friends-panel > h2 { margin: 0 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
+	.friends-panel p { margin: 0; max-width: 52rem; color: var(--text-muted); }
+	.friends-panel a { color: var(--text-strong); }
+
+	.friends-disclosure { margin-bottom: 1.25rem !important; font-size: var(--text-small); line-height: 1.6; }
+
+	.friends-request label { display: block; margin-bottom: 0.4rem; color: var(--text-strong); font-weight: 600; }
+	.friends-request__row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+	.friends-request__row input {
+		flex: 1 1 14rem;
+		min-width: 0;
+		padding: 0.6rem 0.85rem;
+		border: 1px solid var(--line, var(--glass-border));
+		border-radius: var(--radius-md);
+		background: var(--bg-raised, transparent);
+		color: var(--text-strong);
+		font: inherit;
+	}
+	.friends-hint { margin-top: 0.55rem !important; font-size: var(--text-small); }
+
+	.friends-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); margin-top: 1.5rem; }
+	.friends-section { padding: clamp(0.85rem, 1.6vw, 1.15rem); }
+	.friends-section h2 { margin: 0 0 0.75rem; color: var(--text-strong); font-size: var(--text-body); }
+	.friends-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+	.friends-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		padding: 0.5rem 0.6rem;
+		border: 1px solid var(--line, rgba(255, 255, 255, 0.07));
+		border-radius: var(--radius-sm);
+	}
+	.friends-row__who { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; color: var(--text-strong); }
+	.friends-row__name { color: var(--text-muted); font-size: var(--text-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.friends-row__actions { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; }
+
+	/* Row controls are client-rendered but carry GlassButton's exact classes —
+	   one visual language, whether the button came from Astro or from JS. */
+	.friends-row__actions :is(button, a) { text-decoration: none; }
+	.friends-btn--muted { color: var(--text-muted) !important; }
+	.friends-btn--danger {
+		color: var(--danger) !important;
+		border-color: var(--danger-line) !important;
+		background: var(--danger-soft) !important;
+	}
+
+	/* Online dot: status colour from tokens (never colour alone — the client
+	   sets an aria-label and the row names the handle). */
+	.friends-online { color: var(--signal-live); font-size: 0.7rem; line-height: 1; }
+	.friends-empty { margin: 0; color: var(--text-muted); font-size: var(--text-small); }
+</style>

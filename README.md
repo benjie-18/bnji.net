@@ -21,17 +21,23 @@ bokeh) — both wrapped in a realistic liquid-glass surface system. Built with
 > | [`docs/DEPLOY.md`](./docs/DEPLOY.md) | Owner runbook: migrations, existing secrets, deployment and verification |
 > | [`docs/GAMES-DECISIONS.md`](./docs/GAMES-DECISIONS.md) | Games architecture decision and identity/verifier seams |
 > | [`docs/GAMES-OPERATIONS.md`](./docs/GAMES-OPERATIONS.md) | Games setup, privacy/retention, Cloudflare Free quotas and first-game recipe |
-> | [`docs/CHAT-SYSTEM-PLAN.md`](./docs/CHAT-SYSTEM-PLAN.md) | **Plan only:** room chat, moderation and admin visibility, display names, private messaging with images, friends |
+> | [`docs/CHAT-SYSTEM-PLAN.md`](./docs/CHAT-SYSTEM-PLAN.md) | **Living plan:** room chat (Phases A–C implemented), private messaging with images, friends |
 > | [`docs/DATA-COLLECTION-POLICY.md`](./docs/DATA-COLLECTION-POLICY.md) | What the site may collect, retention, admin visibility and disclosure rules |
 > | [`docs/DEPENDENCY-POLICY.md`](./docs/DEPENDENCY-POLICY.md) | Dependency tiers, review process, and the infrastructure changes each one allows |
 >
 > Content note: this project intentionally carries **no personal biography**;
 > identity copy is neutral placeholder text by design.
 >
-> **Status note (2026-09-30):** chat, private messaging, friends and
-> admin-visible message moderation are **planned, not implemented** — see
-> `docs/CHAT-SYSTEM-PLAN.md`. The Games room panel is still a transport surface
-> with no playable game and no chat. The dependency rule changed on the same
+> **Status note (2026-09-30):** chat plan Phase A — display names (guest,
+> session-scoped) and public account handles with exact-match lookup — Phase B
+> — in-room chat (bounded plain text, reconnect history, host kick/mute/remove,
+> per-member rate limiting, deleted with the room) — and Phase C — moderation
+> tooling (member reporting with snapshots that outlive the room, an `/admin`
+> Chat tab with live transcripts, delete/ban/kick/close, a report queue and
+> moderation log, blocklist/URL-strip triage config, account export/deletion
+> coverage) — are **implemented**. Private messaging, friends and presence are
+> **planned, not implemented** — see `docs/CHAT-SYSTEM-PLAN.md`. The Games room panel is a transport surface
+> with chat; it still has no playable game. The dependency rule changed on the same
 > date: dependencies are now permitted per tier under
 > `docs/DEPENDENCY-POLICY.md`, and the site may collect and retain chat history
 > and comparable activity records under `docs/DATA-COLLECTION-POLICY.md`. Any
@@ -113,13 +119,21 @@ npm run deploy     # publish to Cloudflare Workers
   writes to an unsupported backend.
 - **Private messages** — contact form delivered server-side through a Discord
   webhook or ntfy push; credentials live only in Worker secrets.
-- **Planned: chat, private messaging and friends** — room chat that is
-  ephemeral but survives reconnects (deleted with the room), guest and account
-  display names, host and admin moderation with admin-visible chat, live
-  account-to-account direct messages with images, and a friends system with
-  presence. Full design, phases, schema sketches, quota math and open questions
-  are in [`docs/CHAT-SYSTEM-PLAN.md`](./docs/CHAT-SYSTEM-PLAN.md). Nothing in
-  that list is implemented yet.
+- **Display names, handles & room chat (implemented) + planned: private
+  messaging and friends** — you can set a display name from the `/games/`
+  rooms panel (guests: kept 30 days keyed by a digest of the session cookie;
+  signed-in: your account name) and claim one public handle per account
+  (unique, exact-match lookup, changeable once every 30 days). Rooms also have
+  plain-text chat: it survives reconnects as bounded history, is rate-limited,
+  and is deleted with the room (≤2 hours) — the room's host can remove
+  messages and kick or mute members. Messages can be reported: snapshots are
+  kept in D1 for review after the room is gone, and `/admin` has a Chat tab
+  for live transcripts, deletes, bans and the report queue. Still planned:
+  live account-to-account direct messages with images, and a friends system
+  with presence. Full design,
+  phases, schema sketches, quota math and open questions are in
+  [`docs/CHAT-SYSTEM-PLAN.md`](./docs/CHAT-SYSTEM-PLAN.md); everything in that
+  list beyond names/handles is not implemented yet.
 - **The Lab** — 16 runnable experiments and small games across 13 components
   (starfield tuner, liquid-glass lab, glass minesweeper, orbit field, 3D piano,
   isometric stack, voxel map, CPS counter, Bubble Pop, Memory Pairs, Reaction

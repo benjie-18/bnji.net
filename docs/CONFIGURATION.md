@@ -101,7 +101,7 @@ irrelevant here.
 | `BOARD_CONFIG.provider` | PUBLIC | `src/config/board.config.ts` | `'d1' \| 'rest'` preference. **No in-memory production fallback**: an unconfigured store returns an honest `503 storage_unconfigured` instead of silently losing messages. |
 | `maxTextLength: 250` | PUBLIC | same | Enforced server-side in `/api/board` with **422 `text_too_long`** — long posts are rejected, never truncated. |
 | other limits (`maxImageBytes`, `allowedImageTypes`, `postCooldownSeconds`, `hourlyPostLimit`, `pollIntervalMs`, visible-count range) | PUBLIC | same | Abuse/size policy; the server re-validates everything. |
-| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | The existing `bnji-board` database ID and binding are already configured; do not create/replace it for Games. Owner-operated deployments should review pending migrations and apply them with `npx wrangler d1 migrations apply bnji-board --remote`. Local development uses `--local`. Schema: the twelve files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
+| `BOARD_DB` D1 binding | **INFRA** | `wrangler.json` + `migrations/` | The existing `bnji-board` database ID and binding are already configured; do not create/replace it for Games. Owner-operated deployments should review pending migrations and apply them with `npx wrangler d1 migrations apply bnji-board --remote`. Local development uses `--local`. Schema: the sixteen files in `migrations/`, applied in order — see the table below and DEPLOY.md. |
 | `BOARD_KV` KV binding | **INFRA** | `wrangler.json` | Shared rate limiting (see below). `npx wrangler kv namespace create BOARD_KV`, paste the id (same placeholder rule). |
 | `BOARD_REST_URL`, `BOARD_REST_TOKEN` | **SECRET** | Worker env | Optional external JSON API provider (`provider: 'rest'`). |
 
@@ -115,7 +115,7 @@ exact but adds deployment infra for no practical gain here. If KV is missing
 entirely, rate limiting **fails open** with a console warning — it is an abuse
 throttle, not authentication.
 
-### 5.1 D1 schema — twelve migrations, one database
+### 5.1 D1 schema — sixteen migrations, one database
 
 There is **one** D1 database (`bnji-board`, bound twice: see the note below). The
 migrations are cumulative and tracked by D1 in its own `d1_migrations` table, so
@@ -136,6 +136,10 @@ and is the normal way to move an existing database forward.
 | 0010 | `secret_code_uses.sql` | Private bounded admin code-use metrics. |
 | 0011 | `games.sql` | Private per-game session runs and server-validated leaderboard rows. |
 | 0012 | `game_players_saves.sql` | Optional player identities, digested sessions, hashed-IP auth-attempt buckets, and bounded revisioned saves. |
+| 0013 | `names.sql` | Chat plan Phase A: `guest_profiles` (display name keyed by SHA-256 of the session id, fixed 30-day sweep) plus nullable unique `handle` / `handle_changed_at` columns on `game_players`. Additive; existing rows untouched, multiple NULL handles allowed. |
+| 0014 | `chat_moderation.sql` | Chat plan Phase C: `room_registry` (code/game/owner-hash/expiry — the owner-approved §6.1 trade), `chat_reports` (UNIQUE `(room_code, message_n)`, snapshot + status + note), `chat_reporters` (distinct-reporter PK), `chat_moderation_log` (admin audit), `chat_bans` (principal hash + reason + expiry). All additive; swept by the hourly retention Cron (budget 14 → 19 DELETE statements). |
+| 0015 | `dm.sql` | Chat plan Phase D: `dm_conversations`, `dm_messages`, `dm_attachments` (D1 base64 image bytes, the owner-approved plan D6 path), `dm_reports`, `dm_reporters`. 60-day message retention swept by the hourly Cron (budget → 19 DELETE statements). Additive. |
+| 0016 | `friends.sql` | Chat plan Phase E: `player_friends` (canonical pair `player_a < player_b`, state pending/accepted/declined, `requested_by` for mutual auto-accept) + `player_blocks`. Additive; rows cascade with account deletion (§9.5). |
 
 ⚠️ 0004 uses `ALTER TABLE … ADD COLUMN`, so it must run after 0001. The filename
 order D1 applies them in guarantees this — do not run the files by hand or
@@ -152,24 +156,22 @@ remains visibly unavailable and its API returns `503 paint_requires_d1_board`;
 the external REST contract is not assumed to support canvas storage. See
 [`DATA.md`](./DATA.md) §10 for synchronization, audit privacy and size bounds.
 
-### 5.2 `BOARD_DB` is bound twice — one of the two is a problem
+### 5.2 `BOARD_DB` is bound once (the duplicate is gone)
 
-`wrangler.json` binds the same `database_id` twice:
-
-- `BOARD_DB` — the normal binding, used by all the code.
-- `bnji_board` — identical, but `"remote": true`.
-
-Nothing reads `bnji_board`. The duplicate is harmless in production but breaks
-local development: `npx wrangler dev` tries to open a remote session, demands a
-`CLOUDFLARE_API_TOKEN`, and exits. Until it is removed, run local dev as
-`npx wrangler dev --local`. Deleting the `bnji_board` binding block is the fix
-and touches no application code.
+`wrangler.json` used to bind the same `database_id` twice — `BOARD_DB` plus a
+`bnji_board` copy with `"remote": true`. Nothing ever read `bnji_board`, and
+the remote flag broke local development (`wrangler dev` demanded a
+`CLOUDFLARE_API_TOKEN` and every build needed the flag stripped by hand).
+**Resolved 2026-10-01:** the `bnji_board` block is deleted — the documented
+fix all along — so `wrangler dev` is plain-local with no flags, and
+`npm run preview` chains the pending-only local migration apply before it
+starts. Codes that matter: only `BOARD_DB`.
 
 ### 5.3 Secrets
 
 | Name | Required? | Notes |
 | --- | --- | --- |
-| `ACCESS_SECRET` | **Yes, for `/admin`** | Signs admin session cookies. Without it `/admin` and every `/api/admin/*` route return `503` — they fail closed, deliberately. `wrangler secret put ACCESS_SECRET`. A random 32+ byte value is fine. |
+| `ACCESS_SECRET` | **Yes, for `/admin`** | Signs admin session cookies **and** derives the Phase C room-admin service token (`sha256('bnji-room-admin:v1:' + secret)`, header `x-bnji-room-admin`) that the DO verifies before `/admin/read` and `/admin/action` — one secret, two uses, both fail closed without it (`503 admin_service_unconfigured` at the gateway, `403 service_unauthorized` at the DO). `wrangler secret put ACCESS_SECRET`. A random 32+ byte value is fine; rotating it invalidates live admin sessions and immediately re-keys the service token (no other action needed). |
 | `ACCESS_TOKEN` | No | Legacy generic gate for `ACCESS_RULES`. The admin surface ignores it in favour of the DB-backed credential; keep it only if a non-admin `ACCESS_RULES` prefix needs it. |
 | `ACCESS_PASSWORD_SHA` | No | Same — generic HMAC rule support. |
 | `DISCORD_WEBHOOK_URL` / `NTFY_URL` | No | `/api/dm` delivery. Unset means the contact form returns `503` and says so. |
@@ -203,7 +205,7 @@ a removed message is never listed to a visitor; the admin API
 | `ACCESS_RULES` | PUBLIC | `src/config/access.config.ts` | Declare protected route prefixes + auth kind. **Empty by default: everything current stays public.** |
 | `ACCESS_TOKEN` | **SECRET** | Worker env | Bearer token for generic `auth: 'token'` rules. **Not** the admin token — see below. |
 | `ACCESS_PASSWORD_SHA` | **SECRET** | Worker env | sha256(hex) of the password for `auth: 'password'` rules. Store the hash, never the password. |
-| `ACCESS_SECRET` | **SECRET** | Worker env | HMAC key signing the session cookie. Required for admin sessions. |
+| `ACCESS_SECRET` | **SECRET** | Worker env | HMAC key signing the session cookie; also the input to the DO admin service token (Phase C). Required for admin sessions and admin room transcripts. |
 
 Honest limitations (also in `src/middleware.ts`): prerendered static pages
 cannot be protected — a private route must set `export const prerender = false;`
@@ -280,6 +282,101 @@ for the data inventory, quotas, local testing, and rollback guidance.
 | Shared board paint | `src/config/paint.config.ts` | Logical canvas size, PNG/request caps, polling and publish limits. The current D1 snapshot is independent from message rows; see [`DATA.md`](./DATA.md) §10. |
 | Browser tools (`/tools/`) | `src/config/tools.config.ts` | Output formats (PNG/JPEG/WebP), which of them honour a quality slider, the accepted input types, and the client-side size/pixel limits. PUBLIC. Both tools run in the visitor's browser, so these are guards against an enormous file, not upload quotas — nothing is uploaded. |
 
+## 8a. Display names & handles — PUBLIC (chat plan Phase A)
+
+`src/config/names.config.ts` (`NAMES_CONFIG`) holds the complete naming
+policy; the shared validator in `src/server/display-name.ts` and every
+name/handle route read it. Names are labels, not identity: they grant no
+access.
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `displayName.minLength` / `maxLength` | `src/config/names.config.ts` | 1–24 **code points** after NFKC, control/format-character stripping and whitespace collapse. Charset: letters, marks, numbers, space, `_ - .` only. Storage `CHECK`s on `game_players.display_name` remain 48 for historical reasons; the API edge has always enforced 24 and now does so through the one shared module. |
+| `displayName.reserved` | same | `admin`, `moderator`, `bnji`, `system` — refused after case-fold, so fullwidth/ligature spellings are refused too. Also applied to handles (deliberate tightening: an `@admin` handle would defeat a reserved display name). |
+| `handle.minLength` / `maxLength` | same | 3–20 of `[a-z0-9_]`. One global handle per account, NULL until claimed, unique via migration `0013`. Exact-match lookup only — no directory, no prefix search; `GET /api/players?handle=` returns just handle + display name, never a player ID. |
+| `handle.changeCooldownDays` | same | 30 days between changes; first claim is free and an idempotent re-submit of the owned handle neither fails nor resets the clock. |
+| `guestProfiles.retentionDays` | same | 30 days after the last change. `guest_profiles` rows are keyed by `sha256(session id)` (the raw `bnji_ps` value is never stored) and swept hourly by the cron job on this fixed window, independent of `trackingRetentionDays`. |
+| `limits.nameChangeWindowMs` / `nameChangeMax` | same | `POST /api/profile/name`: 5 per 10 minutes per IP, counted in KV (`BOARD_KV`) — profile naming is not chat/DM/presence/friend activity, so the KV rule allows it. |
+| `limits.handleAttemptWindowMs` / `handleAttemptMax` | same | Handle claim and lookup: 8 per 15 minutes per hashed IP, counted in D1 `game_auth_attempts` under distinguishable prefixes (`bnji-handle-claim:` / `bnji-handle-search:`). |
+
+Changing any value takes effect on the next Worker start; no migration is
+needed unless you widen `displayName.maxLength` or the handle bounds past
+their storage `CHECK`s.
+
+## 8b. Room chat — PUBLIC (chat plan Phase B)
+
+`src/config/chat.config.ts` (`CHAT_CONFIG`, exported from `src/config/index.ts`)
+holds the complete room-chat policy. The chat panel reads it for input
+attributes and visibility, the `GameRoom` Durable Object reads it for
+enforcement, and it is the plan §14 kill switch.
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `enabled` | `src/config/chat.config.ts` | Master switch, default `true`. `false` = chat frames refused server-side with `chat_rejected chat_disabled` and the panel hides itself server-side (the markup is wrapped in `{CHAT_CONFIG.enabled && …}`) — rollback without touching the rest of the room protocol. |
+| `maxTextLength` | same | 250 code points after sanitising (NFKC, whitespace control → space, other `Cc`/`Cf` stripped, collapse, trim — shared pipeline with display names, but no charset limit: punctuation and emoji are plain text). Over-cap or blank messages get `chat_rejected invalid_text`. |
+| `maxStoredMessages` | same | 200 messages per room; oldest rows are trimmed on insert (DO SQLite `game_room_chat`, AUTOINCREMENT sequence). |
+| `historyChunkMessages` | same | 25 messages per `chat_history` frame, additionally byte-packed so no frame exceeds the 4,096-byte outbound guard the client enforces (`ROOM_MAX_OUTBOUND_FRAME_BYTES`). Sent after the snapshot on every accept. |
+| `rate.burst` / `rate.refillMs` | same | Per-member token bucket in the socket attachment: burst 5, then ~1 token per 4,000 ms (≈15/min sustained). Breaches get `chat_rejected rate_limited` with `retryAfterMs` — the socket stays open. Never written to KV (plan §5.4). |
+| `rate.globalPerSecond` | same | Pre-parse abuse ceiling: 8 frames/sec across **all** frame types per connection; the 9th closes the socket with 1013 before any parsing or SQL. |
+| `filter.enabled` | same (Phase C) | Master switch for the §6.3 filter blocks, default `true`. `false` = blocklist inert, display strips off. |
+| `filter.blocklist` | same (Phase C) | Lowercase phrases matched case-insensitively against sanitised message text before broadcast; a hit is a soft `chat_rejected blocked` (socket stays open). **Triage aid, not a guarantee** — the empty default is deliberate and the docs say so. |
+| `filter.stripUrlsForAdmin` | same (Phase C) | Admin transcript view only: raw text is stored raw, and the DO's `/admin/read` replaces `http(s)://…` and `www.…` runs with `[link]` so a click cannot leak the operator's IP. Off = admins read exact text. |
+| `moderation.reportWindowMs` / `reportMaxPerWindow` | same (Phase C) | Chat-report HTTP limit: `reportMaxPerWindow` (10) reports per `reportWindowMs` (10 min) per hashed IP, counted in D1 (`reserveAuthAttempt`, prefix `bnji-chat-report:`) — never KV. Breach → `429 rate_limited`. |
+| `moderation.defaultBanMinutes` / `maxBanMinutes` | same (Phase C) | Escalate action default 60 min, hard clamp `maxBanMinutes` (7 days = 10,080). Bans live in `chat_bans` and are enforced at `/ws` join time (`403 chat_banned`). |
+
+## 8c. Direct messages — PUBLIC (chat plan Phase D)
+
+`src/config/dm.config.ts` (`DM_CONFIG`, exported from `src/config/index.ts`)
+holds the complete private-messaging policy. The /messages/ page reads it for
+input bounds and the disclosure line, the `/api/dm/*` routes read it for
+enforcement, and it is the plan §14 rollback switch — independent of room
+chat. The `DMConversation` class binding (`DM_CONVERSATIONS`, Wrangler
+migration `dm-conversations-v1`) is infrastructure, documented in
+[`DEPLOY.md`](./DEPLOY.md).
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `enabled` | `src/config/dm.config.ts` | Master switch, default `true`. `false` = every `/api/dm/*` route refuses with `dm_disabled` and the UI hides itself — rollback without touching room chat. |
+| `maxTextLength` | same | 2,000 code points after the shared sanitizer (NFKC, control/format stripping, collapse, trim — plan §12.2). Over-cap → `422 message_too_long`; blank without an image → `422 empty_message`. |
+| `historyPage` | same | 50 messages per REST history page (default newest page; `after` serves reconnect catch-up, `before` serves scrollback — plan §7.3). |
+| `retentionDays` | same | **60 days** (owner answer 2026-09-30, plan §15 Q2). The hourly cron purges `dm_messages` older than the window; DM report snapshots follow the shared `trackingRetentionDays` sweep instead (plan §9.1). |
+| `rate.sendPerMinute` | same | 30 sends/min per account, D1 counter prefix `bnji-dm-send:` (never KV — plan §11). Breach → `429 rate_limited` with `retryAfter` seconds. |
+| `rate.uploadsPerHour` | same | 20 image uploads/hour per account, prefix `bnji-dm-image:` (plan §7.5). |
+| `rate.reportsPerWindow` / `reportWindowMs` | same | 10 DM reports per 10 min per account, prefix `bnji-dm-report:` (mirrors the Phase C room-report budget). |
+| `rate.connectsPerMinute` | same | 12 socket connects/min per account, prefix `bnji-dm-ws:`. |
+| `images.enabled` | same | Independent image kill switch (plan §14: images toggle separately from text). `false` → `403 images_disabled` on attachment routes; text keeps working. |
+| `images.maxDecodedBytes` | same | 1,400,000 bytes decoded — the board's documented D1 base64 ceiling under D1's 2 MB row limit (plan D6; R2 stays unprovisioned per the owner's answer). Checked before AND after decode. |
+| `images.maxEdge` | same | 1,600 px — the bound the CLIENT normalises to through `<canvas>` before upload (also strips EXIF/GPS, plan §7.4 step 1). |
+| `images.allowedTypes` | same | `image/png`, `image/jpeg`, `image/webp` after server-side magic-byte sniffing. **No SVG** (script vector) and never the client's declared MIME. |
+
+## 8d. Friends, presence & notifications — PUBLIC (chat plan Phase E)
+
+`src/config/friends.config.ts` (`FRIENDS_CONFIG`, re-exported from
+`src/config/index.ts`) holds the whole Phase E policy: the §14 rollback
+switch for the feature, the §8.1 caps, and the D1 rate budgets that back
+friend requests, decisions and presence connects (never KV — plan §11). The
+`Presence` class binding (`PRESENCE`, Wrangler migration `presence-v1`) is
+infrastructure, documented in [`DEPLOY.md`](./DEPLOY.md); the DO stores
+nothing durable, so it has no config of its own. The in-app badge on every
+page polls `GET /api/notifications` at `notificationsPollMs` — counts only,
+in-app only (push/email are deferred by plan §8.3).
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `enabled` | `src/config/friends.config.ts` | Master switch, default `true`. `false` = every `/api/friends`, `/api/presence` and badge poll answers `friends_disabled`, and **the DM friendship gate releases** (`/api/dm/*` returns to Phase D's open behaviour) — plan §14's rollback for E without touching room chat or DM itself. |
+| `maxFriends` | same | 500 accepted friends (plan §8.1). Over → `409 friends_limit` at request time. |
+| `maxPendingOutgoing` | same | 100 unanswered outgoing requests (§8.1). Over → `409 pending_limit`. |
+| `requestsPerMinute` | same | 20 friend-request POSTs/min per account, D1 counter prefix `bnji-friend-request:` (never KV). Breach → `429 rate_limited` + `retry-after`. |
+| `decisionsPerMinute` | same | 60 accept/decline/block/remove/unblock/min per account, prefix `bnji-friend-decision:`. |
+| `presenceConnectsPerMinute` | same | 30 presence socket connects/min per account, prefix `bnji-presence-ws:`. Breach → `429 rate_limited`. |
+| `notificationsPollMs` | same | 60,000 ms — the header badge's poll interval while a page is visible (§8.3). Client-side only; the server never pushes badge counts. |
+
+The DM routes read `FRIENDS_CONFIG.enabled` too: with it on, `POST
+/api/dm/conversations`, `POST /api/dm/messages` and `POST
+/api/dm/attachments` answer `403 not_friends` (or `403 blocked`) unless the
+pair are accepted friends and unblocked — owner answer D7, enforced from
+Phase E. Reads, media and the conversation socket stay membership-gated.
+
 ## 9. Deployment — INFRA (change deliberately, never silently)
 
 | Value | Location | Notes |
@@ -288,11 +385,82 @@ for the data inventory, quotas, local testing, and rollback guidance.
 | Adapter options | `astro.config.mjs` | `prerenderEnvironment: "node"`. |
 | Env schema (secrets list) | `astro.config.mjs` (`env.schema`) | Declares which secrets exist; all optional so builds work unconfigured. |
 | D1 migrations, DO classes, bindings, R2 | `wrangler.json`, `migrations/` | **Allowed when planned and documented** (`docs/DEPLOY.md` + this file + `docs/DEPENDENCY-POLICY.md` §6). Each change is its own reviewed commit, and never weakens the `.gitignore` build-output exclusions. |
+| Workers Previews bindings | `wrangler.json` → `previews` | Required for `npx wrangler preview` / Workers Builds preview builds; see §9.1. D1 and KV point at preview-only resources, never production; see §9.1. |
 
-**Planned config files (not implemented).** The chat plan adds
-`src/config/chat.config.ts` (room chat caps, message length, per-member budget,
-filter toggle), `src/config/dm.config.ts` (retention window, attachment limits,
-admin visibility mode, request/friend caps) and `src/config/friends.config.ts`
+### 9.1 Workers Previews — the `previews` block (added 2026-10-01)
+
+Cloudflare Workers Previews (`npx wrangler preview`, and the automatic preview
+builds Workers Builds runs on non-`main` branches) **refuse to run without a
+`previews` block** in `wrangler.json`, and Previews **do not inherit the
+top-level production bindings**. Only assets, compatibility settings, DO
+classes, migrations and placement carry over; every binding the code reads
+from `env` must be repeated inside `previews` or the Preview returns a 1101
+the moment a route touches it.
+
+The block binds exactly what the Worker reads at runtime and nothing else:
+
+| Binding in `previews` | Resource it points at | Isolation |
+| --- | --- | --- |
+| `BOARD_DB` (D1) | the preview-only `bnji-board-preview` database | **Isolated from production.** A Preview's test posts, scores and DMs land in this separate database. Previews never auto-apply migrations, so **every new file in `migrations/` must also be applied here**: `npx wrangler d1 migrations apply bnji-board-preview --remote`. |
+| `BOARD_KV` (KV) | the preview-only `bnji-board-preview-kv` namespace | **Isolated from production.** Holds only the Preview's own `rl:*` rate-limit counters (§5). |
+| `GAME_ROOMS`, `DM_CONVERSATIONS`, `PRESENCE` (Durable Objects) | the same three classes | **Isolated automatically.** Each Preview gets its own DO namespace and storage; the bindings are declared only because the routes read them from `env`. |
+
+Deliberately **not** in the block: Cron Triggers, routes and the asset
+directory (Cloudflare rejects them there; `wrangler preview` uploads the
+branch's own `./dist`, and the hourly retention sweep stays
+production-only). Secrets never go in the file at all — for Previews they are
+set once for all Previews with
+`npx wrangler preview base-config secret put ACCESS_SECRET` (or per-Preview
+with `npx wrangler preview secret put ACCESS_SECRET --name <preview>`).
+Without `ACCESS_SECRET`, `/admin` in a Preview fails closed with `503`
+exactly as in production (§5.3) — that is the design, not a break.
+
+**Preview-only resources (provisioned 2026-10-01).** The `previews` block uses
+its own D1 database (`bnji-board-preview`) and KV namespace
+(`bnji-board-preview-kv`); the top-level production ids are untouched and must
+never be copied into `previews`. The database was created and migrated up to
+`0016_friends.sql` through a one-off GitHub Actions workflow (since removed).
+To recreate them by hand:
+
+```bash
+npx wrangler kv namespace create bnji-board-preview-kv   # paste id into previews.kv_namespaces
+npx wrangler d1 create bnji-board-preview                # paste id into previews.d1_databases
+npx wrangler d1 migrations apply bnji-board-preview --remote
+```
+
+**The `SESSION` gotcha (error 10021).** Whenever Astro sessions are enabled,
+`@astrojs/cloudflare` appends a `SESSION` KV binding *with no id* to the
+generated `dist/server/wrangler.json` — both at the top level and inside
+`previews` (see `cloudflareConfigCustomizer` in the adapter: it adds one
+whenever `needsSessionKVBinding` is true). A normal `wrangler deploy` happily
+auto-provisions the namespace, but a Preview does not, so every preview deploy
+failed with `binding SESSION of type kv_namespace must have a namespace_id
+specified [code: 10021]`.
+
+**Nothing in this codebase reads `Astro.session` or `env.SESSION`** (sessions
+live in D1 and cookies — §5.3/§6a), so sessions are turned off in
+`astro.config.mjs` with a top-level `session: false`. Position matters: the
+adapter reads `config.session`, so the same key nested inside `cloudflare({…})`
+would be silently ignored. The check is a build and a grep:
+
+```bash
+npm run build
+grep SESSION dist/server/wrangler.json   # must print nothing
+```
+
+The generated config should keep only `BOARD_KV` and `BOARD_DB`, with the
+`previews` block still pointing at the preview-only resources above. If
+`SESSION` ever reappears *despite* `session: false`, the account-side
+*Preview base configuration* (edited in the dashboard, not in this repo) has
+its own stray binding: remove it under **Workers → bnjibot → Previews → Base
+configuration** (the CLI manages base-config *secrets* only), or bypass the
+base config entirely with `npx wrangler preview --ignore-base-config`.
+
+**Config files status (chat plan).** `src/config/chat.config.ts` is
+implemented (Phases B + C: chat caps, message length, per-member budget,
+filter, moderation limits — §8b above), and `src/config/dm.config.ts` is
+implemented (Phase D: retention window, send/upload/report/connect budgets,
+attachment limits — §8c above). Still planned: `src/config/friends.config.ts`
 (friend caps, discovery mode, presence visibility). They follow the existing
 rules: public policy only, limits in config rather than hard-coded, documented
 here when they land. See [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) §9.
