@@ -1,5 +1,6 @@
 /** Global game identity, opaque sessions, save CAS, and account lifecycle. */
 import { accountModerationStatements } from './chat-moderation';
+import { dmAccountStatements } from './dm-store';
 import type { D1Database } from './game-store';
 
 export const PLAYER_SESSION_COOKIE = 'bnji_ga';
@@ -203,6 +204,10 @@ export async function deletePlayerAccount(db: D1Database, playerId: string): Pro
 		db.prepare('DELETE FROM game_sessions WHERE player_id = ?1').bind(playerId),
 		db.prepare('DELETE FROM game_players WHERE id = ?1').bind(playerId),
 		...accountModerationStatements(db, principalHash),
+		// Chat plan Phase D (§9.5): conversations this account belongs to leave
+		// whole — messages and attachments with them — plus DM report rows keyed
+		// to this principal (the hashed audit log stays, same as Phase C).
+		...dmAccountStatements(db, playerId, principalHash),
 	]);
 }
 

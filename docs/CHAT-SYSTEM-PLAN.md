@@ -65,7 +65,7 @@ except the ones marked **hard to reverse**.
 | D4 | DM transport | Per-conversation DO / per-player inbox DO / polling | **Per-conversation DO** (≤2 members), mirroring `GameRoom`; polling as a degrade path |
 | D5 | DM persistence | DO SQLite / D1 / none | **D1 `dm_messages`** with a retention window; D1 is the durable record, the DO is only live fanout |
 | D6 | DM images | R2 / D1 base64 / none | **R2 if a Free-account binding is confirmed**, else D1 base64 (board precedent, ≤1.4 MB). Verify R2 binding availability first — sources conflict and enabling R2 needs a payment method |
-| D7 | Who may DM whom | Anyone / friends only / message requests | **Friends only**, with one "message request" from a non-friend as a follow-up if the phase overruns |
+| D7 | Who may DM whom | Anyone / friends only / message requests | **Friends only**, with one "message request" from a non-friend as a follow-up if the phase overruns. **Resolved 2026-09-30 (flagged sequencing tension: the friends tables are Phase E) — Phase D ships open between any two registered accounts, rate-limited and handle-exact; Phase E flips the gate to friends-only and adds blocks** |
 | D8 | Friend discovery | Handle search / invite links / both | **Unique handle, exact-match search** + invite link. No directory, no suggestions |
 | D9 | Presence | Global DO hub / per-conversation only / none | **One `Presence` DO (`idFromName('global')`)**, friends-only visibility, hibernating sockets |
 | D10 | Admin visibility into DMs | metadata only / on report / full content | **On report by default, full logging available as a config value** — see §8.3 and Q3. Whichever is set must be disclosed in the UI |
@@ -332,6 +332,11 @@ browser rather than in a Worker-side image library.
 - Image uploads additionally limited per hour per account.
 - Blocked accounts cannot send, cannot open conversations, and their existing
   conversations are hidden, not deleted.
+- **Phase D interim (owner answer 2026-09-30):** with friends/blocks still in
+  Phase E, the enforcement that ships in D is the Phase C `chat_bans` row — a
+  banned principal gets `403 chat_banned` on every DM route. `player_blocks`
+  and conversation hiding arrive with Phase E, which also flips D7 to
+  friends-only.
 
 ## 8. Phase E — friends, presence, notifications
 
@@ -468,10 +473,16 @@ and is an owner decision if ever wanted.
 | `GET/POST /api/chat/messages` (or WS frames on the existing room socket) | B | room membership |
 | `POST /api/chat/report` | C ✅ | room membership (DO snapshot → D1) |
 | `GET /api/admin/chat/rooms`, `GET /api/admin/chat/room`, `POST /api/admin/chat/action` | C ✅ | admin guard (pages API → DO `/admin/*` service endpoints) |
-| `GET /api/dm/conversations` | D | account |
-| `POST /api/dm/messages` | D | account + friendship |
-| `POST /api/dm/attachments` | D | account + friendship |
-| `GET /api/dm/media/:id` | D | account + conversation membership |
+| `GET /api/dm/conversations` | D ✅ | account |
+| `POST /api/dm/conversations` (open by exact handle — the composer's entry, D8) | D ✅ | account |
+| `GET /api/dm/messages` (history pull: `after` catch-up / `before` scrollback / newest page — §7.3's reconnect) | D ✅ | account + conversation membership |
+| `POST /api/dm/messages` | D ✅ | account (+ friendship in Phase E per D7's resolved answer) |
+| `POST /api/dm/attachments` | D ✅ | account (+ friendship in Phase E) |
+| `GET /api/dm/media/:id` | D ✅ | account + conversation membership |
+| `GET /api/dm/ws` (live-frame socket upgrade) | D ✅ | account + conversation membership |
+| `POST /api/dm/read` (read watermark, §7.1) | D ✅ | account + conversation membership |
+| `POST /api/dm/hide` (delete-for-me, D12) | D ✅ | account + conversation membership |
+| `POST /api/dm/report` (§12.5's report path — owner: gate filled inside D) | D ✅ | account, non-author member |
 | `GET/POST/DELETE /api/friends` | E | account |
 | `GET /api/presence` (WS) | E | account |
 
@@ -530,6 +541,12 @@ stripping, authenticated serving with `nosniff`. Illegal-content handling is a
 process, not a filter: a report path, a block/ban path, and a written owner
 response policy — required before image messaging ships
 (`DATA-COLLECTION-POLICY.md` §7).
+
+**Phase D resolution (2026-09-30, owner: fill the gate inside D):** all three
+exist as of Phase D — `POST /api/dm/report` snapshots into `dm_reports`
+(admin Chat tab, shared audit log), `chat_bans` is enforced on every DM route
+(escalate action included), and the written response policy is drafted in
+`DATA-COLLECTION-POLICY.md` §9 for the owner's review before deploy.
 
 ### 12.6 No end-to-end encryption, and the UI must not imply it
 

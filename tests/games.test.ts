@@ -465,7 +465,8 @@ test('retention sweep drains bounded tracking batches and prunes account securit
 	assert.equal(queries.length, MAX_RETENTION_SWEEP_QUERIES);
 	assert.ok(queries.length < 50, 'the maximum scheduled sweep stays below D1 Free per-invocation query limit');
 	// Phase C: five more bounded deletes (registry, reports, reporters, log, bans).
-	assert.deepEqual(deleteLimits, [50, 50, 50, 50, 50, 50, 10, 10, 10, 10, 50, 10, 50, 50, 50, 50, 50]);
+	// Phase D: five more (dm_messages, orphaned/unclaimed attachments, dm_reports, dm_reporters).
+	assert.deepEqual(deleteLimits, [50, 50, 50, 50, 50, 50, 10, 10, 10, 10, 50, 10, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]);
 	for (const table of ['game_sessions', 'game_scores', 'security_events', 'board_paint_activity']) {
 		const timestamp = table === 'game_sessions' ? 'last_seen_at' : table === 'game_scores' ? 'achieved_at' : 'created_at';
 		assert.equal((db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${timestamp} < ?`).get(now - 7 * day) as { n: number }).n, 0, `${table} drains 60 expired rows`);

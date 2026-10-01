@@ -324,6 +324,31 @@ enforcement, and it is the plan §14 kill switch.
 | `moderation.reportWindowMs` / `reportMaxPerWindow` | same (Phase C) | Chat-report HTTP limit: `reportMaxPerWindow` (10) reports per `reportWindowMs` (10 min) per hashed IP, counted in D1 (`reserveAuthAttempt`, prefix `bnji-chat-report:`) — never KV. Breach → `429 rate_limited`. |
 | `moderation.defaultBanMinutes` / `maxBanMinutes` | same (Phase C) | Escalate action default 60 min, hard clamp `maxBanMinutes` (7 days = 10,080). Bans live in `chat_bans` and are enforced at `/ws` join time (`403 chat_banned`). |
 
+## 8c. Direct messages — PUBLIC (chat plan Phase D)
+
+`src/config/dm.config.ts` (`DM_CONFIG`, exported from `src/config/index.ts`)
+holds the complete private-messaging policy. The /messages/ page reads it for
+input bounds and the disclosure line, the `/api/dm/*` routes read it for
+enforcement, and it is the plan §14 rollback switch — independent of room
+chat. The `DMConversation` class binding (`DM_CONVERSATIONS`, Wrangler
+migration `dm-conversations-v1`) is infrastructure, documented in
+[`DEPLOY.md`](./DEPLOY.md).
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `enabled` | `src/config/dm.config.ts` | Master switch, default `true`. `false` = every `/api/dm/*` route refuses with `dm_disabled` and the UI hides itself — rollback without touching room chat. |
+| `maxTextLength` | same | 2,000 code points after the shared sanitizer (NFKC, control/format stripping, collapse, trim — plan §12.2). Over-cap → `422 message_too_long`; blank without an image → `422 empty_message`. |
+| `historyPage` | same | 50 messages per REST history page (default newest page; `after` serves reconnect catch-up, `before` serves scrollback — plan §7.3). |
+| `retentionDays` | same | **60 days** (owner answer 2026-09-30, plan §15 Q2). The hourly cron purges `dm_messages` older than the window; DM report snapshots follow the shared `trackingRetentionDays` sweep instead (plan §9.1). |
+| `rate.sendPerMinute` | same | 30 sends/min per account, D1 counter prefix `bnji-dm-send:` (never KV — plan §11). Breach → `429 rate_limited` with `retryAfter` seconds. |
+| `rate.uploadsPerHour` | same | 20 image uploads/hour per account, prefix `bnji-dm-image:` (plan §7.5). |
+| `rate.reportsPerWindow` / `reportWindowMs` | same | 10 DM reports per 10 min per account, prefix `bnji-dm-report:` (mirrors the Phase C room-report budget). |
+| `rate.connectsPerMinute` | same | 12 socket connects/min per account, prefix `bnji-dm-ws:`. |
+| `images.enabled` | same | Independent image kill switch (plan §14: images toggle separately from text). `false` → `403 images_disabled` on attachment routes; text keeps working. |
+| `images.maxDecodedBytes` | same | 1,400,000 bytes decoded — the board's documented D1 base64 ceiling under D1's 2 MB row limit (plan D6; R2 stays unprovisioned per the owner's answer). Checked before AND after decode. |
+| `images.maxEdge` | same | 1,600 px — the bound the CLIENT normalises to through `<canvas>` before upload (also strips EXIF/GPS, plan §7.4 step 1). |
+| `images.allowedTypes` | same | `image/png`, `image/jpeg`, `image/webp` after server-side magic-byte sniffing. **No SVG** (script vector) and never the client's declared MIME. |
+
 ## 9. Deployment — INFRA (change deliberately, never silently)
 
 | Value | Location | Notes |
@@ -335,12 +360,12 @@ enforcement, and it is the plan §14 kill switch.
 
 **Config files status (chat plan).** `src/config/chat.config.ts` is
 implemented (Phases B + C: chat caps, message length, per-member budget,
-filter, moderation limits — §8b above). Still planned: `src/config/dm.config.ts`
-(retention window, attachment limits, admin visibility mode, request/friend
-caps) and `src/config/friends.config.ts` (friend caps, discovery mode,
-presence visibility). They follow the existing rules: public policy only,
-limits in config rather than hard-coded, documented here when they land. See
-[`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) §9.
+filter, moderation limits — §8b above), and `src/config/dm.config.ts` is
+implemented (Phase D: retention window, send/upload/report/connect budgets,
+attachment limits — §8c above). Still planned: `src/config/friends.config.ts`
+(friend caps, discovery mode, presence visibility). They follow the existing
+rules: public policy only, limits in config rather than hard-coded, documented
+here when they land. See [`CHAT-SYSTEM-PLAN.md`](./CHAT-SYSTEM-PLAN.md) §9.
 
 ## 10. Replacing things safely — checklist
 

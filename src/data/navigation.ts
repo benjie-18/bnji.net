@@ -75,6 +75,7 @@ export const PRIMARY_NAV: NavEntry[] = [
 			// re-add this entry to put the link back.
 			// { label: 'About', href: '/about/', description: 'What this site is' },
 			{ label: 'Profile', href: '/gizlyy/', description: 'Personal social profile' },
+			{ label: 'Messages', href: '/messages/', description: 'Private messages between accounts' },
 			{ label: 'Blog', href: '/blog/', description: 'Notes and placeholder writing' },
 			{ label: 'Contact', href: '/contact/', description: 'Leave a message' },
 		],

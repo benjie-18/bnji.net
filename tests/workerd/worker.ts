@@ -8,3 +8,4 @@
  * exports of `src/worker.ts` — a class tested here is a class shipped there.
  */
 export { GameRoom } from '../../src/server/game-room-do';
+export { DMConversation } from '../../src/server/dm-conversation-do';

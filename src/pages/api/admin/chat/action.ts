@@ -24,6 +24,7 @@ import { adminConfigured, adminNotConfigured, adminUnauthorized, isAdminRequest 
 import {
 	addModerationLog, clearChatBan, deleteRoomRegistryEntry, getChatReport, setChatBan, setChatReportStatus,
 } from '../../../../server/chat-moderation';
+import { getDmReport, setDmReportStatus } from '../../../../server/dm-reports';
 import { serverEnvironment } from '../../../../server/env';
 import { roomServiceFetch } from '../../../../server/game-room-gateway';
 import { readBodyTextBounded } from '../../../../server/read-body';
@@ -164,6 +165,32 @@ export async function POST(context: APIContext): Promise<Response> {
 	}
 
 	// ------------------------------------------------------------ reports
+	// Phase D: DM reports are keyed (convId, messageN) instead of a numeric id
+	// and never touch a room DO — status changes + the shared audit log only.
+	// Escalate writes a chat_bans row, which blocks BOTH room joins and every
+	// DM route (owner answer 2026-09-30: the ban path covers messaging).
+	if ((action === 'report_resolve' || action === 'report_dismiss' || action === 'report_escalate') && payload.kind === 'dm') {
+		if (!hasOnly('action', 'kind', 'convId', 'messageN', 'note', 'minutes') ||
+			typeof payload.convId !== 'string' || !/^[a-f0-9]{64}$/.test(payload.convId) ||
+			!Number.isSafeInteger(payload.messageN) || Number(payload.messageN) < 1) return json({ error: 'invalid_payload' }, 400);
+		const note = boundedString(payload.note, MAX_NOTE_LENGTH);
+		if (payload.note !== undefined && note === null) return json({ error: 'invalid_payload' }, 400);
+		const report = await getDmReport(db, payload.convId, Number(payload.messageN));
+		if (!report) return json({ error: 'report_not_found' }, 404);
+		const logBase = { roomCode: `dm:${report.convId}`, messageN: report.messageN, targetHash: report.authorHash, detail: note, now };
+		if (action === 'report_escalate') {
+			const minutes = banMinutes(payload.minutes);
+			const expiresAt = now + minutes * 60_000;
+			await setChatBan(db, { principalHash: report.authorHash, reason: boundedString(note, MAX_REASON_LENGTH) ?? 'reported direct message', now, expiresAt });
+			await setDmReportStatus(db, { convId: report.convId, messageN: report.messageN, status: 'resolved', note: note ?? `escalated: ${minutes}m ban`, now });
+			await addModerationLog(db, { action: 'report_escalate', ...logBase, detail: note ?? `escalated: ${minutes}m ban` });
+			return json({ ok: true, status: 'resolved', expiresAt });
+		}
+		const status = action === 'report_resolve' ? 'resolved' : 'dismissed';
+		await setDmReportStatus(db, { convId: report.convId, messageN: report.messageN, status, note, now });
+		await addModerationLog(db, { action, ...logBase });
+		return json({ ok: true, status });
+	}
 	if (action === 'report_resolve' || action === 'report_dismiss') {
 		if (!hasOnly('action', 'id', 'note') ||
 			!Number.isSafeInteger(payload.id) || Number(payload.id) < 1) return json({ error: 'invalid_payload' }, 400);

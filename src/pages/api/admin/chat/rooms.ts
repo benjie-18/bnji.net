@@ -14,6 +14,7 @@ import type { APIContext } from 'astro';
 import { CHAT_CONFIG } from '../../../../config/chat.config';
 import { adminConfigured, adminNotConfigured, adminUnauthorized, isAdminRequest } from '../../../../server/admin';
 import { listActiveChatBans, listActiveRooms, listChatReports, listModerationLog } from '../../../../server/chat-moderation';
+import { listDmReports } from '../../../../server/dm-reports';
 import { serverEnvironment } from '../../../../server/env';
 import type { D1Database } from '../../../../server/game-store';
 
@@ -34,11 +35,15 @@ export async function GET(context: APIContext): Promise<Response> {
 	const db = env.BOARD_DB as D1Database | undefined;
 	if (!db || typeof db.prepare !== 'function') return json({ error: 'storage_unconfigured' }, 503);
 
-	const [rooms, reports, log, bans] = await Promise.all([
+	const [rooms, reports, dmReports, log, bans] = await Promise.all([
 		listActiveRooms(db),
 		listChatReports(db, { limit: 50 }),
+		listDmReports(db, { limit: 50 }),
 		listModerationLog(db, 50),
 		listActiveChatBans(db),
 	]);
-	return json({ rooms, reports, log, bans, filter: { blocklist: CHAT_CONFIG.filter.blocklist, stripUrlsForAdmin: CHAT_CONFIG.filter.stripUrlsForAdmin, enabled: CHAT_CONFIG.enabled } });
+	return json({
+		rooms, reports, dmReports, log, bans,
+		filter: { blocklist: CHAT_CONFIG.filter.blocklist, stripUrlsForAdmin: CHAT_CONFIG.filter.stripUrlsForAdmin, enabled: CHAT_CONFIG.enabled },
+	});
 }

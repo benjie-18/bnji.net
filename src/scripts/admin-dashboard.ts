@@ -534,6 +534,11 @@ export function startAdminDashboard(): void {
 		id: number; roomCode: string; messageN: number; authorHash: string; label: string; text: string;
 		messageAt: number; reportCount: number; reportedAt: number; status: string; statusNote: string | null;
 	};
+	type ChatDmReport = {
+		convId: string; messageN: number; authorHash: string; reporterHash: string; body: string;
+		imageId: string | null; messageAt: number; reportCount: number; reportedAt: number;
+		status: string; statusNote: string | null;
+	};
 	type ChatLogRow = { id: number; action: string; roomCode: string | null; messageN: number | null; targetHash: string | null; detail: string | null; createdAt: number };
 	type ChatBan = { principalHash: string; reason: string | null; createdAt: number; expiresAt: number };
 	type ChatTranscript = {
@@ -589,10 +594,10 @@ export function startAdminDashboard(): void {
 	}
 
 	async function loadChat(): Promise<void> {
-		type ChatDashboard = { rooms: ChatRoom[]; reports: ChatReport[]; log: ChatLogRow[]; bans: ChatBan[]; filter: { blocklist: string[]; stripUrlsForAdmin: boolean; enabled: boolean } };
+		type ChatDashboard = { rooms: ChatRoom[]; reports: ChatReport[]; dmReports: ChatDmReport[]; log: ChatLogRow[]; bans: ChatBan[]; filter: { blocklist: string[]; stripUrlsForAdmin: boolean; enabled: boolean } };
 		const data = await guard(() => adminFetch<ChatDashboard>('/api/admin/chat/rooms'));
 		if (!data || active !== 'chat') return;
-		say(`${data.rooms.length} live room(s) · ${data.reports.filter((report) => report.status === 'open').length} open report(s) · filter ${data.filter.enabled ? (data.filter.blocklist.length ? `${data.filter.blocklist.length} term(s)` : 'blocklist empty') : 'off'}`);
+		say(`${data.rooms.length} live room(s) · ${data.reports.filter((report) => report.status === 'open').length + data.dmReports.filter((report) => report.status === 'open').length} open report(s) · filter ${data.filter.enabled ? (data.filter.blocklist.length ? `${data.filter.blocklist.length} term(s)` : 'blocklist empty') : 'off'}`);
 
 		// Active rooms
 		const roomsWrap = root.querySelector<HTMLElement>('[data-chat-rooms]')!;
@@ -656,6 +661,47 @@ export function startAdminDashboard(): void {
 				tbody.appendChild(tr);
 			}
 			table.appendChild(tbody); reportsWrap.appendChild(table);
+		}
+
+		// Direct message reports (chat plan Phase D)
+		const dmWrap = root.querySelector<HTMLElement>('[data-chat-dm-reports]')!;
+		dmWrap.textContent = '';
+		if (!data.dmReports || data.dmReports.length === 0) {
+			const p = document.createElement('p'); p.className = 'admin__empty'; p.textContent = 'No direct-message reports.'; dmWrap.appendChild(p);
+		} else {
+			const table = document.createElement('table'); table.className = 'admin__table';
+			const thead = document.createElement('thead'); const hr = document.createElement('tr');
+			for (const label of ['When', 'Conversation · #', 'Message', 'Count', 'Status', 'Note', '']) { const th = document.createElement('th'); th.textContent = label; hr.appendChild(th); }
+			thead.appendChild(hr); table.appendChild(thead);
+			const tbody = document.createElement('tbody');
+			for (const report of data.dmReports) {
+				const tr = document.createElement('tr');
+				const when = document.createElement('td'); when.className = 'is-mono'; when.textContent = formatTime(report.reportedAt); tr.appendChild(when);
+				const where = document.createElement('td'); where.className = 'is-mono'; where.textContent = `${report.convId.slice(0, 8)}… · ${report.messageN}`; tr.appendChild(where);
+				const message = document.createElement('td'); message.textContent = report.body || (report.imageId ? '[image]' : '(empty)'); tr.appendChild(message);
+				const count = document.createElement('td'); count.className = 'is-mono'; count.textContent = String(report.reportCount); tr.appendChild(count);
+				const status = document.createElement('td');
+				const badge = document.createElement('span');
+				badge.className = `admin__badge admin__badge--${report.status === 'open' ? 'reported' : report.status === 'resolved' ? 'visible' : 'hidden'}`;
+				badge.textContent = report.status;
+				status.appendChild(badge); tr.appendChild(status);
+				const note = document.createElement('td');
+				const input = document.createElement('input');
+				input.className = 'admin__note'; input.type = 'text'; input.value = report.statusNote ?? '';
+				input.placeholder = 'reason…'; input.setAttribute('aria-label', `Moderator note for DM report ${report.messageN}`);
+				note.appendChild(input); tr.appendChild(note);
+				const dmAction = (extra: Record<string, unknown>): Record<string, unknown> => ({
+					action: extra.action, kind: 'dm', convId: report.convId, messageN: report.messageN,
+					note: input.value.trim() || undefined, ...extra,
+				});
+				tr.appendChild(actionGroup(
+					chatButton('Resolve', () => void chatModerate(dmAction({ action: 'report_resolve' }))),
+					chatButton('Dismiss', () => void chatModerate(dmAction({ action: 'report_dismiss' }))),
+					chatButton('Ban author', () => void chatModerate(dmAction({ action: 'report_escalate' }))),
+				));
+				tbody.appendChild(tr);
+			}
+			table.appendChild(tbody); dmWrap.appendChild(table);
 		}
 
 		// Bans

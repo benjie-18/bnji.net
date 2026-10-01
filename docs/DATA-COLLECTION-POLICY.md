@@ -127,3 +127,35 @@ hard to reverse or unusually invasive:
    **default**, as opposed to a capability or a report-driven path. 
 2. Recording pointer paths, canvas contents or other continuous behavioural
    capture.
+
+## 9. Owner response policy for reported content (drafted 2026-09-30, Phase D gate)
+
+Chat plan §12.5 requires a *written* owner response policy before image
+messaging ships — a process, not a filter. This is that document, drafted as
+part of Phase D for the owner's review; it binds the owner, not the code:
+
+1. **Reports surface immediately.** Any participant can report a message or
+   image in a private conversation (`POST /api/dm/report`); the admin Chat
+   tab shows the content snapshot as soon as it is filed. The same is true of
+   the public board and room chat (Phase C routes). There is no automated
+   scanning and no third-party moderation API — review is human, by the owner.
+2. **Evidence first.** A report's snapshot (content + hashed principals +
+   timestamps) survives the message itself under the shared retention sweep,
+   so a report can be triaged after the content is gone.
+3. **Response ladder, owner's judgement:** dismiss (no violation); remove the
+   content from the affected surface; and/or ban the author (`chat_bans`
+   blocks room chat, DMs and message sending until expiry); and/or delete the
+   account in the most serious cases (the existing deletion cascade removes
+   their messages, conversations and the DM report rows keyed to them).
+   Every action lands in the moderation audit log.
+4. **Illegal content:** the owner preserves the report evidence, removes the
+   content from the site, bans or deletes the account, and evaluates whether
+   the matter must be reported to authorities under Canadian law — this site
+   performs no pre-publication screening and cannot promise moderation speed.
+5. **No promises the code does not keep.** The /messages/ disclosure states
+   exactly what exists today (stored for the retention window; moderators
+   read content only via reports; no end-to-end encryption). Nothing in the
+   UI may claim stronger safety properties than those sentences.
+
+**Status: drafted for owner review; plan §12.5 requires it acknowledged
+before Phase D deploys.**

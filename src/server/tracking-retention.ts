@@ -1,6 +1,8 @@
 /** Shared dynamic retention policy and bounded expiry sweeps for private engagement rows. */
 import { NAMES_CONFIG } from '../config/names.config';
 import { purgeChatModerationRows } from './chat-moderation';
+import { DM_CONFIG } from '../config/dm.config';
+import { purgeDmRows } from './dm-store';
 
 type D1Statement = {
 	bind(...values: (string | number)[]): D1Statement;
@@ -17,7 +19,7 @@ export const MAX_RETENTION_ROWS_PER_TABLE = 50;
 /** A smaller catch-up batch runs only for tables whose primary batch was full. */
 export const MAX_RETENTION_ROWS_PER_TABLE_CATCH_UP = 10;
 /** Settings read + stale-session close + two security prunes + four primary deletes + four catch-up deletes + guest-profile primary + guest-profile catch-up + five chat-moderation purges (registry, reports, reporters, log, bans — plan Phase C). */
-export const MAX_RETENTION_SWEEP_QUERIES = 19;
+export const MAX_RETENTION_SWEEP_QUERIES = 24; // 19 pre-DM + 5 Phase D bounded deletes
 const DAY_MS = 86_400_000;
 
 function clampRetentionDays(value: number): number {
@@ -156,6 +158,11 @@ export async function runRetentionSweep(env: Record<string, unknown>): Promise<v
 		// Phase C: registry + bans expire on their own clocks; reports,
 		// reporter de-dup rows and the audit log follow the shared window.
 		await purgeChatModerationRows(db, { now: Date.now(), cutoff });
+		// Phase D: DM messages follow DM_CONFIG.retentionDays (owner answer:
+		// 60 days); DM report evidence follows the shared tracking window like
+		// every other moderation snapshot (plan §9.1/§9.3).
+		const dmMessageCutoff = Date.now() - DM_CONFIG.retentionDays * DAY_MS;
+		await purgeDmRows(db, { now: Date.now(), messageCutoff: dmMessageCutoff, reportCutoff: cutoff });
 	} catch {
 		// Cron failures are visible in Worker invocation logs but contain no visitor data.
 		console.error('[bnji] tracking retention sweep failed');

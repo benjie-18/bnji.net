@@ -1,6 +1,8 @@
 /** Global player identity, one-time recovery credential, session controls, export and deletion. */
 import type { APIContext } from 'astro';
 import { exportFiledReports, exportReportsOnAccount, getChatBan } from '../../../server/chat-moderation';
+import { exportDmData } from '../../../server/dm-store';
+import { exportDmReportsFiled, exportDmReportsOnAccount } from '../../../server/dm-reports';
 import { clientIp } from '../../../server/security-helpers';
 import { readBodyTextBounded } from '../../../server/read-body';
 import { serverEnvironment } from '../../../server/env';
@@ -259,7 +261,7 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 	if (!player.playerId) return responseWithContext({ error: 'authentication_required' }, 401, player);
 	try {
 		const principalHash = await sha256Hex(`player:${player.playerId}`);
-		const [identity, saves, scores, reportsOnMe, reportsFiled, ban] = await Promise.all([
+		const [identity, saves, scores, reportsOnMe, reportsFiled, ban, dms, dmReportsOnMe, dmReportsFiled] = await Promise.all([
 			db.prepare('SELECT display_name, handle, created_at FROM game_players WHERE id = ?1 LIMIT 1').bind(player.playerId)
 				.first<{ display_name: string; handle: string | null; created_at: number }>(),
 			readPlayerSaves(db, player.playerId),
@@ -270,6 +272,9 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 			exportReportsOnAccount(db, principalHash),
 			exportFiledReports(db, principalHash),
 			getChatBan(db, principalHash),
+			exportDmData(db, player.playerId),
+			exportDmReportsOnAccount(db, principalHash),
+			exportDmReportsFiled(db, principalHash),
 		]);
 		if (!identity) return responseWithContext({ error: 'authentication_required' }, 401, player);
 		const data = {
@@ -294,6 +299,19 @@ export async function exportAccount(context: APIContext): Promise<Response> {
 				})),
 				reportsYouFiled: reportsFiled,
 				ban: ban ? { reason: ban.reason, createdAt: ban.createdAt, expiresAt: ban.expiresAt } : null,
+			},
+			// Phase D (plan §9.5): DMs ARE account-linked, so they export in
+			// full — conversations, history, attachment bytes (bounded), and
+			// both directions of DM report evidence. Sender identity is me/them;
+			// partners appear as handle + display label only, never a player ID.
+			directMessages: {
+				included: true,
+				conversations: dms.conversations,
+				messages: dms.messages,
+				attachmentBytesIncluded: dms.attachmentBytesIncluded,
+				attachmentBytesOmitted: dms.attachmentBytesOmitted,
+				reportsOnYourMessages: dmReportsOnMe,
+				reportsYouFiled: dmReportsFiled,
 			},
 			saves: saves.map((row) => ({ gameId: row.game_id, slotId: row.slot_id, schemaVersion: Number(row.schema_version), revision: Number(row.revision), data: JSON.parse(row.data_json), updatedAt: Number(row.updated_at) })),
 			scores: scores.results.map((row) => ({ gameId: row.game_id, mode: row.mode_id, score: Number(row.score), tieBreak: row.tie_break === null ? null : Number(row.tie_break), achievedAt: Number(row.achieved_at), displayName: row.display_name, status: row.validation_state })),
