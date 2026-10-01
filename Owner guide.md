@@ -540,7 +540,6 @@ Use manual deployment only when you intend to deploy directly through Wrangler. 
 - Profile analytics use an ephemeral session cookie for view deduplication, reactions, and link tracking; it is not a user account.
 - Paint’s activity trail records accepted publish summaries only. Its visitor/session identifier is opaque and ephemeral, not a person’s identity. *(This is current behaviour; the collection policy allows deliberate extensions — account attribution and richer action detail — each of which needs a documented decision and disclosure first.)*
 - Use the admin panel only for its intended private operations, and keep the admin token and `ACCESS_SECRET` out of GitHub and the repository.
-- **Collection is allowed, silence is not.** The site may now store chat history, message logs and comparable activity records (`docs/DATA-COLLECTION-POLICY.md`). Anything collected must appear in the register in `docs/DATA.md` §11 with its retention, and anything a visitor would be surprised by must be said plainly on the page where it happens and on the planned `/privacy/` page.
-- **Tell people what is readable.** If private messages are logged for administrators, the messaging UI has to say so. The honest sentence is short; the alternative is a breach of trust even when nothing illegal happened.
+- **Collection is allowed* The site may now store chat history, message logs and comparable activity records (`docs/DATA-COLLECTION-POLICY.md`). Anything collected must appear in the register in `docs/DATA.md` §11 with its retention.
 
 That’s the current owner setup. For detailed implementation and retention notes, see `docs/CONFIGURATION.md`, `docs/DATA.md`, `docs/PROFILES.md`, `docs/ADMIN.md`, and `docs/DEPLOY.md`.
