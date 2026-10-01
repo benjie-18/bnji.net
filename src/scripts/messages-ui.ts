@@ -611,6 +611,16 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 		status.textContent = conversations.length
 			? `Signed in as ${account.displayName}. ${conversations.length} conversation(s).`
 			: `Signed in as ${account.displayName}. No conversations yet.`;
+
+		// Deep link from the Friends page (/messages/?handle=x): open that
+		// conversation once, then clean the URL so a refresh does not re-fire
+		// it. The D7 gate answers 403 not_friends with the composer's copy if
+		// the pair stopped being friends meanwhile.
+		const requestedHandle = new URL(window.location.href).searchParams.get('handle');
+		if (requestedHandle && /^[a-z0-9_]{3,20}$/.test(requestedHandle)) {
+			window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+			void startConversation(requestedHandle);
+		}
 	} catch (error) {
 		signin.hidden = false;
 		fail(error);

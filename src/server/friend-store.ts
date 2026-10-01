@@ -158,9 +158,14 @@ export async function friendAction(
 	if (blocked) return { ok: false, error: 'blocked', status: 403 };
 
 	if (action === 'remove') {
-		if (!existing || existing.state !== 'accepted') return { ok: false, error: 'not_found', status: 404 };
+		// Accepted friend → unfriend; own pending outgoing → cancel it. Without
+		// the cancel leg a stale request would sit forever (the recipient may
+		// never respond) and count against maxPendingOutgoing. Incoming
+		// pending stays the RECIPIENT's to decline (§8.1).
+		if (!existing) return { ok: false, error: 'not_found', status: 404 };
+		if (existing.state === 'pending' && existing.requested_by !== playerId) return { ok: false, error: 'not_found', status: 404 };
 		await db.prepare('DELETE FROM player_friends WHERE player_a = ?1 AND player_b = ?2').bind(myA, myB).run();
-		return { ok: true, changed: 'removed' };
+		return { ok: true, changed: existing.state === 'accepted' ? 'removed' : 'cancelled' };
 	}
 
 	if (action === 'request') {

@@ -192,9 +192,15 @@ Then, in a browser:
 
 ```bash
 npm ci
-npx wrangler d1 migrations apply bnji-board --local
-npx wrangler dev --local --port 8788
+npm run preview
 ```
+
+`npm run preview` is one command and does the whole local flow: `astro build`,
+then `wrangler d1 migrations apply bnji-board --local` (**pending migrations
+only — already-applied ones are never rerun**), then `wrangler dev`. The
+duplicate `bnji_board` remote binding was removed 2026-10-01
+(CONFIGURATION.md §5.2), so no `--local` flag or `CLOUDFLARE_API_TOKEN` is
+needed for local development anymore.
 
 Create `.dev.vars` for local secrets. It is gitignored — never commit it.
 
@@ -202,8 +208,8 @@ Create `.dev.vars` for local secrets. It is gitignored — never commit it.
 ACCESS_SECRET=<any random string>
 ```
 
-`--local` is required while the duplicate `bnji_board` binding exists in
-`wrangler.json`; see CONFIGURATION.md §5.2. Use `--local` for local development and never let a local command target the remote `bnji_board` binding.
+Prefer raw commands? `npx wrangler d1 migrations apply bnji-board --local`
+then `npx wrangler dev --port 8788` is equivalent.
 
 ---
 
@@ -215,5 +221,5 @@ ACCESS_SECRET=<any random string>
 | `/admin` is `503` | `ACCESS_SECRET` not set | `npx wrangler secret put ACCESS_SECRET` |
 | `/admin` is `401` with the right token | Token rotated, or row out of sync | `/api/admin/board` etc. need a session; sign in again. If the token is lost, reseed — see `docs/ADMIN.md` |
 | Board page loads but posts fail `503 storage_unavailable` | `BOARD_DB` binding or DB missing | Check the binding id in `wrangler.json`, then re-apply migrations |
-| `npx wrangler dev` demands a `CLOUDFLARE_API_TOKEN` | The `bnji_board` remote binding | Add `--local`, or delete that binding block |
+| `npx wrangler dev` demands a `CLOUDFLARE_API_TOKEN` | Stale checkout still carrying the old `bnji_board` remote binding | Pull current `wrangler.json` (the binding was deleted 2026-10-01, CONFIGURATION §5.2); a plain `npm run preview` is then fully local |
 | Login says "too many attempts" | Rate limit: 10 failed attempts per 15 min per IP | Wait it out. It is a real limit, not a bug |

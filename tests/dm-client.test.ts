@@ -81,14 +81,24 @@ async function claimHandle(cookie: string, handle: string, ip: string): Promise<
 	assert.equal(response.status, 200, await response.clone().text());
 }
 
+/** Phase E (plan D7): open-by-handle needs an accepted friendship first. */
+function makeFriends(db: { raw: ReturnType<typeof createTestD1>['raw'] }, nameA: string, nameB: string): void {
+	const ids = db.raw.prepare('SELECT id FROM game_players WHERE display_name IN (?, ?)').all(nameA, nameB) as Array<{ id: string }>;
+	assert.equal(ids.length, 2, 'both accounts exist');
+	const [a, b] = ids.map((row) => row.id).sort();
+	db.raw.prepare(
+		"INSERT INTO player_friends (player_a, player_b, state, requested_by, created_at, updated_at) VALUES (?, ?, 'accepted', ?, ?, ?)",
+	).run(a, b, a, Date.now(), Date.now());
+}
+
 /* ------------------------------------------------- DOM + transport fakes */
 
 /** Parsed from the real page source — the wiring contract is the markup itself. */
-function realMessagesDom(): JSDOM {
+function realMessagesDom(query = ''): JSDOM {
 	const source = readFileSync(new URL('../src/pages/messages.astro', import.meta.url), 'utf8');
 	const parts = source.split('---');
 	const markup = parts.length >= 3 ? parts[2] : source;
-	return new JSDOM(`<!doctype html><html><body>${markup}</body></html>`, { url: `${ORIGIN}/messages/` });
+	return new JSDOM(`<!doctype html><html><body>${markup}</body></html>`, { url: `${ORIGIN}/messages/${query}` });
 }
 
 type FakeSocket = {
@@ -177,8 +187,8 @@ function installGlobals(dom: JSDOM): void {
 
 const tick = (ms = 5): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function mountFreshDom(): Promise<JSDOM> {
-	const dom = realMessagesDom();
+async function mountFreshDom(query = ''): Promise<JSDOM> {
+	const dom = realMessagesDom(query);
 	installGlobals(dom);
 	sockets = [];
 	const root = dom.window.document.querySelector('[data-messages-root]');
@@ -216,16 +226,8 @@ test('the full local flow: boot → start by handle → open → send → live f
 	const bob = await createAccount(GUEST_TWO, 'Test Two', '203.0.113.2');
 	await claimHandle(alice, 'test1', '203.0.113.1');
 	await claimHandle(bob, 'test2', '203.0.113.2');
-	// Phase E (plan D7 answer): open-by-handle is friends-only from E on —
-	// establish the accepted pair exactly like the friends flow would.
-	{
-		const ids = db.raw.prepare("SELECT id FROM game_players WHERE display_name IN ('Test One', 'Test Two')").all() as Array<{ id: string }>;
-		assert.equal(ids.length, 2);
-		const [a, b] = ids.map((row) => row.id).sort();
-		db.raw.prepare(
-			"INSERT INTO player_friends (player_a, player_b, state, requested_by, created_at, updated_at) VALUES (?, ?, 'accepted', ?, ?, ?)",
-		).run(a, b, a, Date.now(), Date.now());
-	}
+	// Phase E (plan D7 answer): open-by-handle is friends-only from E on.
+	makeFriends(db, 'Test One', 'Test Two');
 	activeCookie = alice;
 
 	const dom = await mountFreshDom();
@@ -324,4 +326,24 @@ test('the full local flow: boot → start by handle → open → send → live f
 	const bobView = await conversationsApi.GET(requestContext('/api/dm/conversations', { cookie: bob }));
 	const bobBody = await bobView.json() as { conversations: Array<{ unread: number }> };
 	assert.equal(bobBody.conversations[0].unread >= 1, true, 'partner has unread');
+});
+
+test('deep link: /messages/?handle= opens that conversation once and cleans the URL', async () => {
+	const { db } = database();
+	const alice = await createAccount(GUEST_ONE, 'Deep One', '203.0.113.51');
+	const bob = await createAccount(GUEST_TWO, 'Deep Two', '203.0.113.52');
+	await claimHandle(alice, 'deep_one', '203.0.113.51');
+	await claimHandle(bob, 'deep_two', '203.0.113.52');
+	makeFriends(db, 'Deep One', 'Deep Two');
+	activeCookie = alice;
+
+	const dom = await mountFreshDom('?handle=deep_two');
+	await tick(40);
+
+	// The thread opened without touching the form…
+	assert.equal(byAttr(dom, 'dm-thread-head').hidden, false, 'deep link opens the thread');
+	assert.match(byAttr(dom, 'dm-partner').textContent ?? '', /Deep Two @deep_two/);
+	// …and the parameter is removed so a refresh does not re-fire it.
+	assert.equal(dom.window.location.search, '', 'URL cleaned after consumption');
+	assert.equal(dom.window.location.pathname, '/messages/');
 });

@@ -24,7 +24,7 @@ import PageHeader from '../components/PageHeader.astro';
 	<div class="container dm-body" data-messages-root>
 		<p class="dm-status" data-dm-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
 
-		<section class="dm-panel dm-signin" data-dm-signin hidden>
+		<section class="dm-panel dm-signin" data-dm-signin data-glass="raised" hidden>
 			<h2>Messages are for accounts</h2>
 			<p>
 				Direct messages need a registered account so conversations stay attached to
@@ -33,7 +33,7 @@ import PageHeader from '../components/PageHeader.astro';
 			</p>
 		</section>
 
-		<section class="dm-panel dm-signed-in" data-dm-signed-in hidden>
+		<section class="dm-panel dm-signed-in" data-dm-signed-in data-glass="raised" hidden>
 			<p class="dm-disclosure" data-dm-disclosure></p>
 
 			<div class="dm-layout">
@@ -86,7 +86,9 @@ import PageHeader from '../components/PageHeader.astro';
 <style>
 	.dm-body { display: grid; gap: 1rem; padding-block: 1.5rem 4rem; }
 	.dm-status { min-height: 1.4em; margin: 0; color: var(--text-muted); font-size: var(--text-micro); }
-	.dm-panel { background: var(--bg-raised, transparent); border: 1px solid var(--line, rgba(255,255,255,0.08)); border-radius: 14px; padding: 1.25rem; }
+	/* Surface/border come from [data-glass] (glass.css) — same asset every
+	   other panel on the site uses; here only size and radius remain. */
+	.dm-panel { border-radius: var(--radius-lg); padding: 1.25rem; }
 	.dm-signin h2 { margin: 0 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
 	.dm-signin p { margin: 0; max-width: 44rem; color: var(--text-muted); }
 	.dm-signin a { color: var(--text-strong); }

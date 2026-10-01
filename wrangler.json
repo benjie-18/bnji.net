@@ -15,12 +15,6 @@
 			"database_name": "bnji-board",
 			"database_id": "4a121806-46a2-4d19-ae17-e06e5ad794f3",
 			"migrations_dir": "migrations"
-		},
-		{
-			"binding": "bnji_board",
-			"database_name": "bnji-board",
-			"database_id": "4a121806-46a2-4d19-ae17-e06e5ad794f3",
-			"remote": true
 		}
 	],
 	"kv_namespaces": [

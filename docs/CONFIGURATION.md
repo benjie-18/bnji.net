@@ -156,18 +156,16 @@ remains visibly unavailable and its API returns `503 paint_requires_d1_board`;
 the external REST contract is not assumed to support canvas storage. See
 [`DATA.md`](./DATA.md) §10 for synchronization, audit privacy and size bounds.
 
-### 5.2 `BOARD_DB` is bound twice — one of the two is a problem
+### 5.2 `BOARD_DB` is bound once (the duplicate is gone)
 
-`wrangler.json` binds the same `database_id` twice:
-
-- `BOARD_DB` — the normal binding, used by all the code.
-- `bnji_board` — identical, but `"remote": true`.
-
-Nothing reads `bnji_board`. The duplicate is harmless in production but breaks
-local development: `npx wrangler dev` tries to open a remote session, demands a
-`CLOUDFLARE_API_TOKEN`, and exits. Until it is removed, run local dev as
-`npx wrangler dev --local`. Deleting the `bnji_board` binding block is the fix
-and touches no application code.
+`wrangler.json` used to bind the same `database_id` twice — `BOARD_DB` plus a
+`bnji_board` copy with `"remote": true`. Nothing ever read `bnji_board`, and
+the remote flag broke local development (`wrangler dev` demanded a
+`CLOUDFLARE_API_TOKEN` and every build needed the flag stripped by hand).
+**Resolved 2026-10-01:** the `bnji_board` block is deleted — the documented
+fix all along — so `wrangler dev` is plain-local with no flags, and
+`npm run preview` chains the pending-only local migration apply before it
+starts. Codes that matter: only `BOARD_DB`.
 
 ### 5.3 Secrets
 

@@ -44,6 +44,26 @@ function escapeHtml(value: string): string {
 	return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
 }
 
+/**
+ * The route's vocabulary: POST mutates friendships, DELETE removes them
+ * (unfriend / cancel own pending / unblock). Sending a DELETE action over
+ * POST is a 400 — the method is part of the contract (plan §10).
+ */
+const METHOD_BY_ACTION: Record<string, 'POST' | 'DELETE'> = {
+	request: 'POST', accept: 'POST', decline: 'POST', block: 'POST',
+	remove: 'DELETE', unblock: 'DELETE',
+};
+
+const CHANGED_COPY: Record<string, (handle: string) => string> = {
+	requested: (handle) => `Request sent to ${handle}.`,
+	friends: (handle) => `You and ${handle} are friends now.`,
+	declined: (handle) => `Request from ${handle} declined.`,
+	blocked: (handle) => `${handle} is blocked.`,
+	removed: (handle) => `${handle} removed from your friends.`,
+	cancelled: (handle) => `Request to ${handle} cancelled.`,
+	unblocked: (handle) => `${handle} unblocked.`,
+};
+
 async function apiCall(method: 'GET' | 'POST' | 'DELETE', body?: { action: string; handle: string }): Promise<{ ok: true; data: Lists } | { ok: false; error: unknown; status: number }> {
 	const response = await fetch('/api/friends', {
 		method,
@@ -80,8 +100,11 @@ export function mountFriends(root: HTMLElement): void {
 		blocked: root.querySelector<HTMLElement>('[data-friends-empty="blocked"]'),
 	};
 
-	const setStatus = (message: string): void => {
-		if (status) status.textContent = message;
+	const setStatus = (message: string, tone: 'error' | null = null): void => {
+		if (!status) return;
+		status.textContent = message;
+		if (tone) status.dataset.tone = tone;
+		else delete status.dataset.tone;
 	};
 	const setOnline = (handle: string, online: boolean): void => {
 		for (const dot of root.querySelectorAll<HTMLElement>(`[data-friend-online="${CSS.escape(handle)}"]`)) {
@@ -103,19 +126,28 @@ export function mountFriends(root: HTMLElement): void {
 		const online = kind === 'friends'
 			? `<span class="friends-online" data-friend-online="${handle}" hidden aria-label="${handle} is offline" role="img">●</span>`
 			: '';
+		// Same visual language as GlassButton (glass.css): class + data-glass.
+		// Every control carries a handle-scoped aria-label — "Accept" alone is
+		// ambiguous when a page lists several rows (a11y).
+		const btn = (action: string, label: string, aria: string, extra = ''): string =>
+			`<button type="button" class="glass-button glass-button--quiet glass-button--sm${extra ? ` ${extra}` : ''}" data-glass="" data-friend-action="${action}" aria-label="${escapeHtml(aria)}">${label}</button>`;
 		let actions = '';
 		if (kind === 'incoming') {
-			actions = `
-				<button type="button" data-friend-action="accept">Accept</button>
-				<button type="button" class="friends-btn--muted" data-friend-action="decline">Decline</button>
-				<button type="button" class="friends-btn--danger" data-friend-action="block">Block</button>`;
+			actions = [
+				`<button type="button" class="glass-button glass-button--primary glass-button--sm" data-glass="" data-friend-action="accept" aria-label="${escapeHtml(`Accept friend request from ${handle}`)}">Accept</button>`,
+				btn('decline', 'Decline', `Decline friend request from ${handle}`, 'friends-btn--muted'),
+				btn('block', 'Block', `Block ${handle}`, 'friends-btn--danger'),
+			].join('');
 		} else if (kind === 'friends') {
-			actions = `
-				<a href="/messages/" data-friend-message>Message</a>
-				<button type="button" class="friends-btn--muted" data-friend-action="remove">Remove</button>
-				<button type="button" class="friends-btn--danger" data-friend-action="block">Block</button>`;
+			actions = [
+				`<a class="glass-button glass-button--quiet glass-button--sm" data-glass="" href="/messages/?handle=${encodeURIComponent(entry.handle)}" data-friend-message aria-label="Message ${escapeHtml(handle)}">Message</a>`,
+				btn('remove', 'Remove', `Remove ${handle} from your friends`, 'friends-btn--muted'),
+				btn('block', 'Block', `Block ${handle}`, 'friends-btn--danger'),
+			].join('');
+		} else if (kind === 'outgoing') {
+			actions = btn('remove', 'Cancel', `Cancel friend request to ${handle}`, 'friends-btn--muted');
 		} else if (kind === 'blocked') {
-			actions = `<button type="button" class="friends-btn--muted" data-friend-action="unblock">Unblock</button>`;
+			actions = btn('unblock', 'Unblock', `Unblock ${handle}`, 'friends-btn--muted');
 		}
 		return `<li class="friends-row" data-handle="${handle}">
 			<span class="friends-row__who">${online}<strong>${handle}</strong> <span class="friends-row__name">${label}</span></span>
@@ -132,13 +164,17 @@ export function mountFriends(root: HTMLElement): void {
 	};
 
 	const run = async (action: string, handle: string): Promise<void> => {
-		const outcome = await apiCall('POST', { action, handle });
+		const method = METHOD_BY_ACTION[action];
+		if (!method) return;
+		const outcome = await apiCall(method, { action, handle });
 		if (outcome.ok) {
 			render(outcome.data);
-			setStatus(action === 'request' ? `Request sent to ${handle}.` : `Done — ${handle}.`);
+			const changed = (outcome.data as { changed?: string }).changed;
+			const describe = changed ? CHANGED_COPY[changed] : undefined;
+			setStatus(describe ? describe(handle) : `Done — ${handle}.`);
 			return;
 		}
-		setStatus(copyFor(outcome.error));
+		setStatus(copyFor(outcome.error), 'error');
 	};
 
 	let socket: WebSocket | null = null;
@@ -146,27 +182,37 @@ export function mountFriends(root: HTMLElement): void {
 	let reconnectTimer: number | undefined;
 	let reconnectDelay = 1_000;
 	let pongSeen = true;
+	// Generation token: a restarted socket's stale `close` must not tear down
+	// (or schedule a rival reconnect for) the socket that replaced it.
+	let presenceGeneration = 0;
 
 	const stopPresence = (): void => {
+		presenceGeneration += 1;
 		window.clearInterval(pingTimer);
 		window.clearTimeout(reconnectTimer);
 		pingTimer = undefined;
 		reconnectTimer = undefined;
 		if (socket) {
-			try { socket.close(); } catch { /* no-op */ }
+			const stale = socket;
 			socket = null;
+			try { stale.close(); } catch { /* no-op */ }
 		}
 	};
 
 	const startPresence = (): void => {
 		stopPresence();
+		const generation = presenceGeneration;
+		const stale = (): boolean => generation !== presenceGeneration;
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+		let ws: WebSocket;
 		try {
-			socket = new WebSocket(`${protocol}//${window.location.host}/api/presence`);
+			ws = new WebSocket(`${protocol}//${window.location.host}/api/presence`);
 		} catch {
 			return;
 		}
-		socket.addEventListener('message', (event) => {
+		socket = ws;
+		ws.addEventListener('message', (event) => {
+			if (stale()) return;
 			let frame: unknown;
 			try { frame = JSON.parse(String(event.data)); } catch { return; }
 			const message = frame as { t?: string; handles?: unknown };
@@ -180,21 +226,34 @@ export function mountFriends(root: HTMLElement): void {
 				pongSeen = true;
 			}
 		});
-		socket.addEventListener('close', () => {
+		ws.addEventListener('close', () => {
+			if (stale()) return;
 			stopPresence();
 			// Client-side detection only — the DO keeps no heartbeat (§8.2);
 			// reconnect with backoff and take a fresh snapshot on open.
-			reconnectTimer = window.setTimeout(() => { reconnectDelay = Math.min(30_000, reconnectDelay * 2); startPresence(); }, reconnectDelay);
+			reconnectTimer = window.setTimeout(() => { if (stale()) return; reconnectDelay = Math.min(30_000, reconnectDelay * 2); startPresence(); }, reconnectDelay);
 		});
-		socket.addEventListener('error', () => { try { socket?.close(); } catch { /* no-op */ } });
+		ws.addEventListener('error', () => { if (!stale()) { try { ws.close(); } catch { /* no-op */ } } });
 		// Keep-alive: ping and require a pong; silent socket → force reconnect.
 		pongSeen = true;
 		pingTimer = window.setInterval(() => {
-			if (!socket || socket.readyState !== WebSocket.OPEN) return;
-			if (!pongSeen) { try { socket.close(); } catch { /* no-op */ } return; }
+			if (stale() || !socket || socket !== ws || ws.readyState !== WebSocket.OPEN) return;
+			if (!pongSeen) { try { ws.close(); } catch { /* no-op */ } return; }
 			pongSeen = false;
-			try { socket.send(JSON.stringify({ t: 'ping' })); } catch { /* no-op */ }
+			try { ws.send(JSON.stringify({ t: 'ping' })); } catch { /* no-op */ }
 		}, 30_000);
+	};
+
+	// One mutation at a time: double-clicks must not burn the rate budget.
+	let busy = false;
+	const withBusy = (work: () => Promise<void>): void => {
+		if (busy) return;
+		busy = true;
+		root.setAttribute('aria-busy', 'true');
+		void work().finally(() => {
+			busy = false;
+			root.removeAttribute('aria-busy');
+		});
 	};
 
 	form?.addEventListener('submit', (event) => {
@@ -202,7 +261,10 @@ export function mountFriends(root: HTMLElement): void {
 		const handle = (handleInput?.value ?? '').trim().toLowerCase();
 		if (!handle) return;
 		setStatus('Sending…');
-		void run('request', handle).then(() => { if (handleInput) handleInput.value = ''; });
+		withBusy(async () => {
+			await run('request', handle);
+			if (handleInput) handleInput.value = '';
+		});
 	});
 
 	root.addEventListener('click', (event) => {
@@ -212,10 +274,14 @@ export function mountFriends(root: HTMLElement): void {
 		const row = actionButton.closest<HTMLElement>('[data-handle]');
 		const action = actionButton.dataset.friendAction;
 		if (!row || !action || !row.dataset.handle) return;
+		const handle = row.dataset.handle;
 		setStatus('Working…');
-		void run(action, row.dataset.handle).then(() => {
-			if (action === 'block') stopPresence(); // my friend set changed → the socket's view is stale
-			else if (action === 'unblock' || action === 'accept') startPresence();
+		withBusy(async () => {
+			await run(action, handle);
+			// The Presence header carries my accepted-friend handles: any action
+			// that can change that set (accept, remove, block) gets a fresh
+			// socket so both the snapshot and my visibility to others stay honest.
+			if (action === 'accept' || action === 'remove' || action === 'block') startPresence();
 		});
 	});
 
@@ -237,7 +303,7 @@ export function mountFriends(root: HTMLElement): void {
 		} else {
 			if (signin) signin.hidden = true;
 			if (signedIn) signedIn.hidden = false;
-			setStatus(copyFor(outcome.error));
+			setStatus(copyFor(outcome.error), 'error');
 		}
 	})();
 }

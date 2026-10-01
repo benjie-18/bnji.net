@@ -4,6 +4,8 @@
  *   GET    /api/friends                       -> 200 { friends, incoming, outgoing, blocked, config }
  *   POST   /api/friends { action, handle }    -> 200 lists   action: request | accept | decline | block
  *   DELETE /api/friends { action, handle }    -> 200 lists   action: remove | unblock
+ *                                                (remove = unfriend, or cancel
+ *                                                 your own outgoing request)
  *
  * Account-only (plan §7.1), same-origin mutations, bounded bodies, D1 rate
  * budgets never KV (§11). Player IDs never leave the server — everything is

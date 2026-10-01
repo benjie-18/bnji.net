@@ -43,5 +43,6 @@
 	],
 	"vars": {
 		"ACCESS_SECRET": "workerd-test-secret"
-	}
+	},
+	"d1_databases": []
 }

@@ -224,6 +224,19 @@ test('friends: decline then re-request is a fresh pending row', async () => {
 	assert.equal((await body(retry)).changed, 'requested');
 	const incoming = await body(await friendsApi.GET(requestContext('/api/friends', { cookie: bob })));
 	assert.deepEqual(incoming.incoming.map((row) => row.handle), ['alice']);
+
+	// The SENDER can cancel their own outgoing request with DELETE remove —
+	// otherwise a never-answered row would sit forever and count against
+	// maxPendingOutgoing. The recipient cannot use remove on an incoming row
+	// (their verb stays decline).
+	const byRecipient = await friend(bob, 'DELETE', 'remove', 'alice');
+	assert.equal(byRecipient.status, 404, 'incoming pending is not removable by the recipient');
+	const cancelled = await friend(alice, 'DELETE', 'remove', 'bob');
+	assert.equal(cancelled.status, 200, await cancelled.clone().text());
+	assert.equal((await body(cancelled)).changed, 'cancelled');
+	const afterCancel = await body(await friendsApi.GET(requestContext('/api/friends', { cookie: alice })));
+	assert.deepEqual(afterCancel.outgoing, [], 'the cancelled request is gone');
+	assert.equal((await friend(alice, 'POST', 'request', 'bob')).status, 200, 'cancelling frees the pair for a fresh request');
 });
 
 test('friends: block wins — removes friendship, cancels pending, denies new, unblock restores', async () => {

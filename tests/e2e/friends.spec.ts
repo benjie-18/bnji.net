@@ -101,6 +101,12 @@ test('the friends page discloses, lists, and sends the exact action bodies', asy
 	await page.locator('[data-friends-list="friends"] [data-friend-action="remove"]').first().click();
 	await expect.poll(() => deleteBodies).toEqual([{ action: 'remove', handle: 'pal_one' }]);
 
+	// Cancel on an outgoing request → DELETE remove (the sender's cancel leg).
+	await page.locator('[data-friends-list="outgoing"] [data-friend-action="remove"]').click();
+	await expect.poll(() => deleteBodies.filter((body) => body.handle === 'sent_one')).toEqual([
+		{ action: 'remove', handle: 'sent_one' },
+	]);
+
 	const violations = await new AxeBuilder({ page }).analyze();
 	expect(violations.violations.map((violation) => violation.id), 'axe detected accessibility violations').toEqual([]);
 });
