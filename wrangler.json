@@ -43,6 +43,10 @@
 			{
 				"name": "GAME_ROOMS",
 				"class_name": "GameRoom"
+			},
+			{
+				"name": "DM_CONVERSATIONS",
+				"class_name": "DMConversation"
 			}
 		]
 	},
@@ -51,6 +55,12 @@
 			"tag": "game-rooms-v1",
 			"new_sqlite_classes": [
 				"GameRoom"
+			]
+		},
+		{
+			"tag": "dm-conversations-v1",
+			"new_sqlite_classes": [
+				"DMConversation"
 			]
 		}
 	]
