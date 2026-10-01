@@ -215,6 +215,10 @@ test('the messages page discloses, lists, threads, sends, and handles live frame
 	await page.locator('[data-dm-new-form]').evaluate((form) => (form as HTMLFormElement).requestSubmit());
 	await expect.poll(() => posts.openBodies.length).toBe(1);
 	expect(posts.openBodies[0]).toEqual({ handle: 'friend_two' });
+	// Regression (user report 2026-10-01): the server list hides conversations
+	// until their first message, so the client must merge the POST response
+	// locally — otherwise "That conversation no longer exists." on open.
+	await expect(page.locator('[data-dm-list] button')).toHaveCount(2);
 	await expect(page.locator('[data-dm-partner]')).toContainText('Friend Two');
 	await expect(page.locator('[data-dm-thread] li')).toHaveCount(0);
 

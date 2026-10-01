@@ -501,8 +501,28 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 
 	async function startConversation(handle: string): Promise<void> {
 		try {
-			const data = await api<{ conversation: { id: string } }>('/api/dm/conversations', post('/api/dm/conversations', { handle }));
+			const data = await api<{ conversation: { id: string; mySide: 'lo' | 'hi'; partner: { handle: string | null; displayName: string }; exists: boolean } }>(
+				'/api/dm/conversations',
+				post('/api/dm/conversations', { handle }),
+			);
 			await refreshConversations();
+			// The list only shows conversations with a first message (§7.1), so a
+			// just-opened thread is absent from the refresh — merge the POST
+			// response in locally or openConversation can never find it.
+			if (!conversations.some((item) => item.id === data.conversation.id)) {
+				conversations.unshift({
+					id: data.conversation.id,
+					partner: data.conversation.partner,
+					mySide: data.conversation.mySide,
+					lastSeq: 0,
+					myReadSeq: 0,
+					partnerReadSeq: 0,
+					unread: 0,
+					updatedAt: null,
+					preview: null,
+				});
+				renderList();
+			}
 			await openConversation(data.conversation.id);
 			newHandle.value = '';
 		} catch (error) {
