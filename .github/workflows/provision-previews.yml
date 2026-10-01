@@ -32,9 +32,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-
-      - run: npm ci
 
       - name: Create (or find) preview KV namespace and D1 database
         run: |
@@ -79,7 +76,7 @@ jobs:
             ]
           }
           JSON
-          npx wrangler d1 migrations apply "$PREVIEW_D1_NAME" --remote --config wrangler.provision.json
+          npx --yes wrangler@4.144.0 d1 migrations apply "$PREVIEW_D1_NAME" --remote --config wrangler.provision.json
           rm wrangler.provision.json
 
       - name: Write ids into wrangler.json (previews block only)
