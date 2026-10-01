@@ -385,6 +385,56 @@ Phase E. Reads, media and the conversation socket stay membership-gated.
 | Adapter options | `astro.config.mjs` | `prerenderEnvironment: "node"`. |
 | Env schema (secrets list) | `astro.config.mjs` (`env.schema`) | Declares which secrets exist; all optional so builds work unconfigured. |
 | D1 migrations, DO classes, bindings, R2 | `wrangler.json`, `migrations/` | **Allowed when planned and documented** (`docs/DEPLOY.md` + this file + `docs/DEPENDENCY-POLICY.md` §6). Each change is its own reviewed commit, and never weakens the `.gitignore` build-output exclusions. |
+| Workers Previews bindings | `wrangler.json` → `previews` | Required for `npx wrangler preview` / Workers Builds preview builds; see §9.1. Mirrors the production storage bindings — nothing new is provisioned. |
+
+### 9.1 Workers Previews — the `previews` block (added 2026-10-01)
+
+Cloudflare Workers Previews (`npx wrangler preview`, and the automatic preview
+builds Workers Builds runs on non-`main` branches) **refuse to run without a
+`previews` block** in `wrangler.json`, and Previews **do not inherit the
+top-level production bindings**. Only assets, compatibility settings, DO
+classes, migrations and placement carry over; every binding the code reads
+from `env` must be repeated inside `previews` or the Preview returns a 1101
+the moment a route touches it.
+
+The block binds exactly what the Worker reads at runtime and nothing else:
+
+| Binding in `previews` | Resource it points at | Isolation |
+| --- | --- | --- |
+| `BOARD_DB` (D1) | the production `bnji-board` database id | **Shared with production.** A Preview's test posts, scores and DMs land in the real tables (admin-deletable). Previews never auto-apply migrations, so schema stays whatever production has. |
+| `BOARD_KV` (KV) | the production rate-limit namespace id | **Shared with production.** Only `rl:*` fixed-window counters with TTLs — low-risk by nature (§5). |
+| `GAME_ROOMS`, `DM_CONVERSATIONS`, `PRESENCE` (Durable Objects) | the same three classes | **Isolated automatically.** Each Preview gets its own DO namespace and storage; the bindings are declared only because the routes read them from `env`. |
+
+Deliberately **not** in the block: Cron Triggers, routes and the asset
+directory (Cloudflare rejects them there; `wrangler preview` uploads the
+branch's own `./dist`, and the hourly retention sweep stays
+production-only). Secrets never go in the file at all — for Previews they are
+set once for all Previews with
+`npx wrangler preview base-config secret put ACCESS_SECRET` (or per-Preview
+with `npx wrangler preview secret put ACCESS_SECRET --name <preview>`).
+Without `ACCESS_SECRET`, `/admin` in a Preview fails closed with `503`
+exactly as in production (§5.3) — that is the design, not a break.
+
+**Upgrading to fully isolated Previews** (owner decision, no urgency): create
+preview-only resources and swap the ids **inside the `previews` block only** —
+production ids at the top level stay untouched:
+
+```bash
+npx wrangler kv namespace create BOARD_KV_PREVIEW   # paste id into previews.kv_namespaces
+npx wrangler d1 create bnji-board-preview           # paste id into previews.d1_databases
+npx wrangler d1 migrations apply bnji-board-preview --remote   # before first preview deploy
+```
+
+**The `SESSION` gotcha (error 10021).** Preview deployments also merge an
+account-side *Preview base configuration* that is edited in the dashboard, not
+in this repo. A stray `SESSION` KV binding existed there with no namespace
+selected, so every preview deploy failed with `binding SESSION of type
+kv_namespace must have a namespace_id specified [code: 10021]`. **Nothing in
+this codebase reads `env.SESSION`** (sessions live in D1 and cookies —
+§5.3/§6a). If that error ever reappears: remove the offending binding in the
+dashboard under **Workers → bnjibot → Previews → Base configuration** (the
+CLI manages base-config *secrets* only), or bypass the base config entirely
+with `npx wrangler preview --ignore-base-config`.
 
 **Config files status (chat plan).** `src/config/chat.config.ts` is
 implemented (Phases B + C: chat caps, message length, per-member budget,

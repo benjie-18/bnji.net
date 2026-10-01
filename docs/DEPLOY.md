@@ -133,7 +133,9 @@ the hashed credential in D1, not by that variable.
 ## 4. Deploy
 
 Pushes to `main` build and deploy automatically through Cloudflare Workers
-Builds. If you deploy by hand instead:
+Builds. Pushes to other branches build **Workers Previews**, configured by the
+`previews` block in `wrangler.json` — see CONFIGURATION.md §9.1 before
+changing any binding. If you deploy by hand instead:
 
 ```bash
 npm run build
