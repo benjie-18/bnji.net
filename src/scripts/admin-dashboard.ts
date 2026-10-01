@@ -594,10 +594,38 @@ export function startAdminDashboard(): void {
 	}
 
 	async function loadChat(): Promise<void> {
-		type ChatDashboard = { rooms: ChatRoom[]; reports: ChatReport[]; dmReports: ChatDmReport[]; log: ChatLogRow[]; bans: ChatBan[]; filter: { blocklist: string[]; stripUrlsForAdmin: boolean; enabled: boolean } };
+		type ChatDashboard = {
+			rooms: ChatRoom[];
+			reports: ChatReport[];
+			dmReports: ChatDmReport[];
+			log: ChatLogRow[];
+			bans: ChatBan[];
+			dmMeta?: {
+				conversations: {
+					id: string;
+					participants: { handle: string | null; displayName: string }[];
+					messages: number;
+					reports: number;
+					createdAt: number;
+					lastMessageAt: number | null;
+				}[];
+				health: {
+					accounts: { total: number; new7d: number };
+					messages: { conversations: number; sent24h: number };
+					reports: { open: number; total: number };
+					friends: { accepted: number; pending: number; blocks: number };
+					presence: { sockets: number; handles: number } | null;
+				};
+				note: string;
+			};
+			filter: { blocklist: string[]; stripUrlsForAdmin: boolean; enabled: boolean };
+		};
 		const data = await guard(() => adminFetch<ChatDashboard>('/api/admin/chat/rooms'));
 		if (!data || active !== 'chat') return;
-		say(`${data.rooms.length} live room(s) · ${data.reports.filter((report) => report.status === 'open').length + data.dmReports.filter((report) => report.status === 'open').length} open report(s) · filter ${data.filter.enabled ? (data.filter.blocklist.length ? `${data.filter.blocklist.length} term(s)` : 'blocklist empty') : 'off'}`);
+		const presenceLine = data.dmMeta?.health.presence
+			? ` · ${data.dmMeta.health.presence.handles} handle(s) online`
+			: '';
+		say(`${data.rooms.length} live room(s) · ${data.reports.filter((report) => report.status === 'open').length + data.dmReports.filter((report) => report.status === 'open').length} open report(s) · filter ${data.filter.enabled ? (data.filter.blocklist.length ? `${data.filter.blocklist.length} term(s)` : 'blocklist empty') : 'off'}${presenceLine}`);
 
 		// Active rooms
 		const roomsWrap = root.querySelector<HTMLElement>('[data-chat-rooms]')!;
@@ -702,6 +730,44 @@ export function startAdminDashboard(): void {
 				tbody.appendChild(tr);
 			}
 			table.appendChild(tbody); dmWrap.appendChild(table);
+		}
+
+		// Messaging health + DM metadata (Phase E deepened admin)
+		const health = data.dmMeta?.health;
+		const healthWrap = root.querySelector<HTMLElement>('[data-chat-health]');
+		if (health && healthWrap) {
+			renderFacts(healthWrap, [
+				['Accounts', `${health.accounts.total} (${health.accounts.new7d} new)`],
+				['DM conversations', health.messages.conversations],
+				['DMs sent (24 h)', health.messages.sent24h],
+				['DM reports open / total', `${health.reports.open} / ${health.reports.total}`],
+				['Friends (accepted)', health.friends.accepted],
+				['Requests pending', health.friends.pending],
+				['Blocks', health.friends.blocks],
+				['Presence', health.presence ? `${health.presence.handles} handle(s) · ${health.presence.sockets} socket(s)` : 'unavailable'],
+			]);
+		}
+		const dmMetaWrap = root.querySelector<HTMLElement>('[data-chat-dm-meta]');
+		if (dmMetaWrap && data.dmMeta) {
+			renderTable(
+				dmMetaWrap,
+				[
+					{ label: 'Conversation', get: (r) => `${String(r.id).slice(0, 10)}…`, mono: true },
+					{
+						label: 'Participants',
+						get: (r) => (Array.isArray(r.participants)
+							? (r.participants as { handle: string | null; displayName: string }[])
+									.map((p) => p.handle ?? p.displayName ?? '—')
+									.join(' ↔ ')
+							: '—'),
+					},
+					{ label: 'Messages', get: (r) => r.messages, mono: true },
+					{ label: 'Reports', get: (r) => r.reports, mono: true },
+					{ label: 'Last activity', get: (r) => (r.lastMessageAt ? formatTime(Number(r.lastMessageAt)) : '—'), mono: true },
+				],
+				data.dmMeta.conversations as unknown as Record<string, unknown>[],
+				'No conversations yet.',
+			);
 		}
 
 		// Bans
@@ -931,8 +997,16 @@ export function startAdminDashboard(): void {
 
 	/* --- statistics --------------------------------------------------------- */
 
+	type StatsSiteGroup = {
+		topPaths: { path: string; views: number; uniques: number }[];
+		live: { views: number; visitors: number; paths: { path: string; views: number }[] };
+		referrers: { host: string; count: number }[];
+		windows: { topPathsDays: number; liveMinutes: number; referrersDays: number };
+		note: string;
+	};
 	type StatsPayload = {
 		generatedAt: number;
+		site: StatsSiteGroup | null;
 		credential: { tokenRotatedAt: number; everRotated: boolean };
 		traffic: {
 			note: string;
@@ -1267,6 +1341,46 @@ export function startAdminDashboard(): void {
 			filteredProfiles as unknown as Record<string, unknown>[],
 			'No tracked pages match these filters.',
 		);
+
+		/* site — live pulse, 7-day leaders, referrers (site-wide tracking cards) */
+		if (data.site) {
+			renderFacts(
+				root.querySelector<HTMLElement>('[data-stats-live]')!,
+				[
+					[`Views (last ${data.site.windows.liveMinutes} min)`, data.site.live.views],
+					[`Visitors (last ${data.site.windows.liveMinutes} min)`, data.site.live.visitors],
+					['Active paths', data.site.live.paths.length],
+				],
+			);
+			renderTable(
+				root.querySelector<HTMLElement>('[data-stats-live-paths]')!,
+				[
+					{ label: 'Path', get: (r) => r.path, mono: true },
+					{ label: 'Views', get: (r) => r.views, mono: true },
+				],
+				data.site.live.paths as unknown as Record<string, unknown>[],
+				'No views in this window yet.',
+			);
+			renderTable(
+				root.querySelector<HTMLElement>('[data-stats-top-paths]')!,
+				[
+					{ label: 'Path', get: (r) => r.path, mono: true },
+					{ label: 'Views', get: (r) => r.views, mono: true },
+					{ label: 'Sessions', get: (r) => r.uniques, mono: true },
+				],
+				data.site.topPaths as unknown as Record<string, unknown>[],
+				'No views recorded in this window.',
+			);
+			renderTable(
+				root.querySelector<HTMLElement>('[data-stats-referrers]')!,
+				[
+					{ label: 'Host', get: (r) => r.host, mono: true },
+					{ label: 'Page views', get: (r) => r.count, mono: true },
+				],
+				data.site.referrers as unknown as Record<string, unknown>[],
+				'No external referrers in this window.',
+			);
+		}
 
 		/* engagement — reactions and outbound link clicks */
 		renderSourceList(

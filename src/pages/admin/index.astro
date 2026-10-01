@@ -154,6 +154,25 @@ export const prerender = false;
 
 			<div class="admin__cards" data-stats-root style="margin-top: 1.5rem;">
 				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">🕒 Live now</h2>
+					<p class="admin__hint">Rolling 30-minute pulse from profile views — one count per session per day, so "visitors" means distinct sessions.</p>
+					<div data-stats-live />
+					<div class="admin__table-wrap" data-stats-live-paths style="margin-top: 0.75rem;" />
+				</div>
+
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">🏆 Top paths (7 days)</h2>
+					<p class="admin__hint">Which routes are actually being visited this week, with distinct sessions per path.</p>
+					<div class="admin__table-wrap" data-stats-top-paths />
+				</div>
+
+				<div class="admin__card" data-glass>
+					<h2 class="admin__h2">🔗 Top referrers (30 days)</h2>
+					<p class="admin__hint">Referring hosts only, grouped from page-view rows — our own hostnames are excluded and full URLs are never shown.</p>
+					<div class="admin__table-wrap" data-stats-referrers />
+				</div>
+
+				<div class="admin__card" data-glass>
 					<h2 class="admin__h2">💡 Engagement &amp; Reactions</h2>
 					<div class="admin__stack" data-stats-engagement />
 				</div>
@@ -271,6 +290,12 @@ export const prerender = false;
 				<h2 class="admin__h2">Direct message reports</h2>
 				<p class="admin__hint">Snapshots taken when a participant reports a message in a private conversation (chat plan Phase D). Banning an author here also blocks their room chat and DMs until the ban expires.</p>
 				<div data-chat-dm-reports />
+			</div>
+			<div class="admin__card" data-glass style="margin-top: 1rem;">
+				<h2 class="admin__h2">📡 Messaging health (Phase E)</h2>
+				<p class="admin__hint">Counts and metadata only: DM bodies live on report snapshots, friend lists are never listed (aggregate counts alone), and presence reports how many sockets are attached — no browsing, no identities.</p>
+				<div data-chat-health />
+				<div class="admin__table-wrap" data-chat-dm-meta style="margin-top: 0.75rem;" />
 			</div>
 			<div class="admin__card" data-glass style="margin-top: 1rem;">
 				<h2 class="admin__h2">Active bans</h2>

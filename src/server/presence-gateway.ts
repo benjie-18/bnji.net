@@ -15,6 +15,44 @@ type PresenceGatewayEnv = { PRESENCE?: PresenceNamespace };
 
 export const PRESENCE_INSTANCE = 'global';
 
+/**
+ * Service-authenticated stats path (mirrors the room admin token): the DO
+ * answers socket/handle counts to anyone holding
+ * `hex(sha256('bnji-presence-admin:v1:' + ACCESS_SECRET))` — the same secret
+ * that already guards GameRoom admin reads. Never KV, never a browser path.
+ */
+export const PRESENCE_ADMIN_HEADER = 'x-bnji-presence-admin';
+
+export async function derivePresenceAdminToken(secret: string): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`bnji-presence-admin:v1:${secret}`));
+	return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** Live presence counts for the admin dashboard; null whenever unavailable (never fails the request). */
+export async function presenceAdminFetch(
+	env: Record<string, unknown>,
+	secret: string | undefined,
+): Promise<{ sockets: number; handles: number } | null> {
+	if (!secret) return null;
+	const namespace = presenceNamespace((env as PresenceGatewayEnv).PRESENCE);
+	if (!namespace) return null;
+	try {
+		const token = await derivePresenceAdminToken(secret);
+		const stub = namespace.get(namespace.idFromName(PRESENCE_INSTANCE));
+		const response = await stub.fetch(new Request('https://presence.internal/admin/stats', {
+			headers: { [PRESENCE_ADMIN_HEADER]: token },
+		}));
+		if (!response.ok) return null;
+		const data = await response.json() as { sockets?: unknown; handles?: unknown };
+		const sockets = Number(data.sockets);
+		const handles = Number(data.handles);
+		if (!Number.isFinite(sockets) || !Number.isFinite(handles) || sockets < 0 || handles < 0) return null;
+		return { sockets, handles };
+	} catch {
+		return null;
+	}
+}
+
 export function presenceNamespace(value: unknown): PresenceNamespace | null {
 	if (!value || typeof value !== 'object') return null;
 	const namespace = value as PresenceNamespace;

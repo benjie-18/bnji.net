@@ -69,6 +69,10 @@ export interface ProfileStore {
 	getAllTrackedPages(): Promise<{ slug: string; name: string; total: number; today: number; week: number; month: number }[]>;
 	getTimeSeriesViews(scope: TimeSeriesScope, timeRange: TimeSeriesRange): Promise<TimeSeriesBucket[]>;
 
+	/* Site-wide admin aggregates (profile_views is the view store) */
+	getTopPaths(since: number, limit: number): Promise<{ path: string; views: number; uniques: number }[]>;
+	getLiveActivity(since: number, limit: number): Promise<{ views: number; visitors: number; paths: { path: string; views: number }[] }>;
+
 	/* Reactions */
 	getReactionCounts(profileSlug: string): Promise<ReactionCounts>;
 	addReaction(profileSlug: string, reaction: string, sessionKey: string, now: number): Promise<boolean>;
@@ -122,6 +126,40 @@ function createD1ProfileStore(db: D1Database): ProfileStore {
 				});
 			}
 			return pages.sort((a, b) => b.total - a.total);
+		},
+
+		async getTopPaths(since, limit) {
+			const { results } = await db
+				.prepare(
+					`SELECT profile_slug AS path, COUNT(*) AS views, COUNT(DISTINCT session_key) AS uniques
+					 FROM profile_views WHERE created_at >= ?1
+					 GROUP BY profile_slug ORDER BY views DESC, path ASC LIMIT ?2`,
+				)
+				.bind(since, Math.min(50, Math.max(1, limit)))
+				.all<{ path: string; views: number; uniques: number }>();
+			return results.map((row) => ({ path: String(row.path), views: Number(row.views), uniques: Number(row.uniques) }));
+		},
+
+		async getLiveActivity(since, limit) {
+			const [totals, paths] = await Promise.all([
+				db
+					.prepare('SELECT COUNT(*) AS v, COUNT(DISTINCT session_key) AS u FROM profile_views WHERE created_at >= ?1')
+					.bind(since)
+					.first<{ v: number; u: number }>(),
+				db
+					.prepare(
+						`SELECT profile_slug AS path, COUNT(*) AS views
+						 FROM profile_views WHERE created_at >= ?1
+						 GROUP BY profile_slug ORDER BY views DESC, path ASC LIMIT ?2`,
+					)
+					.bind(since, Math.min(20, Math.max(1, limit)))
+					.all<{ path: string; views: number }>(),
+			]);
+			return {
+				views: Number(totals?.v ?? 0),
+				visitors: Number(totals?.u ?? 0),
+				paths: paths.results.map((row) => ({ path: String(row.path), views: Number(row.views) })),
+			};
 		},
 
 		async getTimeSeriesViews(scope, timeRange) {

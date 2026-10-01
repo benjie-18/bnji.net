@@ -201,6 +201,20 @@ export async function friendAction(
 	return { ok: true, changed: 'declined' };
 }
 
+/** Admin-side aggregates (counts only — friend lists stay private, §8.1). */
+export async function friendHealthCounts(db: D1Database): Promise<{ accepted: number; pending: number; blocks: number }> {
+	const [accepted, pending, blocks] = await Promise.all([
+		db.prepare("SELECT COUNT(*) AS n FROM player_friends WHERE state = 'accepted'").first<{ n: number }>(),
+		db.prepare("SELECT COUNT(*) AS n FROM player_friends WHERE state = 'pending'").first<{ n: number }>(),
+		db.prepare('SELECT COUNT(*) AS n FROM player_blocks').first<{ n: number }>(),
+	]);
+	return {
+		accepted: Number(accepted?.n ?? 0),
+		pending: Number(pending?.n ?? 0),
+		blocks: Number(blocks?.n ?? 0),
+	};
+}
+
 /** §8.3 badge: unanswered incoming requests. */
 export async function countPendingFriendRequests(db: D1Database, playerId: string): Promise<number> {
 	const row = await db.prepare(

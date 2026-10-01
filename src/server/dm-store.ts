@@ -132,6 +132,71 @@ export async function ensureConversation(db: D1Database, a: string, b: string, n
  * unread = messages past my watermark from them that are not hidden for me,
  * and a last-message preview (body trimmed to 140 code points).
  */
+/* ------------------------------------------------- admin metadata (D10) */
+
+export type DmMetadataConversation = {
+	id: string;
+	participants: Array<{ handle: string | null; displayName: string }>;
+	messages: number;
+	reports: number;
+	createdAt: number;
+	lastMessageAt: number | null;
+};
+
+/**
+ * Admin-side DM METADATA (owner answer D10 / plan §12.5): participants as
+ * public handles, counts and timestamps — never message bodies, never
+ * player IDs (§12.3). Newest activity first, bounded.
+ */
+export async function listConversationMetadata(db: D1Database, limit = 50): Promise<DmMetadataConversation[]> {
+	const capped = Math.min(100, Math.max(1, limit));
+	const { results } = await db.prepare(
+		`SELECT c.id, c.member_lo, c.created_at, c.last_message_at,
+		        (SELECT COUNT(*) FROM dm_messages m WHERE m.conv_id = c.id) AS messages,
+		        (SELECT COUNT(*) FROM dm_reports r WHERE r.conv_id = c.id) AS reports,
+		        pa.handle AS handle_lo, pa.display_name AS name_lo,
+		        pb.handle AS handle_hi, pb.display_name AS name_hi
+		 FROM dm_conversations c
+		 LEFT JOIN game_players pa ON pa.id = c.member_lo
+		 LEFT JOIN game_players pb ON pb.id = c.member_hi
+		 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.created_at DESC
+		 LIMIT ?1`,
+	).bind(capped).all<Record<string, unknown>>();
+	return results.map((row) => ({
+		id: String(row.id),
+		participants: [
+			{ handle: row.handle_lo === null || row.handle_lo === undefined ? null : String(row.handle_lo), displayName: row.name_lo === null || row.name_lo === undefined ? 'Deleted account' : String(row.name_lo) },
+			{ handle: row.handle_hi === null || row.handle_hi === undefined ? null : String(row.handle_hi), displayName: row.name_hi === null || row.name_hi === undefined ? 'Deleted account' : String(row.name_hi) },
+		],
+		messages: Number(row.messages ?? 0),
+		reports: Number(row.reports ?? 0),
+		createdAt: Number(row.created_at),
+		lastMessageAt: row.last_message_at === null || row.last_message_at === undefined ? null : Number(row.last_message_at),
+	}));
+}
+
+/** Aggregate DM health for the admin chat tab (counts only). */
+export async function dmHealthCounts(db: D1Database, now: number): Promise<{
+	conversations: number;
+	sent24h: number;
+	reportsOpen: number;
+	reportsTotal: number;
+}> {
+	const dayAgo = now - 86_400_000;
+	const [conversations, sent24h, open, total] = await Promise.all([
+		db.prepare('SELECT COUNT(*) AS n FROM dm_conversations').first<{ n: number }>(),
+		db.prepare('SELECT COUNT(*) AS n FROM dm_messages WHERE created_at >= ?1').bind(dayAgo).first<{ n: number }>(),
+		db.prepare("SELECT COUNT(*) AS n FROM dm_reports WHERE status = 'open'").first<{ n: number }>(),
+		db.prepare('SELECT COUNT(*) AS n FROM dm_reports').first<{ n: number }>(),
+	]);
+	return {
+		conversations: Number(conversations?.n ?? 0),
+		sent24h: Number(sent24h?.n ?? 0),
+		reportsOpen: Number(open?.n ?? 0),
+		reportsTotal: Number(total?.n ?? 0),
+	};
+}
+
 /**
  * Phase E §8.3: one number for the in-app badge — total unread across my
  * conversations, same definition as listConversations' per-row `unread`

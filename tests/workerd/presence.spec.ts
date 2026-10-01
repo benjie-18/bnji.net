@@ -13,6 +13,7 @@
  */
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
+import { derivePresenceAdminToken, PRESENCE_ADMIN_HEADER } from '../../src/server/presence-gateway';
 import { SocketBox, delay, type BoxFrame } from './support';
 
 const HEX_A = 'a'.repeat(32);
@@ -149,6 +150,32 @@ describe('Presence — snapshots, friend-scoped announcements, multi-tab', () =>
 		client.send(JSON.stringify({ t: 'weird', junk: true }));
 		await delay(30);
 		expect(client.readyState).toBe(1);
+		await closeAll();
+	});
+
+	it('admin stats: ACCESS_SECRET-derived token returns counts only', async () => {
+		const secret = (env as unknown as { ACCESS_SECRET?: string }).ACCESS_SECRET ?? '';
+		expect(secret, 'wrangler.test.json must expose ACCESS_SECRET for service auth').toBeTruthy();
+		const url = 'https://presence.test/admin/stats';
+
+		// No token / wrong token → 401, never counts.
+		expect((await stub().fetch(new Request(url))).status).toBe(401);
+		expect((await stub().fetch(new Request(url, { headers: { [PRESENCE_ADMIN_HEADER]: 'deadbeef' } }))).status).toBe(401);
+
+		// Two live sockets with distinct handles.
+		const alice = await track(await connect('alice4', []));
+		await alice.next(snapshotOf);
+		const bob = await track(await connect('bob4', ['alice4']));
+		await bob.next(snapshotOf);
+
+		const token = await derivePresenceAdminToken(secret);
+		const response = await stub().fetch(new Request(url, { headers: { [PRESENCE_ADMIN_HEADER]: token } }));
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { sockets?: unknown; handles?: unknown };
+		// Aggregates only — the key shape itself proves no handle list leaks.
+		expect(Object.keys(body).sort()).toEqual(['handles', 'sockets']);
+		expect(body.sockets).toBe(2);
+		expect(body.handles).toBe(2);
 		await closeAll();
 	});
 });

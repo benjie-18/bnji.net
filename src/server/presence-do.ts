@@ -16,10 +16,11 @@
  * the route; a browser cannot address the DO without it).
  */
 import { DurableObject } from 'cloudflare:workers';
+import { derivePresenceAdminToken, PRESENCE_ADMIN_HEADER } from './presence-gateway';
 
 export const PRESENCE_PROTOCOL_VERSION = 1;
 
-type PresenceEnv = Record<string, never>;
+type PresenceEnv = { ACCESS_SECRET?: string };
 type Attachment = { handle: string; friends: string[] };
 
 function json(data: unknown, status = 200): Response {
@@ -76,12 +77,41 @@ export class Presence extends DurableObject<PresenceEnv> {
 	constructor(state: DurableObjectState, env: PresenceEnv) {
 		super(state, env);
 		this.state = state;
+		// `this.env` (inherited from DurableObject<PresenceEnv>) carries the
+		// ACCESS_SECRET the admin stats path re-derives its token from.
 	}
 
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 		if (url.pathname === '/ws' && request.method === 'GET') return this.acceptConnection(request);
+		if (url.pathname === '/admin/stats' && request.method === 'GET') return this.adminStats(request);
 		return json({ error: 'not_found' }, 404);
+	}
+
+	/**
+	 * Service-authenticated aggregate (admin dashboard): how many sockets are
+	 * attached right now and how many distinct handles they belong to.
+	 * Aggregates only — a handle list never leaves the DO (§8.1 keeps friend
+	 * data private; presence adds only counts).
+	 */
+	private async adminStats(request: Request): Promise<Response> {
+		const secret = this.env.ACCESS_SECRET;
+		if (!secret) return json({ error: 'service_unconfigured' }, 503);
+		const provided = request.headers.get(PRESENCE_ADMIN_HEADER) ?? '';
+		const expected = await derivePresenceAdminToken(secret);
+		// Length check first, then XOR-compare the hex digests (timing-safe
+		// enough for a shared operator token; mirrors the room admin gate).
+		if (provided.length !== expected.length) return json({ error: 'service_unauthorized' }, 401);
+		let diff = 0;
+		for (let i = 0; i < expected.length; i += 1) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+		if (diff !== 0) return json({ error: 'service_unauthorized' }, 401);
+		const sockets = this.state.getWebSockets();
+		const handles = new Set<string>();
+		for (const socket of sockets) {
+			const attachment = socketAttachment(socket);
+			if (attachment?.handle) handles.add(attachment.handle);
+		}
+		return json({ sockets: sockets.length, handles: handles.size });
 	}
 
 	private acceptConnection(request: Request): Response {
