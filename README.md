@@ -148,11 +148,18 @@ npm run deploy     # publish to Cloudflare Workers
   PNG, JPEG and WebP locally: aspect-ratio-preserving resize, a quality slider
   that is disabled (with the reason shown) for PNG, input/output previews with
   real byte deltas, and a clear error instead of a silent format substitution
-  when a browser cannot encode the requested format. *JSON Formatter &
-  Validator* formats, minifies, copies and clears, keeps the input untouched
-  when a parse fails, and reports the line and column of the failure in every
-  browser (V8 omits the offset for several common errors, so the offset is
-  derived from the text). Limits live in `src/config/tools.config.ts`.
+  when a browser cannot encode the requested format. *Word Counter & Text
+  Stats* counts words, characters, sentences, paragraphs, lines, keywords and
+  reading/speaking times as you type, from a textarea or a dropped text file:
+  words are split with the browser's own `Intl.Segmenter`, so a script with no
+  spaces (Chinese, Japanese, Thai) counts properly and “well-known” stays one
+  word, while a browser without one gets the space split pinned and disabled
+  with the reason shown. A paste over the character limit is refused out loud
+  instead of being truncated by a `maxlength`, and the numbers on screen are
+  cleared with it rather than left describing text that is no longer in the box;
+  the clipboard summary is built from the same counts the panel shows, and
+  “copied” is only said when the write resolved. Limits, pace domains and the
+  common-words list live in `src/config/tools.config.ts`.
 - **Admin panel** (`/admin`, gated) — one shared access token stored as a
   SHA-256 hash in D1 and rotated from the panel itself; a site-wide statistics
   dashboard built only from data the app already records; board moderation;

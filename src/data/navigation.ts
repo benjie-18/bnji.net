@@ -62,7 +62,7 @@ export const PRIMARY_NAV: NavEntry[] = [
 			{ label: 'Projects', href: '/projects/', description: 'Selected work and placeholders' },
 			{ label: 'Lab', href: '/lab/', description: 'Interactive experiments' },
 			{ label: 'Games', href: '/games/', description: 'A growing catalog of games' },
-			{ label: 'Tools', href: '/tools/', description: 'Image and JSON tools that run locally' },
+			{ label: 'Tools', href: '/tools/', description: 'Image and word tools that run locally' },
 		],
 	},
 	{

@@ -217,6 +217,48 @@
 	line-height: 1.5;
 }
 
+/* --- text input ------------------------------------------------------------ */
+
+/*
+ * The word counter's textarea is both the control and the readout, so it is
+ * styled as a surface (border + fill, no blur of its own — a blur here would
+ * stack on the panel's) and sized to hold a page of prose without scrolling.
+ */
+.tool__textarea {
+	inline-size: 100%;
+	min-inline-size: 0;
+	min-block-size: 12rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-clear);
+	color: var(--text-strong);
+	font-family: var(--font-body);
+	font-size: var(--text-small);
+	line-height: 1.65;
+	padding: var(--space-3) var(--space-4);
+	resize: vertical;
+	/* The caret follows the accent so it stays visible on both themes' glass. */
+	caret-color: var(--accent-strong);
+	transition: border-color var(--dur-fast) var(--ease-soft);
+}
+
+.tool__textarea:hover {
+	border-color: var(--glass-border-strong);
+}
+
+.tool__textarea::placeholder {
+	color: var(--text-dim);
+}
+
+/*
+ * The character readout becomes a warning when the text is over the limit. The
+ * refusal itself is in the error line; this is the number that caused it, left
+ * visible next to the label so the visitor can see how far over they are.
+ */
+.tool__value[data-over='true'] {
+	color: var(--danger);
+}
+
 /* --- controls ------------------------------------------------------------ */
 
 .tool__field {
@@ -396,6 +438,107 @@
 	overflow-wrap: anywhere;
 }
 
+/* --- stats ----------------------------------------------------------------- */
+
+/*
+ * Tiles, not a table: the readout is a set of independent numbers a visitor
+ * scans in any order, and a tile keeps its label with its value at every width.
+ * No backdrop-filter here — twelve blurred tiles inside a blurred panel is the
+ * stacking cost glass.css warns about.
+ */
+.tool__stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+	gap: var(--space-3);
+	margin: 0;
+}
+
+.tool__stat {
+	display: grid;
+	gap: var(--space-1);
+	align-content: start;
+	min-inline-size: 0;
+	padding: var(--space-3);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-clear);
+}
+
+/* The two numbers anyone actually came for: words and characters. */
+.tool__stat--primary {
+	border-color: var(--accent-line);
+	background: var(--accent-soft);
+}
+
+.tool__stat-label {
+	margin: 0;
+	font-size: var(--text-micro);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}
+
+.tool__stat-value {
+	margin: 0;
+	font-size: var(--text-body);
+	line-height: 1.2;
+	color: var(--text-strong);
+	/* A six-figure count or a long word must wrap inside the tile, not spill. */
+	overflow-wrap: anywhere;
+}
+
+.tool__stat--primary .tool__stat-value {
+	font-size: var(--text-lead);
+}
+
+/* --- keyword list ---------------------------------------------------------- */
+
+.tool__keyword-block {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.tool__sub-title {
+	margin: 0;
+	font-size: var(--text-small);
+	font-weight: 600;
+	letter-spacing: var(--tracking-snug);
+	color: var(--text-strong);
+}
+
+.tool__keywords {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+	gap: var(--space-2) var(--space-4);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.tool__keyword {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-2);
+	min-inline-size: 0;
+	padding-block-end: var(--space-1);
+	border-block-end: 1px solid var(--glass-border);
+}
+
+.tool__keyword-word {
+	font-size: var(--text-small);
+	color: var(--text-strong);
+	overflow-wrap: anywhere;
+}
+
+.tool__keyword-count {
+	font-size: var(--text-micro);
+	letter-spacing: 0.08em;
+	color: var(--text-dim);
+	white-space: nowrap;
+}
+
 /* --- trailing limits section -------------------------------------------- */
 
 .tools-notes {
@@ -432,9 +575,11 @@
 /* --- environments ------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-	/* The only transition on this page is the drop zone's colour change; a
-	   visitor who asked for less motion gets the state change, not the fade. */
-	.tool-drop {
+	/* The only transitions on this page are the drop zone's and the textarea's
+	   colour change; a visitor who asked for less motion gets the state change,
+	   not the fade. */
+	.tool-drop,
+	.tool__textarea {
 		transition: none;
 	}
 }
@@ -445,10 +590,18 @@
 	.tool-drop,
 	.tool__select,
 	.tool__number,
+	.tool__textarea,
 	.tool__preview-img,
+	.tool__stat,
 	.tool__error {
 		border: 1px solid CanvasText;
 		background: Canvas;
+	}
+
+	.tool__stat--primary {
+		/* The accent fill is gone in forced colours, so the two headline numbers
+		   keep their emphasis from the border instead. */
+		border-width: 2px;
 	}
 
 	.tool__preview-img {
@@ -460,7 +613,10 @@
 	}
 
 	.tool__status,
-	.tool__preview-meta {
+	.tool__preview-meta,
+	.tool__stat-label,
+	.tool__stat-value,
+	.tool__keyword-count {
 		color: CanvasText;
 	}
 }

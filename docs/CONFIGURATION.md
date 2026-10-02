@@ -280,7 +280,7 @@ for the data inventory, quotas, local testing, and rollback guidance.
 | Lab experiments | `src/data/lab.ts` + `src/components/lab/*` + the static map in `src/pages/lab.astro` | Add a game = component + data entry + one map line. |
 | Fluid Sandbox tuning | `src/components/lab/fluid/config.ts` | Defaults, slider ranges, tools, scenes list, palette, quality tiers, solver + render constants. The UI is generated from it. Scenes live in `fluid/scenes.ts`. |
 | Shared board paint | `src/config/paint.config.ts` | Logical canvas size, PNG/request caps, polling and publish limits. The current D1 snapshot is independent from message rows; see [`DATA.md`](./DATA.md) §10. |
-| Browser tools (`/tools/`) | `src/config/tools.config.ts` | Output formats (PNG/JPEG/WebP), which of them honour a quality slider, the accepted input types, and the client-side size/pixel limits. PUBLIC. Both tools run in the visitor's browser, so these are guards against an enormous file, not upload quotas — nothing is uploaded. |
+| Browser tools (`/tools/`) | `src/config/tools.config.ts` | Image tool: output formats (PNG/JPEG/WebP), which of them honour a quality slider, the accepted input types, and the client-side size/pixel limits. Word tool: word-splitting modes and their hints, the accepted text types/extensions, the common-words list behind the keyword filter, the reading/speaking pace domains, the keyword-list bounds, the debounce, and the character/file limits. PUBLIC. Both tools run in the visitor's browser, so these are guards against an enormous file or paste, not upload quotas — nothing is uploaded, and neither tool stores anything. |
 
 ## 8a. Display names & handles — PUBLIC (chat plan Phase A)
 

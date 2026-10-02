@@ -1,11 +1,11 @@
 /**
- * BNJI.NET — public configuration for the browser tool on /tools/.
+ * BNJI.NET — public configuration for the browser tools on /tools/.
  *
- * The tool runs entirely inside the visitor's tab. No image and no
- * file byte is ever uploaded, stored, proxied or logged: there is no API route
- * behind the tool, which is the whole privacy posture. Every limit below is
- * therefore a *client-side guard* — it exists to stop one enormous file from
- * wedging a tab, not to meter an upload.
+ * Both tools run entirely inside the visitor's tab. No image, no file byte and
+ * no character of text is ever uploaded, stored, proxied or logged: there is no
+ * API route behind either tool, which is the whole privacy posture. Every limit
+ * below is therefore a *client-side guard* — it exists to stop one enormous file
+ * or one enormous paste from wedging a tab, not to meter an upload.
  *
  * PUBLIC: everything in this file ships in the client bundle, so it contains no
  * secrets and nothing environment-specific.
@@ -94,4 +94,116 @@ export const TOOL_IMAGE_CONFIG = {
 	quality: { min: 30, max: 100, step: 1, default: 82 },
 	/** Hard ceiling on one edge, so a typo cannot ask for a 99999px canvas. */
 	maxDimension: 20_000,
+} as const;
+
+/* ------------------------------------------------------------------------- *
+ * Word counter & text stats (/tools/#word-counter)
+ * ------------------------------------------------------------------------- */
+
+/** How a run of text is broken into words. */
+export type ToolWordMode = 'segmenter' | 'whitespace';
+
+/**
+ * Word-splitting modes, in the order the <select> shows them.
+ *
+ * The segmenter is the default because `split(/\s+/)` — what most counters do —
+ * reports ONE word for a whole Chinese, Japanese or Thai sentence. Those scripts
+ * do not put spaces between words, so counting them needs a real segmenter.
+ */
+export const WORD_MODES: readonly ToolWordMode[] = ['segmenter', 'whitespace'];
+
+export const WORD_MODE_LABEL: Record<ToolWordMode, string> = {
+	segmenter: 'Browser segmenter — counts scripts with no spaces',
+	whitespace: 'Spaces only — the classic split',
+};
+
+/** One-line trade-off shown under the mode select as it changes. */
+export const WORD_MODE_HINT: Record<ToolWordMode, string> = {
+	segmenter:
+		'Your browser splits the text into words, so Chinese, Japanese and Thai count properly and “well-known” stays one word.',
+	whitespace:
+		'Counts the runs between spaces. Text with no spaces — Chinese, Japanese, Thai — reads as one long word.',
+};
+
+/**
+ * Shown instead of the mode hint when the browser has no Intl.Segmenter at all
+ * (Firefox before 125). The select is then pinned to the space split and
+ * disabled, because a choice the browser cannot honour is worse than a disabled
+ * one that says why — the rule the image tool applies to a format it cannot
+ * encode.
+ */
+export const WORD_MODE_UNAVAILABLE_HINT =
+	'This browser has no text segmenter (Intl.Segmenter), so words are counted by spaces and the choice is off. Text with no spaces — Chinese, Japanese, Thai — will read as one long word.';
+
+/**
+ * Text inputs a browser can decode with `file.text()`. This is the honest list:
+ * the tool does not read PDFs, Word documents, spreadsheets, images, archives or
+ * video, and both the file picker and the validation below refuse them by name.
+ *
+ * Many browsers report an EMPTY type for .md/.csv/.log, so the extension is the
+ * fallback whenever the type is missing — see `checkTextFile()`.
+ */
+export const TEXT_INPUT_TYPES: readonly string[] = [
+	'text/plain',
+	'text/markdown',
+	'text/csv',
+	'application/json',
+];
+
+/** Extensions accepted when the browser could not name a MIME type. */
+export const TEXT_INPUT_EXTENSIONS: readonly string[] = [
+	'.txt',
+	'.text',
+	'.md',
+	'.markdown',
+	'.csv',
+	'.tsv',
+	'.json',
+	'.log',
+];
+
+/** `accept` attribute for the file input — one string, no drift from the lists. */
+export const TEXT_INPUT_ACCEPT = [...TEXT_INPUT_EXTENSIONS, ...TEXT_INPUT_TYPES].join(',');
+
+/** Human list used in the error copy, so the two can never disagree. */
+export const TEXT_INPUT_LABELS = 'plain text, Markdown, CSV, TSV, JSON or a log file';
+
+/**
+ * Common English words the keyword list can skip.
+ *
+ * Without this the top of every English list is “the”, “of” and “and”, which
+ * tells a writer nothing. It is a checkbox rather than a rule because a list of
+ * stopwords is a list of assumptions, and the visitor should be able to see
+ * theirs switched off. English only — the tool does not pretend otherwise.
+ */
+export const WORD_STOPWORDS: readonly string[] = [
+	'a', 'about', 'all', 'also', 'am', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'been', 'but',
+	'by', 'can', 'could', 'did', 'do', 'does', 'for', 'from', 'had', 'has', 'have', 'he', 'her',
+	'here', 'him', 'his', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'its', 'just', 'me', 'more',
+	'my', 'no', 'not', 'now', 'of', 'on', 'one', 'or', 'other', 'our', 'out', 'say', 'she', 'so',
+	'some', 'than', 'that', 'the', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'to',
+	'up', 'was', 'we', 'were', 'what', 'when', 'which', 'who', 'why', 'will', 'with', 'would',
+	'you', 'your',
+];
+
+export const TOOL_WORDS_CONFIG = {
+	/** Refuse before counting: ~500,000 characters is a 90,000-word book. */
+	maxInputCharacters: 500_000,
+	/**
+	 * Refuse before reading. 2 MB is what half a million characters weigh at four
+	 * bytes each, so this and `maxInputCharacters` are the same limit seen from
+	 * two sides: the byte check stops a huge file being decoded at all, and the
+	 * character check (which runs after decoding) is the one that decides.
+	 */
+	maxFileBytes: 2 * 1024 * 1024,
+	/** Keystrokes are coalesced, so a fast typist is not re-segmented per key. */
+	recountDelayMs: 150,
+	/** Silent-reading pace in words per minute (slider domain). */
+	reading: { min: 100, max: 400, step: 5, default: 238 },
+	/** Reading aloud runs slower than reading silently, so it gets its own domain. */
+	speaking: { min: 80, max: 220, step: 5, default: 150 },
+	/** How many keywords the frequency list shows. */
+	keywords: { min: 1, max: 12, step: 1, default: 6 },
+	/** Shorter than this a "keyword" is noise: “a”, “I”, “ok”. */
+	minKeywordLength: 2,
 } as const;

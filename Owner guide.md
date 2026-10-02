@@ -347,9 +347,9 @@ A “coming soon” entry does not create a page. To make a new destination live
 
 ### The browser tools on `/tools/`
 
-`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries one
-tool, and it runs entirely in the visitor's browser: there is no API route, no
-upload and no storage behind it, so "nothing is uploaded" is a property
+`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries two
+tools, and both run entirely in the visitor's browser: there is no API route, no
+upload and no storage behind either of them, so "nothing is uploaded" is a property
 of the code rather than a promise.
 
 - **Image Converter & Optimizer** — converts between PNG, JPEG and WebP, resizes
@@ -361,11 +361,27 @@ of the code rather than a promise.
   metadata into the new file. Quality applies to JPEG and WebP only; the PNG
   slider is disabled with the reason shown rather than hidden.
 
-Formats, accepted input types and limits live in **`src/config/tools.config.ts`**;
-behaviour lives in `src/scripts/tools-image.ts`,
-started from `src/scripts/boot.ts`. To add a second tool, add a component under
+- **Word Counter & Text Stats** — counts words, characters (with and without
+  spaces), sentences, paragraphs, lines, unique words, the longest word, the two
+  averages, a most-frequent-words list, and a reading and a speaking time, all
+  while the visitor types or after they drop a text file. It reads only text
+  (`.txt`, `.md`, `.csv`, `.tsv`, `.json`, `.log`) and refuses PDFs, documents,
+  spreadsheets, images, archives and video by name. Words are split with the
+  browser's own segmenter, so a language that does not use spaces is counted
+  properly; a browser that has no segmenter is told so, and its choice is
+  disabled rather than quietly downgraded. It does **not** check grammar or
+  spelling, does **not** rewrite anything, and does **not** keep the text: the
+  reading times are the word count divided by the pace the visitor set, not a
+  measurement, and a paste over the character limit is refused instead of being
+  cut short. Nothing is stored, so a reload starts from an empty box.
+
+Formats, accepted input types, pace ranges, the common-words list and the limits
+live in **`src/config/tools.config.ts`**; behaviour lives in
+`src/scripts/tools-image.ts` and `src/scripts/tools-words.ts`, both started from
+`src/scripts/boot.ts`. To add another tool, add a component under
 `src/components/tools/` plus one init module and one line in `boot.ts` — the page
-itself only composes them.
+itself only composes them. `tests/tools-markup.test.ts` lists every
+controller/component pair, so a new tool needs one line there too.
 
 ## 9. Change the site’s appearance and visitor settings
 

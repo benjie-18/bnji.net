@@ -1,0 +1,287 @@
+---
+/**
+ * Tools — Word Counter & Text Stats.
+ *
+ * Same split as the image converter: the whole interface is markup + CSS and
+ * every behaviour lives in src/scripts/tools-words.ts, reached through boot().
+ * With JavaScript blocked, late or broken, the page still explains what the tool
+ * counts and what it refuses to do, and the controls stay in the document — the
+ * stat tiles read zero rather than disappearing, so the shape of the answer is
+ * visible without a script.
+ *
+ * Limits, the pace domains, the word-splitting modes and the common-words list
+ * come from src/config/tools.config.ts — the component never hard-codes a limit,
+ * a wpm figure or a trade-off sentence.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import {
+	TEXT_INPUT_ACCEPT,
+	TEXT_INPUT_LABELS,
+	TOOL_WORDS_CONFIG,
+	WORD_MODES,
+	WORD_MODE_HINT,
+	WORD_MODE_LABEL,
+	WORD_STOPWORDS,
+} from '../../config/tools.config';
+
+const { reading, speaking, keywords, maxInputCharacters, maxFileBytes } = TOOL_WORDS_CONFIG;
+---
+
+<section
+	class="tool tool--words"
+	id="word-counter"
+	aria-labelledby="word-counter-title"
+	data-word-counter
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>02</span><span>/ WORDS</span></p>
+			<h2 class="tool__title" id="word-counter-title">Word counter and text stats</h2>
+			<p class="tool__lead">
+				Type or paste text — or drop a text file — and watch the words, characters, sentences,
+				paragraphs and reading time update as you go. The counting happens in this tab, so nothing
+				you write is sent anywhere.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__pane">
+				<div class="tool__field">
+					<label class="tool__label" for="word-text">
+						Your text
+						{/*
+						  aria-hidden because this readout lives INSIDE the label: left
+						  readable it would become part of the textarea's accessible name
+						  and change under the visitor on every keystroke. Nothing is lost
+						  by hiding it — the same number is the Characters tile, and an
+						  over-limit paste is announced by the error line, which states
+						  both figures.
+						*/}
+						<span class="tool__value mono" aria-hidden="true" data-word-limit>0 / {maxInputCharacters.toLocaleString('en-US')} characters</span>
+					</label>
+					{/*
+					  spellcheck is off on purpose: a tool that counts words should not
+					  cover them in red squiggles, and a browser's spelling pass on half a
+					  million characters is work nobody asked for.
+					*/}
+					<textarea
+						class="tool__textarea"
+						id="word-text"
+						rows="12"
+						spellcheck="false"
+						autocapitalize="off"
+						autocomplete="off"
+						placeholder="Type or paste your text here…"
+						aria-describedby="word-text-hint"
+						data-word-text></textarea>
+					{/*
+					  No maxlength: it would truncate a paste silently, and a tool
+					  whose whole posture is "never a quiet surprise" refuses over
+					  the limit out loud instead — see checkInputText().
+					*/}
+					<p class="tool__hint" id="word-text-hint">
+						The counts update as you type. Characters are counted as you read them, so an emoji
+						is one character and a line break is one character.
+					</p>
+				</div>
+
+				{/* The label IS the drop target, exactly as in the image tool: clicking it
+				    opens the picker natively, dragging a file onto it loads it, and Tab
+				    reaches the input inside. */}
+				<label class="tool-drop" data-word-drop>
+					<span class="sr-only">Choose a text file to count</span>
+					<input
+						class="tool-drop__input"
+						type="file"
+						accept={TEXT_INPUT_ACCEPT}
+						aria-describedby="word-source-hint"
+						data-word-source
+					/>
+					<span class="tool-drop__prompt">Or choose / drop a text file</span>
+				</label>
+				<p class="tool__hint" id="word-source-hint">
+					Reads {TEXT_INPUT_LABELS} as UTF-8, up to {(maxFileBytes / (1024 * 1024)).toLocaleString('en-US')} MB.
+					The file's text replaces whatever is in the box, so you can edit it before counting.
+				</p>
+				<p class="tool__preview-meta mono" data-word-source-meta></p>
+			</div>
+
+			<div class="tool__controls">
+				<div class="tool__field">
+					<label class="tool__label" for="word-mode">How words are split</label>
+					<select class="tool__select" id="word-mode" data-word-mode>
+						{WORD_MODES.map((mode) => <option value={mode}>{WORD_MODE_LABEL[mode]}</option>)}
+					</select>
+					<p class="tool__hint" id="word-mode-hint" data-word-mode-hint>
+						{WORD_MODE_HINT.segmenter}
+					</p>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="word-reading">
+						Reading pace
+						<span class="tool__value mono" data-word-reading-value>{reading.default} wpm</span>
+					</label>
+					<input
+						class="tool__range"
+						id="word-reading"
+						type="range"
+						min={reading.min}
+						max={reading.max}
+						step={reading.step}
+						value={reading.default}
+						aria-describedby="word-reading-hint"
+						data-word-reading
+					/>
+					<p class="tool__hint" id="word-reading-hint">
+						An estimate, not a measurement: reading time is the word count divided by this pace.
+					</p>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="word-speaking">
+						Speaking pace
+						<span class="tool__value mono" data-word-speaking-value>{speaking.default} wpm</span>
+					</label>
+					<input
+						class="tool__range"
+						id="word-speaking"
+						type="range"
+						min={speaking.min}
+						max={speaking.max}
+						step={speaking.step}
+						value={speaking.default}
+						aria-describedby="word-speaking-hint"
+						data-word-speaking
+					/>
+					<p class="tool__hint" id="word-speaking-hint">
+						Reading aloud runs slower than reading silently, so it gets its own pace and its own
+						time.
+					</p>
+				</div>
+
+				<fieldset class="tool__field tool__field--keywords">
+					<legend class="tool__label">Keyword list (optional)</legend>
+					<div class="tool__dimension">
+						<label class="tool__sub-label mono" for="word-keywords">How many words</label>
+						<input
+							class="tool__number"
+							id="word-keywords"
+							type="number"
+							inputmode="numeric"
+							min={keywords.min}
+							max={keywords.max}
+							step={keywords.step}
+							value={keywords.default}
+							data-word-keywords
+						/>
+					</div>
+					<label class="tool__check">
+						<input type="checkbox" checked data-word-stopwords />
+						<span>Ignore {WORD_STOPWORDS.length} common English words</span>
+					</label>
+					<p class="tool__hint">
+						The list is the most frequent words in your text. Ignoring common words is on by
+						default because otherwise the top of every English list is “the”, “of” and “and”. Set
+						the count to 0 to switch the list off.
+					</p>
+				</fieldset>
+			</div>
+
+			{/*
+			  Plain <button class="glass-button"> rather than the GlassButton
+			  component: GlassButton only forwards the props it declares, so a
+			  data-* hook passed to it is dropped and the script would find
+			  nothing to bind. The image tool uses the same markup for the same
+			  reason, and tests/tools-markup.test.ts guards it.
+			*/}
+			<div class="tool__actions">
+				<button class="glass-button glass-button--primary" type="button" data-glass="" data-word-count>
+					Count
+				</button>
+				<button class="glass-button" type="button" data-glass="" data-word-copy disabled>
+					Copy summary
+				</button>
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-word-reset>
+					Reset
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-word-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-word-error hidden></p>
+
+			<div class="tool__results" data-word-results hidden>
+				<dl class="tool__stats">
+					<div class="tool__stat tool__stat--primary">
+						<dt class="tool__stat-label">Words</dt>
+						<dd class="tool__stat-value mono" data-word-words>0</dd>
+					</div>
+					<div class="tool__stat tool__stat--primary">
+						<dt class="tool__stat-label">Characters</dt>
+						<dd class="tool__stat-value mono" data-word-characters>0</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Characters, no spaces</dt>
+						<dd class="tool__stat-value mono" data-word-characters-no-space>0</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Sentences</dt>
+						<dd class="tool__stat-value mono" data-word-sentences>0</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Paragraphs</dt>
+						<dd class="tool__stat-value mono" data-word-paragraphs>0</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Lines</dt>
+						<dd class="tool__stat-value mono" data-word-lines>0</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Reading time</dt>
+						<dd class="tool__stat-value mono" data-word-reading-time>—</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Speaking time</dt>
+						<dd class="tool__stat-value mono" data-word-speaking-time>—</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Unique words</dt>
+						<dd class="tool__stat-value mono" data-word-unique>0</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Longest word</dt>
+						<dd class="tool__stat-value" data-word-longest>—</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Average word</dt>
+						<dd class="tool__stat-value mono" data-word-average-word>—</dd>
+					</div>
+					<div class="tool__stat">
+						<dt class="tool__stat-label">Average sentence</dt>
+						<dd class="tool__stat-value mono" data-word-average-sentence>—</dd>
+					</div>
+				</dl>
+
+				<div class="tool__keyword-block">
+					<h3 class="tool__sub-title" id="word-keywords-title">Most frequent words</h3>
+					<ol
+						class="tool__keywords"
+						aria-labelledby="word-keywords-title"
+						data-word-keyword-list
+					></ol>
+					<p class="tool__hint" data-word-keywords-none>Nothing to list yet.</p>
+				</div>
+			</div>
+
+			<p class="tool__note">
+				Counts are estimates wherever language is: a sentence ends at a full stop, a question mark,
+				an exclamation mark or a line break — so “Mr.” ends one, exactly as your browser's own
+				segmenter says it does — and a paragraph is a block separated by a blank line, not by a
+				single line break. Reading and speaking times are the word count divided by the pace you
+				set. Text files are decoded as UTF-8, so a file saved in another encoding arrives as
+				mojibake and the tool says so. Nothing is uploaded, stored or logged: the text lives in the
+				box until you clear it.
+			</p>
+		</div>
+	</GlassPanel>
+</section>
