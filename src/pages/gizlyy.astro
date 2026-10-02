@@ -189,12 +189,12 @@ const allReactions = PROFILE_CONFIG.allowedReactions;
 		opacity: 0.85;
 	}
 
-	.profile-reactions__btn.is-reacted {
+	:global(.profile-reactions__btn.is-reacted) {
 		border-color: var(--accent-line);
 		background: var(--accent-soft);
 	}
 
-	.profile-reactions__btn.is-cooldown {
+	:global(.profile-reactions__btn.is-cooldown) {
 		border-color: rgba(255, 214, 138, 0.3);
 	}
 
