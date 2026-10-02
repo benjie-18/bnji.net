@@ -66,16 +66,12 @@
 	display: none;
 }
 
-/* --- Tabs + sling indicator --------------------------------------------- */
+/* --- Tabs --------------------------------------------------------------- */
+/* The nav IS the shared travelling-slab primitive (glass.css `.glass-tabs`);
+   only the admin grid placement is local. The capsule's edges (--tab-l/r/t/b)
+   are written by mountGlassTabs() in scripts/glass-tabs.ts. */
 .admin__tabs {
-	--parent-radius: var(--radius-pill);
-	position: relative;
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.25rem;
-	padding: 0.35rem;
 	justify-self: start;
-	max-inline-size: 100%;
 }
 
 /* Wrapped rows on narrow screens cannot stay a pill. */
@@ -83,108 +79,6 @@
 	.admin__tabs {
 		--parent-radius: var(--radius-md);
 		justify-self: stretch;
-	}
-}
-
-.admin__tab {
-	position: relative;
-	z-index: 1;
-	padding: 0.5rem 1rem;
-	border: 0;
-	border-radius: var(--radius-pill);
-	background: transparent;
-	color: var(--text-muted);
-	font-family: var(--font-mono);
-	font-size: var(--text-micro);
-	letter-spacing: var(--tracking-mono);
-	text-transform: uppercase;
-	cursor: pointer;
-	transition: color var(--dur-fast) var(--ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-	.admin__tab:hover {
-		color: var(--text-strong);
-	}
-}
-
-.admin__tab[aria-selected='true'] {
-	color: var(--text-strong);
-}
-
-.admin__tab:focus-visible {
-	outline: 2px solid var(--accent-strong);
-	outline-offset: 2px;
-}
-
-/* The travelling capsule. Its edges are driven by --tab-l/r/t/b (set by
-   admin-dashboard.ts). The leading edge moves on the fast leg, the
-   trailing edge on the slow spring leg: the capsule stretches toward the
-   clicked label, then its tail slings in behind it. Durations are motion
-   tokens, so OS reduced-motion collapses them to 0 automatically. */
-.admin__tab-indicator {
-	--sling-lead: var(--dur-base);
-	--sling-trail: var(--dur-slow);
-	--sling-ease: var(--ease-spring);
-	position: absolute;
-	z-index: 0;
-	inset: var(--tab-t, 0.35rem) var(--tab-r, 100%) var(--tab-b, 0.35rem) var(--tab-l, 0.35rem);
-	border-radius: var(--radius-pill);
-	background: var(--glass-bg-raised);
-	border: 1px solid var(--accent-line);
-	box-shadow:
-		0 0 18px -6px var(--accent-soft),
-		inset 0 1px 1px var(--glass-fresnel-top);
-	opacity: 0;
-	pointer-events: none;
-}
-
-html[data-theme='light'] .admin__tab-indicator {
-	background: var(--accent);
-	border-color: var(--accent-strong);
-	box-shadow: 0 2px 8px var(--glass-shadow-contact);
-}
-
-.admin__tab-indicator[data-ready] {
-	opacity: 1;
-}
-
-.admin__tab-indicator[data-direction='forward'] {
-	transition:
-		right var(--sling-lead) var(--ease-out),
-		left var(--sling-trail) var(--sling-ease),
-		top var(--sling-lead) var(--ease-out),
-		bottom var(--sling-lead) var(--ease-out),
-		opacity var(--dur-fast) var(--ease-out);
-}
-
-.admin__tab-indicator[data-direction='back'] {
-	transition:
-		left var(--sling-lead) var(--ease-out),
-		right var(--sling-trail) var(--sling-ease),
-		top var(--sling-lead) var(--ease-out),
-		bottom var(--sling-lead) var(--ease-out),
-		opacity var(--dur-fast) var(--ease-out);
-}
-
-.admin__tab-indicator[data-instant] {
-	transition: none;
-}
-
-/* Settings store: performance mode keeps the glide but drops the spring
-   overshoot; reduced effects removes the travel entirely. */
-html[data-performance-mode='on'] .admin__tab-indicator {
-	--sling-trail: var(--dur-base);
-	--sling-ease: var(--ease-out);
-}
-
-html[data-reduced-effects='on'] .admin__tab-indicator {
-	transition: none;
-}
-
-@media (forced-colors: active) {
-	.admin__tab-indicator {
-		border-color: Highlight;
 	}
 }
 

@@ -1,7 +1,11 @@
 import { connectGameRoom, createGameRoom, type RoomNotice } from './game-rooms';
 import { NAMES_CONFIG } from '../config/names.config';
 import { CHAT_CONFIG } from '../config/chat.config';
+import { LOBBY_CONFIG } from '../config/lobby.config';
+import { getGame } from '../data/games';
 import { hasRegisteredAdapter } from '../data/game-adapters';
+
+type LobbyRow = { roomCode: string; gameId: string; players: number; capacity: number; createdAt: number; expiresAt: number; revision: number };
 
 /** Optional bridge so a game page can observe/send on the SAME room socket. */
 export type RoomObserver = {
@@ -30,8 +34,104 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 	const chatInput = chatForm?.querySelector<HTMLInputElement>('[name="text"]') ?? null;
 	const chatSend = chatForm?.querySelector<HTMLButtonElement>('button[type="submit"]') ?? null;
 	const roster = root.querySelector<HTMLUListElement>('[data-chat-roster]');
+	const membersStatus = root.querySelector<HTMLElement>('[data-members-status]');
 	const seenChat = new Map<number, HTMLElement>();
 	let isHost = false;
+
+	// ----------------------------------------------------------- open lobbies
+	// The list is a courtesy, never a requirement: a failed read leaves room
+	// creation/join untouched, and a room missing from a stale list is still
+	// reachable with its code.
+	const lobbyList = root.querySelector<HTMLUListElement>('[data-lobby-list]');
+	const lobbyStatus = root.querySelector<HTMLElement>('[data-lobby-status]');
+	const lobbyRefresh = root.querySelector<HTMLButtonElement>('[data-lobby-refresh]');
+	let lobbyTimer = 0;
+	let lobbyStopped = false;
+	function lobbySay(message: string): void { if (lobbyStatus) lobbyStatus.textContent = message; }
+	function lobbyGameId(): string {
+		// The Games page picks a game in a <select>; a game page carries a hidden
+		// input (or just the panel's own data-game-id) because it hosts one game.
+		const field = root.querySelector<HTMLInputElement>('[data-room-create] [name="gameId"]');
+		return field?.value || root.dataset.gameId || '';
+	}
+	function expiryText(expiresAt: number): string {
+		const minutes = Math.max(0, Math.round((expiresAt - Date.now()) / 60_000));
+		return minutes <= 1 ? 'under a minute left' : `${minutes} min left`;
+	}
+	function paintLobby(row: LobbyRow): HTMLLIElement {
+		const item = document.createElement('li');
+		item.className = 'glass-row glass-row--split room-tools__lobby';
+		const main = document.createElement('span');
+		main.className = 'glass-row__main';
+		const title = document.createElement('strong');
+		title.textContent = getGame(row.gameId)?.title ?? row.gameId;
+		const meta = document.createElement('span');
+		meta.className = 'glass-row__meta';
+		meta.textContent = `${row.players}/${row.capacity} players · ${expiryText(row.expiresAt)}`;
+		main.appendChild(title);
+		main.appendChild(meta);
+		const actions = document.createElement('span');
+		actions.className = 'glass-row__actions';
+		const join = document.createElement('button');
+		join.type = 'button';
+		join.className = 'glass-button glass-button--sm';
+		join.textContent = 'Join room';
+		join.addEventListener('click', () => {
+			connect(row.roomCode);
+			lobbySay(`Joining ${title.textContent}…`);
+		});
+		actions.appendChild(join);
+		item.appendChild(main);
+		item.appendChild(actions);
+		return item;
+	}
+	async function loadLobbies(): Promise<void> {
+		if (!lobbyList || lobbyStopped) return;
+		const gameId = lobbyGameId();
+		if (lobbyRefresh) lobbyRefresh.disabled = true;
+		try {
+			const response = await fetch(`/api/games/lobbies${gameId ? `?gameId=${encodeURIComponent(gameId)}` : ''}`, {
+				credentials: 'same-origin', cache: 'no-store',
+			});
+			const body = await response.json().catch(() => ({})) as { lobbies?: LobbyRow[]; error?: string; refreshAfterSeconds?: number; truncated?: boolean };
+			if (!response.ok) {
+				lobbyStopped = true;
+				if (lobbyTimer) { window.clearInterval(lobbyTimer); lobbyTimer = 0; }
+				lobbySay(body.error === 'lobby_disabled' ? 'Open rooms are turned off right now — use a room code to join.' : 'Open rooms are unavailable right now — use a room code to join.');
+				return;
+			}
+			const rows = Array.isArray(body.lobbies) ? body.lobbies : [];
+			lobbyList.replaceChildren();
+			if (rows.length === 0) {
+				const empty = document.createElement('li');
+				empty.className = 'room-tools__lobby-meta';
+				empty.textContent = 'No open rooms right now. Create one and it appears here for everyone.';
+				lobbyList.appendChild(empty);
+			} else {
+				for (const row of rows) lobbyList.appendChild(paintLobby(row));
+			}
+			lobbySay(rows.length === 0 ? '' : `${rows.length} open room${rows.length === 1 ? '' : 's'} · anyone may join${body.truncated ? ' (list truncated)' : ''}.`);
+		} catch {
+			lobbySay('Open rooms could not be loaded — use a room code to join.');
+		} finally {
+			if (lobbyRefresh) lobbyRefresh.disabled = false;
+		}
+	}
+	function startLobbyTimer(seconds: number): void {
+		if (lobbyTimer) window.clearInterval(lobbyTimer);
+		// No faster than the server-side cache: polling harder than the cache TTL
+		// only reads the same list and spends the per-IP budget.
+		const period = Math.max(LOBBY_CONFIG.minRefreshSeconds, seconds) * 1_000;
+		lobbyTimer = window.setInterval(() => { void loadLobbies(); }, period);
+	}
+	if (lobbyList) {
+		void loadLobbies().then(() => startLobbyTimer(LOBBY_CONFIG.cacheTtlSeconds));
+		lobbyRefresh?.addEventListener('click', () => void loadLobbies());
+		document.addEventListener('visibilitychange', () => {
+			if (document.visibilityState === 'hidden') { if (lobbyTimer) { window.clearInterval(lobbyTimer); lobbyTimer = 0; } }
+			else if (!lobbyTimer && !lobbyStopped) startLobbyTimer(LOBBY_CONFIG.cacheTtlSeconds);
+		});
+	}
 
 	// --------------------------------------------------- profile name (plan §4)
 	// GET the current label so the form reflects the server's truth; POST edits
@@ -175,6 +275,7 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 		return true;
 	}
 	function renderRoster(members: MemberFrame[]): void {
+		if (membersStatus) membersStatus.textContent = members.length ? `${members.length} in the room.` : 'Waiting for members…';
 		if (!roster) return;
 		roster.replaceChildren();
 		for (const member of members) {
@@ -244,7 +345,31 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 		chatList?.replaceChildren();
 		roster?.replaceChildren();
 		if (roster) roster.hidden = true;
+		if (membersStatus) membersStatus.textContent = 'Connecting…';
 		chatSay('Connecting to the room chat…');
+	/**
+	 * Plain language for a refused socket. The two durable refusals (kicked,
+	 * gone) must not read like a flaky connection: one is final for this account
+	 * and the other asks for a fresh code, and telling a player to "re-enter the
+	 * code" when the host removed them would be wrong and unkind.
+	 */
+	function closeCopy(info?: { code: number; reason: string }): string {
+		switch (info?.code) {
+			case 4003:
+				return info.reason === 'Removed by administrator'
+					? 'An administrator removed you from this room. The block stays until they lift it.'
+					: 'The host removed you from this room. You cannot rejoin it, but any other room code still works.';
+			case 4002:
+				return info.reason === 'Room expired'
+					? 'That room has expired, so the connection closed. Create a new room or join another one from the list.'
+					: 'That room no longer exists. Create a new room or join another one from the list.';
+			case 4001:
+				return 'This room is open in another tab or window — the newer connection took over.';
+			default:
+				return 'Room connection closed. Re-enter the code to reconnect while the room is active.';
+		}
+	}
+
 		activeSocket = connectGameRoom(code, (message: RoomNotice) => {
 			observer.onFrame?.(message);
 			if (message.type === 'snapshot') {
@@ -259,14 +384,22 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 			else if (message.type === 'conflict') say(`Room state changed to version ${message.revision ?? 0}; reconnecting clients receive the latest snapshot.`);
 			else if (message.type === 'state_rejected') say(message.error === 'game_adapter_unavailable' ? 'No game adapter is registered; state changes are refused.' : 'The game authority rejected that state change.');
 			else handleChatNotice(message);
-		}, (state) => {
+		}, (state, info) => {
 			observer.onSocket?.(state === 'connected' ? activeSocket : null);
 			if (state === 'connecting') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); say('Connecting to room…'); }
 			else if (state === 'connected') { if (leaveButton) leaveButton.disabled = false; setChatEnabled(CHAT_CONFIG.enabled); }
-			else if (state === 'closed') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection closed. Re-enter the code to reconnect while the room is active.'); say('Room connection closed. Re-enter the code to reconnect while the room is active.'); }
+			else if (state === 'closed') {
+				if (leaveButton) leaveButton.disabled = true;
+				setChatEnabled(false);
+				const copy = closeCopy(info);
+				chatSay(copy);
+				say(copy);
+			}
 			else if (state === 'error') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection failed. Check the code and connection, then try again.'); say('Room connection failed. Check the code and connection, then try again.'); }
 		});
 	}
+	// Works for a <select> (Games page) and for RoomPanel's hidden input.
+	root.querySelector<HTMLInputElement>('[data-room-create] [name="gameId"]')?.addEventListener('change', () => { void loadLobbies(); });
 	root.querySelector<HTMLFormElement>('[data-room-create]')?.addEventListener('submit', async (event) => {
 		event.preventDefault();
 		const form = event.currentTarget as HTMLFormElement;

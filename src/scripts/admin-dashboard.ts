@@ -17,6 +17,7 @@
  * — both attacker-influenceable, neither ever treated as markup.
  */
 import { adminFetch, coalesce, formatTime, renderFacts, renderTable } from './admin';
+import { mountGlassTabs } from './glass-tabs';
 import { startAdminPlaylist } from './admin-playlist';
 
 type TabName = 'stats' | 'overview' | 'board' | 'playlist' | 'security' | 'games' | 'chat' | 'settings' | 'config';
@@ -149,41 +150,14 @@ export function startAdminDashboard(): void {
 	   duration. */
 	const tabList = root.querySelector<HTMLElement>('[data-admin-tabs]');
 	const indicator = root.querySelector<HTMLElement>('[data-tab-indicator]');
-	let indicatorLeft = -1;
-
-	const placeIndicator = (instant = false): void => {
-		if (!tabList || !indicator) return;
-		const current = tabs.find((tab) => tab.dataset.tab === active);
-		if (!current) return;
-		const listBox = tabList.getBoundingClientRect();
-		const box = current.getBoundingClientRect();
-		const left = box.left - listBox.left;
-		const top = box.top - listBox.top;
-		const right = listBox.width - (left + box.width);
-		const bottom = listBox.height - (top + box.height);
-
-		const forward = indicatorLeft < 0 || left >= indicatorLeft;
-		indicator.dataset.direction = forward ? 'forward' : 'back';
-		if (instant || indicatorLeft < 0) indicator.dataset.instant = '';
-		else delete indicator.dataset.instant;
-
-		indicator.style.setProperty('--tab-l', `${left}px`);
-		indicator.style.setProperty('--tab-r', `${right}px`);
-		indicator.style.setProperty('--tab-t', `${top}px`);
-		indicator.style.setProperty('--tab-b', `${bottom}px`);
-		indicator.dataset.ready = '';
-		indicatorLeft = left;
-		if (indicator.dataset.instant !== undefined) {
-			// Re-enable transitions after the instant placement has painted.
-			requestAnimationFrame(() => requestAnimationFrame(() => delete indicator.dataset.instant));
-		}
-	};
-
-	if (tabList && typeof ResizeObserver !== 'undefined') {
-		// Wrapping on narrow screens / UI-scale changes moves the labels.
-		new ResizeObserver(() => placeIndicator(true)).observe(tabList);
-	}
-	window.addEventListener('bnji:settingschange', () => placeIndicator(true));
+	// The travelling capsule is the SHARED primitive (`glass-tabs`): the admin
+	// nav and every other segmented control must move identically, and a second
+	// implementation of "where is the selected label" is a second thing to keep
+	// in sync with the motion tokens.
+	const tabsController = tabList && indicator
+		? mountGlassTabs({ list: tabList, indicator, current: () => tabs.find((tab) => tab.dataset.tab === active) ?? null })
+		: null;
+	const placeIndicator = (instant = false): void => tabsController?.place(instant);
 
 	const show = (name: TabName): void => {
 		active = name;

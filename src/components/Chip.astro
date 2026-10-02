@@ -7,7 +7,7 @@
  * invisible cost that ruins a phone's frame budget. The .chip rule in
  * styles/glass.css gives them the same border/fill language without the blur.
  */
-type Tone = 'default' | 'accent' | 'live' | 'soon' | 'idle';
+type Tone = 'default' | 'accent' | 'live' | 'soon' | 'idle' | 'danger' | 'plain';
 
 interface Props {
 	tone?: Tone;
@@ -43,5 +43,19 @@ const dotTone = tone === 'live' || tone === 'soon' ? tone : 'idle';
 
 	.chip--idle {
 		color: var(--text-dim);
+	}
+
+	/* Danger is deliberately quiet: it marks a blocked account or an
+	   irreversible action in a list, it does not shout from across the page —
+	   the border and the fill in styles/glass.css carry the tone. */
+	.chip--danger {
+		color: var(--signal-danger, #ff9aa2);
+	}
+
+	/* `plain` is the no-border variant for places where a chip is used as
+	   metadata inside a row that already has a surface. */
+	.chip--plain {
+		border-color: transparent;
+		background: transparent;
 	}
 </style>

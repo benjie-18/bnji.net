@@ -80,3 +80,47 @@ export function isValidHandle(value: unknown): value is string {
 	if (!new RegExp(`^[a-z0-9_]{${minLength},${maxLength}}$`).test(value)) return false;
 	return !(NAMES_CONFIG.displayName.reserved as readonly string[]).includes(value);
 }
+
+/* ------------------------------------------------------------------------- *
+ * Public labels — the form every shared surface shows.
+ *
+ * A handle is an account's permanent public identity, so it is the FIRST thing
+ * a leaderboard row and a room roster should say; the display name stays beside
+ * it because it is the friendlier, changeable label. Guests have no handle, so
+ * their label is exactly the display name they chose. Composing at render/read
+ * time (never at write time) means one rename or one new handle updates every
+ * surface at once, and no stored column with a 1–24 CHECK has to grow.
+ * ------------------------------------------------------------------------- */
+
+export type PublicLabelParts = { handle?: string | null; displayName?: string | null };
+
+/** `@handle · Display Name`, `@handle`, a display name, or null for nothing. */
+export function formatPublicLabel(parts: PublicLabelParts): string | null {
+	const { separator, maxLength } = NAMES_CONFIG.publicLabel;
+	const name = parts.displayName ? sanitizeDisplayName(parts.displayName) : null;
+	const displayName = name?.ok ? name.name : null;
+	if (!isValidHandle(parts.handle)) return displayName;
+	const handle = `@${parts.handle}`;
+	// The handle is the identity: when the composition would not fit, the
+	// secondary label is dropped rather than truncated mid-name.
+	if (!displayName || [...`${handle}${separator}${displayName}`].length > maxLength) return handle;
+	return `${handle}${separator}${displayName}`;
+}
+
+/**
+ * Re-validate a label that has crossed a boundary (the room upgrade header into
+ * the GameRoom DO). The DO must not run a composed label through
+ * `sanitizeDisplayName` — that sanitizer's charset refuses `@` and the
+ * separator, so every handle label would silently degrade to "Player".
+ */
+export function sanitizePublicLabel(value: unknown): { ok: true; label: string } | { ok: false } {
+	const text = sanitizePlainText(value, NAMES_CONFIG.publicLabel.maxLength);
+	if (!text.ok) return { ok: false };
+	const [first, ...rest] = text.value.split(NAMES_CONFIG.publicLabel.separator);
+	if (first.startsWith('@')) {
+		const label = formatPublicLabel({ handle: first.slice(1), displayName: rest.join(NAMES_CONFIG.publicLabel.separator) || null });
+		return label ? { ok: true, label } : { ok: false };
+	}
+	const label = sanitizeDisplayName(text.value);
+	return label.ok ? { ok: true, label: label.name } : { ok: false };
+}

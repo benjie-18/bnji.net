@@ -9,7 +9,11 @@
  * only protocol messages are `ping` (keep-alive detection, no server
  * heartbeat) and `pong`.
  */
+import { mountGlassTabs } from './glass-tabs';
+import { DIRECTORY_CONFIG } from '../config/directory.config';
+
 type Entry = { handle: string; displayName: string; since: number };
+type Person = { handle: string; displayName: string; friendState: 'none' | 'friends' | 'pending_in' | 'pending_out' };
 type Lists = {
 	friends: Entry[];
 	incoming: Entry[];
@@ -99,6 +103,35 @@ export function mountFriends(root: HTMLElement): void {
 		outgoing: root.querySelector<HTMLElement>('[data-friends-empty="outgoing"]'),
 		blocked: root.querySelector<HTMLElement>('[data-friends-empty="blocked"]'),
 	};
+	const counts = {
+		incoming: root.querySelector<HTMLElement>('[data-friends-count="incoming"]'),
+		friends: root.querySelector<HTMLElement>('[data-friends-count="friends"]'),
+		outgoing: root.querySelector<HTMLElement>('[data-friends-count="outgoing"]'),
+		blocked: root.querySelector<HTMLElement>('[data-friends-count="blocked"]'),
+	};
+	const panels = {
+		incoming: root.querySelector<HTMLElement>('[data-friends-panel="incoming"]'),
+		friends: root.querySelector<HTMLElement>('[data-friends-panel="friends"]'),
+		outgoing: root.querySelector<HTMLElement>('[data-friends-panel="outgoing"]'),
+		blocked: root.querySelector<HTMLElement>('[data-friends-panel="blocked"]'),
+	};
+	const tabsList = root.querySelector<HTMLElement>('[data-friends-tabs]');
+	const tabIndicator = root.querySelector<HTMLElement>('[data-friends-indicator]');
+	let activeTab: keyof typeof panels = 'incoming';
+	const tabs = tabsList && tabIndicator
+		? mountGlassTabs({ list: tabsList, indicator: tabIndicator, current: () => root.querySelector<HTMLElement>(`[data-friends-tab="${activeTab}"]`) })
+		: null;
+	function showTab(next: keyof typeof panels): void {
+		activeTab = next;
+		for (const kind of ['incoming', 'friends', 'outgoing', 'blocked'] as const) {
+			if (panels[kind]) panels[kind]!.hidden = kind !== next;
+			root.querySelector<HTMLElement>(`[data-friends-tab="${kind}"]`)?.setAttribute('aria-selected', kind === next ? 'true' : 'false');
+		}
+		tabs?.place();
+	}
+	for (const button of root.querySelectorAll<HTMLButtonElement>('[data-friends-tab]')) {
+		button.addEventListener('click', () => showTab(button.dataset.friendsTab as keyof typeof panels));
+	}
 
 	const setStatus = (message: string, tone: 'error' | null = null): void => {
 		if (!status) return;
@@ -160,7 +193,13 @@ export function mountFriends(root: HTMLElement): void {
 			const items = data[kind] ?? [];
 			if (lists[kind]) lists[kind]!.innerHTML = items.map((entry) => rowHtml(entry, kind)).join('');
 			if (empty[kind]) empty[kind]!.hidden = items.length > 0;
+			if (counts[kind]) counts[kind]!.textContent = String(items.length);
 		}
+		// The tab counts are informational: an empty list is still worth a click,
+		// but a request arriving while the page is open must be visible without
+		// switching tabs.
+		const pending = (data.incoming ?? []).length;
+		if (pending > 0) showTab('incoming');
 	};
 
 	const run = async (action: string, handle: string): Promise<void> => {
@@ -282,6 +321,82 @@ export function mountFriends(root: HTMLElement): void {
 			// that can change that set (accept, remove, block) gets a fresh
 			// socket so both the snapshot and my visibility to others stay honest.
 			if (action === 'accept' || action === 'remove' || action === 'block') startPresence();
+		});
+	});
+
+	// ------------------------------------------------------------ people index
+	// Handle-fragment search. Debounced by `DIRECTORY_CONFIG.searchDebounceMs`
+	// because this runs while typing; the endpoint is per-account rate-limited
+	// and the debounce is what keeps a fast typist inside that budget.
+	const searchForm = root.querySelector<HTMLFormElement>('[data-people-search]');
+	const searchInput = root.querySelector<HTMLInputElement>('[data-people-query]');
+	const searchStatus = root.querySelector<HTMLElement>('[data-people-status]');
+	const searchResults = root.querySelector<HTMLElement>('[data-people-results]');
+	let searchTimer: number | undefined;
+	let searchSeq = 0;
+	const personButton = (person: Person): string => {
+		const handle = escapeHtml(person.handle);
+		if (person.friendState === 'friends') return `<span class="friends-row__name">Already friends</span>`;
+		if (person.friendState === 'pending_out') return `<span class="friends-row__name">Request sent</span>`;
+		if (person.friendState === 'pending_in') {
+			return `<button type="button" class="glass-button glass-button--primary glass-button--sm" data-glass="" data-people-accept="${handle}" aria-label="${escapeHtml(`Accept friend request from ${handle}`)}">Accept</button>`;
+		}
+		return `<button type="button" class="glass-button glass-button--quiet glass-button--sm" data-glass="" data-people-add="${handle}" aria-label="${escapeHtml(`Send a friend request to ${handle}`)}">Add friend</button>`;
+	};
+	const personRow = (person: Person): string => `<li class="friends-row" data-handle="${escapeHtml(person.handle)}">
+			<span class="friends-row__who"><strong>@${escapeHtml(person.handle)}</strong> <span class="friends-row__name">${escapeHtml(person.displayName)}</span></span>
+			<span class="friends-row__actions">${personButton(person)}</span>
+		</li>`;
+	async function searchPeople(): Promise<void> {
+		if (!searchInput || !searchResults) return;
+		const query = searchInput.value.trim().toLowerCase();
+		if (query.length < DIRECTORY_CONFIG.minQueryLength) {
+			searchResults.replaceChildren();
+			if (searchStatus) searchStatus.textContent = `Type at least ${DIRECTORY_CONFIG.minQueryLength} characters.`;
+			return;
+		}
+		const seq = ++searchSeq;
+		if (searchStatus) searchStatus.textContent = 'Searching…';
+		try {
+			const response = await fetch(`/api/people?query=${encodeURIComponent(query)}`, { credentials: 'same-origin', cache: 'no-store' });
+			const body = await response.json().catch(() => ({})) as { people?: Person[]; truncated?: boolean; error?: string };
+			if (seq !== searchSeq) return;
+			if (!response.ok) {
+				searchResults.replaceChildren();
+				if (searchStatus) searchStatus.textContent = body.error === 'directory_disabled' ? 'People search is turned off right now.'
+					: body.error === 'friends_disabled' ? 'Friends are turned off right now.'
+					: body.error === 'rate_limited' ? 'Slow down a little and try again.'
+					: body.error === 'account_required' ? 'Sign in from the Games page to search for people.'
+					: 'That search could not be run.';
+				return;
+			}
+			const people = Array.isArray(body.people) ? body.people : [];
+			searchResults.innerHTML = people.map(personRow).join('');
+			if (searchStatus) searchStatus.textContent = people.length === 0 ? 'No handles match that fragment.'
+				: `${people.length} match${people.length === 1 ? '' : 'es'}${body.truncated ? ' (showing the first results)' : ''}.`;
+		} catch {
+			if (seq === searchSeq && searchStatus) searchStatus.textContent = 'The search could not be run. Check your connection.';
+		}
+	}
+	searchForm?.addEventListener('submit', (event) => { event.preventDefault(); window.clearTimeout(searchTimer); void searchPeople(); });
+	searchInput?.addEventListener('input', () => {
+		window.clearTimeout(searchTimer);
+		searchTimer = window.setTimeout(() => void searchPeople(), DIRECTORY_CONFIG.searchDebounceMs);
+	});
+	// Buttons created by the search delegate through the same [data-friend-action]
+	// path as a rendered list row, so there is one mutation code path.
+	searchResults?.addEventListener('click', (event) => {
+		const target = event.target as Element | null;
+		const add = target?.closest<HTMLElement>('[data-people-add]');
+		const accept = target?.closest<HTMLElement>('[data-people-accept]');
+		const handle = add?.dataset.peopleAdd ?? accept?.dataset.peopleAccept;
+		if (!handle) return;
+		const action = add ? 'request' : 'accept';
+		setStatus('Working…');
+		withBusy(async () => {
+			await run(action, handle);
+			if (action === 'accept') startPresence();
+			await searchPeople();
 		});
 	});
 

@@ -15,12 +15,13 @@ import { CHAT_CONFIG } from '../../src/config/chat.config';
 import { GameRoom } from '../../src/server/game-room-do';
 import { ROOM_TTL_MS } from '../../src/server/game-room-protocol';
 import {
-	connect, createRoom, delay, PRINCIPAL_A, PRINCIPAL_B, principalHash,
+	connect, connectRaw, createRoom, delay, PRINCIPAL_A, PRINCIPAL_B, PRINCIPAL_C, principalHash,
 	snapshotOf, sqlRows, stubFor, uniqueRoomCode, type BoxFrame,
 } from './support';
 
 const LABEL_A = { 'x-bnji-chat-label': encodeURIComponent('Alice') };
 const LABEL_B = { 'x-bnji-chat-label': encodeURIComponent('Bob') };
+const LABEL_C = { 'x-bnji-chat-label': encodeURIComponent('Carol') };
 const chatOf = (frame: BoxFrame): boolean => frame.type === 'chat';
 const historyOf = (frame: BoxFrame): boolean => frame.type === 'chat_history';
 const membersOf = (frame: BoxFrame): boolean => frame.type === 'members';
@@ -248,19 +249,28 @@ describe('GameRoom — moderation inside the room (plan §5.5)', () => {
 		send(bAgain.socket, { v: 1, type: 'chat', text: 'still muted?' });
 		expect(await bAgain.box.next((frame) => frame.type === 'chat_rejected')).toMatchObject({ error: 'muted' });
 
-		// Kick: B's socket closes 4003, its membership row is gone, and the
-		// seat can be re-joined (kick = membership delete, per plan).
+		// Kick: B's socket closes 4003, its membership row is gone, and the kick
+		// is a LOCKOUT for the room's remaining lifetime — a kicked player who
+		// could reconnect a second later was never really removed. (Open lobbies
+		// made this load-bearing: the room is listed, so the removed player can
+		// be back without an invite.)
 		send(a.socket, { v: 1, type: 'kick', member: bMemberId! });
 		expect((await bAgain.box.closed()).code).toBe(4003);
 		const members = await sqlRows<{ count: number }>(code, 'SELECT COUNT(*) AS count FROM game_room_members');
 		expect(Number(members[0].count)).toBe(1);
-		const rejoin = await connect(code, PRINCIPAL_B, LABEL_B);
-		const rejoinSnapshot = await rejoin.box.next(snapshotOf);
-		expect(rejoinSnapshot.connectedMembers).toBe(2);
+		const kicked = await sqlRows<{ count: number }>(code, 'SELECT COUNT(*) AS count FROM game_room_kicks');
+		expect(Number(kicked[0].count)).toBe(1);
+		const rejoin = await connectRaw(code, PRINCIPAL_B);
+		expect(rejoin.status).toBe(403);
+		expect(await rejoin.json()).toMatchObject({ error: 'room_kicked' });
+		// A stranger is still admitted: the lockout is per principal.
+		const c = await connect(code, PRINCIPAL_C, LABEL_C);
+		const cSnapshot = await c.box.next(snapshotOf);
+		expect(cSnapshot.connectedMembers).toBe(2);
 		const log = await sqlRows<{ action: string }>(code, 'SELECT action FROM game_room_chat_log ORDER BY id');
 		expect(log.map((row) => row.action)).toContain('mute');
 		expect(log.map((row) => row.action)).toContain('kick');
-		void a.socket; void rejoin.socket;
+		void a.socket; void c.socket;
 	});
 });
 

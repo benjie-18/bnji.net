@@ -1,0 +1,91 @@
+---
+/**
+ * Shared leaderboard panel: mode tabs, a paged board, and the caller's own
+ * standing. Used by `/games/<game>/leaderboard/` for every game that has a
+ * server verifier.
+ *
+ * The rows are fetched, not rendered — the page stays static, and mode/page
+ * live in the query string (see `src/scripts/game-leaderboard`).
+ */
+import type { Game } from '../data/games';
+import { leaderboardModes, MODE_LABEL } from '../data/game-adapters';
+
+interface Props {
+	game: Game;
+	/** Initial mode, so the tab markup can be server-rendered without a flash. */
+	initialMode?: string;
+}
+const { game, initialMode } = Astro.props;
+const modes = leaderboardModes(game);
+const current = initialMode && modes.includes(initialMode) ? initialMode : modes[0] ?? 'default';
+---
+
+<section
+	class="glass-panel leaderboard"
+	data-board
+	data-game-id={game.id}
+	aria-labelledby="leaderboard-title"
+>
+	<header class="leaderboard__head">
+		<div>
+			<p class="eyebrow">Leaderboard</p>
+			<h2 id="leaderboard-title">{game.title}</h2>
+			<p class="leaderboard__note">Only runs a server verifier accepted are listed. A row shows the player's current public label, so a rename updates every board at once.</p>
+		</div>
+		<p class="glass-note leaderboard__you" data-board-you hidden>
+			<span class="glass-label">You</span> <span data-board-you-value></span>
+		</p>
+	</header>
+
+	{
+		modes.length > 1 && (
+			<div class="glass-tabs leaderboard__tabs" role="tablist" aria-label="Score modes">
+				<div class="glass-tabs__list" data-board-tabs>
+					{modes.map((mode) => (
+						<button
+							type="button"
+							class="glass-tabs__item"
+							role="tab"
+							data-board-mode={mode}
+							aria-selected={mode === current ? 'true' : 'false'}
+						>
+							{MODE_LABEL[mode] ?? mode}
+						</button>
+					))}
+					<span class="glass-tabs__indicator" data-board-indicator aria-hidden="true"></span>
+				</div>
+			</div>
+		)
+	}
+
+	<ol class="leaderboard__rows" data-board-rows></ol>
+	<p class="leaderboard__status" data-board-status role="status" aria-live="polite">Loading the board…</p>
+	<div class="leaderboard__actions">
+		<button type="button" class="glass-button" data-board-more hidden>Load more</button>
+	</div>
+</section>
+
+<script>
+	import { mountGameLeaderboard } from '../scripts/game-leaderboard';
+	for (const root of document.querySelectorAll<HTMLElement>('[data-board]')) mountGameLeaderboard(root);
+</script>
+
+<style>
+	.leaderboard { display: grid; gap: 1.1rem; padding: clamp(1.1rem, 3vw, 1.7rem); }
+	.leaderboard__head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 0.75rem 1.5rem; }
+	.leaderboard__head h2 { margin: 0.25rem 0 0; color: var(--text-strong); font-size: var(--text-title); }
+	.leaderboard__note { max-width: 62ch; margin: 0.5rem 0 0; color: var(--text-muted); line-height: 1.6; }
+	.leaderboard__you { margin: 0; min-height: 1.6em; }
+	.leaderboard__rows { display: grid; gap: 0.4rem; margin: 0; padding: 0; list-style: none; }
+	:global(.leaderboard-row--empty) { padding: 1rem; color: var(--text-muted); }
+	.leaderboard__status { min-height: 1.6em; margin: 0; color: var(--text-muted); font-size: var(--text-small); }
+	.leaderboard__actions { display: flex; gap: 0.6rem; }
+	:global(.leaderboard-row__rank) { color: var(--text-dim); font-size: var(--text-small); min-inline-size: 3.2rem; }
+	:global(.leaderboard-row__main) { display: grid; gap: 0.15rem; }
+	:global(.leaderboard-row__main strong) { color: var(--text-strong); overflow-wrap: anywhere; }
+	:global(.leaderboard-row__meta) { color: var(--text-muted); font-size: var(--text-micro); }
+	:global(.leaderboard-row__score) { color: var(--text-strong); font-size: var(--text-lead); }
+	@media (max-width: 560px) {
+		:global(.leaderboard-row__rank) { min-inline-size: 0; }
+	}
+</style>

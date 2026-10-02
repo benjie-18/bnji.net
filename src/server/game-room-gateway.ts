@@ -1,5 +1,9 @@
-/** HTTP boundary for the private room namespace. Only this module derives trusted principals from player-context. */
-import { sanitizeDisplayName } from './display-name';
+/**
+ * HTTP boundary for the room namespace: the private per-socket channel AND the
+ * public `/lobby` probe that answers the open-lobby list. Only this module
+ * derives trusted principals from player-context.
+ */
+import { formatPublicLabel, sanitizePublicLabel } from './display-name';
 import { readGuestProfile } from './guest-profile-store';
 import type { PlayerContext } from './player-context';
 import type { D1Database } from './game-store';
@@ -25,6 +29,10 @@ export function roomNamespace(value: unknown): GameRoomNamespace | null {
  * by the room upgrade route). Resolved server-side from the Phase A stores —
  * NOT client-supplied — then sanitised here and again in the DO. Failures fall
  * back to a generic label: the label is cosmetic and must never block a join.
+ *
+ * An account's handle leads (`@handle · Display Name`) because the handle is
+ * the label that is already public on every leaderboard; the display name
+ * stays beside it. Guests keep their own display name.
  */
 export async function resolveRoomChatLabel(env: Record<string, unknown>, player: PlayerContext): Promise<string> {
 	const fallback = player.playerId ? 'Player' : 'Guest';
@@ -32,10 +40,11 @@ export async function resolveRoomChatLabel(env: Record<string, unknown>, player:
 	if (!db || typeof (db as D1Database).prepare !== 'function') return fallback;
 	try {
 		const raw = player.playerId
-			? (await (db as D1Database).prepare('SELECT display_name FROM game_players WHERE id = ?1 LIMIT 1').bind(player.playerId).first<{ display_name: string }>())?.display_name
-			: (await readGuestProfile(db as D1Database, player.sessionId))?.display_name;
-		const sanitized = sanitizeDisplayName(raw ?? '');
-		return sanitized.ok ? sanitized.name : fallback;
+			? await (db as D1Database).prepare('SELECT display_name, handle FROM game_players WHERE id = ?1 LIMIT 1').bind(player.playerId).first<{ display_name: string; handle: string | null }>()
+			: await readGuestProfile(db as D1Database, player.sessionId);
+		const label = formatPublicLabel({ handle: raw && 'handle' in raw ? raw.handle : null, displayName: raw?.display_name ?? '' });
+		const sanitized = sanitizePublicLabel(label ?? '');
+		return sanitized.ok ? sanitized.label : fallback;
 	} catch {
 		return fallback;
 	}
@@ -48,13 +57,13 @@ export async function resolveRoomChatLabel(env: Record<string, unknown>, player:
  * Phase C service token). Admin paths derive the token from ACCESS_SECRET —
  * absent secret, absent admin room access (fail closed, plan §6.2).
  */
-export async function roomServiceFetch(env: Record<string, unknown>, code: string, player: PlayerContext, path: '/create' | '/ws' | '/report', init: {
+export async function roomServiceFetch(env: Record<string, unknown>, code: string, player: PlayerContext, path: '/create' | '/ws' | '/report' | '/lobby', init: {
 	method: 'POST' | 'GET'; body?: string; request?: Request;
 }): Promise<Response>;
 export async function roomServiceFetch(env: Record<string, unknown>, code: string, player: null, path: '/admin/read' | '/admin/action', init: {
 	method: 'POST' | 'GET'; body?: string; request?: Request;
 }): Promise<Response>;
-export async function roomServiceFetch(env: Record<string, unknown>, code: string, player: PlayerContext | null, path: '/create' | '/ws' | '/report' | '/admin/read' | '/admin/action', init: {
+export async function roomServiceFetch(env: Record<string, unknown>, code: string, player: PlayerContext | null, path: '/create' | '/ws' | '/report' | '/lobby' | '/admin/read' | '/admin/action', init: {
 	method: 'POST' | 'GET'; body?: string; request?: Request;
 }): Promise<Response> {
 	const unavailable = (error: string, status: number): Response => new Response(JSON.stringify({ error }), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
@@ -78,5 +87,8 @@ export async function roomServiceFetch(env: Record<string, unknown>, code: strin
 		if (!player) return unavailable('room_service_unavailable', 503);
 		headers.set('x-bnji-verified-principal', roomPrincipal(player));
 	}
+	// `/lobby` is a read: GET, and with no body — a GET carrying one throws before
+	// it ever reaches the DO, which would read as "every room is down".
+	if (path === '/lobby') return stub.fetch(new Request('https://game-room.internal/lobby', { method: 'GET', headers }));
 	return stub.fetch(new Request(`https://game-room.internal${path}`, { method: 'POST', headers, body: init.body ?? '{}' }));
 }

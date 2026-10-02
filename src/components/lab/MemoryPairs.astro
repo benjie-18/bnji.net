@@ -640,7 +640,7 @@ const initialDeck = [...INITIAL_GLYPHS, ...INITIAL_GLYPHS]
 		background: var(--glass-bg);
 		border-color: var(--glass-border-strong);
 	}
-	.memory__gear-btn.is-open {
+	:global(.memory__gear-btn.is-open) {
 		color: var(--accent-strong);
 		border-color: var(--accent-strong);
 		background: var(--accent-soft);
@@ -650,7 +650,7 @@ const initialDeck = [...INITIAL_GLYPHS, ...INITIAL_GLYPHS]
 		block-size: 15px;
 		transition: transform var(--dur-base) var(--ease-spring);
 	}
-	.memory__gear-btn.is-open .memory__gear-icon {
+	:global(.memory__gear-btn.is-open .memory__gear-icon) {
 		transform: rotate(45deg);
 	}
 

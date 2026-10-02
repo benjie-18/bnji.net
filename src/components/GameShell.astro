@@ -11,8 +11,14 @@ interface Props {
 	instructions: string;
 	initialState?: State;
 	level?: 1 | 2 | 3;
+	/**
+	 * This game's leaderboard route, when it has one. Rendered in the fixed tool
+	 * row (never inside a state panel), so the link cannot move between states
+	 * and a game with no board simply shows no link.
+	 */
+	boardHref?: string | null;
 }
-const { gameId, title, instructions, initialState = 'ready', level = 1 } = Astro.props;
+const { gameId, title, instructions, initialState = 'ready', level = 1, boardHref } = Astro.props;
 const headingId = `game-${gameId.replace(/[^a-zA-Z0-9_-]/g, '-')}-title`;
 const instructionsId = `${headingId}-instructions`;
 const Title = `h${level}` as const;
@@ -27,11 +33,25 @@ const Title = `h${level}` as const;
 	aria-labelledby={headingId}
 	aria-describedby={instructionsId}
 >
-	<div class="game-shell__surface" data-glass="raised">
+	<div class="game-shell__surface" data-glass="raised" data-game-shell-surface>
 		<header class="game-shell__header">
-			<p class="eyebrow">PLAY / {gameId}</p>
-			<Title id={headingId}>{title}</Title>
-			<p id={instructionsId} class="game-shell__instructions">{instructions}</p>
+			<div class="game-shell__titles">
+				<p class="eyebrow">PLAY / {gameId}</p>
+				<Title id={headingId}>{title}</Title>
+				<p id={instructionsId} class="game-shell__instructions">{instructions}</p>
+			</div>
+			<!--
+				A fixed tool row: the fullscreen control lives here (not in a panel)
+				so it keeps its place for the whole session and the panels below it
+				never move between states. The button ships hidden and only
+				JavaScript reveals it — without the Fullscreen API the page must not
+				show a control that cannot work, and it must not reserve a dead slot
+				in a no-JS page either.
+			-->
+			<div class="game-shell__tools">
+				{boardHref && <a class="game-shell__link game-shell__board" href={boardHref}>Leaderboard</a>}
+				<button type="button" class="game-shell__button game-shell__fullscreen" data-game-fullscreen aria-pressed="false" hidden>Fullscreen</button>
+			</div>
 		</header>
 
 		<p
@@ -87,12 +107,48 @@ const Title = `h${level}` as const;
 <style>
 	.game-shell { padding-block: clamp(1rem, 4vw, 2.5rem) 5rem; }
 	.game-shell__surface {
+		position: relative;
 		max-width: 72rem;
 		margin-inline: auto;
 		padding: clamp(1.2rem, 4vw, 2.5rem);
 		border-radius: var(--radius-xl);
 	}
-	.game-shell__header { max-width: 66ch; margin-block-end: clamp(1.5rem, 5vw, 3rem); }
+	/*
+	 * Fullscreen: the surface is the fullscreen element, so its own background
+	 * must stop being transparent (there is no page behind it any more) and it
+	 * has to fill the screen. Written with :global() because a :fullscreen rule
+	 * cannot be scoped — the pseudo-class only ever matches the document root
+	 * element, which carries no Astro scope attribute.
+	 */
+	:global(.game-shell__surface:fullscreen) {
+		max-width: none;
+		max-height: none;
+		padding: clamp(1rem, 3vw, 2rem);
+		border-radius: 0;
+		overflow: auto;
+		background: var(--game-field, var(--glass-bg-fallback, var(--bg-surface)));
+	}
+	:global(.game-shell__surface[data-game-fullscreen='true']) {
+		max-width: none;
+		padding: clamp(1rem, 3vw, 2rem);
+		border-radius: 0;
+		overflow: auto;
+		background: var(--game-field, var(--glass-bg-fallback, var(--bg-surface)));
+	}
+	.game-shell [data-game-fullscreen='true'] { scrollbar-gutter: stable; }
+	.game-shell__header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem 1.5rem;
+		margin-block-end: clamp(1.5rem, 5vw, 3rem);
+	}
+	.game-shell__titles { min-inline-size: 0; max-inline-size: 66ch; }
+	.game-shell__tools { display: flex; flex-wrap: wrap; gap: 0.5rem; min-inline-size: 9rem; justify-content: flex-end; }
+	.game-shell__fullscreen { min-inline-size: 9rem; }
+	.game-shell__fullscreen[hidden] { display: none; }
+	.game-shell__board { min-inline-size: 9rem; }
 	.game-shell__header h1,
 	.game-shell__header h2,
 	.game-shell__header h3 {
@@ -112,6 +168,13 @@ const Title = `h${level}` as const;
 	.game-shell__panel[hidden] { display: none !important; }
 	.game-shell__panel h2 { margin: 0; color: var(--text-strong); font-size: var(--text-title); }
 	.game-shell__content { width: 100%; min-width: 0; }
+	/*
+	 * The three short panels (paused/error/results) keep the ready panel's
+	 * height. The property is set by initShellHeightReserve() and is only ever
+	 * an approximate, monotonic floor: it may grow with the game, it never
+	 * shrinks and it never applies to the ready panel itself.
+	 */
+	.game-shell__panel:not([data-game-shell-panel='ready']) { min-block-size: var(--game-shell-reserve, 0px); }
 	.game-shell__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block-start: 0.5rem; }
 	.game-shell__button,
 	.game-shell__link {

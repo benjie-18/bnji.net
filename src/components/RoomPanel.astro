@@ -20,7 +20,7 @@ const { gameId } = Astro.props;
 			<p class="eyebrow">MULTIPLAYER</p>
 			<h2 id="room-panel-title">Private room</h2>
 		</div>
-		<p class="room-panel__intro">Rooms are temporary and code-protected — share the code only with players you want in your game. Up to 2 hours, then everything is deleted with the room.</p>
+		<p class="room-panel__intro">Rooms are temporary: up to 2 hours, then everything in them is deleted. Every room is listed below for anyone to join, and the host can kick — the code stays the thing you need to get in.</p>
 	</div>
 
 	<div class="room-panel__forms">
@@ -34,6 +34,21 @@ const { gameId } = Astro.props;
 			<input id="room-code-input" name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" placeholder="22-character room code" required />
 			<button class="room-panel__button" type="submit">Join or reconnect</button>
 		</form>
+	</div>
+
+	<!--
+		Open lobbies for THIS game. Rooms are public to join by design; the code
+		remains the entry ticket, and the host can kick anyone out for the room's
+		remaining lifetime. The panel hides itself when the list is unavailable —
+		creating/joining with a code never depends on it.
+	-->
+	<div class="room-panel__lobbies glass-item">
+		<div class="room-panel__lobbies-head">
+			<h3 class="glass-label">Open rooms</h3>
+			<button class="room-panel__button room-panel__button--small" type="button" data-lobby-refresh>Refresh</button>
+		</div>
+		<ul class="room-panel__lobby-list" data-lobby-list></ul>
+		<p class="room-panel__note" data-lobby-status role="status" aria-live="polite">Loading open rooms…</p>
 	</div>
 
 	<form class="room-panel__name" data-profile-name>
@@ -55,9 +70,15 @@ const { gameId } = Astro.props;
 				<input id="chess-chat-input" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
 				<button class="room-panel__button room-panel__button--primary" type="submit" disabled>Send</button>
 			</form>
-			<ul class="room-panel__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
 		</div>
 	)}
+
+	<!-- Members are not a chat feature: seats, teams and kicks matter whether or not chat is on. -->
+	<div class="room-panel__members" data-room-members>
+		<h3 class="glass-label">Members</h3>
+		<ul class="room-panel__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
+		<p class="room-panel__note" data-members-status role="status" aria-live="polite">Join or create a room to see members.</p>
+	</div>
 
 	<div class="room-panel__status">
 		<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
@@ -110,6 +131,11 @@ const { gameId } = Astro.props;
 	.room-panel__button--small { padding: 0.25rem 0.65rem; font-size: 0.82rem; }
 	.room-panel__note { font-size: 0.82rem; color: var(--text-muted, #9aa3b2); max-width: 64ch; }
 	.room-panel__name { display: grid; gap: 0.45rem; justify-items: start; }
+	.room-panel__lobbies { display: grid; gap: 0.55rem; padding: 0.9rem; }
+	.room-panel__lobbies-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+	.room-panel__lobbies-head h3 { margin: 0; }
+	.room-panel__lobby-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+	.room-panel__members { display: grid; gap: 0.45rem; }
 	.room-panel__chat { display: grid; gap: 0.6rem; }
 	.room-panel__chat-messages { list-style: none; display: grid; gap: 0.35rem; max-height: 14rem; overflow-y: auto; padding: 0; margin: 0; }
 	.room-panel__chat-messages :global(li) { display: grid; gap: 0.1rem; padding: 0.35rem 0.55rem; border-radius: 8px; background: rgba(255 255 255 / 0.05); font-size: 0.9rem; }

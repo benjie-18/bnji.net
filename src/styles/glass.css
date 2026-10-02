@@ -23,14 +23,9 @@
    ========================================================================== */
 
 :root {
-	--glass-radius-pill: 9999px;
-	--glass-radius-lg: 24px;
-	--glass-radius-md: 16px;
-	--glass-radius-sm: 10px;
-	--glass-pad-lg: 24px;
-	--glass-pad-md: 16px;
-	--glass-pad-sm: 10px;
-
+	/* The glass radius/padding scale itself lives in styles/tokens.css with every
+	   other token; what is declared here is the per-element context that nested
+	   geometry is calculated from, which only this layer ever sets. */
 	--parent-radius: var(--glass-radius-md);
 	--parent-pad: var(--glass-pad-md);
 }
@@ -182,7 +177,9 @@ html[data-theme='light'] .glass--clear {
 	border: 1px solid rgba(255, 255, 255, 0.85);
 }
 
-/* Raised: floating navigation docks, sheets, and modal pills */
+/* Raised: floating navigation docks, sheets, and modal pills. A dock is meant to
+   be a stadium, so it takes --radius-pill; a big content panel pairs it with
+   `large` below, which is what "raised panel with a readable corner" means here. */
 [data-glass~='raised'],
 .glass--raised {
 	--parent-radius: var(--glass-radius-pill);
@@ -207,6 +204,8 @@ html[data-theme='light'] .glass--raised {
 /* Large panels: thicker glass physical profile, deeper shadow */
 [data-glass~='large'],
 .glass-panel--pad-lg {
+	/* Declared after `raised` in this file, and matched by the same specificity,
+	   so a panel that asks for both gets raised's material and large's corner. */
 	--parent-radius: var(--glass-radius-lg);
 	--parent-pad: var(--glass-pad-lg);
 	box-shadow:
@@ -253,11 +252,48 @@ html[data-theme='light'] .glass--raised {
 /* Nested child elements calculate concentric curvature:
    r_child = max(4px, r_parent - padding * 0.5) */
 [data-glass] .glass-button,
+[data-glass] .glass-item,
 [data-glass] .chip,
 [data-glass] input:not([type='range']),
 [data-glass] select,
 [data-glass] textarea {
 	border-radius: max(6px, calc(var(--parent-radius, 16px) - var(--parent-pad, 16px) * 0.5));
+}
+
+/* --- Items: the row inside a panel ---------------------------------------- */
+/* A list row is the small sibling of a panel: the same boundary and fill
+   tokens, without a backdrop of its own. Putting [data-glass] on every row
+   would re-run the whole optical layer once per row for no perceptual gain, so
+   this is a class and not a variant — the recipe exists once, here, and every
+   list on the site (friends, messages, lobbies, leaderboard) uses it. */
+.glass-item {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-quiet);
+	transition:
+		border-color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-item--interactive:hover {
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+	}
+}
+
+/* An item whose content was taken away (a deleted chat message): the row is
+   still there to explain itself, so it is dimmed, never removed by CSS. */
+.glass-item--muted .glass-row__main {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.glass-item[data-highlighted],
+.glass-item[aria-current='true'] {
+	border-color: var(--accent-line);
+	background: var(--accent-soft);
 }
 
 /* --- Glass Groups --------------------------------------------------------- */
@@ -363,6 +399,28 @@ html[data-theme='light'] .glass-button {
 	transform: translateY(0) scale3d(0.995, 0.995, 1);
 }
 
+/* Disabled is the normal state for a control that is waiting on the game (a
+   claim button before a run, a host-only action for a guest), and these buttons
+   are built by scripts as often as by pages, so the state lives here rather
+   than as a per-component rule. */
+/* A toggle (Fullscreen, Sound) is a button that stays on screen and changes
+   meaning, so the pressed state gets the same tint the items use. */
+.glass-button[aria-pressed='true'] {
+	background: var(--accent-soft);
+	border-color: var(--accent-strong);
+}
+
+.glass-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.glass-button:disabled:hover {
+	border-color: var(--glass-border);
+	box-shadow: none;
+	transform: none;
+}
+
 .glass-button:focus-visible {
 	outline: 2px solid var(--accent-strong);
 	outline-offset: 2px;
@@ -411,6 +469,280 @@ html[data-theme='light'] .glass-button {
 	}
 }
 
+/* Destructive: the same capsule body with the site's danger boundary, so a
+   page never has to reach for `!important` to make a button look dangerous. */
+.glass-button--danger {
+	color: var(--danger);
+	border-color: var(--danger-line);
+	background: var(--danger-soft);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-button--danger:hover {
+		color: var(--danger);
+		border-color: var(--danger);
+		background: var(--danger-soft);
+		box-shadow:
+			var(--glass-shadow-raised),
+			0 0 18px -6px var(--danger-line),
+			inset 0 1px 1.5px var(--glass-fresnel-top);
+	}
+}
+
+/* --- Fields: the input half of the same language -------------------------- */
+/* The admin panel's fields and these are one recipe: quiet glass, hairline
+   boundary, accent focus ring. Promoted here so /friends/, /messages/ and
+   /games/ stop each carrying a private copy that can drift. */
+.glass-label {
+	display: block;
+	margin-block-end: var(--space-2);
+	color: var(--text-strong);
+	font-size: var(--text-small);
+	font-weight: 600;
+}
+
+.glass-field {
+	inline-size: 100%;
+	min-inline-size: 0;
+	padding: 0.55rem 0.8rem;
+	color: var(--text-strong);
+	background: var(--glass-bg-quiet);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	font: inherit;
+	transition:
+		border-color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out);
+}
+
+.glass-field::placeholder {
+	color: var(--text-faint);
+}
+
+.glass-field:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 1px;
+	border-color: var(--accent-line);
+}
+
+.glass-field[disabled],
+.glass-field[aria-disabled='true'] {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.glass-field option {
+	background: var(--bg-surface, Canvas);
+	color: var(--text-strong);
+}
+
+/* --- Status lines: always under the control they describe ----------------- */
+/* One primitive for "what just happened", reserved to sit below an input or a
+   form — never above the panel it belongs to. `:empty` collapses it, so a page
+   does not show a gap of nothing while it is idle, and the fixed minimum
+   height keeps the layout from jumping when a reply arrives. */
+.glass-status {
+	margin: 0;
+	min-block-size: 1.1rem;
+	color: var(--text-muted);
+	font-size: var(--text-small);
+	line-height: 1.5;
+}
+
+.glass-status:empty {
+	min-block-size: 0;
+}
+
+.glass-status[data-tone='error'] {
+	color: var(--danger);
+}
+
+.glass-status[data-tone='ok'] {
+	color: var(--accent);
+}
+
+/* --- Segmented tabs: the travelling slab ---------------------------------- */
+/* One glass capsule that travels between tab labels, promoted from the admin
+   section nav so the site has exactly one "category selector" motion. Its four
+   edges are separate custom properties (--tab-l/r/t/b) written by
+   scripts/glass-tabs.ts: the edge on the side of travel moves on the fast leg
+   and the trailing edge follows on the slow spring leg, so the slab stretches
+   toward the clicked label and its tail slings in behind it. Only position and
+   opacity animate, and every duration is a motion token, so
+   prefers-reduced-motion collapses the travel on its own; the Settings store's
+   data-* flags handle the explicit switches. */
+/* Deliberately not a surface: the strip adds no fill, no border and no second
+   backdrop blur. A call site that wants a box says so with data-glass="quiet"
+   (or "raised", the way the admin nav does), and inherits its radius through
+   --parent-radius so the slab inside stays concentric. */
+.glass-tabs {
+	--sling-lead: var(--dur-base);
+	--sling-trail: var(--dur-slow);
+	--sling-ease: var(--ease-spring);
+	--parent-radius: var(--radius-pill);
+	position: relative;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	padding: 0.35rem;
+	max-inline-size: 100%;
+	border-radius: var(--parent-radius, var(--radius-pill));
+}
+
+.glass-tabs__item {
+	position: relative;
+	z-index: 1;
+	padding: 0.5rem 1rem;
+	border: 0;
+	border-radius: var(--radius-pill);
+	background: transparent;
+	color: var(--text-muted);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	cursor: pointer;
+	transition: color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-tabs__item:hover {
+		color: var(--text-strong);
+	}
+}
+
+.glass-tabs__item[aria-selected='true'] {
+	color: var(--text-strong);
+}
+
+.glass-tabs__item:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.glass-tabs__indicator {
+	position: absolute;
+	z-index: 0;
+	inset: var(--tab-t, 0.35rem) var(--tab-r, 100%) var(--tab-b, 0.35rem) var(--tab-l, 0.35rem);
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-raised);
+	border: 1px solid var(--accent-line);
+	box-shadow:
+		0 0 18px -6px var(--accent-soft),
+		inset 0 1px 1px var(--glass-fresnel-top);
+	opacity: 0;
+	pointer-events: none;
+}
+
+html[data-theme='light'] .glass-tabs__indicator {
+	background: var(--accent);
+	border-color: var(--accent-strong);
+	box-shadow: 0 2px 8px var(--glass-shadow-contact);
+}
+
+.glass-tabs__indicator[data-ready] {
+	opacity: 1;
+}
+
+.glass-tabs__indicator[data-direction='forward'] {
+	transition:
+		right var(--sling-lead) var(--ease-out),
+		left var(--sling-trail) var(--sling-ease),
+		top var(--sling-lead) var(--ease-out),
+		bottom var(--sling-lead) var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+
+.glass-tabs__indicator[data-direction='back'] {
+	transition:
+		left var(--sling-lead) var(--ease-out),
+		right var(--sling-trail) var(--sling-ease),
+		top var(--sling-lead) var(--ease-out),
+		bottom var(--sling-lead) var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+
+.glass-tabs__indicator[data-instant] {
+	transition: none;
+}
+
+/* Settings store: performance mode keeps the glide but drops the spring
+   overshoot; reduced effects removes the travel entirely. */
+html[data-performance-mode='on'] .glass-tabs__indicator {
+	--sling-trail: var(--dur-base);
+	--sling-ease: var(--ease-out);
+}
+
+html[data-reduced-effects='on'] .glass-tabs__indicator {
+	transition: none;
+}
+
+/* Forced colors: the slab is decoration, so it becomes the system highlight
+   rather than disappearing with the background. */
+@media (forced-colors: active) {
+	.glass-tabs__indicator {
+		border-color: Highlight;
+	}
+}
+
+/* --- Rows: what a list line looks like everywhere ------------------------- */
+/* A row that the CLIENT builds cannot be reached by a page's scoped styles at
+   all (Astro attributes only the elements in its template), so the shape of a
+   lobby row, a chat line or a save row lives here instead of being copied into
+   every page that renders one. Compose them with `.glass-item` for the box:
+   `.glass-item.glass-row` for "label left, control right", `.glass-row--split`
+   for "meta, content, actions". */
+.glass-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-1) var(--space-3);
+}
+
+.glass-row--split {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: baseline;
+}
+
+.glass-row__main {
+	min-inline-size: 0;
+	display: grid;
+	gap: 0.15rem;
+	color: var(--text-strong);
+	font-size: var(--text-small);
+	overflow-wrap: anywhere;
+}
+
+.glass-row__meta {
+	color: var(--text-muted);
+	font-size: var(--text-micro);
+	white-space: nowrap;
+}
+
+.glass-row__actions {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1);
+}
+
+.glass-row__actions :is(button, a) {
+	text-decoration: none;
+}
+
+/* --- Notes --------------------------------------------------------------- */
+/* The one-line explanation or empty-state under a control. Pages keep their own
+   class for a hook, and this for the voice: small, quiet, readable measure. */
+.glass-note {
+	margin: 0;
+	max-inline-size: 64ch;
+	color: var(--text-muted);
+	font-size: var(--text-small);
+	line-height: 1.55;
+}
+
 /* --- Chips ---------------------------------------------------------------- */
 .chip {
 	display: inline-flex;
@@ -441,6 +773,23 @@ html[data-theme='light'] .glass-button {
 	border-color: var(--accent-line);
 	color: var(--accent);
 	background: var(--accent-soft);
+}
+
+/* A state that must read as a problem, without the page inventing a colour. */
+.chip--danger {
+	border-color: var(--danger-line);
+	color: var(--danger);
+	background: var(--danger-soft);
+}
+
+/* Plain: the same pill for a word that must keep its own casing — a display
+   name, a room state. Chips shout in mono caps because they label things;
+   people do not. */
+.chip--plain {
+	font-family: var(--font-body);
+	font-size: var(--text-small);
+	letter-spacing: 0;
+	text-transform: none;
 }
 
 /* --- Accessibility Variants ----------------------------------------------- */

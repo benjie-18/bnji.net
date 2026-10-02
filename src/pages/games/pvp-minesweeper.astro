@@ -10,6 +10,10 @@ import GameShell from '../../components/GameShell.astro';
 import PageHeader from '../../components/PageHeader.astro';
 import RoomPanel from '../../components/RoomPanel.astro';
 import Layout from '../../layouts/Layout.astro';
+import { getGame } from '../../data/games';
+import { leaderboardHref } from '../../data/game-adapters';
+
+const boardHref = leaderboardHref(getGame('bnji.pvp-minesweeper')!);
 
 const instructions =
 	'Create a room below and invite at least one other player. Everyone votes the difficulty (5 seconds), then each player lays mines on the opponents boards at the same time — you cannot see the mines coming your way. ' +
@@ -27,7 +31,7 @@ const instructions =
 	/>
 
 	<div class="container ms-body">
-		<GameShell gameId="bnji.pvp-minesweeper" title="PvP Minesweeper" instructions={instructions} initialState="ready">
+		<GameShell gameId="bnji.pvp-minesweeper" title="PvP Minesweeper" instructions={instructions} initialState="ready" boardHref={boardHref}>
 			<div class="ms-layout">
 				<div class="ms-side" data-glass>
 					<p class="ms-phase" data-ms-phase>Not connected</p>
@@ -153,7 +157,7 @@ const instructions =
 	.ms-button:hover:not(:disabled) { background: rgba(255 255 255 / 0.08); }
 	.ms-button:disabled { opacity: 0.55; cursor: not-allowed; }
 	.ms-button--primary { background: var(--accent, #6ea8fe); border-color: transparent; color: #0b1020; font-weight: 600; }
-	.ms-target {
+	:global(.ms-target) {
 		padding: 0.35rem 0.8rem;
 		border-radius: 999px;
 		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
@@ -163,7 +167,7 @@ const instructions =
 		font-size: 0.85rem;
 		cursor: pointer;
 	}
-	.ms-target.is-active {
+	:global(.ms-target.is-active) {
 		background: var(--accent, #6ea8fe);
 		border-color: transparent;
 		color: #0b1020;
@@ -180,7 +184,7 @@ const instructions =
 		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.2));
 		background: rgba(0 0 0 / 0.35);
 	}
-	.ms-cell {
+	:global(.ms-cell) {
 		display: grid;
 		place-items: center;
 		border: 0;
@@ -192,29 +196,29 @@ const instructions =
 		cursor: pointer;
 		position: relative;
 	}
-	.ms-cell.is-hidden {
+	:global(.ms-cell.is-hidden) {
 		background: rgba(255 255 255 / 0.16);
 		box-shadow: inset 0 -2px 0 rgba(0 0 0 / 0.25);
 	}
-	.ms-cell.is-hidden:hover { background: rgba(255 255 255 / 0.26); }
-	.ms-cell.is-revealed { background: rgba(0 0 0 / 0.32); cursor: default; color: var(--text, #e8ecf4); }
-	.ms-cell.is-editor.is-revealed { cursor: pointer; }
-	.ms-cell.is-pending { animation: ms-pulse 0.7s ease-in-out infinite alternate; }
-	.ms-cell[data-value='1'] { color: #6ea8fe; }
-	.ms-cell[data-value='2'] { color: #63d4a0; }
-	.ms-cell[data-value='3'] { color: #ff8f8f; }
-	.ms-cell[data-value='4'] { color: #c7a6ff; }
-	.ms-cell[data-value='5'], .ms-cell[data-value='6'], .ms-cell[data-value='7'], .ms-cell[data-value='8'] { color: #ffcf6b; }
-	.ms-cell.is-mine { background: rgba(255 107 107 / 0.22); color: #ff8f8f; cursor: default; }
-	.ms-cell.is-boom { background: rgba(255 107 107 / 0.55); color: #fff; }
-	.ms-cell.is-armed { background: rgba(255 207 107 / 0.35); color: #ffcf6b; }
-	.ms-cell:focus-visible { outline: 3px solid var(--accent, #6ea8fe); outline-offset: 1px; z-index: 1; }
+	:global(.ms-cell.is-hidden:hover) { background: rgba(255 255 255 / 0.26); }
+	:global(.ms-cell.is-revealed) { background: rgba(0 0 0 / 0.32); cursor: default; color: var(--text, #e8ecf4); }
+	:global(.ms-cell.is-editor.is-revealed) { cursor: pointer; }
+	:global(.ms-cell.is-pending) { animation: ms-pulse 0.7s ease-in-out infinite alternate; }
+	:global(.ms-cell[data-value='1']) { color: #6ea8fe; }
+	:global(.ms-cell[data-value='2']) { color: #63d4a0; }
+	:global(.ms-cell[data-value='3']) { color: #ff8f8f; }
+	:global(.ms-cell[data-value='4']) { color: #c7a6ff; }
+	:global(.ms-cell[data-value='5']), :global(.ms-cell[data-value='6']), :global(.ms-cell[data-value='7']), :global(.ms-cell[data-value='8']) { color: #ffcf6b; }
+	:global(.ms-cell.is-mine) { background: rgba(255 107 107 / 0.22); color: #ff8f8f; cursor: default; }
+	:global(.ms-cell.is-boom) { background: rgba(255 107 107 / 0.55); color: #fff; }
+	:global(.ms-cell.is-armed) { background: rgba(255 207 107 / 0.35); color: #ffcf6b; }
+	:global(.ms-cell:focus-visible) { outline: 3px solid var(--accent, #6ea8fe); outline-offset: 1px; z-index: 1; }
 	@keyframes ms-pulse {
 		from { background: rgba(255 255 255 / 0.16); }
 		to { background: rgba(110 168 254 / 0.55); }
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.ms-cell.is-pending { animation: none; background: rgba(110 168 254 / 0.45); }
+		:global(.ms-cell.is-pending) { animation: none; background: rgba(110 168 254 / 0.45); }
 	}
 	.ms-results { display: grid; gap: 0.9rem; justify-items: start; }
 	.ms-results__note { font-weight: 600; }

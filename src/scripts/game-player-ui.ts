@@ -10,7 +10,7 @@ type AccountState = { authenticated: boolean; displayName?: string; saveCount?: 
 
 function $(selector: string, root: HTMLElement): HTMLElement | null { return root.querySelector<HTMLElement>(selector); }
 function say(element: HTMLElement | null, message: string): void { if (element) element.textContent = message; }
-function button(label: string, action: () => void | Promise<void>, className = 'player-tools__button'): HTMLButtonElement {
+function button(label: string, action: () => void | Promise<void>, className = 'glass-button'): HTMLButtonElement {
 	const control = document.createElement('button');
 	control.type = 'button';
 	control.className = className;
@@ -71,12 +71,12 @@ export async function mountPlayerTools(root: HTMLElement): Promise<void> {
 					await chooseCloudVersion(save.gameId, save.slotId);
 					await renderSaves();
 					say(live, save.conflict?.deleted ? 'Cloud deletion accepted. The local snapshot was removed.' : 'Cloud version selected.');
-				}, 'player-tools__button player-tools__button--small'));
+				}, 'glass-button glass-button--sm'));
 				choices.appendChild(button(save.conflict.deleted ? 'Restore this device version' : 'Keep this device version', async () => {
 					const result = await chooseLocalVersion(save.gameId, save.slotId);
 					await renderSaves();
 					say(live, result === 'saved' ? 'This device version was synced.' : result === 'conflict' ? 'The cloud changed again. Review the conflict and choose again.' : 'Could not sync this version; it remains on this device.');
-				}, 'player-tools__button player-tools__button--small'));
+				}, 'glass-button glass-button--sm'));
 				item.appendChild(choices);
 			}
 			savesList.appendChild(item);

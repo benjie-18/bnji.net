@@ -3,12 +3,20 @@
 import GlassPanel from '../components/GlassPanel.astro';
 import GameCard from '../components/GameCard.astro';
 import PageHeader from '../components/PageHeader.astro';
-import { GAMES } from '../data/games';
+import { getStandaloneGames } from '../data/games';
+import { hasLeaderboard, leaderboardHref, MODE_LABEL } from '../data/game-adapters';
 import { NAMES_CONFIG } from '../config/names.config';
 import { CHAT_CONFIG } from '../config/chat.config';
 import Layout from '../layouts/Layout.astro';
 
-const standalone = GAMES.filter((game) => !game.labHref);
+/**
+ * `getStandaloneGames()` — everything with its own route. Deliberately NOT
+ * `!game.labHref`: the Lab is a separate experience with its own page, and a
+ * Lab card that offered "Create a room" would open a room for a game that has
+ * no page, no protocol adapter and no way to render it.
+ */
+const standalone = getStandaloneGames();
+const boards = standalone.filter(hasLeaderboard);
 const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG.handle.maxLength}}`;
 ---
 
@@ -28,51 +36,52 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 					<p class="eyebrow">PLAYER ID &amp; SAVES</p>
 					<h2 id="player-tools-title">Keep your progress yours.</h2>
 				</div>
-				<p class="player-tools__guest-note">Guest play is always available. Local progress stays on this device until you choose to sync.</p>
+				<p class="player-tools__guest-note">Play as a guest, or sync across devices.</p>
 			</div>
 			<p class="player-tools__greeting" data-player-greeting>You are playing as a guest. Account tools load when available.</p>
-			<p class="player-tools__live" data-player-live role="status" aria-live="polite" aria-atomic="true"></p>
 
 			<div class="player-tools__guest" data-player-guest>
 				<form class="player-tools__form" data-player-create>
 					<h3>Create one global player account</h3>
-					<p>Use a display name and a private recovery code.</p>
-					<label><span>Display name</span><input name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required /></label>
-					<button class="player-tools__button player-tools__button--primary" type="submit">Create account &amp; claim this guest session</button>
+					<label><span>Display name</span><input class="glass-field" name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required /></label>
+					<button class="glass-button glass-button--primary" type="submit">Create account &amp; claim this guest session</button>
 				</form>
 				<form class="player-tools__form" data-player-login>
 					<h3>Already have a player code?</h3>
-					<label><span>Recovery code</span><input name="recoveryCode" type="text" maxlength="37" autocomplete="off" autocapitalize="characters" spellcheck="false" required /></label>
-					<button class="player-tools__button" type="submit">Sign in on this device</button>
+					<label><span>Recovery code</span><input class="glass-field" name="recoveryCode" type="text" maxlength="37" autocomplete="off" autocapitalize="characters" spellcheck="false" required /></label>
+					<button class="glass-button" type="submit">Sign in on this device</button>
 				</form>
 			</div>
 
 			<div class="player-tools__account" data-player-account hidden>
 				<form class="player-tools__form" data-player-handle>
 					<h3>Public handle</h3>
-					<label><span>Handle</span><input name="handle" type="text" minlength={NAMES_CONFIG.handle.minLength} maxlength={NAMES_CONFIG.handle.maxLength} pattern={handlePattern} autocomplete="username" spellcheck="false" placeholder="your_handle" /></label>
-					<button class="player-tools__button" type="submit">Save handle</button>
-					<p class="player-tools__note">Your handle is public: anyone who knows it can look you up and see your display name. You can change it once every {NAMES_CONFIG.handle.changeCooldownDays} days.</p>
+					<label><span>Handle</span><input class="glass-field" name="handle" type="text" minlength={NAMES_CONFIG.handle.minLength} maxlength={NAMES_CONFIG.handle.maxLength} pattern={handlePattern} autocomplete="username" spellcheck="false" placeholder="your_handle" /></label>
+					<button class="glass-button" type="submit">Save handle</button>
+					<p class="player-tools__note">Public: anyone who knows it sees your display name. Changeable every {NAMES_CONFIG.handle.changeCooldownDays} days.</p>
 					<p class="player-tools__note" data-handle-status role="status" aria-live="polite"></p>
 				</form>
 				<div class="player-tools__account-actions">
-					<button class="player-tools__button" type="button" data-player-sync>Sync saves</button>
-					<button class="player-tools__button" type="button" data-rotate-recovery>Rotate recovery code</button>
-					<a class="player-tools__button" href="/api/games/account/export" data-player-export>Export account data</a>
-					<button class="player-tools__button" type="button" data-player-signout>Sign out</button>
-					<button class="player-tools__button player-tools__button--danger" type="button" data-player-delete>Delete account</button>
+					<button class="glass-button" type="button" data-player-sync>Sync saves</button>
+					<button class="glass-button" type="button" data-rotate-recovery>Rotate recovery code</button>
+					<a class="glass-button" href="/api/games/account/export" data-player-export>Export account data</a>
+					<button class="glass-button" type="button" data-player-signout>Sign out</button>
+					<button class="glass-button glass-button--danger" type="button" data-player-delete>Delete account</button>
 				</div>
-				<p class="player-tools__note">Recovery is by code only. Keep it private; if you lose the code and all signed-in devices, the account cannot be recovered.</p>
+				<p class="player-tools__note">Recovery is by code only; if you lose it, the account cannot be recovered.</p>
 			</div>
+
+			<!-- Account/save status sits under the forms it reports on, never above the panel. -->
+			<p class="player-tools__live glass-status" data-player-live role="status" aria-live="polite" aria-atomic="true"></p>
 
 			<div class="player-tools__recovery" data-recovery-panel hidden>
 				<h3>Save this recovery code now</h3>
-				<p>It is shown only once. Anyone with it can sign in. Store it somewhere private, then dismiss this message.</p>
+				<p>Shown once. Anyone with it can sign in.</p>
 				<output class="player-tools__code" data-recovery-code aria-label="One-time recovery code"></output>
 				<div class="player-tools__account-actions">
-					<button class="player-tools__button" type="button" data-copy-recovery>Copy code</button>
-					<button class="player-tools__button" type="button" data-download-recovery>Download code</button>
-					<button class="player-tools__button player-tools__button--primary" type="button" data-recovery-dismiss>Hide code</button>
+					<button class="glass-button" type="button" data-copy-recovery>Copy code</button>
+					<button class="glass-button" type="button" data-download-recovery>Download code</button>
+					<button class="glass-button glass-button--primary" type="button" data-recovery-dismiss>Hide code</button>
 				</div>
 			</div>
 
@@ -86,55 +95,100 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 			<div>
 				<p class="eyebrow">Multiplayer</p>
 				<h2 id="room-tools-title">Private room</h2>
-				<p>Rooms are temporary and code-protected multiplayer instances.</p>
+				<p>Temporary rooms, up to 2 hours. The host can kick.</p>
 			</div>
 			<div class="room-tools__forms">
 				<form data-room-create>
 					<label for="room-game">Room context</label>
-					<select id="room-game" name="gameId" required>
-						{GAMES.filter((game) => game.status === 'available').map((game) => <option value={game.id}>{game.title}</option>)}
+					<select id="room-game" class="glass-field" name="gameId" required>
+						{standalone.map((game) => <option value={game.id}>{game.title}</option>)}
 					</select>
-					<button class="player-tools__button player-tools__button--primary" type="submit">Create a room</button>
+					<button class="glass-button glass-button--primary" type="submit">Create a room</button>
 				</form>
 				<form data-room-join>
 					<label for="room-code-input">Room code</label>
-					<input id="room-code-input" name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" required />
-					<button class="player-tools__button" type="submit">Join or reconnect</button>
+					<input id="room-code-input" class="glass-field" name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" required />
+					<button class="glass-button" type="submit">Join or reconnect</button>
 				</form>
 			</div>
 			<form class="room-tools__name" data-profile-name>
 				<label for="profile-display-name">Your display name</label>
-				<input id="profile-display-name" name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required />
-				<button class="player-tools__button" type="submit">Save name</button>
-				<p class="room-tools__name-note">Signed in: saved to your account. Playing as a guest: kept for {NAMES_CONFIG.guestProfiles.retentionDays} days, keyed by a digest of this browser's session cookie &mdash; not linked to an account.</p>
-				<p class="room-tools__name-status" data-profile-name-status role="status" aria-live="polite"></p>
+				<input id="profile-display-name" class="glass-field" name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required />
+				<button class="glass-button" type="submit">Save name</button>
+				<p class="room-tools__name-note">Guests: kept {NAMES_CONFIG.guestProfiles.retentionDays} days, keyed to this browser &mdash; not your account.</p>
+				<p class="room-tools__name-status glass-status" data-profile-name-status role="status" aria-live="polite"></p>
 			</form>
 			{CHAT_CONFIG.enabled && (
 			<div class="room-tools__chat" data-chat-panel>
-				<p class="room-tools__chat-note">Plain text for everyone in the room. Messages are stored only while this room exists (up to 2 hours) and are deleted with the room &mdash; not encrypted, not permanent, and no links are turned into previews. You can report another member's message; reported messages are kept for review after the room is gone.</p>
+				<p class="room-tools__chat-note">Plain text for the room. Stored only while the room exists (&le;2 h), deleted with it, not encrypted. Reported messages are kept for review.</p>
 				<!-- aria-live announces new messages. Deliberately no role="log": it would
 				     override the <ol>'s implicit list role and break every <li>'s semantics
 				     (axe "listitem"). The status line below carries the announcements text. -->
 				<ol class="room-tools__chat-messages" data-chat-messages aria-live="polite" aria-label="Room chat messages"></ol>
-				<p class="room-tools__chat-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
 				<form class="room-tools__chat-form" data-chat-form>
 					<label for="chat-input">Message</label>
-					<input id="chat-input" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
-					<button class="player-tools__button player-tools__button--primary" type="submit" disabled>Send</button>
+					<input id="chat-input" class="glass-field" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
+					<button class="glass-button glass-button--primary" type="submit" disabled>Send</button>
 				</form>
-				<ul class="room-tools__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
+				<p class="room-tools__chat-status glass-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
 			</div>
 			)}
+			<!--
+				The roster lives OUTSIDE the chat panel: who is in the room is
+				relevant to the game (kicks, seats, teams), not to chatting, and a
+				player who hides chat must still see who they are playing with.
+			-->
+			<div class="room-tools__members" data-room-members>
+				<h3 class="glass-label">Members</h3>
+				<ul class="room-tools__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
+				<p class="room-tools__lobby-status glass-status" data-members-status role="status" aria-live="polite">Join or create a room to see members.</p>
+			</div>
+			<div class="room-tools__lobbies glass-item">
+				<div class="room-tools__lobbies-head">
+					<h3 class="glass-label">Open rooms</h3>
+					<button class="glass-button glass-button--sm" type="button" data-lobby-refresh>Refresh</button>
+				</div>
+				<p class="room-tools__lobbies-note">Anyone can join; the host can kick. Full or expired rooms drop off.</p>
+				<ul class="room-tools__lobby-list" data-lobby-list></ul>
+				<p class="room-tools__lobby-status glass-status" data-lobby-status role="status" aria-live="polite">Loading open rooms…</p>
+			</div>
 			<div class="room-tools__status">
 				<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
-				<div data-room-code-panel hidden><span>Share this room code privately:</span> <output data-room-code></output> <button class="player-tools__button player-tools__button--small" type="button" data-room-copy>Copy code</button> <button class="player-tools__button player-tools__button--small" type="button" data-room-leave disabled>Leave room</button></div>
+				<div data-room-code-panel hidden><span>Share this room code privately:</span> <output data-room-code></output> <button class="glass-button glass-button--sm" type="button" data-room-copy>Copy code</button> <button class="glass-button glass-button--sm" type="button" data-room-leave disabled>Leave room</button></div>
 			</div>
 		</section>
+
+		{boards.length > 0 && (
+			<section aria-labelledby="leaderboards-title">
+				<div class="games-section-heading">
+					<div>
+						<p class="eyebrow">02 / LEADERBOARDS</p>
+						<h2 id="leaderboards-title">Verified scores</h2>
+					</div>
+					<span class="mono games-count">{boards.length} ranked</span>
+				</div>
+				<p class="games-section-note">Server-verified runs only.</p>
+				<ul class="games-boards">
+					{boards.map((game) => (
+						<li class="glass-row glass-row--split">
+							<span class="glass-row__main">
+								<strong>{game.title}</strong>
+								<span class="glass-row__meta">{(game.modes ?? ['default']).map((mode) => MODE_LABEL[mode] ?? mode).join(' · ')}</span>
+							</span>
+							<span class="glass-row__actions">
+								<a class="glass-button glass-button--sm" href={leaderboardHref(game)}>Open leaderboard</a>
+								<a class="glass-button glass-button--sm" href={game.href}>Play</a>
+							</span>
+						</li>
+					))}
+				</ul>
+			</section>
+		)}
 
 		<section aria-labelledby="standalone-title">
 			<div class="games-section-heading">
 				<div>
-					<p class="eyebrow">01 / CATALOG</p>
+					<p class="eyebrow">03 / CATALOG</p>
 					<h2 id="standalone-title">Games</h2>
 				</div>
 				<span class="mono games-count">{standalone.length} published</span>
@@ -142,7 +196,7 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 			{
 				standalone.length === 0 ? (
 					<GlassPanel pad="lg" class="games-empty">
-						<p>No games yet..</p>
+						<p>No games published yet.</p>
 					</GlassPanel>
 				) : (
 					<div class="games-grid">
@@ -174,7 +228,7 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 		gap: 1rem;
 		padding: clamp(1.1rem, 3vw, 1.7rem);
 		border: 1px solid var(--glass-border);
-		border-radius: var(--radius-lg);
+		border-radius: var(--glass-radius-lg, 24px);
 		background: var(--glass-bg);
 	}
 	.player-tools__head, .player-tools__saves-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
@@ -182,66 +236,66 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	.player-tools__guest-note, .player-tools__note, .player-tools__greeting, .player-tools__live { color: var(--text-muted); line-height: 1.55; }
 	.player-tools__guest-note { max-width: 42ch; margin: 0; }
 	.player-tools__greeting { margin: 0; color: var(--text-strong); }
-	.player-tools__live { min-height: 1.5em; margin: 0; }
+	.player-tools__live { min-height: 1.5em; }
 	.player-tools__guest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-	.player-tools__form { display: grid; align-content: start; gap: 0.7rem; padding: 1rem; border: 1px solid var(--glass-border); border-radius: var(--radius-md); }
+	.player-tools__form { display: grid; align-content: start; gap: 0.7rem; padding: 1rem; border: 1px solid var(--glass-border); border-radius: var(--glass-radius-md, 16px); }
 	.player-tools__form h3, .player-tools__recovery h3, .player-tools__saves h3 { margin: 0; color: var(--text-strong); font-size: var(--text-lead); }
 	.player-tools__form p, .player-tools__recovery p { margin: 0; color: var(--text-muted); line-height: 1.55; }
 	.player-tools__form label { display: grid; gap: 0.35rem; color: var(--text-strong); font-size: var(--text-small); }
-	.player-tools__form input { width: 100%; min-height: 2.8rem; padding: 0.65rem 0.75rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
-	.player-tools__form input:focus-visible, .player-tools__button:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
-	.player-tools__button { display: inline-flex; min-height: 2.7rem; align-items: center; justify-content: center; padding: 0.6rem 0.85rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: transparent; font: inherit; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; }
-	.player-tools__button:hover { border-color: var(--accent-strong); }
-	.player-tools__button:disabled { opacity: 0.55; cursor: wait; }
-	.player-tools__button--primary { border-color: var(--accent-strong); color: var(--text-inverse, #10121a); background: var(--accent-strong); }
-	.player-tools__button--danger { color: var(--danger); }
-	.player-tools__account-actions, .player-tools__choices { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+	.player-tools__account-actions, .player-tools___choices { display: flex; flex-wrap: wrap; gap: 0.6rem; }
 	.player-tools__note { margin: 0; font-size: var(--text-small); }
-	.player-tools__recovery { display: grid; gap: 0.8rem; padding: 1rem; border: 1px solid var(--signal-soon); border-radius: var(--radius-md); }
-	.player-tools__code { display: block; overflow-wrap: anywhere; padding: 0.8rem; border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font-family: var(--font-mono, monospace); font-size: clamp(1rem, 3vw, 1.35rem); letter-spacing: 0.06em; user-select: all; }
+	.player-tools__recovery { display: grid; gap: 0.8rem; padding: 1rem; border: 1px solid var(--signal-soon); border-radius: var(--glass-radius-md, 16px); }
+	.player-tools__code { display: block; overflow-wrap: anywhere; padding: 0.8rem; border-radius: var(--glass-radius-sm, 10px); color: var(--text-strong); background: var(--glass-bg-quiet); font-family: var(--font-mono, monospace); font-size: clamp(1rem, 3vw, 1.35rem); letter-spacing: 0.06em; user-select: all; }
 	.player-tools__saves { display: grid; gap: 0.75rem; padding-top: 0.5rem; }
 	.player-tools__saves-head span { color: var(--text-muted); font-size: var(--text-small); }
 	.player-tools__save-list { display: grid; gap: 0.6rem; }
-	.player-tools__empty, .player-tools__save-list > p { margin: 0; color: var(--text-muted); }
-	.player-tools__save { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.65rem; padding: 0.8rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); }
-	.player-tools__save strong { color: var(--text-strong); }
-	.player-tools__save p { margin: 0.2rem 0 0; color: var(--text-muted); font-size: var(--text-small); }
-	.player-tools__state { color: var(--text-muted); font-size: var(--text-small); }
-	.player-tools__state--saved { color: var(--accent-strong); }
-	.player-tools__state--conflict { color: var(--danger); font-weight: 700; }
-	.player-tools__choices { grid-column: 1 / -1; }
-	.room-tools { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: 1rem 2rem; padding: clamp(1.1rem, 3vw, 1.7rem); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--glass-bg); }
+	:global(.player-tools__empty), :global(.player-tools__save-list > p) { margin: 0; color: var(--text-muted); }
+	/* Save rows are built by game-player-ui.ts, so their rules must be global:
+	   a scoped rule never reaches a node the script created. */
+	:global(.player-tools__save) { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.65rem; padding: 0.8rem; border: 1px solid var(--glass-border); border-radius: var(--glass-radius-sm, 10px); }
+	:global(.player-tools__save strong) { color: var(--text-strong); }
+	:global(.player-tools__save p) { margin: 0.2rem 0 0; color: var(--text-muted); font-size: var(--text-small); }
+	:global(.player-tools__state) { color: var(--text-muted); font-size: var(--text-small); }
+	:global(.player-tools__state--saved) { color: var(--accent-strong); }
+	:global(.player-tools__state--conflict) { color: var(--danger); font-weight: 700; }
+	:global(.player-tools__choices) { grid-column: 1 / -1; }
+	.room-tools { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: 1rem 2rem; padding: clamp(1.1rem, 3vw, 1.7rem); border: 1px solid var(--glass-border); border-radius: var(--glass-radius-lg, 24px); background: var(--glass-bg); }
 	.room-tools h2 { margin: 0.25rem 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
 	.room-tools p, .room-tools__status { color: var(--text-muted); line-height: 1.55; }
 	.room-tools p { margin: 0; }
 	.room-tools__forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 	.room-tools__forms form { display: grid; align-content: start; gap: 0.55rem; }
 	.room-tools__forms label, .room-tools__status span { color: var(--text-strong); font-size: var(--text-small); }
-	.room-tools__forms select, .room-tools__forms input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
-	.room-tools__forms select:focus-visible, .room-tools__forms input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
 	.room-tools__name { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem 0.75rem; align-items: end; padding-top: 0.9rem; border-top: 1px solid var(--glass-border); }
 	.room-tools__name label { display: grid; gap: 0.35rem; color: var(--text-strong); font-size: var(--text-small); }
-	.room-tools__name input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
-	.room-tools__name input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
 	.room-tools__name-note, .room-tools__name-status { grid-column: 1 / -1; font-size: var(--text-small); }
 	.room-tools__name-status { min-height: 1.5em; color: var(--text-strong); }
 	.room-tools__chat { grid-column: 1 / -1; display: grid; gap: 0.55rem; padding-top: 0.9rem; border-top: 1px solid var(--glass-border); }
 	.room-tools__chat-note { font-size: var(--text-small); }
-	.room-tools__chat-messages { display: grid; gap: 0.4rem; max-height: 14rem; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
-	.room-tools__chat-item { display: grid; grid-template-columns: auto 1fr auto; gap: 0.25rem 0.65rem; align-items: baseline; padding: 0.4rem 0.55rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); }
-	.room-tools__chat-meta { color: var(--text-muted); font-size: var(--text-micro); white-space: nowrap; }
-	.room-tools__chat-text { color: var(--text-strong); overflow-wrap: anywhere; }
-	.room-tools__chat-item--removed .room-tools__chat-text { color: var(--text-muted); font-style: italic; }
-	.room-tools__chat-actions { display: flex; gap: 0.35rem; }
-	.room-tools__chat-action { border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 0.15rem 0.45rem; color: var(--text-muted); background: transparent; font: inherit; font-size: var(--text-micro); cursor: pointer; }
-	.room-tools__chat-action:hover { border-color: var(--accent-strong); color: var(--text-strong); }
-	.room-tools__chat-status { min-height: 1.5em; margin: 0; color: var(--text-strong); font-size: var(--text-small); }
+	.room-tools__chat-messages { display: grid; gap: 0.4rem; max-height: 14rem; overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 0; list-style: none; }
+	/* Chat rows are built by game-room-ui.ts (innerHTML) — global by necessity. */
+	:global(.room-tools__chat-item) { display: grid; grid-template-columns: auto 1fr auto; gap: 0.25rem 0.65rem; align-items: baseline; padding: 0.4rem 0.55rem; border: 1px solid var(--glass-border); border-radius: var(--glass-radius-sm, 10px); }
+	:global(.room-tools__chat-meta) { color: var(--text-muted); font-size: var(--text-micro); white-space: nowrap; }
+	:global(.room-tools__chat-text) { color: var(--text-strong); overflow-wrap: anywhere; }
+	:global(.room-tools__chat-item--removed .room-tools__chat-text) { color: var(--text-muted); font-style: italic; }
+	:global(.room-tools__chat-actions) { display: flex; gap: 0.35rem; }
+	:global(.room-tools__chat-action) { border: 1px solid var(--glass-border); border-radius: var(--glass-radius-sm, 10px); padding: 0.15rem 0.45rem; color: var(--text-muted); background: transparent; font: inherit; font-size: var(--text-micro); cursor: pointer; }
+	:global(.room-tools__chat-action:hover) { border-color: var(--accent-strong); color: var(--text-strong); }
+	.room-tools__chat-status { min-height: 1.5em; font-size: var(--text-small); }
 	.room-tools__chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem 0.75rem; align-items: end; }
 	.room-tools__chat-form label { grid-column: 1 / -1; color: var(--text-strong); font-size: var(--text-small); }
-	.room-tools__chat-form input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
-	.room-tools__chat-form input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
 	.room-tools__chat-roster { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
-	.room-tools__chat-roster li { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.55rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--text-micro); }
+	:global(.room-tools__chat-roster li) { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.6rem; border: 1px solid var(--glass-border); border-radius: var(--radius-pill); color: var(--text-muted); font-size: var(--text-micro); }
+	.room-tools__lobbies { grid-column: 1 / -1; display: grid; gap: 0.55rem; padding: 0.9rem; }
+	.room-tools__lobbies-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+	.room-tools__lobbies-head h3 { margin: 0; }
+	.room-tools__lobbies-note { font-size: var(--text-small); }
+	.room-tools__lobby-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+	:global(.room-tools__lobby-meta) { color: var(--text-muted); font-size: var(--text-small); }
+	.room-tools__lobby-status { min-height: 1.5em; font-size: var(--text-small); }
+	.room-tools__members { grid-column: 1 / -1; display: grid; gap: 0.45rem; }
+	.games-section-note { max-width: 70ch; margin: 0 0 1rem; color: var(--text-muted); line-height: 1.6; }
+	.games-boards { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
 	.room-tools__status { grid-column: 1 / -1; min-height: 1.5em; }
 	.room-tools__status output { margin-inline: 0.4rem; color: var(--text-strong); font-family: var(--font-mono, monospace); overflow-wrap: anywhere; user-select: all; }
 	.room-tools__status > div { margin-top: 0.35rem; }
@@ -266,9 +320,9 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	@media (max-width: 560px) {
 		.games-grid, .player-tools__guest, .room-tools, .room-tools__forms, .room-tools__name, .room-tools__chat-form { grid-template-columns: 1fr; }
 		.games-section-heading, .player-tools__head, .player-tools__saves-head { align-items: start; flex-direction: column; }
-		.player-tools__save { grid-template-columns: 1fr; }
-		.player-tools__choices { display: grid; grid-template-columns: 1fr; }
-		.player-tools__button { width: 100%; }
+		:global(.player-tools__save) { grid-template-columns: 1fr; }
+		:global(.player-tools__choices) { display: grid; grid-template-columns: 1fr; }
+		:global(.player-tools .glass-button) { width: 100%; }
 		.player-tools__account-actions { display: grid; grid-template-columns: 1fr; }
 	}
 </style>

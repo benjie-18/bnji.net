@@ -29,6 +29,7 @@ import {
 import type { GameModule } from '../game-runtime';
 import type { RoomNotice } from '../game-rooms';
 import { setGameShellState } from '../game-shell';
+import { createRunToken, idempotencyKey, submitAttestedWin, submitRun } from '../game-scores';
 
 const MS_GAME_ID = 'bnji.pvp-minesweeper';
 
@@ -119,11 +120,9 @@ function normalizeView(raw: unknown): MsView | null {
 	};
 }
 
-function randomIdempotencyKey(): string {
-	const bytes = new Uint8Array(18);
-	crypto.getRandomValues(bytes);
-	return Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 32);
-}
+/* Score claims go through the shared client (`../game-scores`): a win is
+ * attested-increment, so the server owns the number and the client only needs
+ * a stable key so a retry is not a second claim. */
 
 export type PvpMinesweeperGame = ReturnType<typeof createPvpMinesweeperGame>;
 
@@ -158,6 +157,9 @@ export function createPvpMinesweeperGame() {
 	let memberLabels = new Map<string, string>();
 	let inputLocked = false;
 	let claimDone = false;
+	/** Per-WIN token; regenerated each time a new results phase is announced to this member. */
+	let runToken = createRunToken();
+	let autoClaimKey = '';
 	let resultsAcknowledged = false;
 	let lastResultsRound = -1;
 	// Private field view (actor-only replies): adjacency digits + revealed cells.
@@ -405,6 +407,15 @@ export function createPvpMinesweeperGame() {
 			if (claimable && view.results) {
 				const winsSoFar = (myMemberId ? view.wins[myMemberId] ?? 0 : 0);
 				if (claimNote) claimNote.textContent = `${view.results.difficulty} · this would record win ${winsSoFar + 1} for you on this difficulty. The server asks the room whether you really won.`;
+				// An attested win has nothing for the client to compare: the server
+				// increments the stored count. Order is name → POST → standing
+				// refresh, and the key is per results phase so a re-render is one claim.
+				const key = `ms-${view.results.round}:${view.results.difficulty}`;
+				if (autoClaimKey !== key) {
+					autoClaimKey = key;
+					runToken = createRunToken();
+					void maybeAutoClaimWin(view.results.round, view.results.difficulty);
+				}
 			}
 		}
 		renderWins();
@@ -487,6 +498,7 @@ export function createPvpMinesweeperGame() {
 			}
 			if (next.phase === 'lobby' && previousPhase === 'results') {
 				claimDone = false;
+				autoClaimKey = '';
 				if (claimStatus) claimStatus.textContent = '';
 				if (!resultsAcknowledged) showShell('ready');
 			}
@@ -601,6 +613,36 @@ export function createPvpMinesweeperGame() {
 	}
 
 	// ---------------------------------------------------------------- claim
+	/**
+	 * Attested-increment auto-submit. The room must still be alive to attest the
+	 * round, so this runs as soon as the results phase is announced rather than
+	 * waiting for the player to type a name. Guests keep the manual form.
+	 */
+	async function maybeAutoClaimWin(round: number, difficulty: string): Promise<void> {
+		const rooms = document.querySelector<HTMLElement>('[data-room-tools]');
+		const roomCode = rooms?.dataset.roomCode ?? '';
+		if (!/^[A-Za-z0-9_-]{22}$/.test(roomCode)) return;
+		const result = await submitAttestedWin({
+			gameId: MS_GAME_ID, mode: difficulty, proof: { roomCode, round },
+			idempotencyKey: idempotencyKey('msw', runToken),
+		});
+		if (result.outcome.kind === 'stored') {
+			claimDone = true;
+			if (claimForm) claimForm.hidden = true;
+			if (claimStatus) claimStatus.textContent = `Win recorded: ${result.outcome.score.toLocaleString()} on ${difficulty}.`;
+			renderWins();
+		} else if (result.outcome.kind === 'duplicate') {
+			claimDone = true;
+			if (claimForm) claimForm.hidden = true;
+		} else if (result.outcome.kind === 'not-best') {
+			// Attested increments are never "not best" — the server increments.
+		} else if (result.outcome.kind === 'unreachable') {
+			if (claimStatus) claimStatus.textContent = 'Could not reach the leaderboard. Type a name below to claim this win.';
+		} else if (result.outcome.kind === 'rejected') {
+			if (claimStatus) claimStatus.textContent = result.outcome.message;
+		}
+	}
+
 	async function submitClaim(): Promise<void> {
 		if (!view?.results || !myMemberId || claimDone || !claimForm) return;
 		const rooms = document.querySelector<HTMLElement>('[data-room-tools]');
@@ -609,43 +651,34 @@ export function createPvpMinesweeperGame() {
 			if (claimStatus) claimStatus.textContent = 'Room code unavailable — reconnect the room and try again.';
 			return;
 		}
+		const displayName = claimName?.value.trim() ?? '';
+		if (!displayName) { if (claimStatus) claimStatus.textContent = 'Enter a display name (1–24 characters).'; return; }
 		if (claimStatus) claimStatus.textContent = 'Asking the room…';
 		const submit = claimForm.querySelector<HTMLButtonElement>('button[type="submit"]');
 		if (submit) submit.disabled = true;
+		if (claimName) claimName.disabled = true;
 		try {
-			const response = await fetch('/api/games/scores', {
-				method: 'POST',
-				credentials: 'same-origin',
-				cache: 'no-store',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					gameId: MS_GAME_ID,
-					mode: view.results.difficulty,
-					score: 1,
-					tieBreak: 0,
-					displayName: claimName?.value.trim() ?? '',
-					idempotencyKey: randomIdempotencyKey(),
-					proof: { roomCode, round: view.results.round },
-				}),
+			// Same stable key as the automatic attempt: this win is one claim.
+			const outcome = await submitRun({
+				gameId: MS_GAME_ID, mode: view.results.difficulty, score: 0, tieBreak: null,
+				displayName, idempotencyKey: idempotencyKey('msw', runToken), proof: { roomCode, round: view.results.round },
 			});
-			const body = await response.json().catch(() => ({})) as { error?: string; score?: number };
-			if (response.ok) {
+			if (outcome.kind === 'stored') {
 				claimDone = true;
-				if (claimStatus) claimStatus.textContent = `Win recorded: ${Number(body.score ?? 1).toLocaleString()} on ${view.results.difficulty}. The leaderboard is on the Games page.`;
+				if (claimStatus) claimStatus.textContent = `Win recorded: ${outcome.score.toLocaleString()} on ${view.results.difficulty}. The leaderboard is on the Games page.`;
 				claimForm.hidden = true;
 				return;
 			}
 			if (claimStatus) {
-				claimStatus.textContent =
-					body.error === 'invalid_display_name' ? 'Enter a display name (1–24 characters).'
-					: body.error === 'score_rejected' ? 'The room could not attest this win.'
-					: body.error === 'rate_limited' ? 'Too many claims right now — try again shortly.'
-					: body.error === 'invalid_mode' || body.error === 'unknown_game' ? 'Leaderboard submission is unavailable right now.'
-					: 'The claim could not be verified. Try again in a moment.';
+				claimStatus.textContent = outcome.kind === 'duplicate' ? 'This win was already submitted.'
+					: outcome.kind === 'not-best' ? 'The room attested the win, but the board kept your stronger count.'
+					: outcome.kind === 'unreachable' ? 'Could not reach the server. Try again when online.'
+					: outcome.message;
 			}
 		} catch {
 			if (claimStatus) claimStatus.textContent = 'Could not reach the server. Try again when online.';
 		} finally {
+			if (claimName) claimName.disabled = false;
 			if (submit) submit.disabled = false;
 		}
 	}
