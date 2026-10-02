@@ -1,21 +1,21 @@
 ---
 /**
- * /tools/ — one browser tool, fully local.
+ * /tools/ — fully local browser tools.
  *
  * Each tool is its own component under src/components/tools/ and its behaviour is
- * a module under src/scripts/ started from boot(). The page itself only
- * composes them, so a second tool is one component plus one nav entry — no page
- * rewrite.
+ * a module under src/scripts/ started from boot().
  *
- * Privacy is a structural property here, not a promise: there is no API route,
- * no fetch and no form post behind the tool, so "nothing is uploaded" is
+ * Privacy is a structural property here: there is no API route,
+ * no fetch and no form post behind the tools, so "nothing is uploaded" is
  * checkable in the diff.
  */
 import GlassPanel from '../components/GlassPanel.astro';
 import PageHeader from '../components/PageHeader.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import ImageConverter from '../components/tools/ImageConverter.astro';
-import { SITE } from '../data/site';
+import ImageMetadata from '../components/tools/ImageMetadata.astro';
+import UnitConverter from '../components/tools/UnitConverter.astro';
+import PercentageCalculator from '../components/tools/PercentageCalculator.astro';
 import Layout from '../layouts/Layout.astro';
 import '../styles/tools.css';
 
@@ -33,5 +33,8 @@ const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
 
 	<div class="container tools-body">
 		<ImageConverter />
+		<ImageMetadata />
+		<UnitConverter />
+		<PercentageCalculator />
 	</div>
 </Layout>

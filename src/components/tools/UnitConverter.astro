@@ -1,0 +1,88 @@
+---
+/**
+ * Tools — Unit Converter.
+ *
+ * Instant client-side conversions for length, mass, temperature, data, area, and speed.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { UNIT_CATEGORIES } from '../../config/tools.config';
+---
+
+<section
+	class="tool tool--units"
+	id="unit-converter"
+	aria-labelledby="unit-converter-title"
+	data-unit-converter
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>03</span><span>/ UNITS</span></p>
+			<h2 class="tool__title" id="unit-converter-title">Unit converter</h2>
+			<p class="tool__lead">
+				Convert measurements across distance, weight, temperature, data storage, area, and speed. Instant math calculated entirely in your browser.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__field">
+				<label class="tool__label" for="unit-category">Measurement Category</label>
+				<select class="tool__select" id="unit-category" data-unit-category>
+					{UNIT_CATEGORIES.map((cat) => (
+						<option value={cat.id}>{cat.label}</option>
+					))}
+				</select>
+			</div>
+
+			<div class="tool__resize">
+				<div class="tool__field tool__dimension">
+					<label class="tool__label" for="unit-from-val">From Value & Unit</label>
+					<input
+						class="tool__number"
+						id="unit-from-val"
+						type="number"
+						step="any"
+						inputmode="decimal"
+						placeholder="1"
+						data-unit-from-value
+					/>
+					<select class="tool__select" data-unit-from-type aria-label="Source unit"></select>
+				</div>
+
+				<div class="tool__actions" style="align-self: flex-end; margin-block-end: var(--space-2);">
+					<button
+						class="glass-button glass-button--quiet"
+						type="button"
+						data-glass=""
+						data-unit-swap
+						aria-label="Swap source and destination units"
+					>
+						⇄ Swap
+					</button>
+				</div>
+
+				<div class="tool__field tool__dimension">
+					<label class="tool__label" for="unit-to-val">To Value & Unit</label>
+					<input
+						class="tool__number"
+						id="unit-to-val"
+						type="number"
+						step="any"
+						inputmode="decimal"
+						placeholder="Result"
+						data-unit-to-value
+					/>
+					<select class="tool__select" data-unit-to-type aria-label="Destination unit"></select>
+				</div>
+			</div>
+
+			<div class="tool__actions">
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-unit-reset>
+					Reset
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-unit-status aria-live="polite"></p>
+			<p class="tool__note mono" data-unit-formula></p>
+		</div>
+	</GlassPanel>
+</section>
