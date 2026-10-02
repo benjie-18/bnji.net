@@ -1,4 +1,9 @@
-/** Create a short-lived private room. Room state is generic opaque synchronization, never game-rule authority. */
+/**
+ * Create a short-lived room. Room state is generic opaque synchronization, never
+ * game-rule authority. The room is ALSO listed publicly (see
+ * `src/pages/api/games/lobbies.ts`): a code is what joining requires, and the
+ * list publishes codes for as long as the room lives.
+ */
 import type { APIContext } from 'astro';
 import { getGame } from '../../../data/games';
 import { serverEnvironment } from '../../../server/env';
@@ -55,14 +60,18 @@ export async function POST(context: APIContext): Promise<Response> {
 		});
 		const data = await internal.json().catch(() => ({ error: 'room_service_unavailable' })) as Record<string, unknown>;
 		if (internal.ok) {
-			// Phase C room registry (plan §6.1): best-effort — a failed insert
-			// never fails an already-created room, it only hides it from /admin.
+			// Phase C room registry (plan §6.1), now ALSO the open-lobby index: a
+			// failed insert still never fails an already-created room — the room
+			// works for its code-holders — it only keeps the room out of the public
+			// list. Because that list is now player-facing, one retry is worth it.
 			const ownerHash = await sha256Hex(roomPrincipal(player));
 			const expiresAt = typeof data.expiresAt === 'number' ? data.expiresAt : Date.now();
-			try {
-				await db?.prepare('INSERT OR IGNORE INTO room_registry (code, game_id, owner_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
-					.bind(code, gameId, ownerHash, Date.now(), expiresAt).run();
-			} catch { /* registry is an admin aid, not the room of record */ }
+			const insert = db?.prepare('INSERT OR IGNORE INTO room_registry (code, game_id, owner_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
+				.bind(code, gameId, ownerHash, Date.now(), expiresAt);
+			if (insert) {
+				try { await insert.run(); }
+				catch { try { await insert.run(); } catch { /* one retry is all a lobby row is worth */ } }
+			}
 		}
 		const response = json(internal.ok ? { roomCode: code, gameId, expiresAt: data.expiresAt, capacity: data.capacity, protocolVersion: 1 } : data, internal.status);
 		appendPlayerCookies(response.headers, player);

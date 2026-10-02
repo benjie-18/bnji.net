@@ -1,4 +1,9 @@
-/** Authenticated upgrade boundary for a private GameRoom Durable Object. */
+/**
+ * Authenticated upgrade boundary for a GameRoom Durable Object. Joining needs a
+ * principal (every visitor has one, guests included), a free seat and the code —
+ * no host approval, because rooms are listed for anyone in
+ * `src/pages/api/games/lobbies.ts`.
+ */
 import type { APIContext } from 'astro';
 import { serverEnvironment } from '../../../../../server/env';
 import type { D1Database } from '../../../../../server/game-store';

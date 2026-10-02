@@ -1,4 +1,5 @@
 /** D1 data access for private play aggregates and server-validated public scores. */
+import { formatPublicLabel } from './display-name';
 import { closeStaleGameSessions, purgeGameRetention } from './tracking-retention';
 
 export type D1Statement = {
@@ -78,6 +79,20 @@ export async function recordGameSession(db: D1Database, item: GameSessionUpdate)
 
 export type PublicScore = { displayName: string; score: number; tieBreak: number | null; achievedAt: number };
 
+/**
+ * Rows carry the caller's CURRENT public label, not the label they typed when
+ * the run was submitted: an account's row is composed from `game_players`
+ * (handle + display name) so one rename updates every leaderboard, while a
+ * guest row keeps the display name stored on the score. Public surface only —
+ * score row IDs, session IDs, player IDs and validation state stay in D1.
+ */
+function scoreRowLabel(row: { display_name: string; handle: string | null; player_display_name: string | null }): string {
+	const composed = formatPublicLabel({ handle: row.handle, displayName: row.player_display_name ?? row.display_name });
+	// A stored name that no longer satisfies the sanitizer (a word added to the
+	// reserved list, say) must still show something the player recognizes.
+	return composed || row.display_name || 'Anonymous';
+}
+
 /** Public query deliberately omits score row IDs, session IDs, player IDs, IP/device data, and validation metadata. */
 export async function readLeaderboard(
 	db: D1Database,
@@ -90,23 +105,85 @@ export async function readLeaderboard(
 	const safePage = Math.min(100, Math.max(0, Math.floor(page)));
 	const safePageSize = Math.min(50, Math.max(1, Math.floor(pageSize)));
 	const { results } = await db.prepare(
-		`SELECT display_name, score, tie_break, achieved_at
-		 FROM game_scores
-		 WHERE game_id = ?1 AND mode_id = ?2 AND validation_state = 'validated'
-		   AND (?3 IS NULL OR achieved_at >= ?3)
-		 ORDER BY score DESC, COALESCE(tie_break, 1000000001) ASC, achieved_at ASC, id ASC
+		`SELECT gs.display_name, gs.score, gs.tie_break, gs.achieved_at, p.handle, p.display_name AS player_display_name
+		 FROM game_scores gs
+		 LEFT JOIN game_players p ON p.id = gs.player_id
+		 WHERE gs.game_id = ?1 AND gs.mode_id = ?2 AND gs.validation_state = 'validated'
+		   AND (?3 IS NULL OR gs.achieved_at >= ?3)
+		 ORDER BY gs.score DESC, COALESCE(gs.tie_break, 1000000001) ASC, gs.achieved_at ASC, gs.id ASC
 		 LIMIT ?4 OFFSET ?5`,
 	).bind(gameId, modeId, cutoff ?? null, safePageSize + 1, safePage * safePageSize).all<{
 		display_name: string; score: number; tie_break: number | null; achieved_at: number;
+		handle: string | null; player_display_name: string | null;
 	}>();
 	return {
 		rows: results.slice(0, safePageSize).map((row) => ({
-			displayName: row.display_name,
+			displayName: scoreRowLabel(row),
 			score: Number(row.score),
 			tieBreak: row.tie_break === null ? null : Number(row.tie_break),
 			achievedAt: Number(row.achieved_at),
 		})),
 		hasMore: results.length > safePageSize,
+	};
+}
+
+export type PersonalBest = {
+	best: { score: number; tieBreak: number | null; achievedAt: number } | null;
+	/** 1-based position among every retained row; null while the caller has no score. */
+	rank: number | null;
+	entries: number;
+};
+
+/**
+ * The caller's own standing on one board: their best stored score, their rank
+ * among every retained row, and how many rows the board holds.
+ *
+ * Identity rule, deliberately the same one the account's claim path uses: a
+ * signed-in account is measured across EVERY session it has played from (the
+ * true account PB, which is what makes an auto-submit decision correct on a
+ * second device — and guest rows are backfilled with `player_id` at account
+ * create/sign-in, so nothing is stranded). A guest is measured on the
+ * validated session id only.
+ */
+export async function readPersonalBest(
+	db: D1Database,
+	input: { gameId: string; modeId: string; sessionId: string; playerId: string | null; cutoff?: number },
+): Promise<PersonalBest> {
+	const owner = input.playerId === null ? 'gs.player_id IS NULL AND gs.session_id = ?3' : 'gs.player_id = ?3';
+	const ownerValue = input.playerId ?? input.sessionId;
+	const best = await db.prepare(
+		`SELECT gs.score, gs.tie_break, gs.achieved_at
+		 FROM game_scores gs
+		 WHERE gs.game_id = ?1 AND gs.mode_id = ?2 AND gs.validation_state = 'validated'
+		   AND (${owner})
+		   AND (?4 IS NULL OR gs.achieved_at >= ?4)
+		 ORDER BY gs.score DESC, COALESCE(gs.tie_break, 1000000001) ASC, gs.achieved_at ASC, gs.id ASC
+		 LIMIT 1`,
+	).bind(input.gameId, input.modeId, ownerValue, input.cutoff ?? null)
+		.first<{ score: number; tie_break: number | null; achieved_at: number }>();
+	// The rank query needs the row above to exist before it can compare against
+	// it, so the two are sequential: a single query could answer "how many rows
+	// beat score X" but not "X" and "how many beat X" at once.
+	const stats = await db.prepare(
+		`SELECT COUNT(*) AS entries,
+		        COALESCE(SUM(CASE WHEN gs.score > ?4
+		             OR (gs.score = ?4 AND COALESCE(gs.tie_break, 1000000001) < COALESCE(?5, 1000000001))
+		            THEN 1 ELSE 0 END), 0) AS better
+		 FROM game_scores gs
+		 WHERE gs.game_id = ?1 AND gs.mode_id = ?2 AND gs.validation_state = 'validated'
+		   AND (?3 IS NULL OR gs.achieved_at >= ?3)`,
+	).bind(input.gameId, input.modeId, input.cutoff ?? null, best ? Number(best.score) : -1, best?.tie_break ?? null)
+		.first<{ entries: number; better: number }>();
+	const entries = Number(stats?.entries ?? 0);
+	if (!best) return { best: null, rank: null, entries };
+	return {
+		best: {
+			score: Number(best.score),
+			tieBreak: best.tie_break === null ? null : Number(best.tie_break),
+			achievedAt: Number(best.achieved_at),
+		},
+		rank: Number(stats?.better ?? 0) + 1,
+		entries,
 	};
 }
 

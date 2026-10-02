@@ -1,7 +1,7 @@
 /** Generic room coordination only. It validates membership/envelopes/revisions, never game rules or scores. Chat (plan Phase B) lives here as a transport feature: DO SQLite rows, socket-attachment rate buckets, and zero contact with `revision`/`state_json`. Phase C adds the service-authenticated `/admin/read` + `/admin/action` endpoints and the member-authenticated `/report` snapshot. */
 import { DurableObject } from 'cloudflare:workers';
 import { CHAT_CONFIG } from '../config/chat.config';
-import { sanitizeDisplayName } from './display-name';
+import { sanitizePublicLabel } from './display-name';
 import {
 	containsBlockedTerm, consumeChatToken, packChatHistory, parseRoomClientMessage, parseRoomStateMessage, roomAdminServiceToken, ROOM_ADMIN_HEADER,
 	roomCanAdmitMember, roomIsExpired, roomReconnectIsAllowed, ROOM_CAPACITY, ROOM_MAX_GLOBAL_MESSAGES_PER_SECOND, ROOM_MAX_MESSAGE_BYTES,
@@ -39,13 +39,18 @@ function readPrincipal(request: Request): string | null {
 	const value = request.headers.get('x-bnji-verified-principal') ?? '';
 	return /^(?:player|guest):[a-f0-9]{32}$/.test(value) ? value : null;
 }
-/** Label from the upgrade route, URL-encoded because headers are not a Unicode channel. Sanitized here again — the DO never trusts a header. */
+/**
+ * Label from the upgrade route, URL-encoded because headers are not a Unicode
+ * channel. Sanitized here again — the DO never trusts a header. The public-label
+ * sanitizer (not the display-name one) is what accepts the composed
+ * `@handle · Display Name` form; anything else degrades to the generic label.
+ */
 function readChatLabel(request: Request, principal: string): string {
 	const raw = request.headers.get('x-bnji-chat-label');
 	let decoded = '';
 	if (raw) { try { decoded = decodeURIComponent(raw); } catch { decoded = ''; } }
-	const sanitized = sanitizeDisplayName(decoded);
-	if (sanitized.ok) return sanitized.name;
+	const sanitized = sanitizePublicLabel(decoded);
+	if (sanitized.ok) return sanitized.label;
 	return principal.startsWith('player:') ? 'Player' : 'Guest';
 }
 function socketAttachment(socket: WebSocket): Attachment | null {
@@ -86,6 +91,13 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			CREATE TABLE IF NOT EXISTS game_room_mutes (
 				principal_hash TEXT PRIMARY KEY, muted_at INTEGER NOT NULL
 			);
+			-- Open lobbies: a kick must outlast the socket it closed. Member rows
+			-- are deleted on kick, so without this table a kicked player could walk
+			-- straight back in — which is not a kick, it is a doorbell. Same
+			-- lifetime rule as game_room_mutes: the row lives until the room does.
+			CREATE TABLE IF NOT EXISTS game_room_kicks (
+				principal_hash TEXT PRIMARY KEY, kicked_at INTEGER NOT NULL, member_id TEXT NOT NULL, label TEXT NOT NULL
+			);
 		`);
 	}
 
@@ -98,6 +110,11 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		if (!principal) return json({ error: 'room_authentication_required' }, 401);
 		if (url.pathname === '/create' && request.method === 'POST') return this.createRoom(request, principal);
 		if (url.pathname === '/ws' && request.method === 'GET') return this.acceptConnection(request, principal);
+		// Open lobbies: the lobby list asks a room whether it is still alive and
+		// how many seats it has taken. Membership is NOT required — this is the
+		// only read a stranger may perform, so it answers with counters and
+		// nothing else (no state, no chat, no labels).
+		if (url.pathname === '/lobby' && request.method === 'GET') return this.lobbyStatus();
 		if (url.pathname === '/report' && request.method === 'POST') return this.handleReport(request, principal);
 		if (url.pathname === '/game/verify_win' && request.method === 'POST') return this.verifyWin(request, principal);
 		return json({ error: 'not_found' }, 404);
@@ -166,6 +183,10 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		const now = Date.now();
 		if (!room || roomIsExpired(room.expires_at, now)) return json({ error: 'room_expired' }, 410);
 		const hash = await this.principalHash(principal);
+		// A kicked principal is out for the room's remaining lifetime. The grace
+		// window that normally lets a player reconnect must not become the way
+		// back in for someone the host just removed.
+		if (this.isKicked(hash)) return json({ error: 'room_kicked' }, 403);
 		this.state.storage.sql.exec('DELETE FROM game_room_members WHERE reconnect_until IS NOT NULL AND reconnect_until < ?', now);
 		let member: MemberRow | null = this.state.storage.sql.exec<MemberRow>(
 			'SELECT principal_hash, member_id, reconnect_until FROM game_room_members WHERE principal_hash = ?', hash,
@@ -254,6 +275,38 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			socket.send(JSON.stringify({ v: ROOM_PROTOCOL_VERSION, type: 'chat_rejected', error, ...(retryAfterMs ? { retryAfterMs } : {}) }));
 		} catch { try { socket.close(1011, 'Room delivery failed'); } catch { /* no-op */ } }
 	}
+	/** True while a kick row exists for this principal (the row dies with the room). */
+	private isKicked(principalHash: string): boolean {
+		return Boolean(this.state.storage.sql.exec<{ principal_hash: string }>('SELECT principal_hash FROM game_room_kicks WHERE principal_hash = ?', principalHash).toArray()[0]);
+	}
+
+	/**
+	 * Lobby answer for a visitor who is not in the room. Deliberately
+	 * count-and-clock only: the room's opaque state, its members' labels and its
+	 * chat are unreachable here, because this is the one read a stranger may
+	 * perform before joining — and neither the room's membership nor the caller's
+	 * place in it is reported, since lobby answers are cached across visitors.
+	 * A room that is gone answers 410 rather than 200 with an empty body, so a
+	 * stale registry row cannot be mistaken for an empty lobby.
+	 */
+	private lobbyStatus(): Response {
+		const room = this.room();
+		const now = Date.now();
+		if (!room || roomIsExpired(room.expires_at, now)) return json({ error: 'room_expired' }, 410);
+		const seats = Number(this.state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM game_room_members').toArray()[0]?.count ?? 0);
+		return json({
+			live: true,
+			gameId: room.game_id,
+			players: seats,
+			connected: this.connectedPrincipalHashes().size,
+			capacity: ROOM_CAPACITY,
+			joinable: roomCanAdmitMember(seats, false, ROOM_CAPACITY),
+			createdAt: Number(room.created_at),
+			expiresAt: Number(room.expires_at),
+			revision: Number(room.revision),
+		});
+	}
+
 	private isMuted(principalHash: string): boolean {
 		return Boolean(this.state.storage.sql.exec<{ principal_hash: string }>('SELECT principal_hash FROM game_room_mutes WHERE principal_hash = ?', principalHash).toArray()[0]);
 	}
@@ -330,6 +383,16 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			'SELECT principal_hash, member_id, reconnect_until FROM game_room_members WHERE member_id = ?', member,
 		).toArray()[0];
 		if (!target) return this.reject(socket, 'not_allowed');
+		// Record first, delete second: the reverse order would let a reconnect
+		// between the two statements seat the player we are removing.
+		const targetLabel = this.state.getWebSockets()
+			.map((peer) => socketAttachment(peer))
+			.find((att) => att?.principalHash === target.principal_hash)?.label ?? 'Member';
+		this.state.storage.sql.exec(
+			`INSERT INTO game_room_kicks (principal_hash, kicked_at, member_id, label) VALUES (?, ?, ?, ?)
+			 ON CONFLICT(principal_hash) DO UPDATE SET kicked_at = excluded.kicked_at, member_id = excluded.member_id, label = excluded.label`,
+			target.principal_hash, Date.now(), target.member_id, targetLabel,
+		);
 		this.state.storage.sql.exec('DELETE FROM game_room_members WHERE member_id = ?', member);
 		this.logChatAction('kick', attachment.principalHash, target.principal_hash);
 		for (const peer of this.state.getWebSockets()) {
@@ -471,6 +534,14 @@ export class GameRoom extends DurableObject<RoomEnv> {
 				'SELECT principal_hash, member_id, reconnect_until FROM game_room_members WHERE principal_hash = ?', hash,
 			).toArray()[0];
 			if (!target) return json({ ok: true, kicked: false });
+			// Same lockout as a host kick: an administrator removing a griefer from
+			// a public lobby has to be able to leave the page without the griefer
+			// walking straight back in.
+			this.state.storage.sql.exec(
+				`INSERT INTO game_room_kicks (principal_hash, kicked_at, member_id, label) VALUES (?, ?, ?, ?)
+				 ON CONFLICT(principal_hash) DO UPDATE SET kicked_at = excluded.kicked_at, member_id = excluded.member_id, label = excluded.label`,
+				hash, Date.now(), target.member_id, 'Administrator',
+			);
 			this.state.storage.sql.exec('DELETE FROM game_room_members WHERE principal_hash = ?', hash);
 			this.logChatAction('kick_admin', 'administrator', hash);
 			for (const peer of this.state.getWebSockets()) {
@@ -528,6 +599,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		this.state.storage.sql.exec('DELETE FROM game_room_chat');
 		this.state.storage.sql.exec('DELETE FROM game_room_chat_log');
 		this.state.storage.sql.exec('DELETE FROM game_room_mutes');
+		this.state.storage.sql.exec('DELETE FROM game_room_kicks');
 		this.state.storage.sql.exec('DELETE FROM game_room');
 	}
 
