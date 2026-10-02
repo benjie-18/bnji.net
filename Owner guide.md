@@ -347,9 +347,9 @@ A “coming soon” entry does not create a page. To make a new destination live
 
 ### The browser tools on `/tools/`
 
-`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries two
-tools, and both run entirely in the visitor's browser: there is no API route, no
-upload and no storage behind either of them, so "nothing is uploaded" is a property
+`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries three
+tools, and all of them run entirely in the visitor's browser: there is no API route, no
+upload and no storage behind any of them, so "nothing is uploaded" is a property
 of the code rather than a promise.
 
 - **Image Converter & Optimizer** — converts between PNG, JPEG and WebP, resizes
@@ -375,10 +375,31 @@ of the code rather than a promise.
   measurement, and a paste over the character limit is refused instead of being
   cut short. Nothing is stored, so a reload starts from an empty box.
 
-Formats, accepted input types, pace ranges, the common-words list and the limits
-live in **`src/config/tools.config.ts`**; behaviour lives in
-`src/scripts/tools-image.ts` and `src/scripts/tools-words.ts`, both started from
-`src/scripts/boot.ts`. To add another tool, add a component under
+- **Text Diff** — compares two texts, or two text files the visitor drops, and
+  shows what changed: line by line in a unified column or side by side in two
+  aligned ones, with a slider for how many unchanged lines stay visible around
+  each change and an optional mark on the words that changed inside a changed
+  line. "Copy patch" puts a real unified diff on the clipboard, the format
+  `git apply` reads, labelled with the two file names when they came from files.
+  It reads only the same text types the word counter reads, and it does **not**
+  merge, does **not** edit either text, does **not** do three-way comparisons
+  and does **not** keep anything: a reload starts from two empty boxes. Line
+  endings are folded first, so a Windows-saved file does not show every line as
+  changed, and a difference that is only a trailing line break is reported
+  rather than swallowed. Three limits are worth knowing before you are asked
+  about them: each side is capped in characters, a comparison whose table would
+  be enormous is refused with both sizes quoted, and the table on screen is
+  capped in rows (the copied patch is not). Past a size threshold the tool stops
+  re-comparing as you type and clears the panel instead of leaving a diff that
+  describes text no longer in the box.
+
+Formats, accepted input types, pace ranges, the common-words list, the diff
+budgets and every limit live in **`src/config/tools.config.ts`**; behaviour lives
+in `src/scripts/tools-image.ts`, `src/scripts/tools-words.ts` and
+`src/scripts/tools-diff.ts`, all started from `src/scripts/boot.ts`. The three
+share `src/scripts/tools-shared.ts` — byte and number formatting, the text-file
+whitelist and its byte limit, and the shape of a refusal — so two tools cannot
+disagree about what a text file is or how a size is written. To add another tool, add a component under
 `src/components/tools/` plus one init module and one line in `boot.ts` — the page
 itself only composes them. `tests/tools-markup.test.ts` lists every
 controller/component pair, so a new tool needs one line there too.

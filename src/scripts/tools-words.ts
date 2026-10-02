@@ -37,9 +37,6 @@
  * a visitor reads and the numbers they paste elsewhere cannot drift apart.
  */
 import {
-	TEXT_INPUT_EXTENSIONS,
-	TEXT_INPUT_LABELS,
-	TEXT_INPUT_TYPES,
 	TOOL_WORDS_CONFIG,
 	WORD_MODE_HINT,
 	WORD_MODE_UNAVAILABLE_HINT,
@@ -47,11 +44,26 @@ import {
 	type ToolWordMode,
 } from '../config/tools.config';
 /*
- * One byte formatter for both tools, so "5.0 MB" reads the same on the image
- * converter and here. Importing it beats copying it: two formatters is two
- * chances to disagree, and both modules already ship in the same boot() chunk.
+ * The text-file vocabulary both text tools hold in common — what a text file is,
+ * how many bytes one may weigh, how mojibake is caught, how a number is grouped
+ * — lives in ./tools-shared. Importing it beats copying it: two definitions is
+ * two chances to drift, and every tool already ships in the same boot() chunk.
  */
-import { formatBytes } from './tools-image';
+import {
+	checkTextFile,
+	codePointLength,
+	formatBytes,
+	formatCount,
+	isTextFile,
+	looksLikeMojibake,
+	type TextFile,
+	type ToolCheck,
+} from './tools-shared';
+
+/* Re-exported so this module stays the word counter's whole public surface: its
+ * callers, and its tests, import the tool's helpers from the tool. */
+export { checkTextFile, codePointLength, formatCount, isTextFile, looksLikeMojibake };
+export type { TextFile, ToolCheck };
 
 /* ------------------------------------------------------------------------- *
  * Pure helpers. Exported because the interesting decisions — what counts as a
@@ -68,25 +80,6 @@ const TRAILING_JOINER = /[-\u2010-\u2015'’]+$/u;
 /** Everything that is not a letter or a digit, for trimming a token's edges. */
 const NON_WORD_EDGE = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
 
-/**
- * Characters as a person counts them: one per code point, so an emoji is ONE
- * character and not the two UTF-16 units `String#length` would report. A lone
- * surrogate still counts as one — dropping it would make the total disagree with
- * what is on screen. Written as a loop rather than `[...text].length` because
- * spreading allocates one array entry per character, and the limit below allows
- * half a million of them.
- */
-export function codePointLength(text: string): number {
-	let count = 0;
-	for (let index = 0; index < text.length; index += 1) {
-		const code = text.charCodeAt(index);
-		// 0xDC00–0xDFFF is the second half of a surrogate pair; the pair was
-		// already counted at its lead unit.
-		if (code >= 0xdc00 && code <= 0xdfff) continue;
-		count += 1;
-	}
-	return count;
-}
 
 export type CharacterCount = { characters: number; noSpaces: number };
 
@@ -419,12 +412,6 @@ export function estimateTime(words: number, wordsPerMinute: number): TimeEstimat
 	return { minutes, label: formatMinutes(minutes) };
 }
 
-/** 1234 -> "1,234". */
-export function formatCount(value: number): string {
-	if (!Number.isFinite(value)) return '0';
-	return Math.round(value).toLocaleString('en-US');
-}
-
 /** Averages read with one decimal, and an average of nothing is an em dash. */
 export function formatAverage(value: number): string {
 	if (!Number.isFinite(value) || value <= 0) return '—';
@@ -439,14 +426,12 @@ export function formatShare(percent: number): string {
 
 /* --- refusals ------------------------------------------------------------ */
 
-export type TextCheck = { ok: true } | { ok: false; message: string };
-
 /**
  * Refuse a text before it is segmented, and say why in the visitor's terms.
  * Half a million characters is a 90,000-word book; past that a single keystroke
  * would re-segment it on a phone and the tab would stop answering.
  */
-export function checkInputText(text: string): TextCheck {
+export function checkInputText(text: string): ToolCheck {
 	const characters = codePointLength(text);
 	const limit = TOOL_WORDS_CONFIG.maxInputCharacters;
 	if (characters > limit) {
@@ -458,56 +443,6 @@ export function checkInputText(text: string): TextCheck {
 	return { ok: true };
 }
 
-function extensionOf(name: string): string {
-	const index = name.lastIndexOf('.');
-	return index > 0 ? name.slice(index).toLowerCase() : '';
-}
-
-/**
- * Whether a file is text this tool reads. A whitelist, like the image tool's:
- * the alternative is implying the tool reads anything.
- *
- * The type OR the extension is enough, because browsers disagree about both —
- * many report an empty type for .md/.csv/.log, and some answer
- * `application/octet-stream`. A PDF is refused on both counts (its MIME is not
- * `text/*` and `.pdf` is not in the list), which is the case that matters.
- */
-export function isTextFile(file: { name: string; type: string }): boolean {
-	if (TEXT_INPUT_TYPES.includes(file.type)) return true;
-	if (file.type.startsWith('text/')) return true;
-	return TEXT_INPUT_EXTENSIONS.includes(extensionOf(file.name));
-}
-
-export type TextFile = { name: string; type: string; size: number; text(): Promise<string> };
-
-export function checkTextFile(file: { name: string; type: string; size: number }): TextCheck {
-	if (!isTextFile(file)) {
-		return {
-			ok: false,
-			message: `“${file.name}” is not a text file this tool reads. It reads ${TEXT_INPUT_LABELS} — not PDFs, documents, spreadsheets, images, archives or video.`,
-		};
-	}
-	if (file.size === 0) {
-		return { ok: false, message: `“${file.name}” is empty, so there is nothing to count.` };
-	}
-	if (file.size > TOOL_WORDS_CONFIG.maxFileBytes) {
-		return {
-			ok: false,
-			message: `“${file.name}” is ${formatBytes(file.size)}. This tool reads text files up to ${formatBytes(TOOL_WORDS_CONFIG.maxFileBytes)} so one file cannot exhaust a phone's memory.`,
-		};
-	}
-	return { ok: true };
-}
-
-/**
- * Whether a decoded file looks like it was not UTF-8 text. `File.text()` decodes
- * UTF-8 and replaces bytes it cannot parse with U+FFFD, so a PDF, a UTF-16 file
- * or a binary renamed .txt arrives as mojibake — and counting mojibake without
- * saying so is the quietest way to be wrong.
- */
-export function looksLikeMojibake(text: string): boolean {
-	return text.includes('\uFFFD');
-}
 
 /* --- the clipboard summary ----------------------------------------------- */
 

@@ -27,6 +27,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 
 import {
+	TEXT_FILE_CONFIG,
 	TEXT_INPUT_ACCEPT,
 	TEXT_INPUT_LABELS,
 	TOOL_WORDS_CONFIG,
@@ -37,7 +38,8 @@ import {
 } from '../src/config/tools.config';
 import { destroyWordCounter, initWordCounter } from '../src/scripts/tools-words';
 
-const { reading, speaking, keywords, maxInputCharacters, maxFileBytes } = TOOL_WORDS_CONFIG;
+const { reading, speaking, keywords, maxInputCharacters } = TOOL_WORDS_CONFIG;
+const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 const tick = (ms = 8): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const PASSAGE = 'Hello world. This is a test.\n\nSecond paragraph here.';
 

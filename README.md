@@ -142,9 +142,9 @@ npm run deploy     # publish to Cloudflare Workers
   away and on `visibilitychange` when the tab is hidden; the rest are driven by
   user events and have no loop to pause.
 - **Games** (`/games/`, linked under Projects) — a typed catalog linking five existing Lab mini-games without copying them. The shared lifecycle/tracker, private admin view, fail-closed score verifier, optional global player identity, bounded cross-device versioned saves, and generic authenticated Durable Object room transport are implemented. Guest/local play remains available; no playable game or game-specific score/turn validation was added. Free-plan rollout/migrations are owner-operated; see `docs/GAMES-OPERATIONS.md`.
-- **Browser tools** (`/tools/`, linked from the Projects dropdown) — two tools
+- **Browser tools** (`/tools/`, linked from the Projects dropdown) — three tools
   that never send anything anywhere, because there is no API route behind
-  either of them. *Image Converter & Optimizer* decodes, resizes and re-encodes
+  any of them. *Image Converter & Optimizer* decodes, resizes and re-encodes
   PNG, JPEG and WebP locally: aspect-ratio-preserving resize, a quality slider
   that is disabled (with the reason shown) for PNG, input/output previews with
   real byte deltas, and a clear error instead of a silent format substitution
@@ -158,8 +158,19 @@ npm run deploy     # publish to Cloudflare Workers
   instead of being truncated by a `maxlength`, and the numbers on screen are
   cleared with it rather than left describing text that is no longer in the box;
   the clipboard summary is built from the same counts the panel shows, and
-  “copied” is only said when the write resolved. Limits, pace domains and the
-  common-words list live in `src/config/tools.config.ts`.
+  “copied” is only said when the write resolved. *Text Diff* compares two texts
+  or two dropped text files line by line, in a unified or a side-by-side view
+  with a context slider, marks the words that changed inside a changed line, and
+  copies a real unified patch (`git apply` reads it). Line endings are folded
+  first, so a file saved on Windows does not show every line as changed, and a
+  difference that is only a trailing line break is named rather than swallowed.
+  The comparison is a longest-common-subsequence table whose cost is one number
+  the tool can quote, so it refuses past a cell budget instead of wedging a
+  phone, it stops auto-comparing past a size threshold and clears the panel
+  rather than leaving a stale diff on screen, and it caps the rows it draws
+  while the copied patch still holds every line. Limits, pace domains, the
+  common-words list, the diff budgets and the view copy live in
+  `src/config/tools.config.ts`.
 - **Admin panel** (`/admin`, gated) — one shared access token stored as a
   SHA-256 hash in D1 and rotated from the panel itself; a site-wide statistics
   dashboard built only from data the app already records; board moderation;

@@ -38,6 +38,7 @@ import {
 	TOOL_IMAGE_CONFIG,
 	type ToolImageFormat,
 } from '../config/tools.config';
+import { formatBytes } from './tools-shared';
 
 /* ------------------------------------------------------------------------- *
  * Pure helpers. Exported because the interesting decisions — what to refuse,
@@ -74,18 +75,11 @@ export function checkInputFile(file: { name: string; type: string; size: number 
 	return { ok: true };
 }
 
-/** 1536 -> "1.5 KB". Used for every byte count the page shows. */
-export function formatBytes(bytes: number): string {
-	if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-	const units = ['B', 'KB', 'MB', 'GB'];
-	let value = bytes;
-	let unit = 0;
-	while (value >= 1024 && unit < units.length - 1) {
-		value /= 1024;
-		unit += 1;
-	}
-	return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
+/* `formatBytes` moved to ./tools-shared, where the primitives the browser tools
+ * hold in common now live. Re-exported so this module stays the image tool's
+ * whole public surface: its callers, and its tests, import the tool's helpers
+ * from the tool. */
+export { formatBytes };
 
 export type SizeChange = { saved: boolean; percent: number; label: string };
 

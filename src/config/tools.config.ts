@@ -97,6 +97,22 @@ export const TOOL_IMAGE_CONFIG = {
 } as const;
 
 /* ------------------------------------------------------------------------- *
+ * Text files — shared by every tool that reads one (/tools/#word-counter and
+ * /tools/#text-diff). One whitelist, one byte limit and one decoder, so two
+ * tools cannot disagree about what a "text file" is.
+ * ------------------------------------------------------------------------- */
+
+export const TEXT_FILE_CONFIG = {
+	/**
+	 * Refuse before reading. 2 MB is what half a million characters weigh at four
+	 * bytes each, so this and a tool's own character limit are the same limit seen
+	 * from two sides: the byte check stops a huge file being decoded at all, and
+	 * the character check (which runs after decoding) is the one that decides.
+	 */
+	maxBytes: 2 * 1024 * 1024,
+} as const;
+
+/* ------------------------------------------------------------------------- *
  * Word counter & text stats (/tools/#word-counter)
  * ------------------------------------------------------------------------- */
 
@@ -189,13 +205,6 @@ export const WORD_STOPWORDS: readonly string[] = [
 export const TOOL_WORDS_CONFIG = {
 	/** Refuse before counting: ~500,000 characters is a 90,000-word book. */
 	maxInputCharacters: 500_000,
-	/**
-	 * Refuse before reading. 2 MB is what half a million characters weigh at four
-	 * bytes each, so this and `maxInputCharacters` are the same limit seen from
-	 * two sides: the byte check stops a huge file being decoded at all, and the
-	 * character check (which runs after decoding) is the one that decides.
-	 */
-	maxFileBytes: 2 * 1024 * 1024,
 	/** Keystrokes are coalesced, so a fast typist is not re-segmented per key. */
 	recountDelayMs: 150,
 	/** Silent-reading pace in words per minute (slider domain). */
@@ -206,4 +215,52 @@ export const TOOL_WORDS_CONFIG = {
 	keywords: { min: 1, max: 12, step: 1, default: 6 },
 	/** Shorter than this a "keyword" is noise: “a”, “I”, “ok”. */
 	minKeywordLength: 2,
+} as const;
+
+/* ------------------------------------------------------------------------- *
+ * Text diff (/tools/#text-diff)
+ * ------------------------------------------------------------------------- */
+
+/** How the comparison is laid out. */
+export type ToolDiffView = 'unified' | 'split';
+
+export const DIFF_VIEWS: readonly ToolDiffView[] = ['unified', 'split'];
+
+export const DIFF_VIEW_LABEL: Record<ToolDiffView, string> = {
+	unified: 'Unified — one column, changes in order',
+	split: 'Side by side — two columns, aligned',
+};
+
+/** One-line trade-off shown under the view select as it changes. */
+export const DIFF_VIEW_HINT: Record<ToolDiffView, string> = {
+	unified:
+		'One column, so it stays readable on a phone. A removed line comes before the line that replaced it.',
+	split: 'Two columns, aligned line by line. Below about 48rem the columns stack, and unified is the easier read.',
+};
+
+export const TOOL_DIFF_CONFIG = {
+	/** Refuse before comparing, per side: ~250,000 characters is a long contract. */
+	maxInputCharacters: 250_000,
+	/**
+	 * Above this per side, typing no longer re-runs the comparison — the visitor
+	 * presses Compare instead. A diff is O(n×m) where a word count is O(n), so the
+	 * threshold is far below the limit; the panel is cleared when it is crossed,
+	 * because a diff left on screen would describe text that is no longer there.
+	 */
+	autoCompareMaxCharacters: 20_000,
+	recompareDelayMs: 350,
+	/**
+	 * The comparison table is n×m cells of four bytes, where n and m are the lines
+	 * that actually differ (common head and tail are trimmed first, so two similar
+	 * files cost almost nothing). 4,000,000 cells is ~16 MB and ~40 ms — the same
+	 * shape of guard as the image tool's pixel budget, and for the same reason: one
+	 * pathological pair must not be able to wedge a phone.
+	 */
+	maxDiffCells: 4_000_000,
+	/** The same budget for the word-level pass inside one changed line pair. */
+	maxWordDiffCells: 250_000,
+	/** Rows actually put in the DOM, so an all-changed file cannot build 10,000 nodes. */
+	maxRenderedRows: 1_500,
+	/** Unchanged lines kept around a change, as in `diff -U<n>`. 0 shows changes only. */
+	context: { min: 0, max: 12, step: 1, default: 3 },
 } as const;

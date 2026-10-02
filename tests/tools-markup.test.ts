@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 const PAIRS = [
 	['src/scripts/tools-image.ts', 'src/components/tools/ImageConverter.astro'],
 	['src/scripts/tools-words.ts', 'src/components/tools/WordCounter.astro'],
+	['src/scripts/tools-diff.ts', 'src/components/tools/TextDiff.astro'],
 ] as const;
 
 /**

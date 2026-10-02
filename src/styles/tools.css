@@ -539,6 +539,242 @@
 	white-space: nowrap;
 }
 
+/* --- text diff ----------------------------------------------------------- */
+
+/*
+ * The two texts are the widest thing on this tool, so it does not use the shared
+ * source/controls split the other two tools get at 64rem: two boxes of prose
+ * squeezed into half a column is the one thing a diff must not ask anyone to
+ * read. Panes go side by side from 48rem and stack below that.
+ */
+.tool--diff .tool__body {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.tool__panes {
+	display: grid;
+	gap: var(--space-4);
+}
+
+@media (min-width: 48rem) {
+	.tool__panes {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	}
+}
+
+/*
+ * Monospace in both boxes: a diff is read line against line, and a proportional
+ * font makes two lines with the same characters look like different lengths.
+ */
+.tool--diff .tool__textarea {
+	font-family: var(--font-mono);
+	font-size: var(--text-small);
+	tab-size: 4;
+}
+
+.tool__diff-block {
+	display: grid;
+	gap: var(--space-3);
+	min-inline-size: 0;
+}
+
+/* Column captions, shown only in the view that has columns. */
+.tool__diff-head {
+	display: none;
+	gap: var(--space-3);
+	padding-inline: var(--space-2);
+	font-size: var(--text-micro);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+/*
+ * The table. One row shape serves both views — left number, right number, sign,
+ * text — so the script builds one kind of node and a view change is a class and
+ * three CSS rules, not a re-render into different markup.
+ */
+.tool__diff {
+	display: grid;
+	max-block-size: 34rem;
+	overflow: auto;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-clear);
+}
+
+.tool__diff-row {
+	display: grid;
+	grid-template-columns: 3.25rem 3.25rem 1.5rem minmax(0, 1fr);
+	gap: var(--space-2);
+	/*
+	 * Baseline, not top: the numbers are a smaller type size than the text they
+	 * number, so aligning the boxes would float the gutter above the line it
+	 * belongs to. A wrapped line still aligns on its FIRST baseline, which is the
+	 * one the gutter is pointing at.
+	 */
+	align-items: baseline;
+	min-inline-size: 0;
+	padding-block: var(--space-1);
+	padding-inline: var(--space-2);
+	/*
+	 * Every row owns the same 2px leading edge, so the text of a changed row and
+	 * of an unchanged one start on the same character cell. Only its colour
+	 * changes, which is what keeps the column of text straight.
+	 */
+	border-inline-start: 2px solid transparent;
+}
+
+.tool__diff-row--add {
+	background: var(--diff-add-soft);
+	border-inline-start-color: var(--diff-add-line);
+}
+
+.tool__diff-row--del {
+	background: var(--diff-del-soft);
+	border-inline-start-color: var(--diff-del-line);
+}
+
+.tool__diff-row--skip {
+	grid-template-columns: minmax(0, 1fr);
+	justify-items: center;
+	border-block: 1px solid var(--glass-border);
+	background: var(--glass-bg-quiet);
+	font-size: var(--text-micro);
+	letter-spacing: 0.04em;
+	color: var(--text-dim);
+}
+
+.tool__diff-num {
+	font-size: var(--text-micro);
+	line-height: 1.7;
+	color: var(--text-dim);
+	text-align: end;
+	/*
+	 * Numbers and signs are not part of the text: selecting a passage to copy it
+	 * out of the table should not carry a gutter with it.
+	 */
+	user-select: none;
+}
+
+.tool__diff-sign {
+	font-size: var(--text-small);
+	line-height: 1.7;
+	text-align: center;
+	color: var(--text-muted);
+	user-select: none;
+}
+
+.tool__diff-row--add .tool__diff-sign {
+	color: var(--signal-live);
+}
+
+.tool__diff-row--del .tool__diff-sign {
+	color: var(--danger);
+}
+
+.tool__diff-text {
+	min-inline-size: 0;
+	font-size: var(--text-small);
+	line-height: 1.7;
+	color: var(--text-muted);
+	/* A long line wraps rather than widening the table: the two columns of the
+	   split view have to stay the width the grid gave them. */
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/*
+ * A changed line's text is the strong colour: the tint behind it is a wash on
+ * both themes, and the words are the thing the visitor came to read.
+ */
+.tool__diff-row--add .tool__diff-text,
+.tool__diff-row--del .tool__diff-text {
+	color: var(--text-strong);
+}
+
+/*
+ * A line that matched only because whitespace was ignored: the sign says so, and
+ * the hairline under the text says so again for anyone reading the colour only.
+ * --text-faint is the token the palette reserves for exactly this.
+ */
+.tool__diff-row[data-ws='true'] .tool__diff-text {
+	border-block-end: 1px dotted var(--text-faint);
+}
+
+/* The word that moved inside a line, marked harder than the line around it. */
+.tool__diff-piece--add {
+	background: var(--diff-add-word);
+	color: var(--text-strong);
+}
+
+.tool__diff-piece--del {
+	background: var(--diff-del-word);
+	color: var(--text-strong);
+}
+
+/* The two changed-line tiles carry their colour, the way the sign does. */
+.tool__stat--added {
+	border-color: var(--diff-add-line);
+	background: var(--diff-add-soft);
+}
+
+.tool__stat--removed {
+	border-color: var(--diff-del-line);
+	background: var(--diff-del-soft);
+}
+
+.tool--diff[data-view='split'] .tool__diff-head {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.tool--diff[data-view='split'] .tool__diff {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	column-gap: var(--space-3);
+	/*
+	 * dense is the whole of the split view's alignment. A removed line takes
+	 * column 1 and the line that replaced it takes column 2, and without dense
+	 * the placement cursor pushes each addition below the previous removal, so a
+	 * block of three removals against three additions staircases instead of
+	 * sitting side by side. Reading order in the DOM is untouched: dense moves
+	 * pixels, not meaning.
+	 */
+	grid-auto-flow: dense;
+}
+
+.tool--diff[data-view='split'] .tool__diff-row[data-col='left'] {
+	grid-column: 1;
+}
+
+.tool--diff[data-view='split'] .tool__diff-row[data-col='right'] {
+	grid-column: 2;
+}
+
+.tool--diff[data-view='split'] .tool__diff-row[data-col='both'] {
+	grid-column: 1 / -1;
+}
+
+@media (max-width: 47.99rem) {
+	/*
+	 * One column. The placement has to be undone rather than left alone: a
+	 * `grid-column: 2` inside a single-column grid invents a second column and
+	 * the rows overflow the panel sideways. Same specificity as the rules above,
+	 * so this wins on being later, not on being louder.
+	 */
+	.tool--diff[data-view='split'] .tool__diff {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.tool--diff[data-view='split'] .tool__diff-row[data-col] {
+		grid-column: 1;
+	}
+
+	.tool--diff[data-view='split'] .tool__diff-head {
+		display: none;
+	}
+}
+
 /* --- trailing limits section -------------------------------------------- */
 
 .tools-notes {
@@ -593,9 +829,29 @@
 	.tool__textarea,
 	.tool__preview-img,
 	.tool__stat,
+	.tool__diff,
 	.tool__error {
 		border: 1px solid CanvasText;
 		background: Canvas;
+	}
+
+	.tool__diff-row--add,
+	.tool__diff-row--del {
+		/* The tint that says "this line changed" is a colour the system palette
+		   has replaced, so the leading edge carries it instead. */
+		border-inline-start: 3px solid CanvasText;
+	}
+
+	.tool__diff-row--skip {
+		border-block: 1px solid CanvasText;
+		background: Canvas;
+	}
+
+	.tool__diff-piece--add,
+	.tool__diff-piece--del {
+		/* Which words changed is otherwise invisible: a row says added or removed,
+		   but not where inside the line. */
+		text-decoration: underline;
 	}
 
 	.tool__stat--primary {
@@ -616,7 +872,11 @@
 	.tool__preview-meta,
 	.tool__stat-label,
 	.tool__stat-value,
-	.tool__keyword-count {
+	.tool__keyword-count,
+	.tool__diff-num,
+	.tool__diff-sign,
+	.tool__diff-text,
+	.tool__diff-head {
 		color: CanvasText;
 	}
 }

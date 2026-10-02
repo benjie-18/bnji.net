@@ -31,6 +31,7 @@ import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
+import { initTextDiff } from './tools-diff';
 import { initWordCounter } from './tools-words';
 import { initTelemetry } from './telemetry';
 import { initVerityBalls } from './verity-balls';
@@ -73,6 +74,7 @@ export function boot(): void {
 	// subtree is in the document, so it costs one querySelector elsewhere.
 	start('image-converter', initImageConverter);
 	start('word-counter', initWordCounter);
+	start('text-diff', initTextDiff);
 	// Restore verity balls on navigation if active in sessionStorage
 	start('verity-balls', initVerityBalls);
 	// Keep game session tracking out of the shared client chunk and skip the

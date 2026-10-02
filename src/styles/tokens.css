@@ -72,6 +72,19 @@
 	--danger-soft: rgba(255, 154, 139, 0.08);
 	--danger-line: rgba(255, 154, 139, 0.35);
 
+	/* Diff tool (/tools/). An added line and a removed line are status colours of
+	   the same kind as the signals above, so they take the same hues and the same
+	   -soft/-line/-word shape. Colour is never the only signal: every row also
+	   carries a +/− marker and both line numbers, which is what a forced-colours
+	   or screen-reader visit gets. The -word variants are the stronger tint used
+	   for the few characters that changed inside a line. */
+	--diff-add-soft: rgba(121, 230, 176, 0.1);
+	--diff-add-line: rgba(121, 230, 176, 0.32);
+	--diff-add-word: rgba(121, 230, 176, 0.26);
+	--diff-del-soft: rgba(255, 154, 139, 0.1);
+	--diff-del-line: rgba(255, 154, 139, 0.32);
+	--diff-del-word: rgba(255, 154, 139, 0.28);
+
 	/* Shared paint palette: stable ink colours on the canvas's white paper. */
 	--paint-canvas-paper: #ffffff;
 	--paint-ink-charcoal: #1f2933;
@@ -443,6 +456,15 @@
 	--danger: #b3261e; /* 6.4:1 on the light --bg */
 	--danger-soft: rgba(179, 38, 30, 0.07);
 	--danger-line: rgba(179, 38, 30, 0.34);
+
+	/* Diff tool (light): the same six tints against a bright field, where a green
+	   or red at dark-theme alpha would wash out to nothing. */
+	--diff-add-soft: rgba(15, 153, 96, 0.12);
+	--diff-add-line: rgba(15, 153, 96, 0.36);
+	--diff-add-word: rgba(15, 153, 96, 0.22);
+	--diff-del-soft: rgba(179, 38, 30, 0.09);
+	--diff-del-line: rgba(179, 38, 30, 0.34);
+	--diff-del-word: rgba(179, 38, 30, 0.2);
 
 	/* --- Liquid Glass 2027 Optical System (Light) -------------------------- */
 	/* Adaptive luminance: glass_L = 0.58 * backdrop_L + 34

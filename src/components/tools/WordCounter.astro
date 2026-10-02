@@ -15,6 +15,7 @@
  */
 import GlassPanel from '../GlassPanel.astro';
 import {
+	TEXT_FILE_CONFIG,
 	TEXT_INPUT_ACCEPT,
 	TEXT_INPUT_LABELS,
 	TOOL_WORDS_CONFIG,
@@ -24,7 +25,9 @@ import {
 	WORD_STOPWORDS,
 } from '../../config/tools.config';
 
-const { reading, speaking, keywords, maxInputCharacters, maxFileBytes } = TOOL_WORDS_CONFIG;
+const { reading, speaking, keywords, maxInputCharacters } = TOOL_WORDS_CONFIG;
+/* The byte limit is the shared text-file policy, not a word-counter setting. */
+const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 ---
 
 <section
