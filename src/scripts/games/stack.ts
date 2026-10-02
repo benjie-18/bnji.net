@@ -311,8 +311,24 @@ export function createStackGame() {
 			ctx.fill();
 			ctx.restore();
 		}
-		if (!paused) animId = requestAnimationFrame(render);
+		const cameraDiff = Math.abs(targetCameraY - cameraY);
+		const isAnimating = (playing && !gameOver) || debris.length > 0 || sparks.length > 0 || cameraDiff > 0.05;
+
+		if (!isAnimating) {
+			cameraY = targetCameraY;
+			animId = 0;
+		} else if (!paused) {
+			animId = requestAnimationFrame(render);
+		}
 	};
+
+	function startLoop(): void {
+		if (paused) return;
+		if (!animId) {
+			lastTime = performance.now();
+			animId = requestAnimationFrame(render);
+		}
+	}
 
 	// ------------------------------------------------------------------ rules
 	function spawnActive(): void {
@@ -343,6 +359,7 @@ export function createStackGame() {
 		paintHud();
 		say('Playing — Space or tap to drop the block.');
 		showShell('ready');
+		startLoop();
 	}
 	/**
 	 * End the run. The game-over card is the overlay INSIDE the viewport, and the
@@ -463,6 +480,7 @@ export function createStackGame() {
 		}
 		paintHud();
 		spawnActive();
+		startLoop();
 	}
 	function handleAction(): void {
 		if (paused) return;
@@ -490,6 +508,7 @@ export function createStackGame() {
 		paintHud();
 		say('Ready — start a new run when you are.');
 		showShell('ready');
+		startLoop();
 	}
 
 	// ------------------------------------------------------------- claim flow
@@ -558,7 +577,7 @@ export function createStackGame() {
 	claimOpen?.addEventListener('click', () => { resultsAcknowledged = false; renderClaimable(); showShell('results'); });
 	overlayClaim?.addEventListener('click', () => { resultsAcknowledged = false; renderClaimable(); showShell('results'); });
 	claimBack?.addEventListener('click', () => { resultsAcknowledged = true; showShell('ready'); });
-	const onResize = (): void => fitCanvas();
+	const onResize = (): void => { fitCanvas(); startLoop(); };
 	window.addEventListener('resize', onResize);
 	let resizeObserver: ResizeObserver | undefined;
 	if (canvas && typeof ResizeObserver !== 'undefined') {
@@ -589,8 +608,7 @@ export function createStackGame() {
 					if (!paused) return;
 					paused = false;
 					fitCanvas();
-					lastTime = performance.now();
-					animId = requestAnimationFrame(render);
+					startLoop();
 				},
 				destroy: () => {
 					paused = true;
