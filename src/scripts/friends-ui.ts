@@ -9,6 +9,9 @@
  * only protocol messages are `ping` (keep-alive detection, no server
  * heartbeat) and `pong`.
  */
+import { mountGlassTabs } from './glass-tabs';
+import { mountPeoplePanel } from './people-panel';
+
 type Entry = { handle: string; displayName: string; since: number };
 type Lists = {
 	friends: Entry[];
@@ -100,6 +103,55 @@ export function mountFriends(root: HTMLElement): void {
 		blocked: root.querySelector<HTMLElement>('[data-friends-empty="blocked"]'),
 	};
 
+	// ---------------------------------------------------------------- tabs
+	// One strip owns four lists. `mountGlassTabs` is only the travelling slab;
+	// which panel wins is decided here, so the strip and the panels cannot end
+	// up disagreeing about what is selected.
+	const tabStrip = root.querySelector<HTMLElement>('[data-friends-tabs]');
+	const tabIndicator = root.querySelector<HTMLElement>('[data-friends-tabs-indicator]');
+	const tabButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-friends-tab]'));
+	const tabPanels = new Map<string, HTMLElement>();
+	for (const panel of root.querySelectorAll<HTMLElement>('[data-friends-panel]')) {
+		const name = panel.dataset.friendsPanel;
+		if (name) tabPanels.set(name, panel);
+	}
+	const counts = {
+		incoming: root.querySelector<HTMLElement>('[data-friends-count="incoming"]'),
+		friends: root.querySelector<HTMLElement>('[data-friends-count="friends"]'),
+		outgoing: root.querySelector<HTMLElement>('[data-friends-count="outgoing"]'),
+		blocked: root.querySelector<HTMLElement>('[data-friends-count="blocked"]'),
+	};
+	let activeTab = tabButtons.find((button) => button.getAttribute('aria-selected') === 'true')?.dataset.friendsTab ?? 'incoming';
+	const tabs = tabStrip && tabIndicator && tabButtons.length
+		? mountGlassTabs({ list: tabStrip, indicator: tabIndicator, current: () => tabButtons.find((button) => button.dataset.friendsTab === activeTab) ?? null })
+		: null;
+	const selectTab = (name: string, instant = false): void => {
+		if (!tabPanels.has(name)) return;
+		activeTab = name;
+		for (const button of tabButtons) {
+			const selected = button.dataset.friendsTab === name;
+			button.setAttribute('aria-selected', String(selected));
+			button.tabIndex = selected ? 0 : -1;
+		}
+		for (const [panelName, panel] of tabPanels) panel.hidden = panelName !== name;
+		tabs?.place(instant);
+	};
+	tabStrip?.addEventListener('click', (event) => {
+		const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-friends-tab]');
+		if (button?.dataset.friendsTab) selectTab(button.dataset.friendsTab);
+	});
+	// Left/right move between tabs (WAI-ARIA tabs pattern); the buttons keep
+	// their own Enter/Space activation.
+	tabStrip?.addEventListener('keydown', (event) => {
+		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+		event.preventDefault();
+		const index = Math.max(0, tabButtons.findIndex((button) => button.dataset.friendsTab === activeTab));
+		const offset = event.key === 'ArrowRight' ? 1 : tabButtons.length - 1;
+		const next = tabButtons[(index + offset) % tabButtons.length];
+		if (next?.dataset.friendsTab) { selectTab(next.dataset.friendsTab); next.focus(); }
+	});
+	selectTab(activeTab, true);
+
 	const setStatus = (message: string, tone: 'error' | null = null): void => {
 		if (!status) return;
 		status.textContent = message;
@@ -135,21 +187,21 @@ export function mountFriends(root: HTMLElement): void {
 		if (kind === 'incoming') {
 			actions = [
 				`<button type="button" class="glass-button glass-button--primary glass-button--sm" data-glass="" data-friend-action="accept" aria-label="${escapeHtml(`Accept friend request from ${handle}`)}">Accept</button>`,
-				btn('decline', 'Decline', `Decline friend request from ${handle}`, 'friends-btn--muted'),
-				btn('block', 'Block', `Block ${handle}`, 'friends-btn--danger'),
+				btn('decline', 'Decline', `Decline friend request from ${handle}`),
+				btn('block', 'Block', `Block ${handle}`),
 			].join('');
 		} else if (kind === 'friends') {
 			actions = [
 				`<a class="glass-button glass-button--quiet glass-button--sm" data-glass="" href="/messages/?handle=${encodeURIComponent(entry.handle)}" data-friend-message aria-label="Message ${escapeHtml(handle)}">Message</a>`,
-				btn('remove', 'Remove', `Remove ${handle} from your friends`, 'friends-btn--muted'),
-				btn('block', 'Block', `Block ${handle}`, 'friends-btn--danger'),
+				btn('remove', 'Remove', `Remove ${handle} from your friends`),
+				btn('block', 'Block', `Block ${handle}`),
 			].join('');
 		} else if (kind === 'outgoing') {
-			actions = btn('remove', 'Cancel', `Cancel friend request to ${handle}`, 'friends-btn--muted');
+			actions = btn('remove', 'Cancel', `Cancel friend request to ${handle}`);
 		} else if (kind === 'blocked') {
-			actions = btn('unblock', 'Unblock', `Unblock ${handle}`, 'friends-btn--muted');
+			actions = btn('unblock', 'Unblock', `Unblock ${handle}`);
 		}
-		return `<li class="friends-row" data-handle="${handle}">
+		return `<li class="glass-item friends-row" data-handle="${handle}">
 			<span class="friends-row__who">${online}<strong>${handle}</strong> <span class="friends-row__name">${label}</span></span>
 			<span class="friends-row__actions">${actions}</span>
 		</li>`;
@@ -160,8 +212,26 @@ export function mountFriends(root: HTMLElement): void {
 			const items = data[kind] ?? [];
 			if (lists[kind]) lists[kind]!.innerHTML = items.map((entry) => rowHtml(entry, kind)).join('');
 			if (empty[kind]) empty[kind]!.hidden = items.length > 0;
+			if (counts[kind]) {
+				counts[kind]!.textContent = String(items.length);
+				counts[kind]!.hidden = items.length === 0;
+			}
 		}
 	};
+
+	// The people index answers "who could I add"; a result is only useful if the
+	// next click acts on it, so rows hand their handle to the same `run` path the
+	// exact-handle form uses — one implementation of request/accept/block, one
+	// status line, one rate budget.
+	mountPeoplePanel(root, {
+		onRequest: (handle) => {
+			setStatus(`Sending a request to ${handle}…`);
+			withBusy(async () => { await run('request', handle); });
+		},
+		onMessage: (handle) => {
+			window.location.href = `/messages/?handle=${encodeURIComponent(handle)}`;
+		},
+	});
 
 	const run = async (action: string, handle: string): Promise<void> => {
 		const method = METHOD_BY_ACTION[action];

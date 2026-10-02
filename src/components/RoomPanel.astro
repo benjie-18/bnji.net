@@ -1,11 +1,24 @@
 ---
 /**
- * Private-room controls + chat for a game page, wired by `mountGameRooms`
- * (same hooks as the Games page — one room socket carries chat AND game
- * state). Self-contained styles: this component ships on pages that do not
- * load the Games page's scoped CSS.
+ * Room controls, open lobbies and chat for a game page, wired by
+ * `mountGameRooms` (same hooks as the Games page — one room socket carries chat
+ * AND game state). Self-contained styles, because this component ships on pages
+ * that do not load the Games page's CSS.
+ *
+ * "Self-contained" means the layout only: every surface, field, button, row and
+ * status line is a global glass element (`data-glass`, `.glass-field`,
+ * `.glass-button`, `.glass-item`, `.glass-row`, `.glass-status`, `.glass-note`),
+ * so a room panel is the same object as a friends row or an admin capsule. The
+ * client builds the lobby, chat and roster rows, and a page's scoped CSS cannot
+ * reach a node that JavaScript created — those rows therefore carry their
+ * primitives in their own class list.
+ *
+ * `data-lobby-scope` sits on the lobby section itself: that is the element
+ * `mountGameRooms` reads, and a list of every room in the site under a heading
+ * that says "Open lobbies for this game" is a lie about scope.
  */
 import { CHAT_CONFIG } from '../config/chat.config';
+import { LOBBY_CONFIG } from '../config/lobby.config';
 import { NAMES_CONFIG } from '../config/names.config';
 interface Props {
 	/** Fixed room context for pages that host exactly one game. */
@@ -14,110 +27,122 @@ interface Props {
 const { gameId } = Astro.props;
 ---
 
-<section class="room-panel" data-room-tools aria-labelledby="room-panel-title">
+<section class="room-panel" data-room-tools aria-labelledby="room-panel-title" data-glass="raised large">
 	<div class="room-panel__head">
 		<div>
 			<p class="eyebrow">MULTIPLAYER</p>
-			<h2 id="room-panel-title">Private room</h2>
+			<h2 id="room-panel-title">Room &amp; open lobbies</h2>
 		</div>
-		<p class="room-panel__intro">Rooms are temporary and code-protected — share the code only with players you want in your game. Up to 2 hours, then everything is deleted with the room.</p>
+		<p class="glass-note">Every room here is listed for anyone to join, and a code still works for the players you invite. Two hours, then it and everything in it are deleted.</p>
 	</div>
 
 	<div class="room-panel__forms">
 		<form data-room-create>
 			<input type="hidden" name="gameId" value={gameId} />
-			<label for="room-create-submit">Start a chess room</label>
-			<button id="room-create-submit" class="room-panel__button room-panel__button--primary" type="submit">Create a room</button>
+			<label class="glass-label" for="room-create-submit">Start a room for this game</label>
+			<button id="room-create-submit" class="glass-button glass-button--primary" type="submit">Create a room</button>
 		</form>
 		<form data-room-join>
-			<label for="room-code-input">Join with a code</label>
-			<input id="room-code-input" name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" placeholder="22-character room code" required />
-			<button class="room-panel__button" type="submit">Join or reconnect</button>
+			<label class="glass-label" for="room-code-input">Join with a code</label>
+			<div class="room-panel__join">
+				<input id="room-code-input" class="glass-field" name="roomCode" type="text" minlength="22" maxlength="22"
+					autocomplete="off" spellcheck="false" placeholder="22-character room code" required />
+				<button class="glass-button glass-button--quiet" type="submit">Join or reconnect</button>
+			</div>
 		</form>
 	</div>
 
+	{LOBBY_CONFIG.enabled && (
+		<section class="room-panel__lobbies" data-room-lobbies data-lobby-scope={gameId} aria-labelledby="room-panel-lobbies-title">
+			<div class="room-panel__lobbies-head">
+				<h3 id="room-panel-lobbies-title">Open lobbies</h3>
+				<button class="glass-button glass-button--quiet glass-button--sm" type="button" data-lobby-refresh>Refresh</button>
+			</div>
+			<ul class="room-panel__lobby-list" data-lobby-list hidden></ul>
+			<p class="glass-status room-panel__lobby-status" data-lobby-status role="status" aria-live="polite">Open rooms are listed here.</p>
+			<p class="glass-note">A lobby shows its game, how many players are inside and how long the room has left. The host can remove a player, and a removed player cannot rejoin while the room is open.</p>
+		</section>
+	)}
+
+	<!-- Outside the chat panel on purpose: a room listed for strangers still needs a
+	     host who can remove one, even when chat is off. -->
+	<div class="room-panel__members">
+		<p class="glass-note">In this room</p>
+		<ul class="room-panel__roster" data-chat-roster hidden aria-label="Connected members"></ul>
+	</div>
+
 	<form class="room-panel__name" data-profile-name>
-		<label for="chess-profile-display-name">Your display name</label>
-		<input id="chess-profile-display-name" name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required />
-		<button class="room-panel__button" type="submit">Save name</button>
-		<p class="room-panel__note">Signed in: saved to your account. As a guest: kept for {NAMES_CONFIG.guestProfiles.retentionDays} days, keyed by a digest of this browser's session cookie &mdash; not linked to an account.</p>
-		<p class="room-panel__note" data-profile-name-status role="status" aria-live="polite"></p>
+		<label class="glass-label" for="chess-profile-display-name">Your display name</label>
+		<div class="room-panel__join">
+			<input id="chess-profile-display-name" class="glass-field" name="displayName" type="text"
+				maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required />
+			<button class="glass-button glass-button--quiet" type="submit">Save name</button>
+		</div>
+		<p class="glass-note">
+			Signed in: saved to your account. As a guest: kept for {NAMES_CONFIG.guestProfiles.retentionDays} days against a digest of this browser's session cookie, not linked to an account.
+		</p>
+		<p class="glass-status" data-profile-name-status role="status" aria-live="polite"></p>
 	</form>
 
 	{CHAT_CONFIG.enabled && (
 		<div class="room-panel__chat" data-chat-panel>
-			<p class="room-panel__note">Plain text for everyone in the room. Messages live only while this room exists (up to 2 hours) and are deleted with it &mdash; not encrypted, not permanent, no link previews. You can report another member's message; reports are kept for review after the room is gone.</p>
+			<p class="glass-note">Plain text, for everyone in the room. Stored only while this room exists and deleted with it — not encrypted, no link previews. A reported message is kept for review after the room is gone.</p>
 			<!-- Deliberately no role="log": it would override the <ol>'s implicit list role (axe "listitem"). -->
 			<ol class="room-panel__chat-messages" data-chat-messages aria-live="polite" aria-label="Room chat messages"></ol>
-			<p class="room-panel__chat-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
 			<form class="room-panel__chat-form" data-chat-form>
-				<label for="chess-chat-input">Message</label>
-				<input id="chess-chat-input" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
-				<button class="room-panel__button room-panel__button--primary" type="submit" disabled>Send</button>
+				<label class="glass-label" for="chess-chat-input">Message</label>
+				<input id="chess-chat-input" class="glass-field" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength}
+					autocomplete="off" spellcheck="true" disabled />
+				<button class="glass-button glass-button--primary glass-button--sm" type="submit" disabled>Send</button>
 			</form>
-			<ul class="room-panel__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
+			<p class="glass-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
 		</div>
 	)}
 
 	<div class="room-panel__status">
-		<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
-		<div data-room-code-panel hidden>
-			<span>Share this room code privately:</span>
-			<output data-room-code></output>
-			<button class="room-panel__button room-panel__button--small" type="button" data-room-copy>Copy code</button>
-			<button class="room-panel__button room-panel__button--small" type="button" data-room-leave disabled>Leave room</button>
+		<p class="glass-status" data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
+		<div class="room-panel__code" data-room-code-panel hidden>
+			<span class="glass-note">Room code (this room is also listed publicly):</span>
+			<output class="room-panel__code-value" data-room-code></output>
+			<button class="glass-button glass-button--quiet glass-button--sm" type="button" data-room-copy>Copy code</button>
+			<button class="glass-button glass-button--quiet glass-button--sm" type="button" data-room-leave disabled>Leave room</button>
 		</div>
 	</div>
 </section>
 
 <style>
-	.room-panel {
+	.room-panel { display: grid; gap: var(--space-5); padding: var(--glass-pad-lg); }
+	.room-panel[hidden] { display: none; }
+	.room-panel__head { display: grid; gap: var(--space-2); }
+	.room-panel h2 { font-size: var(--text-lead); color: var(--text-strong); }
+	.room-panel h3 { margin: 0; font-size: var(--text-body); color: var(--text-strong); }
+	.room-panel__forms { display: flex; flex-wrap: wrap; gap: var(--space-5); }
+	.room-panel__forms form { display: grid; gap: var(--space-1); align-content: start; }
+	.room-panel__join { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+	.room-panel__join .glass-field { flex: 1 1 15rem; min-inline-size: 0; }
+
+	.room-panel__lobbies, .room-panel__chat, .room-panel__members, .room-panel__name {
 		display: grid;
-		gap: 1.25rem;
-		padding: clamp(1.25rem, 3vw, 2rem);
-		border-radius: var(--radius-lg, 18px);
-		background: var(--glass-bg, rgba(255 255 255 / 0.05));
-		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.12));
+		gap: var(--space-2);
+		padding-block-start: var(--space-4);
+		border-block-start: 1px solid var(--glass-border);
 	}
-	.room-panel__head { display: grid; gap: 0.5rem; }
-	.room-panel__intro { color: var(--text-muted, #9aa3b2); max-width: 60ch; }
-	.room-panel h2 { font-size: clamp(1.2rem, 2.4vw, 1.6rem); }
-	.room-panel__forms { display: flex; flex-wrap: wrap; gap: 1.25rem; }
-	.room-panel__forms form { display: grid; gap: 0.45rem; align-content: start; }
-	.room-panel label { font-size: 0.85rem; color: var(--text-muted, #9aa3b2); }
-	.room-panel input[type='text'] {
-		padding: 0.55rem 0.7rem;
-		border-radius: 10px;
-		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.16));
-		background: var(--glass-input-bg, rgba(0 0 0 / 0.25));
-		color: inherit;
-		min-width: 15rem;
-		font: inherit;
+	.room-panel__lobbies-head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; }
+	.room-panel__lobby-list, .room-panel__chat-messages, .room-panel__roster { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+	.room-panel__chat-messages { max-block-size: 14rem; overflow-y: auto; }
+	.room-panel__roster { display: flex; flex-wrap: wrap; }
+	.room-panel__chat-form { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: end; }
+	.room-panel__chat-form .glass-label { flex-basis: 100%; }
+	.room-panel__chat-form .glass-field { flex: 1 1 14rem; min-inline-size: 0; }
+
+	.room-panel__status { display: grid; gap: var(--space-2); }
+	.room-panel__code { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+	.room-panel__code-value {
+		font-family: var(--font-mono);
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		color: var(--text-strong);
+		overflow-wrap: anywhere;
+		user-select: all;
 	}
-	.room-panel__button {
-		padding: 0.5rem 0.95rem;
-		border-radius: 999px;
-		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
-		background: transparent;
-		color: inherit;
-		font: inherit;
-		cursor: pointer;
-		justify-self: start;
-	}
-	.room-panel__button:hover:not(:disabled) { background: rgba(255 255 255 / 0.08); }
-	.room-panel__button:disabled { opacity: 0.5; cursor: not-allowed; }
-	.room-panel__button--primary { background: var(--accent, #6ea8fe); border-color: transparent; color: #0b1020; font-weight: 600; }
-	.room-panel__button--small { padding: 0.25rem 0.65rem; font-size: 0.82rem; }
-	.room-panel__note { font-size: 0.82rem; color: var(--text-muted, #9aa3b2); max-width: 64ch; }
-	.room-panel__name { display: grid; gap: 0.45rem; justify-items: start; }
-	.room-panel__chat { display: grid; gap: 0.6rem; }
-	.room-panel__chat-messages { list-style: none; display: grid; gap: 0.35rem; max-height: 14rem; overflow-y: auto; padding: 0; margin: 0; }
-	.room-panel__chat-messages :global(li) { display: grid; gap: 0.1rem; padding: 0.35rem 0.55rem; border-radius: 8px; background: rgba(255 255 255 / 0.05); font-size: 0.9rem; }
-	.room-panel__chat-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-	.room-panel__chat-form input { flex: 1 1 14rem; }
-	.room-panel__chat-roster { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; padding: 0; margin: 0; font-size: 0.85rem; }
-	.room-panel__chat-roster :global(li) { padding: 0.15rem 0.55rem; border-radius: 999px; background: rgba(255 255 255 / 0.08); }
-	.room-panel__status { display: grid; gap: 0.5rem; font-size: 0.92rem; }
-	.room-panel__status [data-room-code-panel] { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-	.room-panel__status output { font-family: var(--font-mono, monospace); font-weight: 600; letter-spacing: 0.06em; }
 </style>

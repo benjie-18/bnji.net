@@ -411,6 +411,202 @@ html[data-theme='light'] .glass-button {
 	}
 }
 
+/* --- Fields, Labels, Notes & Status -------------------------------------- */
+/* The form vocabulary the room panel, the friends page and Messages share.
+   Global on purpose, like styles/games.css: the friends, messages and room
+   clients build fields, rows and status lines in JavaScript, and an
+   Astro-scoped rule cannot reach a node that was created after the page
+   compiled — such a node carries the primitive in its own class list instead. */
+
+.glass-label {
+	display: block;
+	color: var(--text-strong);
+	font-size: var(--text-small);
+	font-weight: 600;
+}
+
+.glass-field {
+	inline-size: 100%;
+	min-inline-size: 0;
+	padding: 0.55rem 0.75rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--glass-radius-sm);
+	background: var(--glass-bg-quiet);
+	color: var(--text-strong);
+	font: inherit;
+	font-size: var(--text-small);
+	transition:
+		border-color var(--dur-fast) var(--ease-out),
+		background var(--dur-fast) var(--ease-out);
+}
+
+.glass-field::placeholder { color: var(--text-faint); }
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-field:hover { border-color: var(--glass-border-strong); }
+}
+
+.glass-field:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 1px;
+	border-color: transparent;
+}
+
+.glass-field:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.glass-note {
+	margin: 0;
+	max-inline-size: 66ch;
+	color: var(--text-muted);
+	font-size: var(--text-small);
+	line-height: 1.6;
+}
+
+/* A status line reserves its row whether or not it has text. The room panel,
+   the friends lists and the composer all swap copy in place, and a line that
+   collapses to zero height drags everything under it up the page — which is
+   the layout shift this reservation exists to prevent. */
+.glass-status {
+	margin: 0;
+	min-block-size: 1.25em;
+	color: var(--text-muted);
+	font-size: var(--text-small);
+	line-height: 1.25;
+}
+
+.glass-status[data-tone='error'] { color: var(--danger); }
+
+/* --- Rows ----------------------------------------------------------------- */
+/* One row's material — the fill, boundary and corner. Layout (how the two
+   halves of a row sit against each other) stays with the page or component
+   that owns the row. */
+
+.glass-item {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--glass-radius-sm);
+	background: var(--glass-bg-quiet);
+	transition:
+		border-color var(--dur-fast) var(--ease-out),
+		background var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-item:hover { border-color: var(--glass-border-strong); }
+}
+
+/* --- Segmented Tabs -------------------------------------------------------- */
+/* One travelling capsule under the selected label. scripts/glass-tabs.ts
+   writes --tab-l/r/t/b, data-direction and data-ready; which leg is fast is
+   the CSS's business, driven by motion tokens, so prefers-reduced-motion and
+   the Settings store collapse the travel without the script knowing. The Admin
+   nav predates the module and drives the same contract from admin-dashboard.ts. */
+
+.glass-tabs {
+	--sling-lead: var(--dur-base);
+	--sling-trail: var(--dur-slow);
+	--sling-ease: var(--ease-spring);
+	position: relative;
+	display: flex;
+	gap: 0.25rem;
+	padding: 0.35rem;
+	justify-self: start;
+	max-inline-size: 100%;
+}
+
+.glass-tabs__item {
+	position: relative;
+	z-index: 1;
+	padding: 0.5rem 1rem;
+	border: 0;
+	border-radius: max(var(--glass-radius-sm), calc(var(--parent-radius, var(--glass-radius-pill)) - 0.35rem));
+	background: transparent;
+	color: var(--text-muted);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	text-decoration: none;
+	cursor: pointer;
+	transition: color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.glass-tabs__item:hover { color: var(--text-strong); }
+}
+
+.glass-tabs__item[aria-selected='true'] { color: var(--text-strong); }
+
+.glass-tabs__item:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.glass-tabs__indicator {
+	position: absolute;
+	z-index: 0;
+	inset: var(--tab-t, 0.35rem) var(--tab-r, 100%) var(--tab-b, 0.35rem) var(--tab-l, 0.35rem);
+	border-radius: max(var(--glass-radius-sm), calc(var(--parent-radius, var(--glass-radius-pill)) - 0.35rem));
+	background: var(--glass-bg-raised);
+	border: 1px solid var(--accent-line);
+	box-shadow:
+		0 0 18px -6px var(--accent-soft),
+		inset 0 1px 1px var(--glass-fresnel-top);
+	opacity: 0;
+	pointer-events: none;
+}
+
+html[data-theme='light'] .glass-tabs__indicator {
+	background: var(--accent);
+	border-color: var(--accent-strong);
+	box-shadow: 0 2px 8px var(--glass-shadow-contact);
+}
+
+.glass-tabs__indicator[data-ready] { opacity: 1; }
+
+/* The leading edge takes the short leg, the trailing edge the springy one, so
+   the capsule stretches toward the clicked label and its tail slings in. */
+.glass-tabs__indicator[data-direction='forward'] {
+	transition:
+		right var(--sling-lead) var(--ease-out),
+		left var(--sling-trail) var(--sling-ease),
+		top var(--sling-lead) var(--ease-out),
+		bottom var(--sling-lead) var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+
+.glass-tabs__indicator[data-direction='back'] {
+	transition:
+		left var(--sling-lead) var(--ease-out),
+		right var(--sling-trail) var(--sling-ease),
+		top var(--sling-lead) var(--ease-out),
+		bottom var(--sling-lead) var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+
+/* First paint and relayouts place the slab without travel. */
+.glass-tabs__indicator[data-instant] { transition: none; }
+
+/* Settings store: performance mode keeps the glide but drops the overshoot;
+   reduced effects removes the travel entirely. */
+html[data-performance-mode='on'] .glass-tabs__indicator {
+	--sling-trail: var(--dur-base);
+	--sling-ease: var(--ease-out);
+}
+
+html[data-reduced-effects='on'] .glass-tabs__indicator { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+	.glass-tabs__indicator { transition: none !important; }
+}
+
+@media (forced-colors: active) {
+	.glass-tabs__indicator { border-color: Highlight; }
+}
+
 /* --- Chips ---------------------------------------------------------------- */
 .chip {
 	display: inline-flex;

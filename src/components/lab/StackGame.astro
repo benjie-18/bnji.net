@@ -24,7 +24,7 @@
 			<span class="stack-score-val mono" data-sg-score>0</span>
 		</div>
 
-		<div class="stack-combo mono" data-sg-combo hidden>
+		<div class="stack-combo mono" data-sg-combo>
 			<span class="stack-combo-badge">COMBO ×<span data-sg-combo-count>1</span></span>
 		</div>
 
@@ -40,7 +40,7 @@
 
 		<!-- Overlay Messages -->
 		<div class="stack-overlay" data-sg-overlay>
-			<div class="stack-overlay-card">
+			<div class="stack-overlay-card" data-glass="raised">
 				<h3 class="stack-overlay-title mono" data-sg-title>ISO STACK</h3>
 				<p class="stack-overlay-desc" data-sg-desc>Tap or press Space to drop layers. Align blocks cleanly to maintain tower surface.</p>
 				<button class="glass-button glass-button--primary mono" type="button" data-sg-start>
@@ -118,6 +118,9 @@
 	interface Spark {
 		x: number;
 		y: number;
+		/** The camera height when the burst was spawned: sparks live in screen space, so
+		    they must ride the camera or they slide off the tower as it rises. */
+		cam: number;
 		vx: number;
 		vy: number;
 		life: number;
@@ -138,6 +141,29 @@
 	if (root) {
 		const canvas = root.querySelector<HTMLCanvasElement>('[data-sg-canvas]')!;
 		const ctx = canvas.getContext('2d')!;
+
+		/* The CSS box owns the size and the bitmap is the box × the device pixel
+		   ratio. Drawing into a bitmap the element then stretches is how every
+		   block edge arrives resampled; `ox`/`oy` below therefore read `viewW` and
+		   `viewH` (CSS pixels) instead of `canvas.width`, or the projection would
+		   land 2× off on a retina display. */
+		let viewW = 640;
+		let viewH = 520;
+		const fitCanvas = () => {
+			const ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+			const width = Math.round(canvas.clientWidth || 640);
+			const height = Math.round(canvas.clientHeight || (width * 520) / 640);
+			if (width < 1 || height < 1) return;
+			const bitmapW = Math.round(width * ratio);
+			const bitmapH = Math.round(height * ratio);
+			if (canvas.width !== bitmapW || canvas.height !== bitmapH) {
+				canvas.width = bitmapW;
+				canvas.height = bitmapH;
+			}
+			viewW = width;
+			viewH = height;
+			ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+		};
 		const scoreEl = root.querySelector<HTMLElement>('[data-sg-score]')!;
 		const bestEl = root.querySelector<HTMLElement>('[data-sg-best]')!;
 		const comboEl = root.querySelector<HTMLElement>('[data-sg-combo]')!;
@@ -264,7 +290,7 @@
 			cameraY = 0;
 			targetCameraY = 0;
 			scoreEl.textContent = '0';
-			comboEl.hidden = true;
+			comboEl.classList.remove('is-live');
 			isGameOver = false;
 
 			spawnBlock();
@@ -288,6 +314,7 @@
 				sparks.push({
 					x: screenX,
 					y: screenY,
+					cam: cameraY,
 					vx: Math.cos(angle) * spd,
 					vy: Math.sin(angle) * spd - 1.5,
 					life: 0,
@@ -306,8 +333,8 @@
 			let curZ = activeAxis === 'z' ? activePos : prev.z;
 			let diff = activeAxis === 'x' ? curX - prev.x : curZ - prev.z;
 
-			const ox = canvas.width / 2;
-			const oy = canvas.height * 0.74;
+			const ox = viewW / 2;
+			const oy = viewH * 0.74;
 
 			// Points for this placement: 1 for a normal drop, or the live combo
 			// for a perfect one (the n-th consecutive perfect drop is worth n).
@@ -322,7 +349,7 @@
 				if (combo > bestCombo) bestCombo = combo;
 				points = combo;
 				comboCountEl.textContent = String(combo);
-				comboEl.hidden = false;
+				comboEl.classList.add('is-live');
 				playTone(480 + combo * 55, 'triangle', 0.35);
 
 				// Trigger celebration sparks at top center of placed layer
@@ -330,7 +357,7 @@
 				spawnSparks(pt.x, pt.y);
 			} else {
 				combo = 0;
-				comboEl.hidden = true;
+				comboEl.classList.remove('is-live');
 				playTone(300 + (stack.length % 8) * 28, 'sine', 0.18);
 			}
 
@@ -346,7 +373,13 @@
 
 				newW = prev.w - overhang;
 				const slicedW = overhang;
-				const slicedX = diff > 0 ? prev.x + newW + slicedW / 2 : prev.x - slicedW / 2;
+				// The exposed strip is the part of the OLD slab the new block did not
+				// cover: its centre sits exactly half a kept-width away from the old
+				// centre, on the side the block did not travel toward. (The previous
+				// expression measured from the far edge of the kept slab and then added
+				// a whole width, so the chip appeared out of thin air beside the tower
+				// instead of breaking off it.)
+				const slicedX = diff > 0 ? prev.x - newW / 2 : prev.x + newW / 2;
 
 				// Spawn debris piece falling
 				debris.push({
@@ -356,7 +389,7 @@
 					d: prev.d,
 					y: activeY,
 					vy: 0,
-					vx: diff > 0 ? 1.4 : -1.4,
+					vx: diff > 0 ? -1.4 : 1.4,
 					vz: 0,
 					opacity: 1,
 					colorIndex: stack.length,
@@ -372,7 +405,7 @@
 
 				newD = prev.d - overhang;
 				const slicedD = overhang;
-				const slicedZ = diff > 0 ? prev.z + newD + slicedD / 2 : prev.z - slicedD / 2;
+				const slicedZ = diff > 0 ? prev.z - newD / 2 : prev.z + newD / 2;
 
 				debris.push({
 					x: curX,
@@ -382,7 +415,7 @@
 					y: activeY,
 					vy: 0,
 					vx: 0,
-					vz: diff > 0 ? 1.4 : -1.4,
+					vz: diff > 0 ? -1.4 : 1.4,
 					opacity: 1,
 					colorIndex: stack.length,
 				});
@@ -446,8 +479,8 @@
 			opacity = 1
 		) => {
 			if (w <= 0 || d <= 0) return;
-			const ox = canvas.width / 2;
-			const oy = canvas.height * 0.74;
+			const ox = viewW / 2;
+			const oy = viewH * 0.74;
 			const colors = getColors(colorIdx);
 
 			const p0 = projectIso(x - w / 2, y, z - d / 2, ox, oy);
@@ -551,11 +584,11 @@
 				s.vy += 2.5 * dt * 60;
 			}
 
-			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.clearRect(0, 0, viewW, viewH);
 
 			// Draw ground contact shadow
-			const ox = canvas.width / 2;
-			const oy = canvas.height * 0.74;
+			const ox = viewW / 2;
+			const oy = viewH * 0.74;
 			const shadowCenter = projectIso(0, 0, 0, ox, oy);
 			ctx.save();
 			const shadowGrad = ctx.createRadialGradient(
@@ -574,15 +607,31 @@
 			ctx.fill();
 			ctx.restore();
 
-			// Render stack layers
-			stack.forEach((layer) => {
-				drawIsoBox(layer.x, layer.y, layer.z, layer.w, layer.d, layerHeight, layer.colorIndex);
-			});
-
-			// Render falling debris pieces
-			debris.forEach((d) => {
-				drawIsoBox(d.x, d.y, d.z, d.w, d.d, layerHeight, d.colorIndex, d.opacity);
-			});
+			// Render stack layers and debris together, in painter's order. Along this
+			// projection's view axis the front-most thing is the largest x + z + y, so
+			// a chip falling behind the tower is now drawn behind it — the docstring has
+			// claimed a depth sort since the day this card shipped, and until now there
+			// was none. With no debris in flight the tower order already is that order,
+			// so the sort only runs when there is something to interleave.
+			if (debris.length === 0) {
+				stack.forEach((layer) => {
+					drawIsoBox(layer.x, layer.y, layer.z, layer.w, layer.d, layerHeight, layer.colorIndex);
+				});
+			} else {
+				type Paintable = { key: number; x: number; y: number; z: number; w: number; d: number; colorIndex: number; opacity: number };
+				const painted: Paintable[] = stack.map((layer, index) => ({
+					key: layer.x + layer.z + layer.y + index * 1e-3,
+					x: layer.x, y: layer.y, z: layer.z, w: layer.w, d: layer.d,
+					colorIndex: layer.colorIndex, opacity: 1,
+				}));
+				for (const d of debris) {
+					painted.push({ key: d.x + d.z + d.y, x: d.x, y: d.y, z: d.z, w: d.w, d: d.d, colorIndex: d.colorIndex, opacity: d.opacity });
+				}
+				painted.sort((a, b) => a.key - b.key);
+				for (const item of painted) {
+					drawIsoBox(item.x, item.y, item.z, item.w, item.d, layerHeight, item.colorIndex, item.opacity);
+				}
+			}
 
 			// Render active moving block
 			if (isPlaying && !isGameOver) {
@@ -599,7 +648,7 @@
 				ctx.globalAlpha = alpha;
 				ctx.fillStyle = s.color;
 				ctx.beginPath();
-				ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+				ctx.arc(s.x, s.y + (cameraY - s.cam) * viewZoom, s.size, 0, Math.PI * 2);
 				ctx.fill();
 				ctx.restore();
 			});
@@ -612,7 +661,10 @@
 			if (!isPlaying) {
 				overlay.setAttribute('hidden', '');
 				isPlaying = true;
-				initGame();
+				fitCanvas();
+		if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => fitCanvas()).observe(canvas);
+		window.addEventListener('resize', fitCanvas);
+		initGame();
 			} else {
 				dropBlock();
 			}
@@ -738,23 +790,41 @@
 		color: var(--text-strong);
 	}
 
+	/* The badge is faded, never removed from the row: `hidden` on the middle item
+	   of a space-between header slides SCORE and BEST sideways the instant a combo
+	   starts, which reads as the whole card twitching. The slot is reserved instead.
+	   `--accent-violet` does not exist, and a gradient with an unknown stop is
+	   dropped as invalid — which is why the badge used to have no background at all
+	   and white text on the card behind it. */
+	.stack-combo {
+		display: grid;
+		place-items: center;
+		min-inline-size: 7.5rem;
+		opacity: 0;
+		transition: opacity var(--dur-fast) var(--ease-out, ease-out);
+	}
+	.stack-combo.is-live { opacity: 1; }
+
 	.stack-combo-badge {
 		padding: 0.25rem 0.75rem;
 		border-radius: var(--radius-pill);
-		background: linear-gradient(135deg, var(--accent-strong), var(--accent-violet));
-		color: #ffffff;
+		background: var(--accent);
+		color: var(--game-on-accent);
 		font-size: var(--text-micro);
 		font-weight: 700;
 		box-shadow: 0 0 14px var(--accent-soft);
 	}
 
+	/* The field is a token, not a hand-picked navy: `--game-field` is the one
+	   surface both themes agree the tower needs, and the light-theme override
+	   this rule used to carry is what a token is supposed to make unnecessary. */
 	.stack-viewport {
 		position: relative;
 		width: 100%;
 		border-radius: var(--radius-xl);
 		background:
-			radial-gradient(100% 70% at 50% 20%, rgba(56, 189, 248, 0.08), transparent 70%),
-			rgba(8, 12, 22, 0.65);
+			radial-gradient(100% 70% at 50% 20%, var(--accent-soft), transparent 70%),
+			var(--game-field);
 		border: 1px solid var(--glass-border);
 		overflow: hidden;
 		display: flex;
@@ -762,17 +832,14 @@
 		touch-action: none;
 	}
 
-	:global(html[data-theme='light']) .stack-viewport {
-		background:
-			radial-gradient(100% 70% at 50% 20%, rgba(56, 189, 248, 0.16), transparent 70%),
-			rgba(240, 247, 255, 0.75);
-		border-color: rgba(30, 90, 160, 0.22);
-	}
-
+	/* `aspect-ratio` keeps the element's box independent of the bitmap: the script
+	   rewrites `canvas.width`/`height` for the device pixel ratio, and a
+	   `height: auto` box would resize itself on every fit. */
 	.stack-canvas {
 		width: 100%;
 		max-width: 640px;
 		height: auto;
+		aspect-ratio: 640 / 520;
 		display: block;
 		cursor: pointer;
 	}
@@ -786,14 +853,15 @@
 		z-index: 5;
 	}
 
+	/* No hand-rolled `backdrop-filter` here: the blur belongs to the glass layer
+	   on the card (styles/glass.css), and the scrim is the shared game field tint. */
 	.stack-overlay {
 		position: absolute;
 		inset: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: rgba(6, 10, 18, 0.75);
-		backdrop-filter: blur(10px);
+		background: var(--game-field-scrim);
 		z-index: 10;
 		padding: 1rem;
 	}
@@ -825,7 +893,7 @@
 	}
 
 	.stack-overlay-desc {
-		font-size: var(--text-sm);
+		font-size: var(--text-small);
 		color: var(--text-muted);
 		line-height: 1.45;
 	}

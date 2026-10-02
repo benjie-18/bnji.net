@@ -26,6 +26,19 @@ export type NamesConfig = {
 		/** Exact-match discovery only: no directory, no suggestions, no prefix search. */
 		changeCooldownDays: number;
 	};
+	/**
+	 * The PUBLIC label every shared surface shows: `@handle · Display Name` when
+	 * the account has claimed a handle, the display name alone otherwise. The
+	 * cap is deliberately wider than a display name because it is a composition
+	 * of two labels; it only ever bounds the composed string (leaderboards,
+	 * room rosters, room chat) and is never written to a column with a CHECK.
+	 */
+	publicLabel: {
+		/** Longest composed label that will render. 24 + separator + 21 is 48. */
+		maxLength: number;
+		/** Joiner between the handle and the display name. */
+		separator: string;
+	};
 	guestProfiles: {
 		/** Mirrors the bnji_ps session lifetime: a guest name is swept 30 days after its last change. */
 		retentionDays: number;
@@ -50,6 +63,10 @@ export const NAMES_CONFIG: NamesConfig = {
 		minLength: 3,
 		maxLength: 20,
 		changeCooldownDays: 30,
+	},
+	publicLabel: {
+		maxLength: 48,
+		separator: ' · ',
 	},
 	guestProfiles: {
 		retentionDays: 30,

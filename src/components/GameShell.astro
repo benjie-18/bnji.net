@@ -4,6 +4,9 @@
  * consumer's slot; this component owns the lifecycle-facing status, focus and
  * pause/error/results presentation only.
  */
+import { getGame } from '../data/games';
+import { leaderboardHref } from '../data/game-adapters';
+
 type State = 'loading' | 'ready' | 'paused' | 'error' | 'results';
 interface Props {
 	gameId: string;
@@ -13,6 +16,12 @@ interface Props {
 	level?: 1 | 2 | 3;
 }
 const { gameId, title, instructions, initialState = 'ready', level = 1 } = Astro.props;
+// Every control a game's own state can make appear or disappear lives in a
+// reserved slot (the header link row, the action strip, the viewport overlay),
+// because a shell that grows by one button slides the game window out from
+// under the player's hands.
+const catalogGame = getGame(gameId);
+const boardHref = catalogGame ? leaderboardHref(catalogGame) : null;
 const headingId = `game-${gameId.replace(/[^a-zA-Z0-9_-]/g, '-')}-title`;
 const instructionsId = `${headingId}-instructions`;
 const Title = `h${level}` as const;
@@ -27,9 +36,17 @@ const Title = `h${level}` as const;
 	aria-labelledby={headingId}
 	aria-describedby={instructionsId}
 >
-	<div class="game-shell__surface" data-glass="raised">
+	<div class="game-shell__surface" data-game-shell-surface data-glass="raised large">
 		<header class="game-shell__header">
-			<p class="eyebrow">PLAY / {gameId}</p>
+			<div class="game-shell__head">
+				<p class="eyebrow">PLAY / {gameId}</p>
+				<!-- A fixed row of shell tools: the game's own state can never grow it,
+				     shrink it, or move it, because every slot is always occupied. -->
+				<div class="game-shell__tools">
+					{boardHref && <a class="game-shell__board-link" href={boardHref}>Leaderboard <span aria-hidden="true">↗</span></a>}
+					<button type="button" class="game-shell__tool glass-button glass-button--sm" data-game-fullscreen aria-pressed="false">Fullscreen</button>
+				</div>
+			</div>
 			<Title id={headingId}>{title}</Title>
 			<p id={instructionsId} class="game-shell__instructions">{instructions}</p>
 		</header>
@@ -53,7 +70,7 @@ const Title = `h${level}` as const;
 		<div data-game-shell-panel="ready" hidden={initialState !== 'ready'} class="game-shell__panel">
 			<div class="game-shell__content"><slot /></div>
 			<div class="game-shell__actions">
-				<button type="button" class="game-shell__button" data-game-pause>Pause game</button>
+				<button type="button" class="game-shell__button glass-button" data-game-pause>Pause game</button>
 			</div>
 		</div>
 
@@ -61,20 +78,20 @@ const Title = `h${level}` as const;
 			<h2 data-game-shell-focus tabindex="-1">Game paused</h2>
 			<p>Your game is paused. Resume when you are ready.</p>
 			<div class="game-shell__actions">
-				<button type="button" class="game-shell__button" data-game-resume>Resume game</button>
+				<button type="button" class="game-shell__button glass-button glass-button--primary" data-game-resume>Resume game</button>
 			</div>
 		</div>
 
 		<div data-game-shell-panel="error" hidden={initialState !== 'error'} class="game-shell__panel" data-game-shell-error>
 			<h2 data-game-shell-focus tabindex="-1">Game unavailable</h2>
 			<p>This game could not start in this browser. You can return to the Games catalog.</p>
-			<a class="game-shell__link" href="/games/">Return to Games</a>
+			<a class="game-shell__link glass-button" href="/games/">Return to Games</a>
 		</div>
 
 		<div data-game-shell-panel="results" hidden={initialState !== 'results'} class="game-shell__panel">
 			<h2 data-game-shell-focus tabindex="-1">Results</h2>
 			<div class="game-shell__results"><slot name="results"><p>Your game session is complete.</p></slot></div>
-			<a class="game-shell__link" href="/games/">Return to Games</a>
+			<a class="game-shell__link glass-button" href="/games/">Return to Games</a>
 		</div>
 	</div>
 </section>
@@ -90,9 +107,25 @@ const Title = `h${level}` as const;
 		max-width: 72rem;
 		margin-inline: auto;
 		padding: clamp(1.2rem, 4vw, 2.5rem);
-		border-radius: var(--radius-xl);
 	}
 	.game-shell__header { max-width: 66ch; margin-block-end: clamp(1.5rem, 5vw, 3rem); }
+	.game-shell__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; min-block-size: 2.25rem; }
+	.game-shell__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+	/* Only the width is reserved here: the label alternates between "Fullscreen"
+	   and "Exit fullscreen", and a header row that re-measures on every press
+	   moves the game title beside it. */
+	.game-shell__tool { min-inline-size: 9rem; }
+	.game-shell__tool[hidden] { display: none; }
+	.game-shell__board-link {
+		color: var(--accent-strong);
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		text-decoration: none;
+	}
+	.game-shell__board-link:hover { text-decoration: underline; }
+	.game-shell__board-link:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; border-radius: var(--radius-sm); }
 	.game-shell__header h1,
 	.game-shell__header h2,
 	.game-shell__header h3 {
@@ -108,36 +141,41 @@ const Title = `h${level}` as const;
 	.game-shell__panel > p,
 	.game-shell__results { color: var(--text-muted); line-height: 1.7; }
 	.game-shell__instructions { max-width: 65ch; margin-block: 0.85rem 0; }
-	.game-shell__panel { display: grid; justify-items: start; gap: 0.85rem; min-width: 0; }
+	/* Panel-swap stability: the shell replaces the game with a shorter panel for
+	   paused/results/error, and a page that suddenly loses 500px of height
+	   scrolls out from under the player. Every panel therefore reserves the
+	   ready panel's height — measured by scripts/game-shell.ts into
+	   `--game-shell-reserve` — so swapping panels cannot change document height. */
+	.game-shell__panel { display: grid; justify-items: start; align-content: start; gap: 0.85rem; min-width: 0; min-block-size: var(--game-shell-reserve, 0); }
 	.game-shell__panel[hidden] { display: none !important; }
 	.game-shell__panel h2 { margin: 0; color: var(--text-strong); font-size: var(--text-title); }
 	.game-shell__content { width: 100%; min-width: 0; }
-	.game-shell__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block-start: 0.5rem; }
-	.game-shell__button,
-	.game-shell__link {
-		display: inline-flex;
+	.game-shell__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		margin-block-start: 0.5rem;
+		/* One row of controls, always: a fullscreen label swap or a game adding a
+		   button to the strip must not change the height of the panel that holds it. */
+		min-block-size: var(--game-action-row-size);
 		align-items: center;
-		justify-content: center;
-		min-height: 2.75rem;
-		padding: 0.65rem 1rem;
-		border: 1px solid var(--glass-border);
-		border-radius: var(--radius-md);
-		background: var(--glass-bg-quiet);
-		color: var(--text-strong);
-		font: inherit;
-		font-weight: 600;
-		text-decoration: none;
-		cursor: pointer;
 	}
-	.game-shell__button:hover,
-	.game-shell__link:hover { border-color: var(--accent-strong); }
-	.game-shell__button:focus-visible,
-	.game-shell__link:focus-visible,
+	.game-shell__surface:fullscreen,
+	.game-shell__surface:-webkit-full-screen {
+		max-width: none;
+		block-size: 100%;
+		border-radius: 0;
+		overflow: auto;
+		background: var(--bg);
+	}
+	/* Fullscreen is a different medium: the page chrome (header, footer, starfield)
+	   is gone, so the game gets the whole field and the surface background becomes
+	   the page background. Content keeps its own size; nothing is stretched. */
+	.game-shell__surface:fullscreen .game-shell__header { margin-block-end: 1rem; }
 	.game-shell__panel [tabindex="-1"]:focus-visible {
 		outline: 2px solid var(--accent-strong);
 		outline-offset: 4px;
 	}
-	.game-shell__link { color: var(--accent-strong); }
 	:global(html:not(.js)) .game-shell [data-game-pause],
 	:global(html:not(.js)) .game-shell [data-game-resume] { display: none; }
 	.game-shell__pulse {
@@ -151,15 +189,10 @@ const Title = `h${level}` as const;
 	.game-shell__results { width: 100%; }
 	@keyframes game-shell-pulse { to { opacity: 0.35; transform: scale(0.8); } }
 	@media (max-width: 560px) {
-		.game-shell__surface { padding: 1.1rem; }
+		.game-shell__surface { padding: var(--glass-pad-md); }
 		.game-shell__header h1, .game-shell__header h2, .game-shell__header h3 { font-size: var(--text-title); }
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.game-shell__pulse { animation: none; }
-		.game-shell__button, .game-shell__link { scroll-behavior: auto; transition: none; }
-	}
-	@media (forced-colors: active) {
-		.game-shell__button, .game-shell__link { border: 1px solid ButtonText; }
-		.game-shell__button:focus-visible, .game-shell__link:focus-visible { outline-color: Highlight; }
 	}
 </style>

@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader.astro';
 import { GAMES } from '../data/games';
 import { NAMES_CONFIG } from '../config/names.config';
 import { CHAT_CONFIG } from '../config/chat.config';
+import { LOBBY_CONFIG } from '../config/lobby.config';
 import Layout from '../layouts/Layout.astro';
 
 const standalone = GAMES.filter((game) => !game.labHref);
@@ -85,8 +86,8 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 		<section class="room-tools" data-room-tools aria-labelledby="room-tools-title">
 			<div>
 				<p class="eyebrow">Multiplayer</p>
-				<h2 id="room-tools-title">Private room</h2>
-				<p>Rooms are temporary and code-protected multiplayer instances.</p>
+				<h2 id="room-tools-title">Rooms &amp; open lobbies</h2>
+				<p>Rooms are temporary multiplayer instances. Every room is listed below for anyone to join, and a code still works for the players you invite. Two hours, then it and everything in it are deleted.</p>
 			</div>
 			<div class="room-tools__forms">
 				<form data-room-create>
@@ -101,6 +102,23 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 					<input id="room-code-input" name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" required />
 					<button class="player-tools__button" type="submit">Join or reconnect</button>
 				</form>
+			</div>
+			{LOBBY_CONFIG.enabled && (
+				<section class="room-tools__lobbies" data-room-lobbies aria-labelledby="room-tools-lobbies-title">
+					<div class="room-tools__lobbies-head">
+						<h3 id="room-tools-lobbies-title">Open lobbies</h3>
+						<button class="player-tools__button player-tools__button--small" type="button" data-lobby-refresh>Refresh</button>
+					</div>
+					<ul class="room-tools__lobby-list" data-lobby-list hidden></ul>
+					<p class="room-tools__live" data-lobby-status role="status" aria-live="polite">Open rooms are listed here.</p>
+					<p class="room-tools__name-note">A lobby shows its game, how many players are inside and how long the room has left. The host can remove a player, and a removed player cannot rejoin while the room is open.</p>
+				</section>
+			)}
+			<!-- Outside the chat panel on purpose: a room listed for strangers still
+			     needs a host who can remove one, even when chat is turned off. -->
+			<div class="room-tools__members">
+				<p class="room-tools__name-note">In this room</p>
+				<ul class="room-tools__roster" data-chat-roster hidden aria-label="Connected members"></ul>
 			</div>
 			<form class="room-tools__name" data-profile-name>
 				<label for="profile-display-name">Your display name</label>
@@ -122,12 +140,11 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 					<input id="chat-input" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
 					<button class="player-tools__button player-tools__button--primary" type="submit" disabled>Send</button>
 				</form>
-				<ul class="room-tools__chat-roster" data-chat-roster hidden aria-label="Connected members"></ul>
 			</div>
 			)}
 			<div class="room-tools__status">
 				<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
-				<div data-room-code-panel hidden><span>Share this room code privately:</span> <output data-room-code></output> <button class="player-tools__button player-tools__button--small" type="button" data-room-copy>Copy code</button> <button class="player-tools__button player-tools__button--small" type="button" data-room-leave disabled>Leave room</button></div>
+				<div data-room-code-panel hidden><span class="room-tools__code-note">Room code (this room is also listed publicly):</span> <output data-room-code></output> <button class="player-tools__button player-tools__button--small" type="button" data-room-copy>Copy code</button> <button class="player-tools__button player-tools__button--small" type="button" data-room-leave disabled>Leave room</button></div>
 			</div>
 		</section>
 
@@ -240,8 +257,14 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	.room-tools__chat-form label { grid-column: 1 / -1; color: var(--text-strong); font-size: var(--text-small); }
 	.room-tools__chat-form input { min-height: 2.7rem; width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-strong); background: var(--surface-raised, var(--glass-bg)); font: inherit; }
 	.room-tools__chat-form input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
-	.room-tools__chat-roster { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
-	.room-tools__chat-roster li { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.55rem; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--text-micro); }
+	.room-tools__lobbies { grid-column: 1 / -1; display: grid; gap: 0.55rem; padding-top: 0.9rem; border-top: 1px solid var(--glass-border); }
+	.room-tools__lobbies-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+	.room-tools__lobbies h3 { margin: 0; color: var(--text-strong); font-size: var(--text-body); }
+	.room-tools__lobby-list { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+	.room-tools__members { grid-column: 1 / -1; display: grid; gap: 0.4rem; padding-top: 0.9rem; border-top: 1px solid var(--glass-border); }
+	.room-tools__roster { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+	.room-tools__live { min-height: 1.5em; }
+	.room-tools__code-note { color: var(--text-strong); font-size: var(--text-small); }
 	.room-tools__status { grid-column: 1 / -1; min-height: 1.5em; }
 	.room-tools__status output { margin-inline: 0.4rem; color: var(--text-strong); font-family: var(--font-mono, monospace); overflow-wrap: anywhere; user-select: all; }
 	.room-tools__status > div { margin-top: 0.35rem; }

@@ -163,6 +163,11 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 	const imageChip = byAttr('dm-image-chip');
 	const imageName = byAttr('dm-image-name');
 	const imageRemove = byAttr<HTMLButtonElement>('dm-image-remove');
+	// Two status lines, two scopes: `status` sits under the handle form and
+	// answers "open this conversation", `sendStatus` sits under the composer and
+	// answers "did this message leave". Mixing them would put a send failure
+	// above the fold, next to an unrelated field.
+	const sendStatus = root.querySelector<HTMLElement>('[data-dm-send-status]');
 
 	let config: DmConfig = { retentionDays: 60, maxTextLength: 2000, images: { enabled: true, maxEdge: 1600, allowedTypes: ['image/png', 'image/jpeg', 'image/webp'] } };
 	let conversations: Conversation[] = [];
@@ -174,6 +179,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 	const mountedNs = new Set<number>();
 
 	const say = (message: string): void => { status.textContent = message; };
+	const saySend = (message: string): void => { if (sendStatus) sendStatus.textContent = message; };
 	const connSay = (message: string): void => { conn.textContent = message; };
 
 	function renderDisclosure(): void {
@@ -197,6 +203,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 			const button = document.createElement('button');
 			button.type = 'button';
 			button.dataset.dmOpen = conversation.id;
+			button.className = 'glass-item dm-list__button';
 			if (active?.id === conversation.id) button.setAttribute('aria-current', 'true');
 			const name = document.createElement('span');
 			name.className = 'dm-list__name';
@@ -445,7 +452,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 	async function sendMessage(): Promise<void> {
 		if (!active) return;
 		const body = textInput.value;
-		if (!body.trim() && !pendingImage) { say(copyFor('empty_message')); return; }
+		if (!body.trim() && !pendingImage) { saySend(copyFor('empty_message')); return; }
 		const buttons = composer.querySelectorAll('button');
 		buttons.forEach((button) => { button.disabled = true; });
 		try {
@@ -461,10 +468,10 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 			textInput.value = '';
 			clearPendingImage();
 			appendSent(data.message);
-			say('Message sent.');
+			saySend('Message sent.');
 			void refreshConversations();
 		} catch (error) {
-			fail(error);
+			saySend(error instanceof ApiError ? copyFor(error.message) : copyFor(error));
 		} finally {
 			buttons.forEach((button) => { button.disabled = false; });
 		}

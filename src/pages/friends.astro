@@ -2,14 +2,17 @@
 /**
  * BNJI.NET — chat plan Phase E (plan §8.1, §8.3): friends & presence page.
  *
- * Account-only surface: requests by exact handle, accept/decline/cancel,
- * remove, block/unblock, and online dots for accepted friends (fed by the
- * Presence socket the client opens — the server decides who sees whom,
- * §8.1). Surfaces reuse the site's glass language directly: every panel is
- * a `data-glass` element (styles/glass.css) and the submit control is a
- * GlassButton, so this page cannot drift from the rest of the site.
- * The disclosure below is the phase's plain-language copy (§9.5/§11 wording
- * mirrored): rows live with the account, nothing is emailed or pushed.
+ * Account-only surface: find an account by handle fragment, send/answer
+ * requests, remove, block/unblock, and online dots for accepted friends (fed by
+ * the Presence socket the client opens — the server decides who sees whom, §8.1).
+ *
+ * The page is deliberately built from the global layer and nothing else: panels
+ * are `data-glass` elements, fields are `.glass-field`, controls are
+ * `.glass-button`/`.glass-tabs` (the same slab the Admin section nav uses), and
+ * every status line is a `.glass-status` placed under the input it belongs to.
+ * That leaves no page-private button or field style here to drift, and it keeps
+ * the copy to one line per block — the disclosure below is the only paragraph,
+ * because §9.5/§11 requires it.
  */
 import Layout from '../layouts/Layout.astro';
 import PageHeader from '../components/PageHeader.astro';
@@ -26,62 +29,85 @@ import GlassButton from '../components/GlassButton.astro';
 	/>
 
 	<div class="container friends-body" data-friends-root>
-		<p class="friends-status" data-friends-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
-
-		<section class="friends-panel" data-friends-signin data-glass="raised" hidden>
+		<section class="friends-panel" data-friends-signin data-glass="raised large" hidden>
 			<h2>Friends are for accounts</h2>
 			<p>
-				Friend requests and presence belong to a registered account so they stay attached
-				to whoever owns them. <a href="/games/">Create one on the Games page</a> (or sign
-				in there with your recovery code), then come back.
+				<a href="/games/">Create or sign in to an account on the Games page</a>, then come
+				back.
 			</p>
 		</section>
 
-		<section class="friends-panel" data-friends-signed-in data-glass="raised" hidden>
+		<section class="friends-panel" data-friends-signed-in data-glass="raised large" hidden>
 			<p class="friends-disclosure">
-				Friend requests, friendships and blocks are stored while your account exists —
-				delete the account and they leave with it (they appear in your account export too).
-				Which friends are online shows only to accepted friends, and only while someone has
-				a page open; nothing is emailed or pushed. Your friend list is private: nobody else
-				can see it.
+				Requests, blocks and online status are stored with your account and included in
+				your export; deleting the account removes them. Your lists stay private.
 			</p>
 
-			<form class="friends-request" data-friends-request-form>
-				<label for="friends-request-handle">Send a request by exact handle</label>
-				<div class="friends-request__row">
-					<input id="friends-request-handle" name="handle" type="text" placeholder="exact handle"
-						pattern="[a-z0-9_]{3,20}" minlength="3" maxlength="20" autocomplete="off"
-						autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go"
-						required data-friends-request-handle />
-					<GlassButton type="submit" variant="primary">Send request</GlassButton>
-				</div>
-				<p class="friends-hint">Handles are matched exactly — no directory, no suggestions. They accept, decline or block; a mutual request becomes friends automatically.</p>
-			</form>
+			<div class="friends-forms">
+				<form class="friends-form" data-friends-request-form>
+					<label class="glass-label" for="friends-request-handle">Send a request</label>
+					<div class="friends-form__row">
+						<input id="friends-request-handle" class="glass-field" name="handle" type="text"
+							placeholder="exact handle" pattern="[a-z0-9_]{3,20}" minlength="3" maxlength="20"
+							autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"
+							enterkeyhint="go" required data-friends-request-handle />
+						<GlassButton type="submit" variant="primary">Request</GlassButton>
+					</div>
+					<p class="glass-status" data-friends-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
+				</form>
 
-			<div class="friends-grid">
-				<section class="friends-section" data-glass="quiet" aria-labelledby="friends-incoming-title">
-					<h2 id="friends-incoming-title">Requests</h2>
+				<form class="friends-form" data-people-form data-people-panel>
+					<label class="glass-label" for="people-query">Find people</label>
+					<div class="friends-form__row">
+						<input id="people-query" class="glass-field" name="query" type="search"
+							placeholder="handle or part of one" maxlength="20" autocomplete="off"
+							autocapitalize="none" autocorrect="off" spellcheck="false"
+							enterkeyhint="search" data-people-query />
+						<GlassButton type="submit" variant="quiet" size="sm">Search</GlassButton>
+					</div>
+					<p class="glass-status" data-people-status role="status" aria-live="polite" aria-atomic="true"></p>
+					<ul class="friends-list" data-people-list role="list"></ul>
+					<p class="friends-empty" data-people-empty hidden></p>
+				</form>
+			</div>
+
+			<div class="friends-lists">
+				<nav class="glass-tabs friends-tabs" aria-label="Friend lists" data-glass="raised" data-friends-tabs>
+					<span class="glass-tabs__indicator" aria-hidden="true" data-friends-tabs-indicator></span>
+					<button class="glass-tabs__item" type="button" aria-selected="true" data-friends-tab="incoming">
+						Requests<span class="friends-tabs__count" data-friends-count="incoming" hidden></span>
+					</button>
+					<button class="glass-tabs__item" type="button" aria-selected="false" data-friends-tab="friends">
+						Friends<span class="friends-tabs__count" data-friends-count="friends" hidden></span>
+					</button>
+					<button class="glass-tabs__item" type="button" aria-selected="false" data-friends-tab="outgoing">
+						Sent<span class="friends-tabs__count" data-friends-count="outgoing" hidden></span>
+					</button>
+					<button class="glass-tabs__item" type="button" aria-selected="false" data-friends-tab="blocked">
+						Blocked<span class="friends-tabs__count" data-friends-count="blocked" hidden></span>
+					</button>
+				</nav>
+
+				<div class="friends-tabpanel" data-friends-panel="incoming" aria-labelledby="friends-incoming-title">
+					<h2 class="friends-vh" id="friends-incoming-title">Pending requests</h2>
 					<ul class="friends-list" data-friends-list="incoming" role="list"></ul>
 					<p class="friends-empty" data-friends-empty="incoming" hidden>No pending requests.</p>
-				</section>
-
-				<section class="friends-section" data-glass="quiet" aria-labelledby="friends-title">
-					<h2 id="friends-title">Friends</h2>
+				</div>
+				<div class="friends-tabpanel" data-friends-panel="friends" hidden>
+					<h2 class="friends-vh">Friends</h2>
 					<ul class="friends-list" data-friends-list="friends" role="list"></ul>
-					<p class="friends-empty" data-friends-empty="friends" hidden>No friends yet — send a request above.</p>
-				</section>
-
-				<section class="friends-section" data-glass="quiet" aria-labelledby="friends-outgoing-title">
-					<h2 id="friends-outgoing-title">Sent</h2>
+					<p class="friends-empty" data-friends-empty="friends" hidden>No friends yet — find someone above.</p>
+				</div>
+				<div class="friends-tabpanel" data-friends-panel="outgoing" hidden>
+					<h2 class="friends-vh">Requests you sent</h2>
 					<ul class="friends-list" data-friends-list="outgoing" role="list"></ul>
 					<p class="friends-empty" data-friends-empty="outgoing" hidden>No requests waiting for a reply.</p>
-				</section>
-
-				<section class="friends-section" data-glass="quiet" aria-labelledby="friends-blocked-title">
-					<h2 id="friends-blocked-title">Blocked</h2>
+				</div>
+				<div class="friends-tabpanel" data-friends-panel="blocked" hidden>
+					<h2 class="friends-vh">Blocked accounts</h2>
 					<ul class="friends-list" data-friends-list="blocked" role="list"></ul>
 					<p class="friends-empty" data-friends-empty="blocked" hidden>Nobody is blocked.</p>
-				</section>
+				</div>
 			</div>
 		</section>
 	</div>
@@ -94,63 +120,66 @@ import GlassButton from '../components/GlassButton.astro';
 </script>
 
 <style>
-	.friends-body { display: grid; gap: 1rem; padding-block: 1rem 3rem; }
-	.friends-status { min-height: 1.25rem; margin: 0; color: var(--text-muted); font-size: var(--text-small); }
-	.friends-status[data-tone='error'] { color: var(--danger); }
+	.friends-body { display: grid; gap: var(--space-4); padding-block: var(--space-4) var(--space-7); }
 
-	/* The surface itself comes from [data-glass] (glass.css) — only layout. */
-	.friends-panel { padding: clamp(1.15rem, 2.4vw, 1.75rem); }
+	/* Layout only: the material, buttons, fields, tabs and status lines all come
+	   from styles/glass.css, so nothing here restates them. `raised large` is the
+	   content-panel pairing — raised's material, large's corner and inset. */
+	/* `large` declares --parent-pad: 24px for the concentric radius maths, so the
+	   panel's own inset uses the same token instead of a private clamp. */
+	.friends-panel { padding: var(--glass-pad-lg); }
 	.friends-panel[hidden] { display: none; }
-	.friends-panel > h2 { margin: 0 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
+	.friends-panel > h2 { margin: 0 0 var(--space-2); color: var(--text-strong); font-size: var(--text-title); }
 	.friends-panel p { margin: 0; max-width: 52rem; color: var(--text-muted); }
 	.friends-panel a { color: var(--text-strong); }
+	.friends-disclosure { margin-block-end: var(--space-4); font-size: var(--text-small); line-height: 1.6; }
 
-	.friends-disclosure { margin-bottom: 1.25rem !important; font-size: var(--text-small); line-height: 1.6; }
+	.friends-forms { display: grid; gap: var(--space-5); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }
+	.friends-form__row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+	.friends-form .glass-status { margin-block-start: var(--space-1); }
 
-	.friends-request label { display: block; margin-bottom: 0.4rem; color: var(--text-strong); font-weight: 600; }
-	.friends-request__row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
-	.friends-request__row input {
-		flex: 1 1 14rem;
-		min-width: 0;
-		padding: 0.6rem 0.85rem;
-		border: 1px solid var(--line, var(--glass-border));
-		border-radius: var(--radius-md);
-		background: var(--bg-raised, transparent);
-		color: var(--text-strong);
-		font: inherit;
+	.friends-lists { margin-block-start: var(--space-5); }
+	/* A wrapped row of tabs cannot be a stadium: --parent-radius feeds both the
+	   strip's own corner and the slab inside it (same fix the admin nav uses).
+	   The attribute is part of the selector so it outranks the variant rule. */
+	.friends-tabs { flex-wrap: wrap; }
+
+	@media (max-width: 720px) {
+		[data-glass~='raised'].friends-tabs {
+			--parent-radius: var(--glass-radius-md);
+		}
 	}
-	.friends-hint { margin-top: 0.55rem !important; font-size: var(--text-small); }
+	.friends-tabs__count {
+		margin-inline-start: var(--space-1);
+		color: var(--accent);
+		font-variant-numeric: tabular-nums;
+	}
+	.friends-tabpanel { padding-block-start: var(--space-4); }
+	.friends-tabpanel[hidden] { display: none; }
+	.friends-vh {
+		position: absolute;
+		inline-size: 1px;
+		block-size: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
 
-	.friends-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); margin-top: 1.5rem; }
-	.friends-section { padding: clamp(0.85rem, 1.6vw, 1.15rem); }
-	.friends-section h2 { margin: 0 0 0.75rem; color: var(--text-strong); font-size: var(--text-body); }
-	.friends-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+	.friends-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+	/* The row's fill, boundary and radius are .glass-item (glass.css); this is
+	   only how its two halves sit against each other. */
 	.friends-row {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.5rem;
-		padding: 0.5rem 0.6rem;
-		border: 1px solid var(--line, rgba(255, 255, 255, 0.07));
-		border-radius: var(--radius-sm);
+		gap: var(--space-2);
 	}
 	.friends-row__who { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; color: var(--text-strong); }
 	.friends-row__name { color: var(--text-muted); font-size: var(--text-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.friends-row__actions { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; }
-
-	/* Row controls are client-rendered but carry GlassButton's exact classes —
-	   one visual language, whether the button came from Astro or from JS. */
+	.friends-row__actions { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
 	.friends-row__actions :is(button, a) { text-decoration: none; }
-	.friends-btn--muted { color: var(--text-muted) !important; }
-	.friends-btn--danger {
-		color: var(--danger) !important;
-		border-color: var(--danger-line) !important;
-		background: var(--danger-soft) !important;
-	}
 
-	/* Online dot: status colour from tokens (never colour alone — the client
-	   sets an aria-label and the row names the handle). */
+	/* Online dot: never colour alone — the client keeps an aria-label on it. */
 	.friends-online { color: var(--signal-live); font-size: 0.7rem; line-height: 1; }
 	.friends-empty { margin: 0; color: var(--text-muted); font-size: var(--text-small); }
 </style>

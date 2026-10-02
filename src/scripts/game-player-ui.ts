@@ -10,7 +10,7 @@ type AccountState = { authenticated: boolean; displayName?: string; saveCount?: 
 
 function $(selector: string, root: HTMLElement): HTMLElement | null { return root.querySelector<HTMLElement>(selector); }
 function say(element: HTMLElement | null, message: string): void { if (element) element.textContent = message; }
-function button(label: string, action: () => void | Promise<void>, className = 'player-tools__button'): HTMLButtonElement {
+function button(label: string, action: () => void | Promise<void>, className = 'glass-button glass-button--quiet'): HTMLButtonElement {
 	const control = document.createElement('button');
 	control.type = 'button';
 	control.className = className;
@@ -46,37 +46,40 @@ export async function mountPlayerTools(root: HTMLElement): Promise<void> {
 		savesList.replaceChildren();
 		if (!saves.length) {
 			const empty = document.createElement('p');
-			empty.className = 'player-tools__empty';
+			empty.className = 'player-tools__empty glass-note';
 			empty.textContent = 'No local save snapshots yet. Your existing Lab bests are copied here when available; local progress stays on this device unless you sign in and sync.';
 			savesList.appendChild(empty);
 			return;
 		}
 		for (const save of saves) {
 			const item = document.createElement('article');
-			item.className = 'player-tools__save';
+			item.className = 'player-tools__save glass-item glass-row';
 			const details = document.createElement('div');
+			details.className = 'glass-row__main';
 			const title = document.createElement('strong');
 			title.textContent = GAME_TITLES[save.gameId] ?? save.gameId;
 			const meta = document.createElement('p');
 			meta.textContent = `${save.slotId} · schema ${save.schemaVersion} · ${save.revision === null ? 'not synced' : `cloud revision ${save.revision}`}`;
 			details.appendChild(title); details.appendChild(meta);
 			const state = document.createElement('span');
-			state.className = save.conflict ? 'player-tools__state player-tools__state--conflict' : save.dirty ? 'player-tools__state' : 'player-tools__state player-tools__state--saved';
+			// A state is a label on the row, so it is a chip; only the conflict needs a
+			// colour, and that colour is the global one.
+			state.className = save.conflict ? 'player-tools__state chip chip--danger' : 'player-tools__state chip';
 			state.textContent = save.conflict ? 'Needs a choice' : save.dirty ? 'Local / pending' : 'Synced';
 			item.appendChild(details); item.appendChild(state);
 			if (save.conflict) {
 				const choices = document.createElement('div');
-				choices.className = 'player-tools__choices';
+				choices.className = 'player-tools__choices glass-row__actions';
 				choices.appendChild(button(save.conflict.deleted ? 'Accept cloud deletion' : 'Use cloud version', async () => {
 					await chooseCloudVersion(save.gameId, save.slotId);
 					await renderSaves();
 					say(live, save.conflict?.deleted ? 'Cloud deletion accepted. The local snapshot was removed.' : 'Cloud version selected.');
-				}, 'player-tools__button player-tools__button--small'));
+				}, 'glass-button glass-button--quiet glass-button--sm'));
 				choices.appendChild(button(save.conflict.deleted ? 'Restore this device version' : 'Keep this device version', async () => {
 					const result = await chooseLocalVersion(save.gameId, save.slotId);
 					await renderSaves();
 					say(live, result === 'saved' ? 'This device version was synced.' : result === 'conflict' ? 'The cloud changed again. Review the conflict and choose again.' : 'Could not sync this version; it remains on this device.');
-				}, 'player-tools__button player-tools__button--small'));
+				}, 'glass-button glass-button--quiet glass-button--sm'));
 				item.appendChild(choices);
 			}
 			savesList.appendChild(item);

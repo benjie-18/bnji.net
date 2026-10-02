@@ -127,6 +127,7 @@ export const GAMES = defineGameCatalog([
 	},
 ] as const);
 
+const CATALOG: readonly Game[] = GAMES;
 const GAME_BY_ID = new Map<string, Game>(GAMES.map((game) => [game.id, game]));
 
 export function getGame(id: string): Game | undefined {
@@ -135,6 +136,20 @@ export function getGame(id: string): Game | undefined {
 
 export function getGamesByStatus(status: GameStatus): Game[] {
 	return GAMES.filter((game) => game.status === status);
+}
+
+/**
+ * Games hosted on their own route — everything except the Lab entries, which
+ * are pointers to `/lab/#…` and have no server side at all.
+ *
+ * This is the set a private room can be created for: a Lab experiment has no
+ * page, no verifier and no protocol adapter, so a room "for" it would be a
+ * code in a menu that does nothing. A standalone game without a registered room
+ * authority (Stack) still gets a real room: shared membership, chat and
+ * moderation, with game-state frames refused by design.
+ */
+export function getStandaloneGames(): Game[] {
+	return CATALOG.filter((game) => game.status === 'available' && !game.labHref && Boolean(game.href));
 }
 
 /** Strict score-mode identifier check shared by API validation and tests. */

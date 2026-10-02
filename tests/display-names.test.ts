@@ -15,7 +15,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import type { APIContext } from 'astro';
 import { createTestD1 } from './support/d1.mjs';
-import { isValidHandle, sanitizeDisplayName } from '../src/server/display-name';
+import { formatPublicLabel, isValidHandle, sanitizeDisplayName, sanitizePublicLabel } from '../src/server/display-name';
 import { NAMES_CONFIG } from '../src/config/names.config';
 import { purgeExpiredGuestProfiles, runRetentionSweep, type RetentionDb } from '../src/server/tracking-retention';
 
@@ -329,4 +329,43 @@ test('the retention sweep expires guest display names on the fixed 30-day window
 	const purged = await purgeExpiredGuestProfiles(db as unknown as RetentionDb, now - 30 * day);
 	assert.equal(purged, 50, 'one bounded primary batch');
 	assert.equal((db.raw.prepare('SELECT COUNT(*) AS n FROM guest_profiles WHERE updated_at < ?').get(now - 30 * day) as { n: number }).n, 5, 'the rest waits for the next sweep');
+});
+
+test('public labels compose at read time, handle first, and never truncate a name', () => {
+	// The composition every shared surface renders: `@handle · Display Name`.
+	assert.equal(formatPublicLabel({ handle: 'anne', displayName: 'Anne B' }), '@anne · Anne B');
+	// A handle alone is a complete label; a guest (no handle) keeps their name.
+	assert.equal(formatPublicLabel({ handle: 'anne' }), '@anne');
+	assert.equal(formatPublicLabel({ handle: null, displayName: 'Guest Guy' }), 'Guest Guy');
+	assert.equal(formatPublicLabel({}), null);
+	assert.equal(formatPublicLabel({ handle: '', displayName: '' }), null);
+
+	// An invalid handle is not an identity: the name renders alone.
+	assert.equal(formatPublicLabel({ handle: 'ANNE', displayName: 'Anne B' }), 'Anne B');
+	assert.equal(formatPublicLabel({ handle: 'anne!', displayName: 'Anne B' }), 'Anne B');
+	// A name that cannot be sanitised is dropped, not escaped into the label.
+	assert.equal(formatPublicLabel({ handle: 'anne', displayName: 'x'.repeat(30) }), '@anne');
+	assert.equal(formatPublicLabel({ handle: 'anne', displayName: '\u200b' }), '@anne');
+
+	// The secondary label is dropped rather than truncated mid-name: the handle
+	// is the identity, and a half-name is worse than no name.
+	const longName = 'Name That Will Not Fit Beside A Twenty Character Handle';
+	assert.equal(formatPublicLabel({ handle: 'twenty_character_handle'.slice(0, 20), displayName: longName }), '@twenty_character_han');
+});
+
+test('sanitizePublicLabel re-validates a label that crossed a boundary', () => {
+	// The DO must not run a composed label through sanitizeDisplayName — that
+	// charset refuses `@` and the separator, which would degrade every handle
+	// label to a fallback. This is the validator for the other side.
+	assert.deepEqual(sanitizePublicLabel('@anne · Anne B'), { ok: true, label: '@anne · Anne B' });
+	assert.deepEqual(sanitizePublicLabel('@anne'), { ok: true, label: '@anne' });
+	assert.deepEqual(sanitizePublicLabel('Guest Guy'), { ok: true, label: 'Guest Guy' });
+	// A label whose handle half is invalid degrades to its name half — the same
+	// rule formatPublicLabel applies — and only fails when nothing usable remains.
+	assert.deepEqual(sanitizePublicLabel('@ANNE · Anne'), { ok: true, label: 'Anne' });
+	assert.deepEqual(sanitizePublicLabel('@ANNE'), { ok: false });
+	assert.deepEqual(sanitizePublicLabel('@anne · ' + 'x'.repeat(48)), { ok: false });
+	assert.deepEqual(sanitizePublicLabel('x'.repeat(49)), { ok: false });
+	assert.deepEqual(sanitizePublicLabel(''), { ok: false });
+	assert.deepEqual(sanitizePublicLabel(42), { ok: false });
 });

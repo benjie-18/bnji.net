@@ -86,6 +86,9 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			CREATE TABLE IF NOT EXISTS game_room_mutes (
 				principal_hash TEXT PRIMARY KEY, muted_at INTEGER NOT NULL
 			);
+			CREATE TABLE IF NOT EXISTS game_room_kicks (
+				principal_hash TEXT PRIMARY KEY, kicked_at INTEGER NOT NULL
+			);
 		`);
 	}
 
@@ -97,6 +100,12 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		const principal = readPrincipal(request);
 		if (!principal) return json({ error: 'room_authentication_required' }, 401);
 		if (url.pathname === '/create' && request.method === 'POST') return this.createRoom(request, principal);
+		// `/lobby`: the read the open-lobby list probes every candidate room with.
+		// It authenticates like every other path (the gateway always resolves a
+		// principal), but it answers about the ROOM, never about the caller — the
+		// Worker caches one list per game and shares it with every visitor, so a
+		// per-visitor answer would poison the cache.
+		if (url.pathname === '/lobby' && request.method === 'GET') return this.lobbyProbe();
 		if (url.pathname === '/ws' && request.method === 'GET') return this.acceptConnection(request, principal);
 		if (url.pathname === '/report' && request.method === 'POST') return this.handleReport(request, principal);
 		if (url.pathname === '/game/verify_win' && request.method === 'POST') return this.verifyWin(request, principal);
@@ -130,6 +139,40 @@ export class GameRoom extends DurableObject<RoomEnv> {
 	}
 	private room(): RoomRow | null {
 		return this.state.storage.sql.exec<RoomRow>('SELECT game_id, owner_hash, created_at, expires_at, revision, state_json, last_state_at FROM game_room WHERE id = 1').toArray()[0] ?? null;
+	}
+
+	/**
+	 * The open-lobby probe (`GET /lobby`): exactly what `listOpenLobbies` needs
+	 * to decide whether this room is worth listing, and nothing else. A room
+	 * that is gone answers `live: false` rather than 404 — the caller asked a
+	 * yes/no question — and `players` is the same count `acceptConnection`
+	 * measures a seat against, so "the list says joinable" and "the next join
+	 * succeeds" cannot disagree.
+	 */
+	private lobbyProbe(): Response {
+		const room = this.room();
+		const now = Date.now();
+		if (!room || roomIsExpired(room.expires_at, now)) return json({ live: false }, 200);
+		const players = this.state.storage.sql.exec<{ count: number }>(
+			'SELECT COUNT(*) AS count FROM game_room_members WHERE reconnect_until IS NULL OR reconnect_until >= ?', now,
+		).toArray()[0]?.count ?? 0;
+		return json({
+			live: true, gameId: room.game_id, players, capacity: ROOM_CAPACITY,
+			createdAt: Number(room.created_at), expiresAt: Number(room.expires_at), revision: Number(room.revision),
+		});
+	}
+
+	/** A removed member stays removed for the room's lifetime — the lockout table dies with the room. */
+	private isKicked(hash: string): boolean {
+		return Boolean(this.state.storage.sql.exec<{ principal_hash: string }>(
+			'SELECT principal_hash FROM game_room_kicks WHERE principal_hash = ?', hash,
+		).toArray()[0]);
+	}
+	private recordKick(hash: string): void {
+		this.state.storage.sql.exec(
+			'INSERT INTO game_room_kicks (principal_hash, kicked_at) VALUES (?, ?) ON CONFLICT(principal_hash) DO UPDATE SET kicked_at = excluded.kicked_at',
+			hash, Date.now(),
+		);
 	}
 	private decodeState(jsonText: string): unknown {
 		try { return JSON.parse(jsonText); } catch { return null; }
@@ -166,6 +209,20 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		const now = Date.now();
 		if (!room || roomIsExpired(room.expires_at, now)) return json({ error: 'room_expired' }, 410);
 		const hash = await this.principalHash(principal);
+		if (this.isKicked(hash)) {
+			// Accept the upgrade and close at once. A refused upgrade reaches the
+			// browser as a generic connection error; a 4003 close is the only way
+			// the client can say *why* the door is shut, and the lockout is what
+			// makes the sentence true the second time it happens.
+			const pair = new WebSocketPair();
+			this.state.acceptWebSocket(pair[1]);
+			pair[1].serializeAttachment({
+				principalHash: hash, memberId: '', rateSecond: Math.floor(now / 1000), rateCount: 0,
+				chatTokens: 0, chatTokensAt: now, label: '',
+			} satisfies Attachment);
+			try { pair[1].close(4003, 'Removed by the host'); } catch { /* no-op */ }
+			return new Response(null, { status: 101, webSocket: pair[0] });
+		}
 		this.state.storage.sql.exec('DELETE FROM game_room_members WHERE reconnect_until IS NOT NULL AND reconnect_until < ?', now);
 		let member: MemberRow | null = this.state.storage.sql.exec<MemberRow>(
 			'SELECT principal_hash, member_id, reconnect_until FROM game_room_members WHERE principal_hash = ?', hash,
@@ -331,6 +388,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		).toArray()[0];
 		if (!target) return this.reject(socket, 'not_allowed');
 		this.state.storage.sql.exec('DELETE FROM game_room_members WHERE member_id = ?', member);
+		this.recordKick(target.principal_hash);
 		this.logChatAction('kick', attachment.principalHash, target.principal_hash);
 		for (const peer of this.state.getWebSockets()) {
 			const peerAttachment = socketAttachment(peer);
@@ -472,6 +530,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 			).toArray()[0];
 			if (!target) return json({ ok: true, kicked: false });
 			this.state.storage.sql.exec('DELETE FROM game_room_members WHERE principal_hash = ?', hash);
+			this.recordKick(hash);
 			this.logChatAction('kick_admin', 'administrator', hash);
 			for (const peer of this.state.getWebSockets()) {
 				if (socketAttachment(peer)?.principalHash !== hash) continue;
@@ -528,6 +587,7 @@ export class GameRoom extends DurableObject<RoomEnv> {
 		this.state.storage.sql.exec('DELETE FROM game_room_chat');
 		this.state.storage.sql.exec('DELETE FROM game_room_chat_log');
 		this.state.storage.sql.exec('DELETE FROM game_room_mutes');
+		this.state.storage.sql.exec('DELETE FROM game_room_kicks');
 		this.state.storage.sql.exec('DELETE FROM game_room');
 	}
 

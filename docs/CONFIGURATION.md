@@ -377,6 +377,45 @@ The DM routes read `FRIENDS_CONFIG.enabled` too: with it on, `POST
 pair are accepted friends and unblocked — owner answer D7, enforced from
 Phase E. Reads, media and the conversation socket stay membership-gated.
 
+## 8e. Open lobbies & the people index — PUBLIC
+
+Two discoverability surfaces share one shape: a read that was previously
+possible only by knowing an exact code or handle becomes possible by looking.
+Both are public configuration with a rollback switch, and both are registered
+in [`DATA.md`](./DATA.md) §11 because they change *who can see what*, even
+though neither adds a stored field.
+
+`src/config/lobby.config.ts` (`LOBBY_CONFIG`, re-exported from
+`src/config/index.ts`) governs `GET /api/games/lobbies` and the lobby panel in
+the Games page rooms section. The room registry (`room_registry`, shared with
+chat moderation) is probed live through each room's Durable Object `GET /lobby`;
+a room that is full, gone or too slow is **absent from the list** rather than
+listed and broken.
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `enabled` | `src/config/lobby.config.ts` | Master switch, default `true`. `false` = `GET /api/games/lobbies` answers `503 lobby_disabled` and the panel is not rendered. Rooms still work by code. |
+| `listLimit` | same | 24 registry candidates per request. Over → the response says `truncated: true` instead of paging. |
+| `probeConcurrency` | same | 8 DO probes in flight. Bounds the subrequest fan-out of one list request. |
+| `probeTimeoutMs` | same | 1,500 ms per room. A room that does not answer inside it is dropped (`stale: true`). |
+| `cacheTtlSeconds` | same | 10 s shared KV cache (`BOARD_KV`, key `bnji-lobby:<gameId or all>`). The public list is cached, never per-visitor — the payload carries only joinability facts. |
+| `minRefreshSeconds` | same | 15 s floor between manual refreshes; the panel's auto-refresh uses `max(this, refreshAfterSeconds)` from the response. |
+| `rate` | same | 30 requests/min per IP (`429 rate_limited` + `retry-after`). |
+
+`src/config/directory.config.ts` (`DIRECTORY_CONFIG`) governs `GET
+/api/people` and the people panel on `/friends/`. It is account-only: no
+account → `403 account_required`, and with Phase E off the whole index answers
+`503 friends_disabled` because a result would have no action to offer.
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `enabled` | `src/config/directory.config.ts` | Master switch, default `true`. `false` = `503 directory_disabled`; exact-handle requests on `/friends/` keep working. |
+| `pageSize` | same | 30 rows per search; the response reports `truncated` instead of paging. |
+| `minQueryLength` | same | 3 characters. Shorter → `400 query_too_short`; the panel never sends one. |
+| `maxQueryLength` | same | 20 characters (the handle ceiling) → `400 invalid_query` beyond it. |
+| `rate` | same | 30 searches/min per account, keyed by `sha256("player:<id>")` in `BOARD_KV` (prefix `people-index:`). Breach → `429 rate_limited`. |
+| `searchDebounceMs` | same | 350 ms after the last keystroke before the panel asks. Public config rather than a constant buried in `src/scripts/`. |
+
 ## 9. Deployment — INFRA (change deliberately, never silently)
 
 | Value | Location | Notes |

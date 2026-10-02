@@ -1,0 +1,113 @@
+---
+/**
+ * GameLeaderboard — one game's dedicated board, rendered from `/api/games/*`.
+ *
+ * The page itself is prerendered (title, board picker, empty table, back
+ * links); only the rows are fetched, so a build never needs D1 and a visitor
+ * without JavaScript still gets a readable page that says the board is loaded
+ * live. Rows arrive as text and are written with `textContent`, never markup.
+ */
+import { MODE_LABEL } from '../data/game-adapters';
+import type { Game } from '../data/games';
+
+interface Props {
+	game: Game;
+	modes: string[];
+}
+const { game, modes } = Astro.props;
+const modeLabel = (mode: string): string => MODE_LABEL[mode] ?? mode;
+// The board picker is a link per mode, so the page is still a page without
+// JavaScript; the client takes over the same links when it runs.
+const boardBase = `${(game.href ?? '/games/').replace(/\/$/g, '')}/leaderboard/`;
+---
+
+<section class="lb" data-leaderboard data-game-id={game.id} data-lb-modes={modes.join(',')}>
+	<div class="lb__head" data-glass="raised large">
+		<div class="lb__title">
+			<p class="eyebrow">LEADERBOARD / {game.id}</p>
+			<h2>{game.title}</h2>
+			<p class="lb__intro">Every row was replayed and accepted by the server.</p>
+		</div>
+		<div class="lb__aside">
+			{modes.length > 1 ? (
+				<nav class="glass-tabs" aria-label="Board" data-glass="quiet" data-lb-mode-list>
+					<span class="glass-tabs__indicator" aria-hidden="true" data-lb-mode-indicator></span>
+					{modes.map((mode) => (
+						<a class="glass-tabs__item" href={`${boardBase}?mode=${mode}`} data-lb-mode={mode}>{modeLabel(mode)}</a>
+					))}
+				</nav>
+			) : (
+				<p class="lb__board-name mono">{modeLabel(modes[0] ?? 'default')}</p>
+			)}
+			<!-- The standing line belongs to the board it describes, so it sits under
+			     the picker rather than floating above the table. -->
+			<p class="lb__standing glass-status" data-lb-standing role="status" aria-live="polite" aria-atomic="true">Checking your standing on this board…</p>
+			<a class="glass-button glass-button--primary glass-button--sm" href={game.href ?? '/games/'}>Play {game.title}</a>
+		</div>
+	</div>
+
+	<div class="lb__scroll">
+		<table class="lb__table">
+			<caption class="sr-only">Verified {modeLabel(modes[0] ?? 'default')} scores for {game.title}</caption>
+			<thead>
+				<tr>
+					<th scope="col" class="lb__col-rank">#</th>
+					<th scope="col">Player</th>
+					<th scope="col" class="lb__col-score">Score</th>
+					<th scope="col" class="lb__col-when">Achieved</th>
+				</tr>
+			</thead>
+			<tbody data-lb-rows>
+				<tr class="lb__row-note"><td colspan="4">Loading the board…</td></tr>
+			</tbody>
+		</table>
+	</div>
+
+	<div class="lb__pager">
+		<button type="button" class="glass-button glass-button--quiet glass-button--sm" data-lb-prev disabled>Previous 25</button>
+		<p class="lb__pager-note mono" data-lb-pager-note>Page 1</p>
+		<button type="button" class="glass-button glass-button--quiet glass-button--sm" data-lb-next disabled>Next 25</button>
+	</div>
+	<p class="lb__footnote">A board holds the 500 most recent verified rows, labelled by handle where one exists.</p>
+</section>
+
+<script>
+	import { mountLeaderboards } from '../scripts/game-leaderboard';
+	mountLeaderboards();
+</script>
+
+<style>
+	.lb { display: grid; gap: 1rem; padding-block: 0 4rem; }
+	.lb__head {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: start;
+		gap: 1rem clamp(1rem, 3vw, 2rem);
+		padding: var(--glass-pad-lg);
+	}
+	.lb__title h2 { margin: 0.3rem 0 0.4rem; color: var(--text-strong); font-size: var(--text-title); letter-spacing: var(--tracking-snug); }
+	.lb__intro { max-width: 62ch; margin: 0; color: var(--text-muted); line-height: 1.6; }
+	/* The aside is a stack of things that describe the board as a whole: which
+	   board, where you stand on it, and the way back to the game. */
+	.lb__aside { display: grid; gap: 0.75rem; justify-items: start; }
+	.lb__board-name { margin: 0; color: var(--text-muted); font-size: var(--text-small); }
+	.lb__standing { max-width: 44ch; }
+	.lb__scroll { overflow-x: auto; border-radius: var(--glass-radius-md); }
+	.lb__table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
+	.lb__table caption { text-align: start; }
+	.lb__table th,
+	.lb__table td { padding: 0.6rem 0.7rem; text-align: start; border-block-end: 1px solid var(--glass-border); }
+	.lb__table thead th { color: var(--text-muted); font-weight: 600; font-size: var(--text-micro); text-transform: uppercase; letter-spacing: 0.12em; }
+	.lb__col-rank { width: 3.5rem; }
+	.lb__col-score, .lb__col-when { text-align: end; white-space: nowrap; }
+	.lb__table td.lb__cell-score { color: var(--text-strong); font-family: var(--font-mono); font-size: var(--text-lead); }
+	.lb__row-me th, .lb__row-me td { background: var(--accent-soft); }
+	.lb__cell-when { color: var(--text-muted); white-space: nowrap; }
+	.lb__row-note td { color: var(--text-muted); font-style: italic; }
+	.lb__pager { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+	.lb__pager-note { margin: 0; color: var(--text-muted); font-size: var(--text-micro); }
+	.lb__footnote { margin: 0; color: var(--text-muted); font-size: var(--text-micro); line-height: 1.6; max-width: 80ch; }
+	@media (max-width: 700px) {
+		.lb__head { grid-template-columns: 1fr; }
+	}
+</style>

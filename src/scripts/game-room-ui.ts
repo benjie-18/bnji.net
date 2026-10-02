@@ -1,7 +1,10 @@
-import { connectGameRoom, createGameRoom, type RoomNotice } from './game-rooms';
+import { connectGameRoom, createGameRoom, type RoomNotice, type RoomCloseInfo } from './game-rooms';
 import { NAMES_CONFIG } from '../config/names.config';
 import { CHAT_CONFIG } from '../config/chat.config';
+import { LOBBY_CONFIG } from '../config/lobby.config';
 import { hasRegisteredAdapter } from '../data/game-adapters';
+import { getGame } from '../data/games';
+import type { LobbyList, LobbyRow } from '../server/game-lobby';
 
 /** Optional bridge so a game page can observe/send on the SAME room socket. */
 export type RoomObserver = {
@@ -101,7 +104,9 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 	function renderChat(frame: ChatFrame): void {
 		if (!chatList || seenChat.has(frame.n)) return;
 		const item = document.createElement('li');
-		item.className = 'room-tools__chat-item';
+		// JS-created rows carry the global primitive: an Astro-scoped rule can never
+		// reach a node that did not exist when the page compiled.
+		item.className = 'glass-item room-tools__chat-item';
 		item.dataset.chatN = String(frame.n);
 		const meta = document.createElement('span');
 		meta.className = 'room-tools__chat-meta';
@@ -142,7 +147,10 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 	function chatAction(label: string, run: (button: HTMLButtonElement) => void): HTMLButtonElement {
 		const button = document.createElement('button');
 		button.type = 'button';
-		button.className = 'room-tools__chat-action';
+		// Row material + control primitive, both global: a button built here has to
+		// look right on the Games page and inside a game page's RoomPanel, and
+		// neither page's scoped CSS can style it.
+		button.className = 'glass-button glass-button--quiet glass-button--sm room-tools__chat-action';
 		button.textContent = label;
 		button.addEventListener('click', () => run(button));
 		return button;
@@ -179,12 +187,19 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 		roster.replaceChildren();
 		for (const member of members) {
 			const item = document.createElement('li');
+			item.className = 'glass-item room-tools__roster-item';
 			const name = document.createElement('span');
 			name.textContent = `${member.label}${member.isHost ? ' · host' : ''}${member.muted ? ' · muted' : ''}`;
 			item.appendChild(name);
 			if (isHost && !member.isSelf) {
-				item.appendChild(chatAction('Kick', () => sendChatFrame({ v: 1, type: 'kick', member: member.memberId })));
-				if (!member.muted) item.appendChild(chatAction('Mute', () => sendChatFrame({ v: 1, type: 'mute', member: member.memberId })));
+				const kick = chatAction('Kick', () => sendChatFrame({ v: 1, type: 'kick', member: member.memberId }));
+				kick.setAttribute('aria-label', `Remove ${member.label} from the room`);
+				item.appendChild(kick);
+				if (!member.muted) {
+					const mute = chatAction('Mute', () => sendChatFrame({ v: 1, type: 'mute', member: member.memberId }));
+					mute.setAttribute('aria-label', `Mute ${member.label} for the rest of this room's life`);
+					item.appendChild(mute);
+				}
 			}
 			roster.appendChild(item);
 		}
@@ -231,6 +246,95 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 	});
 	if (!CHAT_CONFIG.enabled && chatPanel) chatPanel.hidden = true;
 
+	// ---------------------------------------------------------- open lobbies
+	// The list is a read of /api/games/lobbies, not a registry this panel keeps:
+	// a room that is full, gone or too slow to answer is absent rather than
+	// listed and broken. `data-lobby-scope` on the section is the game this page
+	// hosts; a page with no fixed game (the catalog) lists every game.
+	const lobbyPanel = root.querySelector<HTMLElement>('[data-room-lobbies]');
+	const lobbyList = root.querySelector<HTMLUListElement>('[data-lobby-list]');
+	const lobbyStatus = root.querySelector<HTMLElement>('[data-lobby-status]');
+	const lobbyRefresh = root.querySelector<HTMLButtonElement>('[data-lobby-refresh]');
+	const lobbyScope = lobbyPanel?.dataset.lobbyScope ?? '';
+	let lobbyTimer: number | undefined;
+	let lobbyCooldownUntil = 0;
+	const lobbySay = (message: string): void => { if (lobbyStatus) lobbyStatus.textContent = message; };
+
+	function minutesLeft(expiresAt: number): string {
+		const left = expiresAt - Date.now();
+		if (!Number.isFinite(left) || left <= 0) return 'closing now';
+		if (left < 90_000) return 'under a minute left';
+		return `${Math.round(left / 60_000)} min left`;
+	}
+
+	function lobbyRow(row: LobbyRow): HTMLLIElement {
+		const item = document.createElement('li');
+		item.className = 'glass-item room-lobby';
+		const who = document.createElement('span');
+		who.className = 'room-lobby__who';
+		const title = document.createElement('strong');
+		title.textContent = getGame(row.gameId)?.title ?? row.gameId;
+		const meta = document.createElement('span');
+		meta.className = 'room-lobby__meta';
+		meta.textContent = `${row.players}/${row.capacity} players · ${minutesLeft(row.expiresAt)}`;
+		who.appendChild(title);
+		who.appendChild(meta);
+		const join = document.createElement('button');
+		join.type = 'button';
+		join.className = 'glass-button glass-button--primary glass-button--sm';
+		join.textContent = 'Join';
+		join.setAttribute('aria-label', `Join the ${title.textContent} room — ${row.players} of ${row.capacity} players`);
+		join.addEventListener('click', () => { connect(row.roomCode); lobbySay('Joining…'); });
+		item.appendChild(who);
+		item.appendChild(join);
+		return item;
+	}
+
+	function renderLobbies(body: LobbyList & { cached?: boolean }): void {
+		if (!lobbyList) return;
+		lobbyList.replaceChildren();
+		const rows = body.lobbies ?? [];
+		lobbyList.hidden = rows.length === 0;
+		if (rows.length === 0) {
+			lobbySay('No open rooms right now. Create one — it will be listed here for anyone to join.');
+			return;
+		}
+		for (const row of rows) lobbyList.appendChild(lobbyRow(row));
+		lobbySay(`${rows.length} open room${rows.length === 1 ? '' : 's'}${body.stale ? ' — some rooms did not answer and are not shown' : ''}.`);
+	}
+
+	async function refreshLobbies(force = false): Promise<void> {
+		if (!lobbyPanel) return;
+		if (!force && Date.now() < lobbyCooldownUntil) return;
+		lobbyCooldownUntil = Date.now() + LOBBY_CONFIG.minRefreshSeconds * 1_000;
+		window.clearTimeout(lobbyTimer);
+		if (lobbyRefresh) lobbyRefresh.disabled = true;
+		try {
+			const query = lobbyScope ? `?gameId=${encodeURIComponent(lobbyScope)}` : '';
+			const response = await fetch(`/api/games/lobbies${query}`, {
+				headers: { accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store',
+			});
+			const body = await response.json().catch(() => null) as (LobbyList & { error?: string }) | null;
+			if (!response.ok) {
+				lobbySay(body?.error === 'lobby_disabled' ? 'Open lobbies are turned off right now.'
+					: body?.error === 'rate_limited' ? 'Slow down a moment, then refresh again.'
+					: 'Open rooms could not be loaded.');
+				return;
+			}
+			if (body) renderLobbies(body);
+			const wait = Math.max(LOBBY_CONFIG.minRefreshSeconds, Number(body?.refreshAfterSeconds ?? LOBBY_CONFIG.cacheTtlSeconds));
+			lobbyTimer = window.setTimeout(() => void refreshLobbies(true), wait * 1_000);
+		} catch {
+			lobbySay('Open rooms could not be loaded — check your connection.');
+		} finally {
+			window.setTimeout(() => { if (lobbyRefresh) lobbyRefresh.disabled = false; }, LOBBY_CONFIG.minRefreshSeconds * 1_000);
+		}
+	}
+	if (lobbyPanel) {
+		lobbyRefresh?.addEventListener('click', () => void refreshLobbies());
+		void refreshLobbies();
+	}
+
 	function connect(code: string): void {
 		if (activeSocket && activeSocket.readyState < WebSocket.CLOSING) activeSocket.close(1000, 'Switching rooms');
 		roomCode = code;
@@ -259,11 +363,35 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 			else if (message.type === 'conflict') say(`Room state changed to version ${message.revision ?? 0}; reconnecting clients receive the latest snapshot.`);
 			else if (message.type === 'state_rejected') say(message.error === 'game_adapter_unavailable' ? 'No game adapter is registered; state changes are refused.' : 'The game authority rejected that state change.');
 			else handleChatNotice(message);
-		}, (state) => {
+		}, (state, close) => {
 			observer.onSocket?.(state === 'connected' ? activeSocket : null);
 			if (state === 'connecting') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); say('Connecting to room…'); }
 			else if (state === 'connected') { if (leaveButton) leaveButton.disabled = false; setChatEnabled(CHAT_CONFIG.enabled); }
-			else if (state === 'closed') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection closed. Re-enter the code to reconnect while the room is active.'); say('Room connection closed. Re-enter the code to reconnect while the room is active.'); }
+			else if (state === 'closed') {
+				if (leaveButton) leaveButton.disabled = true;
+				setChatEnabled(false);
+				// The close code is the only thing that distinguishes "the host removed
+				// you" from "the room is gone", so it picks the sentence here.
+				const removed = close?.code === 4003;
+				const ended = close?.code === 4002;
+				const message = removed
+					? 'The room host removed you. That room will not let you rejoin; you can create or join another one.'
+					: ended
+						? 'The room ended, and everything in it was deleted.'
+						: 'Room connection closed. Re-enter the code to reconnect while the room is active.';
+				if (removed || ended) {
+					// The code is dead to this visitor: keeping it on screen only invites
+					// the rejoin the server will refuse.
+					roomCode = '';
+					root.dataset.roomCode = '';
+					if (codePanel) codePanel.hidden = true;
+					roster?.replaceChildren();
+					if (roster) roster.hidden = true;
+					void refreshLobbies(true);
+				}
+				chatSay(message);
+				say(message);
+			}
 			else if (state === 'error') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); chatSay('Room connection failed. Check the code and connection, then try again.'); say('Room connection failed. Check the code and connection, then try again.'); }
 		});
 	}

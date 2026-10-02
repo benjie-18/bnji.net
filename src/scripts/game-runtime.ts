@@ -114,7 +114,15 @@ export function mountGameLifecycle(root: HTMLElement, game: GameModule): () => v
 	const onResume = (): void => { userPaused = false; update(); };
 	const onStateChange = (event: Event): void => {
 		const state = (event as CustomEvent<{ state?: GameShellState }>).detail?.state;
-		if (state === 'results') { finished = true; update(); }
+		// Returning from results to ready must CLEAR the terminal flag. A game is
+		// allowed to hand the player their board back after a result (Stack's
+		// "Back to the tower", Chess's "New practice game"), and a `finished` that
+		// outlives the results panel means the loop is never resumed: the tower
+		// freezes and the next run is unplayable until the page reloads.
+		if (state === 'results') finished = true;
+		else if (state === 'ready' || state === 'paused') finished = false;
+		else return;
+		update();
 	};
 	root.addEventListener('bnji:game-pause', onPause);
 	root.addEventListener('bnji:game-resume', onResume);

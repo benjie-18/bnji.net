@@ -254,6 +254,9 @@ test('the full local flow: boot → start by handle → open → send → live f
 	const partnerSide = aliceSide === 'lo' ? 'hi' : 'lo';
 
 	const status = (): string => byAttr(dom, 'dm-status').textContent ?? '';
+	// Two status lines, two scopes: the composer answers on its own line under
+	// the field it belongs to, never above the fold next to the handle form.
+	const sendStatus = (): string => byAttr(dom, 'dm-send-status').textContent ?? '';
 	assert.match(status(), /Conversation with Test Two open\./, `thread did not open, status was: ${status()}`);
 	assert.equal(byAttr(dom, 'dm-thread-head').hidden, false);
 	assert.equal(byAttr(dom, 'dm-composer').hidden, false);
@@ -273,7 +276,7 @@ test('the full local flow: boot → start by handle → open → send → live f
 	textInput.value = '  hello there  ';
 	(byAttr(dom, 'dm-composer') as HTMLFormElement).dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
 	await tick(30);
-	assert.match(status(), /Message sent\./, `send failed, status was: ${status()}`);
+	assert.match(sendStatus(), /Message sent\./, `send failed, status was: ${sendStatus()}`);
 	const mine = win.document.querySelector('[data-dm-n="1"]');
 	assert.ok(mine, 'the sent message renders');
 	assert.match(mine!.className, /dm-msg--me/);

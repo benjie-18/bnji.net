@@ -479,3 +479,39 @@
 		--hover-lift: 0px;
 	}
 }
+
+/* --- Game surfaces ---------------------------------------------------------
+   Chess, Minesweeper and Stack draw their own fields (styles/games.css, the
+   Stack card) and a board is not a page surface: the inks below keep their
+   meaning in both themes — a light square is not "a light-theme surface", it is
+   a light square — which is why only the shell around them (--game-field, the
+   Stack viewport) follows the theme. Values are the literals the pages carried
+   before the tokens existed, so this block changes ownership, not colour. */
+:root {
+	--game-board-light: #cfd8e6;
+	--game-board-dark: #4f6280;
+	--game-piece-light: #f7f9fc;
+	--game-piece-dark: #171d29;
+	--game-move-hint: rgba(110 168 254 / 0.85);
+	--game-cell-plate: rgba(0 0 0 / 0.35);
+	--game-cell-hidden: rgba(255 255 255 / 0.16);
+	--game-cell-shade: rgba(0 0 0 / 0.32);
+	--game-count-n1: #6ea8fe;
+	--game-count-n2: #63d4a0;
+	--game-count-n3: #ff8f8f;
+	--game-count-n4: #c7a6ff;
+	--game-count-many: #ffcf6b;
+	/* Stack's viewport: the one game surface that must read as part of the page,
+	   so it flips with the theme (see the light override below). */
+	--game-field: rgba(8, 12, 22, 0.65);
+	--game-field-scrim: rgba(6, 10, 18, 0.75);
+	--game-on-accent: #0b1020;
+	/* One row of game controls, always: a fullscreen label swap or a game adding
+	   a button must not change the height of the panel that holds the strip. */
+	--game-action-row-size: 2.75rem;
+}
+
+[data-theme='light'] {
+	--game-field: rgba(240, 247, 255, 0.75);
+	--game-field-scrim: rgba(232, 240, 250, 0.82);
+}

@@ -248,15 +248,19 @@ describe('GameRoom — moderation inside the room (plan §5.5)', () => {
 		send(bAgain.socket, { v: 1, type: 'chat', text: 'still muted?' });
 		expect(await bAgain.box.next((frame) => frame.type === 'chat_rejected')).toMatchObject({ error: 'muted' });
 
-		// Kick: B's socket closes 4003, its membership row is gone, and the
-		// seat can be re-joined (kick = membership delete, per plan).
+		// Kick: B's socket closes 4003 and its membership row is gone — but the
+		// seat is not B's to take back. The lockout row makes the removal durable
+		// for the room's lifetime, so a rejoin is upgraded and closed at once.
 		send(a.socket, { v: 1, type: 'kick', member: bMemberId! });
 		expect((await bAgain.box.closed()).code).toBe(4003);
 		const members = await sqlRows<{ count: number }>(code, 'SELECT COUNT(*) AS count FROM game_room_members');
 		expect(Number(members[0].count)).toBe(1);
+		const kicks = await sqlRows<{ principal_hash: string }>(code, 'SELECT principal_hash FROM game_room_kicks');
+		expect(kicks.map((row) => row.principal_hash)).toEqual([await principalHash(PRINCIPAL_B)]);
 		const rejoin = await connect(code, PRINCIPAL_B, LABEL_B);
-		const rejoinSnapshot = await rejoin.box.next(snapshotOf);
-		expect(rejoinSnapshot.connectedMembers).toBe(2);
+		expect((await rejoin.box.closed()).code).toBe(4003);
+		const membersAfter = await sqlRows<{ count: number }>(code, 'SELECT COUNT(*) AS count FROM game_room_members');
+		expect(Number(membersAfter[0].count)).toBe(1);
 		const log = await sqlRows<{ action: string }>(code, 'SELECT action FROM game_room_chat_log ORDER BY id');
 		expect(log.map((row) => row.action)).toContain('mute');
 		expect(log.map((row) => row.action)).toContain('kick');

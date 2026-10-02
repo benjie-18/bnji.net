@@ -1,0 +1,56 @@
+---
+/**
+ * `/games/<game>/leaderboard/` — one dedicated board per scored game.
+ *
+ * Prerendered shell, live rows: the build has no D1, so the page is static
+ * HTML and `/api/games/leaderboard` supplies the numbers at view time. One
+ * route covers every game through `getStaticPaths`, and a game only appears
+ * here when a server verifier can actually accept its scores — an empty board
+ * nobody can ever submit to is not a feature.
+ */
+import GameLeaderboard from '../../../components/GameLeaderboard.astro';
+import PageHeader from '../../../components/PageHeader.astro';
+import Layout from '../../../layouts/Layout.astro';
+import { getStandaloneGames, type Game } from '../../../data/games';
+import { hasLeaderboard, leaderboardModes } from '../../../data/game-adapters';
+
+interface Props {
+	game: Game;
+}
+
+export function getStaticPaths() {
+	return getStandaloneGames()
+		.filter(hasLeaderboard)
+		.map((game) => ({
+			params: { game: (game.href ?? '').replace(/^\/games\/|\/$/g, '') },
+			props: { game },
+		}));
+}
+
+const { game } = Astro.props;
+const modes = leaderboardModes(game);
+const boardTitle = modes.length > 1 ? `${game.title} leaderboards` : `${game.title} leaderboard`;
+---
+
+<Layout title={boardTitle} description={`The ${game.title} leaderboard on bnji.net — server-verified runs only, one board per mode.`}>
+	<PageHeader
+		index="07"
+		label={`GAMES / ${game.title.toUpperCase()} / LEADERBOARD`}
+		titleId="page-title"
+		title={boardTitle}
+		description="Server-verified runs only, one board per mode."
+	/>
+
+	<div class="container leaderboard-body">
+		<nav class="glass-tabs leaderboard-nav" data-glass="quiet" aria-label="Leaderboard links">
+			<a class="glass-tabs__item" href="/games/">All games</a>
+			<a class="glass-tabs__item" href={game.href ?? '/games/'}>Play {game.title}</a>
+		</nav>
+		<GameLeaderboard game={game} modes={modes} />
+	</div>
+</Layout>
+
+<style>
+	.leaderboard-body { display: grid; gap: 1.25rem; padding-block: 0 6rem; }
+	.leaderboard-nav { padding: var(--glass-pad-sm); justify-self: start; }
+</style>

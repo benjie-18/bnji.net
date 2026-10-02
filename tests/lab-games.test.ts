@@ -169,9 +169,10 @@ function buildStackFixture() {
 
 	const header = el('div', { class: 'stack-header' });
 	const score = el('span', { 'data-sg-score': '' }, '0');
+	// The badge is permanent in the DOM and fades in with `is-live`: `hidden` on
+	// the middle item of a space-between header slides SCORE and BEST sideways
+	// the instant a combo starts, so the slot is reserved instead.
 	const combo = el('div', { 'data-sg-combo': '', class: 'stack-combo' });
-	combo.hidden = true;
-	combo.setAttribute('hidden', '');
 	append(combo, append(el('span', { class: 'stack-combo-badge' }), el('span', { 'data-sg-combo-count': '' }, '1')));
 	append(header, score, combo, el('span', { 'data-sg-best': '' }, '0'));
 
@@ -409,7 +410,7 @@ test('iso stack: perfect drops build the combo, the best combo survives to game 
 			// Three perfect drops (z, x, z) — the combo badge must climb.
 			driver.drop(0);
 			assert.equal(score.textContent, '1', 'first perfect drop scores 1');
-			assert.equal(combo.hidden, false, 'combo badge shows after a perfect drop');
+			assert.equal(combo.classList.contains('is-live'), true, 'combo badge shows after a perfect drop');
 			assert.equal(comboCount.textContent, '1', 'combo counts 1');
 
 			driver.drop(0);
@@ -422,12 +423,12 @@ test('iso stack: perfect drops build the combo, the best combo survives to game 
 
 			// An overhang drop resets the combo but still places a layer.
 			driver.drop(40);
-			assert.equal(combo.hidden, true, 'overhang drop hides the combo badge');
+			assert.equal(combo.classList.contains('is-live'), false, 'overhang drop hides the combo badge');
 			assert.equal(score.textContent, '7', 'imperfect drop is worth 1');
 
 			// Perfect again — relative to the new (offset) top layer.
 			driver.drop(0);
-			assert.equal(combo.hidden, false, 'combo restarts after an overhang');
+			assert.equal(combo.classList.contains('is-live'), true, 'combo restarts after an overhang');
 			assert.equal(comboCount.textContent, '1', 'combo restarts at 1');
 			assert.equal(score.textContent, '8', 'fourth placed layer worth 1 more');
 
@@ -450,7 +451,7 @@ test('iso stack: perfect drops build the combo, the best combo survives to game 
 			dispatch(overlay.querySelector('[data-sg-start]') as Element, 'click');
 			assert.equal(overlay.hasAttribute('hidden'), true, 'overlay hides on restart');
 			assert.equal(score.textContent, '0', 'score resets');
-			assert.equal(combo.hidden, true, 'combo resets');
+			assert.equal(combo.classList.contains('is-live'), false, 'combo resets');
 			driver.drop(0);
 			assert.equal(score.textContent, '1', 'the restarted run plays normally');
 		} finally {
