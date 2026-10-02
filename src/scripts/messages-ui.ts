@@ -106,8 +106,14 @@ function post(path: string, data: unknown): RequestInit {
 }
 
 function timeLabel(at: number): string {
-	try { return new Date(at).toLocaleTimeString(); }
+	try { return new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
 	catch { return ''; }
+}
+
+/** Exact byte count for padded base64, without allocating a decoded buffer. */
+export function decodedBase64ByteLength(value: string): number {
+	const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+	return Math.max(0, Math.floor((value.length * 3) / 4) - padding);
 }
 
 /** Client-side image normalisation (§7.4 step 1): canvas re-encode = EXIF stripped. */
@@ -287,6 +293,12 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 		else thread.appendChild(item);
 	}
 
+	function isNearThreadBottom(): boolean {
+		return thread.scrollHeight - thread.scrollTop - thread.clientHeight <= 80;
+	}
+
+	function scrollThreadToBottom(): void { thread.scrollTop = thread.scrollHeight; }
+
 	function updateSeen(partnerReadSeq: number): void {
 		for (const marker of thread.querySelectorAll<HTMLElement>('[data-dm-seen]')) {
 			const n = Number(marker.dataset.dmSeen);
@@ -318,13 +330,12 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 		newSay('Opening conversation…');
 		closeSocket();
 		try {
-			const data = await api<{ messages: Message[]; myReadSeq: number; partnerReadSeq: number; lastSeq: number }>(
+			const data = await api<{ messages: Message[]; myReadSeq: number; partnerReadSeq: number }>(
 				`/api/dm/messages?conversation=${encodeURIComponent(id)}`,
 			);
 			setThread(conversation, data.messages, data.partnerReadSeq);
-			conversation.myReadSeq = data.lastSeq;
+			conversation.myReadSeq = data.myReadSeq;
 			conversation.partnerReadSeq = data.partnerReadSeq;
-			conversation.unread = 0;
 			renderList();
 			await markRead();
 			await connectSocket();
@@ -349,12 +360,15 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 	}
 
 	async function markRead(): Promise<void> {
-		if (!active) return;
+		const conversationId = active?.id;
+		if (!conversationId) return;
 		try {
-			await api('/api/dm/read', post('/api/dm/read', { conversation: active.id }));
-			const conversation = conversations.find((item) => item.id === active?.id);
-			if (conversation && conversation.unread > 0) { conversation.unread = 0; renderList(); }
-		} catch { /* watermark is opportunistic */ }
+			const result = await api<{ readSeq: number }>('/api/dm/read', post('/api/dm/read', { conversation: conversationId }));
+			const conversation = conversations.find((item) => item.id === conversationId);
+			if (!conversation) return;
+			conversation.myReadSeq = Math.max(conversation.myReadSeq, result.readSeq);
+			if (conversation.unread > 0) { conversation.unread = 0; renderList(); }
+		} catch { /* watermark is opportunistic; keep the unread badge until it succeeds */ }
 	}
 
 	/* --------------------------------------------------------- websocket */
@@ -378,19 +392,21 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 			if (active) {
 				const last = Number(thread.lastElementChild?.getAttribute('data-dm-n') ?? 0);
 				const data = await api<{ messages: Message[] }>(`/api/dm/messages?conversation=${encodeURIComponent(active.id)}&after=${last}`);
+				const followTail = isNearThreadBottom();
 				for (const message of data.messages) appendMessage(message);
-				thread.scrollTop = thread.scrollHeight;
+				if (data.messages.length > 0 && followTail) scrollThreadToBottom();
 			}
 			return;
 		}
 		if (frame.t === 'dm_new' && active) {
 			const from = frame.m.senderSide === active.mySide ? 'me' : 'them';
-			const isAtBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight <= 50;
-			appendMessage({ n: frame.m.n, from, body: frame.m.body, imageId: frame.m.imageId, at: frame.m.at });
-			if (from === 'me' || isAtBottom) {
-				thread.scrollTop = thread.scrollHeight;
-			}
-			if (from === 'them') { void markRead(); void refreshConversations(); }
+      const followTail = isNearThreadBottom();
+      appendMessage({ n: frame.m.n, from, body: frame.m.body, imageId: frame.m.imageId, at: frame.m.at });
+      if (from === 'me' || followTail) scrollThreadToBottom();
+      if (from === 'them') {
+	      await markRead();
+	      await refreshConversations();
+      }
 			return;
 		}
 		if (frame.t === 'dm_hide') {
@@ -487,11 +503,13 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 
 	async function attachImage(file: File): Promise<void> {
 		if (!active || !config.images.enabled) return;
+		const cap = config.images.maxDecodedBytes ?? 1_400_000;
 		try {
 			say('Preparing image…');
 			const { base64 } = await normaliseImage(file, config.images.maxEdge);
-			const decodedBytes = Math.floor((base64.length * 3) / 4);
-			const cap = config.images.maxDecodedBytes ?? 1_400_000;
+			// The source may be larger if canvas normalization shrinks it; enforce
+			// the D1 ceiling on the exact normalized payload that will be uploaded.
+			const decodedBytes = decodedBase64ByteLength(base64);
 			if (decodedBytes > cap) { say(copyFor('image_too_large')); return; }
 			const data = await api<{ attachment: { id: string; mime: string } }>('/api/dm/attachments', post('/api/dm/attachments', {
 				conversation: active.id,

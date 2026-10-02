@@ -15,7 +15,8 @@ import test from 'node:test';
 import type { APIContext } from 'astro';
 import { JSDOM } from 'jsdom';
 import { createTestD1 } from './support/d1.mjs';
-import { mountMessages } from '../src/scripts/messages-ui';
+import { decodedBase64ByteLength, mountMessages } from '../src/scripts/messages-ui';
+import { DM_CONFIG } from '../src/config/dm.config';
 
 const migrations = readdirSync(new URL('../migrations/', import.meta.url)).filter((name) => name.endsWith('.sql')).sort();
 const accountApi = await import('../src/pages/api/games/account.ts');
@@ -186,6 +187,11 @@ function installGlobals(dom: JSDOM): void {
 }
 
 const tick = (ms = 5): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+async function until(check: () => boolean, timeoutMs = 1_000): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+	while (!check() && Date.now() < deadline) await tick(5);
+	return check();
+}
 
 async function mountFreshDom(query = ''): Promise<JSDOM> {
 	const dom = realMessagesDom(query);
@@ -204,8 +210,58 @@ const byAttr = (dom: JSDOM, name: string): HTMLElement => {
 	return node as unknown as HTMLElement;
 };
 
+/** Make canvas normalization deterministic without relying on jsdom's canvas implementation. */
+function mockCanvasOutput(dom: JSDOM, output: Uint8Array, onDecode: () => void = () => {}): () => void {
+	const prototype = dom.window.HTMLCanvasElement.prototype;
+	const contextDescriptor = Object.getOwnPropertyDescriptor(prototype, 'getContext');
+	const blobDescriptor = Object.getOwnPropertyDescriptor(prototype, 'toBlob');
+	const originalCreateImageBitmap = globalThis.createImageBitmap;
+	globalThis.createImageBitmap = (async () => {
+		onDecode();
+		return { width: 1, height: 1, close() {} };
+	}) as unknown as typeof createImageBitmap;
+	Object.defineProperty(prototype, 'getContext', { configurable: true, value: () => ({ drawImage() {} }) });
+	Object.defineProperty(prototype, 'toBlob', {
+		configurable: true,
+		value: (callback: BlobCallback) => callback(new Blob([output.slice().buffer as ArrayBuffer], { type: 'image/webp' })),
+	});
+	return () => {
+		globalThis.createImageBitmap = originalCreateImageBitmap;
+		if (contextDescriptor) Object.defineProperty(prototype, 'getContext', contextDescriptor);
+		else Reflect.deleteProperty(prototype, 'getContext');
+		if (blobDescriptor) Object.defineProperty(prototype, 'toBlob', blobDescriptor);
+		else Reflect.deleteProperty(prototype, 'toBlob');
+	};
+}
+
 const GUEST_ONE = '11111111111111111111111111111111';
 const GUEST_TWO = '22222222222222222222222222222222';
+
+async function createUnreadConversation(input: {
+	nameA: string; handleA: string; nameB: string; handleB: string; ipSuffix: string;
+}): Promise<{ db: ReturnType<typeof database>['db']; alice: string; bob: string; conversationId: string; mySide: 'lo' | 'hi'; partnerSide: 'lo' | 'hi' }> {
+	const { db } = database();
+	const ipA = `203.0.113.${input.ipSuffix}`;
+	const ipB = `203.0.114.${input.ipSuffix}`;
+	const alice = await createAccount(GUEST_ONE, input.nameA, ipA);
+	const bob = await createAccount(GUEST_TWO, input.nameB, ipB);
+	await claimHandle(alice, input.handleA, ipA);
+	await claimHandle(bob, input.handleB, ipB);
+	makeFriends(db, input.nameA, input.nameB);
+	const opened = await conversationsApi.POST(requestContext('/api/dm/conversations', {
+		method: 'POST', cookie: alice, body: { handle: input.handleB },
+	}));
+	assert.equal(opened.status, 200, await opened.clone().text());
+	const { conversation } = await opened.json() as { conversation: { id: string; mySide: 'lo' | 'hi' } };
+	const first = await messagesApi.POST(requestContext('/api/dm/messages', {
+		method: 'POST', cookie: bob, body: { conversation: conversation.id, body: 'incoming message' },
+	}));
+	assert.equal(first.status, 200, await first.clone().text());
+	return {
+		db, alice, bob, conversationId: conversation.id, mySide: conversation.mySide,
+		partnerSide: conversation.mySide === 'lo' ? 'hi' : 'lo',
+	};
+}
 
 /* ---------------------------------------------------------------- tests */
 
@@ -244,7 +300,7 @@ test('the full local flow: boot → start by handle → open → send → live f
 	const handleInput = byAttr(dom, 'dm-new-handle') as HTMLInputElement;
 	handleInput.value = 'test2';
 	(byAttr(dom, 'dm-new-form') as HTMLFormElement).dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
-	await tick(30);
+	assert.equal(await until(() => !byAttr(dom, 'dm-thread-head').hidden), true, 'opening should render the thread without a fixed sleep');
 
 	// Whose side is whose depends on the stored player ids — read it back.
 	const aliceRow = db.raw.prepare("SELECT id FROM game_players WHERE display_name = 'Test One'").get() as { id: string };
@@ -255,6 +311,7 @@ test('the full local flow: boot → start by handle → open → send → live f
 
 	const status = (): string => byAttr(dom, 'dm-status').textContent ?? '';
 	const openStatus = (): string => byAttr(dom, 'dm-new-status').textContent ?? '';
+	assert.equal(await until(() => /Conversation with Test Two open\./.test(openStatus())), true, `thread did not open, status was: ${openStatus()}`);
 	assert.match(openStatus(), /Conversation with Test Two open\./, `thread did not open, status was: ${openStatus()}`);
 	assert.equal(status(), '', 'opening a thread clears stale composer feedback');
 	assert.equal(byAttr(dom, 'dm-thread-head').hidden, false);
@@ -267,19 +324,20 @@ test('the full local flow: boot → start by handle → open → send → live f
 	// The socket opened against the right conversation.
 	assert.equal(sockets.length, 1);
 	assert.match(sockets[0].url, /\/api\/dm\/ws\?conversation=[0-9a-f]{64}$/);
-	await tick(10);
-	assert.match(byAttr(dom, 'dm-conn').textContent ?? '', /Connected\./);
+	assert.equal(await until(() => /Connected\./.test(byAttr(dom, 'dm-conn').textContent ?? '')), true, 'the client socket opens');
 
 	// Send the first message.
 	const textInput = byAttr(dom, 'dm-text') as HTMLTextAreaElement;
 	textInput.value = '  hello there  ';
 	(byAttr(dom, 'dm-composer') as HTMLFormElement).dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
-	await tick(30);
+	assert.equal(await until(() => /Message sent\./.test(status())), true, `send failed, status was: ${status()}`);
 	assert.match(status(), /Message sent\./, `send failed, status was: ${status()}`);
 	const mine = win.document.querySelector('[data-dm-n="1"]');
 	assert.ok(mine, 'the sent message renders');
 	assert.match(mine!.className, /dm-msg--me/);
 	assert.match(mine!.textContent ?? '', /hello there/, 'sanitised body renders as textContent');
+	const timeLabel = mine!.querySelector('.dm-msg__meta > span')?.textContent ?? '';
+	assert.doesNotMatch(timeLabel, /:\d{2}:\d{2}/, 'message timestamps display to the minute, not the second');
 	// Server state: one row, sanitised, conversation now listable server-side.
 	const row = db.raw.prepare('SELECT body FROM dm_messages').get() as { body: string };
 	assert.equal(row.body, 'hello there');
@@ -328,6 +386,125 @@ test('the full local flow: boot → start by handle → open → send → live f
 	const bobView = await conversationsApi.GET(requestContext('/api/dm/conversations', { cookie: bob }));
 	const bobBody = await bobView.json() as { conversations: Array<{ unread: number }> };
 	assert.equal(bobBody.conversations[0].unread >= 1, true, 'partner has unread');
+});
+
+
+test('unread stays visible until the mark-read request succeeds', async () => {
+	const fixture = await createUnreadConversation({ nameA: 'Unread One', handleA: 'unread_one', nameB: 'Unread Two', handleB: 'unread_two', ipSuffix: '91' });
+	activeCookie = fixture.alice;
+	const dom = await mountFreshDom();
+	assert.equal(dom.window.document.querySelector('[data-dm-unread]')?.textContent, '1');
+
+	const originalFetch = globalThis.fetch;
+	let failRead = true;
+	globalThis.fetch = async (input, init) => {
+		const raw = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+		if (new URL(raw, ORIGIN).pathname === '/api/dm/read' && failRead) {
+			return new Response(JSON.stringify({ error: 'storage_unavailable' }), { status: 503 });
+		}
+		return fetchShim(input, init);
+	};
+	try {
+		dom.window.document.querySelector<HTMLButtonElement>('[data-dm-open]')!.click();
+		await tick(30);
+		assert.equal(dom.window.document.querySelector('[data-dm-unread]')?.textContent, '1', 'failed read must not clear the local unread badge');
+		const before = fixture.db.raw.prepare('SELECT read_seq_lo, read_seq_hi FROM dm_conversations WHERE id = ?').get(fixture.conversationId) as { read_seq_lo: number; read_seq_hi: number };
+		assert.equal(before[fixture.mySide === 'lo' ? 'read_seq_lo' : 'read_seq_hi'], 0, 'the durable watermark also remains unchanged');
+
+		failRead = false;
+		dom.window.document.querySelector<HTMLButtonElement>('[data-dm-open]')!.click();
+		await tick(30);
+		assert.equal(dom.window.document.querySelector('[data-dm-unread]'), null, 'successful read clears the badge');
+		const after = fixture.db.raw.prepare('SELECT read_seq_lo, read_seq_hi FROM dm_conversations WHERE id = ?').get(fixture.conversationId) as { read_seq_lo: number; read_seq_hi: number };
+		assert.equal(after[fixture.mySide === 'lo' ? 'read_seq_lo' : 'read_seq_hi'], 1, 'the successful request advances the durable watermark');
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test('live DM frames preserve scrollback unless the reader is near the bottom', async () => {
+	const fixture = await createUnreadConversation({ nameA: 'Scroll One', handleA: 'scroll_one', nameB: 'Scroll Two', handleB: 'scroll_two', ipSuffix: '92' });
+	activeCookie = fixture.alice;
+	const dom = await mountFreshDom();
+	const thread = byAttr(dom, 'dm-thread') as HTMLOListElement;
+	Object.defineProperty(thread, 'scrollHeight', { configurable: true, get: () => thread.children.length * 200 });
+	Object.defineProperty(thread, 'clientHeight', { configurable: true, value: 100 });
+	dom.window.document.querySelector<HTMLButtonElement>('[data-dm-open]')!.click();
+	await tick(35);
+	assert.equal(thread.children.length, 1);
+	thread.scrollTop = 0;
+
+	const second = await messagesApi.POST(requestContext('/api/dm/messages', {
+		method: 'POST', cookie: fixture.bob, body: { conversation: fixture.conversationId, body: 'second incoming' },
+	}));
+	assert.equal(second.status, 200, await second.clone().text());
+	const secondMessage = (await second.json() as { message: { n: number; at: number; body: string; imageId: string | null } }).message;
+	sockets[0]!.onmessage?.({ data: JSON.stringify({ t: 'dm_new', v: 1, m: { ...secondMessage, senderSide: fixture.partnerSide } }) });
+	await tick(30);
+	assert.equal(thread.scrollTop, 0, 'an incoming message does not pull a reader away from older messages');
+
+	thread.scrollTop = thread.scrollHeight - thread.clientHeight;
+	const third = await messagesApi.POST(requestContext('/api/dm/messages', {
+		method: 'POST', cookie: fixture.bob, body: { conversation: fixture.conversationId, body: 'third incoming' },
+	}));
+	assert.equal(third.status, 200, await third.clone().text());
+	const thirdMessage = (await third.json() as { message: { n: number; at: number; body: string; imageId: string | null } }).message;
+	sockets[0]!.onmessage?.({ data: JSON.stringify({ t: 'dm_new', v: 1, m: { ...thirdMessage, senderSide: fixture.partnerSide } }) });
+	await tick(30);
+	assert.equal(thread.scrollTop, thread.scrollHeight, 'a reader at the bottom follows new messages');
+});
+
+test('normalized base64 size accounting subtracts padding exactly', () => {
+	assert.equal(decodedBase64ByteLength('YQ=='), 1);
+	assert.equal(decodedBase64ByteLength('YWI='), 2);
+	assert.equal(decodedBase64ByteLength('YWJj'), 3);
+});
+
+test('a larger source image is allowed when normalization brings it under the upload ceiling', async () => {
+	const fixture = await createUnreadConversation({ nameA: 'Image One', handleA: 'image_one', nameB: 'Image Two', handleB: 'image_two', ipSuffix: '93' });
+	activeCookie = fixture.alice;
+	const dom = await mountFreshDom();
+	dom.window.document.querySelector<HTMLButtonElement>('[data-dm-open]')!.click();
+	assert.equal(await until(() => !byAttr(dom, 'dm-thread-head').hidden), true, 'the image conversation opens');
+	const imageInput = byAttr(dom, 'dm-image-input') as HTMLInputElement;
+	const file = new dom.window.File([new Uint8Array(DM_CONFIG.images.maxDecodedBytes + 1)], 'large-source.png', { type: 'image/png' });
+	Object.defineProperty(imageInput, 'files', { configurable: true, value: [file] as unknown as FileList });
+	let decodes = 0;
+	const smallWebp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+	const restore = mockCanvasOutput(dom, smallWebp, () => { decodes += 1; });
+	try {
+		imageInput.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+		assert.equal(await until(() => byAttr(dom, 'dm-status').textContent === 'Image ready — add a note and send.'), true, 'the normalized image uploads');
+		assert.equal(decodes, 1, 'a source over 1.4 MB reaches browser normalization');
+		assert.equal(byAttr(dom, 'dm-image-chip').hidden, false, 'the successfully uploaded image is staged');
+		assert.equal((fixture.db.raw.prepare('SELECT COUNT(*) AS n FROM dm_attachments').get() as { n: number }).n, 1);
+	} finally {
+		restore();
+	}
+});
+
+test('normalized output over the upload ceiling is rejected before upload', async () => {
+	const fixture = await createUnreadConversation({ nameA: 'Image Three', handleA: 'image_three', nameB: 'Image Four', handleB: 'image_four', ipSuffix: '94' });
+	activeCookie = fixture.alice;
+	const dom = await mountFreshDom();
+	dom.window.document.querySelector<HTMLButtonElement>('[data-dm-open]')!.click();
+	assert.equal(await until(() => !byAttr(dom, 'dm-thread-head').hidden), true, 'the image conversation opens');
+	const imageInput = byAttr(dom, 'dm-image-input') as HTMLInputElement;
+	const file = new dom.window.File([new Uint8Array([1, 2, 3])], 'small-source.png', { type: 'image/png' });
+	Object.defineProperty(imageInput, 'files', { configurable: true, value: [file] as unknown as FileList });
+	const oversizedOutput = new Uint8Array(DM_CONFIG.images.maxDecodedBytes + 1);
+	oversizedOutput.set([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+	let decodes = 0;
+	const restore = mockCanvasOutput(dom, oversizedOutput, () => { decodes += 1; });
+	try {
+		imageInput.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+		assert.equal(await until(() => byAttr(dom, 'dm-status').textContent === 'That image is too large.'), true, 'the normalized-byte ceiling is enforced');
+		assert.equal(decodes, 1, 'size is checked after normalization');
+		assert.equal(byAttr(dom, 'dm-image-chip').hidden, true, 'oversized output is not staged');
+		assert.equal((fixture.db.raw.prepare('SELECT COUNT(*) AS n FROM dm_attachments').get() as { n: number }).n, 0, 'no oversized attachment is uploaded');
+	} finally {
+		restore();
+	}
 });
 
 test('send failures stay below the composer while open failures stay below the handle field', async () => {
@@ -427,7 +604,7 @@ test('deep link: /messages/?handle= opens that conversation once and cleans the 
 	activeCookie = alice;
 
 	const dom = await mountFreshDom('?handle=deep_two');
-	await tick(40);
+	assert.equal(await until(() => !byAttr(dom, 'dm-thread-head').hidden), true, 'deep link eventually opens the thread');
 
 	// The thread opened without touching the form…
 	assert.equal(byAttr(dom, 'dm-thread-head').hidden, false, 'deep link opens the thread');

@@ -23,6 +23,8 @@ import {
 import { friendAction, listFriendState } from '../../server/friend-store';
 import { reserveAuthAttempt, sha256Hex } from '../../server/player-store';
 import { readBodyTextBounded } from '../../server/read-body';
+import { serverEnvironment } from '../../server/env';
+import { presenceRefreshFetch } from '../../server/presence-gateway';
 
 export const prerender = false;
 
@@ -98,8 +100,33 @@ async function mutate(context: APIContext, method: 'POST' | 'DELETE'): Promise<R
 			payload.handle, Date.now(),
 		);
 		if (!outcome.ok) return resolved.finish({ error: outcome.error }, outcome.status);
+		let presenceSynced = false;
+		if (outcome.changed === 'friends' || outcome.changed === 'removed' || outcome.changed === 'blocked') {
+			// Refresh both ends: the counterpart's visibility changed, and other
+			// tabs belonging to the caller may carry the previous friend list.
+			try {
+				const [identity, env] = await Promise.all([
+					resolved.db.prepare('SELECT handle FROM game_players WHERE id = ?1 LIMIT 1')
+						.bind(resolved.player.playerId!).first<{ handle: string | null }>(),
+					serverEnvironment(),
+				]);
+				const callerHandle = typeof identity?.handle === 'string' ? identity.handle : null;
+				const handles = [payload.handle, callerHandle].filter((handle): handle is string => typeof handle === 'string');
+				const refreshed = await presenceRefreshFetch(
+					env,
+					(env as Record<string, unknown>).ACCESS_SECRET as string | undefined,
+					handles,
+				);
+				presenceSynced = Boolean(callerHandle && refreshed.refreshedHandles.includes(callerHandle));
+				if (!refreshed.ok) console.warn('friends: presence refresh unavailable after relationship change');
+			} catch {
+				// The D1 friendship transition is already committed; a transient DO
+				// failure must not misreport it as a failed mutation.
+				console.warn('friends: presence refresh unavailable after relationship change');
+			}
+		}
 		const state = await lists(resolved);
-		return resolved.finish({ changed: outcome.changed, ...state, config: { maxFriends: FRIENDS_CONFIG.maxFriends, maxPendingOutgoing: FRIENDS_CONFIG.maxPendingOutgoing } }, 200);
+		return resolved.finish({ changed: outcome.changed, presenceSynced, ...state, config: { maxFriends: FRIENDS_CONFIG.maxFriends, maxPendingOutgoing: FRIENDS_CONFIG.maxPendingOutgoing } }, 200);
 	} catch {
 		return resolved.finish({ error: 'storage_unavailable' }, 503);
 	}

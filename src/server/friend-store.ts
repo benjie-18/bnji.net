@@ -49,14 +49,17 @@ async function playerIdByHandle(db: D1Database, handle: string): Promise<{ id: s
 
 /** The four lists the /friends page renders, joined to display labels. */
 export async function listFriendState(db: D1Database, playerId: string): Promise<FriendListState> {
-	const acceptedStmt = db.prepare(
+	type AcceptedRow = { handle: string | null; display_name: string; since: number };
+	type PendingRow = { handle: string | null; display_name: string; state: string; requested_by: string; since: number };
+	type BlockRow = { handle: string | null; display_name: string; since: number };
+	const acceptedQuery = db.prepare(
 		`SELECT p.handle AS handle, p.display_name AS display_name, f.updated_at AS since
 		 FROM player_friends f
 		 JOIN game_players p ON p.id = CASE WHEN f.player_a = ?1 THEN f.player_b ELSE f.player_a END
 		 WHERE (f.player_a = ?1 OR f.player_b = ?1) AND f.state = 'accepted'
 		 ORDER BY p.handle LIMIT ?2`,
 	).bind(playerId, 501);
-	const pendingStmt = db.prepare(
+	const pendingQuery = db.prepare(
 		`SELECT p.handle AS handle, p.display_name AS display_name, f.state AS state,
 		        f.requested_by AS requested_by, f.updated_at AS since
 		 FROM player_friends f
@@ -64,38 +67,44 @@ export async function listFriendState(db: D1Database, playerId: string): Promise
 		 WHERE (f.player_a = ?1 OR f.player_b = ?1) AND f.state = 'pending'
 		 ORDER BY p.handle LIMIT ?2`,
 	).bind(playerId, 501);
-	const blocksStmt = db.prepare(
+	const blockQuery = db.prepare(
 		`SELECT p.handle AS handle, p.display_name AS display_name, b.created_at AS since
 		 FROM player_blocks b
 		 JOIN game_players p ON p.id = b.blocked
 		 WHERE b.blocker = ?1
 		 ORDER BY p.handle LIMIT ?2`,
 	).bind(playerId, 501);
-
-	let accepted: { results: Array<{ handle: string | null; display_name: string; since: number }> };
-	let pending: { results: Array<{ handle: string | null; display_name: string; state: string; requested_by: string; since: number }> };
-	let blocks: { results: Array<{ handle: string | null; display_name: string; since: number }> };
-
-	if (typeof db.batch === 'function') {
-		const results = await db.batch([acceptedStmt, pendingStmt, blocksStmt]);
-		accepted = results[0] as typeof accepted;
-		pending = results[1] as typeof pending;
-		blocks = results[2] as typeof blocks;
+	type BatchRead<T> = { results?: T[] };
+	let acceptedRows: AcceptedRow[];
+	let pendingRows: PendingRow[];
+	let blockRows: BlockRow[];
+	if (db.batch) {
+		// D1 batch carries the three independent private-list reads in one
+		// service round trip. Keep a Promise.all fallback for small test/host
+		// adapters that implement only prepare/all.
+		const result = await db.batch([acceptedQuery, pendingQuery, blockQuery]) as [
+			BatchRead<AcceptedRow>, BatchRead<PendingRow>, BatchRead<BlockRow>,
+		];
+		acceptedRows = result[0]?.results ?? [];
+		pendingRows = result[1]?.results ?? [];
+		blockRows = result[2]?.results ?? [];
 	} else {
-		[accepted, pending, blocks] = await Promise.all([
-			acceptedStmt.all<{ handle: string | null; display_name: string; since: number }>(),
-			pendingStmt.all<{ handle: string | null; display_name: string; state: string; requested_by: string; since: number }>(),
-			blocksStmt.all<{ handle: string | null; display_name: string; since: number }>(),
+		const [accepted, pending, blocks] = await Promise.all([
+			acceptedQuery.all<AcceptedRow>(),
+			pendingQuery.all<PendingRow>(),
+			blockQuery.all<BlockRow>(),
 		]);
+		acceptedRows = accepted.results;
+		pendingRows = pending.results;
+		blockRows = blocks.results;
 	}
-
 	const entry = (row: { handle: string | null; display_name: string; since: number }): FriendEntry | null =>
 		row.handle === null ? null : { handle: String(row.handle), displayName: String(row.display_name), since: Number(row.since) };
 	return {
-		friends: accepted.results.map(entry).filter((item): item is FriendEntry => item !== null),
-		incoming: pending.results.filter((row) => row.requested_by !== playerId).map(entry).filter((item): item is FriendEntry => item !== null),
-		outgoing: pending.results.filter((row) => row.requested_by === playerId).map(entry).filter((item): item is FriendEntry => item !== null),
-		blocked: blocks.results.map(entry).filter((item): item is FriendEntry => item !== null),
+		friends: acceptedRows.map(entry).filter((item): item is FriendEntry => item !== null),
+		incoming: pendingRows.filter((row) => row.requested_by !== playerId).map(entry).filter((item): item is FriendEntry => item !== null),
+		outgoing: pendingRows.filter((row) => row.requested_by === playerId).map(entry).filter((item): item is FriendEntry => item !== null),
+		blocked: blockRows.map(entry).filter((item): item is FriendEntry => item !== null),
 	};
 }
 

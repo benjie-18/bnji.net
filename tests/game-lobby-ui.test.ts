@@ -71,14 +71,22 @@ function panelDom(): JSDOM {
 	const source = readFileSync(new URL('../src/components/RoomPanel.astro', import.meta.url), 'utf8');
 	const parts = source.split('---');
 	const markup = parts.length >= 3 ? parts[2]!.split('<style>')[0]! : source;
-	// Render the component the way Astro would for a chess page: the only
-	// interpolation the script reads is the hidden gameId field.
-	const rendered = markup.replace('value={gameId}', 'value="bnji.chess"');
-	return new JSDOM(`<!doctype html><html><body>${rendered}</body></html>`, { url: `${ORIGIN}/games/chess/` });
+	// Render the server-side substitutions needed by this browser-hook test.
+	// Astro itself is exercised by the project build.
+	const rendered = markup
+		.replace('value={gameId}', 'value="bnji.chess"')
+		.replace(/(aria-labelledby|id|for)=\{`\$\{panelId\}-([^`]+)`\}/g, (_match, attribute: string, suffix: string) => `${attribute}="room-test-${suffix}"`)
+		.replace('Start a {roomNoun} room', 'Start a chess room');
+	const dom = new JSDOM(`<!doctype html><html><body>${rendered}</body></html>`, { url: `${ORIGIN}/games/chess/` });
+	// jsdom defaults to a hidden document; ordinary tests model a foreground tab.
+	Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, value: 'visible' });
+	return dom;
 }
 
 type LobbyHandler = (url: string) => { status?: number; body: unknown };
 const intervalPeriods: number[] = [];
+const intervalIds: number[] = [];
+const clearedIntervals = new Set<number>();
 function install(dom: JSDOM, handler: LobbyHandler) {
 	const calls: string[] = [];
 	const g = globalThis as Record<string, unknown>;
@@ -97,9 +105,12 @@ function install(dom: JSDOM, handler: LobbyHandler) {
 	// The panel polls. Record the requested period and never fire the timer:
 	// the interval's EXISTENCE and its floor are the contract here.
 	dom.window.setInterval = ((_handler: TimerHandler, timeout?: number) => {
+		const id = intervalIds.length + 1;
+		intervalIds.push(id);
 		intervalPeriods.push(timeout ?? 0);
-		return intervalPeriods.length;
+		return id;
 	}) as unknown as typeof setInterval;
+	dom.window.clearInterval = ((id: number) => { clearedIntervals.add(id); }) as typeof clearInterval;
 	return calls;
 }
 
@@ -121,7 +132,7 @@ const byAttr = (dom: JSDOM, name: string): HTMLElement => {
 	return node as unknown as HTMLElement;
 };
 
-test.beforeEach(() => { sockets = []; intervalPeriods.length = 0; });
+test.beforeEach(() => { sockets = []; intervalPeriods.length = 0; intervalIds.length = 0; clearedIntervals.clear(); });
 
 test('rows show the game, seats and time left, and Join opens the room socket', async (t) => {
 	const dom = panelDom();
@@ -153,6 +164,99 @@ test('rows show the game, seats and time left, and Join opens the room socket', 
 	await tick(10);
 	assert.equal(sockets.length, 1, 'Join must open the room, not just link to it');
 	assert.match(sockets[0]!.url, new RegExp(`/api/games/rooms/${CODE}/ws$`));
+	assert.equal(dom.window.document.activeElement, dom.window.document.querySelector('[data-chat-form] [name="text"]'), 'joining moves keyboard focus into room chat');
+});
+
+
+test('RoomPanel labels point to unique generated IDs', (t) => {
+	const dom = panelDom();
+	mountWith(t, dom);
+	const ids = [...dom.window.document.querySelectorAll('[id]')].map((element) => element.id);
+	assert.equal(new Set(ids).size, ids.length, 'the panel does not introduce duplicate IDs');
+	for (const label of dom.window.document.querySelectorAll<HTMLLabelElement>('label[for]')) {
+		assert.ok(dom.window.document.getElementById(label.htmlFor), `label target ${label.htmlFor} exists`);
+	}
+	const root = dom.window.document.querySelector('[data-room-tools]')!;
+	assert.equal(root.getAttribute('aria-labelledby'), root.querySelector('h2')!.id);
+});
+
+test('lobby polling pauses while hidden and refreshes when the page becomes visible', async (t) => {
+	const dom = panelDom();
+	let visibility: DocumentVisibilityState = 'hidden';
+	Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, get: () => visibility });
+	const calls = install(dom, () => ({ body: { lobbies: [], refreshAfterSeconds: 10 } }));
+	mountWith(t, dom);
+	await tick(20);
+	const lobbyReads = (): number => calls.filter((url) => url.startsWith('/api/games/lobbies')).length;
+	assert.equal(lobbyReads(), 0, 'an initially hidden tab does not fetch lobbies');
+	assert.equal(intervalPeriods.length, 0, 'an initially hidden tab does not create a timer');
+
+	visibility = 'visible';
+	dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+	await tick(20);
+	assert.equal(lobbyReads(), 1, 'becoming visible triggers an immediate read');
+	assert.deepEqual(intervalPeriods, [15_000], 'the timer respects the server/cache floor');
+
+	visibility = 'hidden';
+	dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+	assert.ok(clearedIntervals.has(intervalIds[0]!), 'hiding the document clears the active interval');
+	await tick(20);
+	assert.equal(lobbyReads(), 1, 'no lobby requests are made while hidden');
+
+	visibility = 'visible';
+	dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+	await tick(20);
+	assert.equal(lobbyReads(), 2, 'returning to the foreground refreshes the list immediately');
+	assert.equal(intervalPeriods.length, 2, 'polling resumes with one timer');
+});
+
+test('a network error does not start polling, but an explicit refresh can recover', async (t) => {
+	const dom = panelDom();
+	let fail = true;
+	const calls = install(dom, (url) => {
+		if (url.startsWith('/api/games/lobbies') && fail) throw new Error('network offline');
+		return { body: { lobbies: [], refreshAfterSeconds: 10 } };
+	});
+	mountWith(t, dom);
+	await tick(20);
+	const lobbyReads = (): number => calls.filter((url) => url.startsWith('/api/games/lobbies')).length;
+	assert.equal(lobbyReads(), 1);
+	assert.match(byAttr(dom, 'lobby-status').textContent ?? '', /could not be loaded/);
+	assert.equal(intervalPeriods.length, 0, 'a rejected initial request must not start a polling timer');
+
+	fail = false;
+	byAttr(dom, 'lobby-refresh').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+	await tick(20);
+	assert.equal(lobbyReads(), 2, 'the refresh button permits an explicit retry');
+	assert.equal(intervalPeriods.length, 1, 'polling resumes after a successful retry');
+});
+
+test('a non-OK refresh clears its timer and a later manual retry can restart it', async (t) => {
+	const dom = panelDom();
+	let reads = 0;
+	install(dom, (url) => {
+		if (!url.startsWith('/api/games/lobbies')) return { body: {} };
+		reads += 1;
+		return reads === 2
+			? { status: 503, body: { error: 'storage_unavailable' } }
+			: { body: { lobbies: [], refreshAfterSeconds: 10 } };
+	});
+	mountWith(t, dom);
+	await tick(20);
+	assert.deepEqual(intervalPeriods, [15_000]);
+
+	const refresh = byAttr(dom, 'lobby-refresh');
+	refresh.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+	await tick(20);
+	assert.equal(reads, 2);
+	assert.ok(clearedIntervals.has(intervalIds[0]!), 'the failing response stops the interval');
+	assert.equal(intervalPeriods.length, 1, 'the failed response does not recreate the timer');
+	assert.match(byAttr(dom, 'lobby-status').textContent ?? '', /unavailable right now/);
+
+	refresh.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+	await tick(20);
+	assert.equal(reads, 3);
+	assert.equal(intervalPeriods.length, 2, 'a later successful manual retry restores polling');
 });
 
 test('an empty list says so without disabling the code path', async (t) => {

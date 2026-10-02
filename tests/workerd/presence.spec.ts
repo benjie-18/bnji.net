@@ -48,6 +48,7 @@ async function connect(handle: string | null, friends: string[] | null, options:
 const snapshotOf = (frame: BoxFrame): boolean => frame.t === 'presence_snapshot';
 const onlineOf = (handle: string) => (frame: BoxFrame): boolean => frame.t === 'presence_change' && frame.handle === handle && frame.online === true;
 const offlineOf = (handle: string) => (frame: BoxFrame): boolean => frame.t === 'presence_change' && frame.handle === handle && frame.online === false;
+const refreshOf = (frame: BoxFrame): boolean => frame.t === 'presence_refresh';
 
 const openSockets: WebSocket[] = [];
 async function track(result: { socket: WebSocket | null; box: SocketBox | null; status: number }): Promise<SocketBox> {
@@ -135,6 +136,36 @@ describe('Presence — snapshots, friend-scoped announcements, multi-tab', () =>
 		// Last tab closes → the offline announcement finally fires.
 		openSockets[base + 2]!.close();
 		expect((await alice.next(offlineOf('bob2'))).handle).toBe('bob2');
+		await closeAll();
+	});
+
+	it('admin refresh asks only the affected handles to reconnect', async () => {
+		const secret = (env as unknown as { ACCESS_SECRET?: string }).ACCESS_SECRET ?? '';
+		const token = await derivePresenceAdminToken(secret);
+		const alice = await track(await connect('alice5', ['bob5']));
+		await alice.next(snapshotOf);
+		const bob = await track(await connect('bob5', ['alice5']));
+		await bob.next(snapshotOf);
+		const url = 'https://presence.test/admin/refresh';
+
+		expect((await stub().fetch(new Request(url, { method: 'POST', body: JSON.stringify({ handles: ['bob5'] }) }))).status).toBe(401);
+		const invalid = await stub().fetch(new Request(url, {
+			method: 'POST',
+			headers: { [PRESENCE_ADMIN_HEADER]: token },
+			body: JSON.stringify({ handles: ['BOB5'] }),
+		}));
+		expect(invalid.status).toBe(400);
+
+		const response = await stub().fetch(new Request(url, {
+			method: 'POST',
+			headers: { [PRESENCE_ADMIN_HEADER]: token },
+			body: JSON.stringify({ handles: ['bob5'] }),
+		}));
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ refreshedHandles: ['bob5'] });
+		expect((await bob.next(refreshOf)).v).toBe(1);
+		await delay(40);
+		expect(alice.frames.filter(refreshOf)).toEqual([]);
 		await closeAll();
 	});
 

@@ -53,6 +53,37 @@ export async function presenceAdminFetch(
 	}
 }
 
+/** Ask live sockets for the affected handles to reconnect with fresh D1 visibility. */
+export async function presenceRefreshFetch(
+	env: Record<string, unknown>,
+	secret: string | undefined,
+	handles: string[],
+): Promise<{ ok: boolean; refreshedHandles: string[] }> {
+	const unavailable = { ok: false, refreshedHandles: [] as string[] };
+	const unique = [...new Set(handles)];
+	if (!secret || unique.length === 0 || unique.length > 2 || unique.some((handle) => !/^[a-z0-9_]{3,20}$/.test(handle))) return unavailable;
+	const namespace = presenceNamespace((env as PresenceGatewayEnv).PRESENCE);
+	if (!namespace) return unavailable;
+	try {
+		const token = await derivePresenceAdminToken(secret);
+		const stub = namespace.get(namespace.idFromName(PRESENCE_INSTANCE));
+		const response = await stub.fetch(new Request('https://presence.internal/admin/refresh', {
+			method: 'POST',
+			headers: { [PRESENCE_ADMIN_HEADER]: token, 'content-type': 'application/json' },
+			body: JSON.stringify({ handles: unique }),
+		}));
+		if (!response.ok) return unavailable;
+		const data = await response.json().catch(() => null) as { refreshedHandles?: unknown } | null;
+		if (!data || !Array.isArray(data.refreshedHandles)) return unavailable;
+		const refreshedHandles = data.refreshedHandles.filter((handle): handle is string =>
+			typeof handle === 'string' && unique.includes(handle),
+		);
+		return { ok: true, refreshedHandles: [...new Set(refreshedHandles)] };
+	} catch {
+		return unavailable;
+	}
+}
+
 export function presenceNamespace(value: unknown): PresenceNamespace | null {
 	if (!value || typeof value !== 'object') return null;
 	const namespace = value as PresenceNamespace;

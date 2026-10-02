@@ -47,7 +47,13 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 	const lobbyRefresh = root.querySelector<HTMLButtonElement>('[data-lobby-refresh]');
 	let lobbyTimer = 0;
 	let lobbyStopped = false;
+	let lobbyRequest: Promise<void> | null = null;
 	function lobbySay(message: string): void { if (lobbyStatus) lobbyStatus.textContent = message; }
+	function stopLobbyTimer(): void {
+		if (!lobbyTimer) return;
+		window.clearInterval(lobbyTimer);
+		lobbyTimer = 0;
+	}
 	function lobbyGameId(): string {
 		// The Games page picks a game in a <select>; a game page carries a hidden
 		// input (or just the panel's own data-game-id) because it hosts one game.
@@ -85,51 +91,67 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 		item.appendChild(actions);
 		return item;
 	}
-	async function loadLobbies(): Promise<void> {
-		if (!lobbyList || lobbyStopped) return;
+	function loadLobbies(): Promise<void> {
+		if (!lobbyList || lobbyStopped || document.visibilityState === 'hidden') return Promise.resolve();
+		if (lobbyRequest) return lobbyRequest;
 		const gameId = lobbyGameId();
 		if (lobbyRefresh) lobbyRefresh.disabled = true;
-		try {
-			const response = await fetch(`/api/games/lobbies${gameId ? `?gameId=${encodeURIComponent(gameId)}` : ''}`, {
-				credentials: 'same-origin', cache: 'no-store',
-			});
-			const body = await response.json().catch(() => ({})) as { lobbies?: LobbyRow[]; error?: string; refreshAfterSeconds?: number; truncated?: boolean };
-			if (!response.ok) {
+		lobbyRequest = (async () => {
+			try {
+				const response = await fetch(`/api/games/lobbies${gameId ? `?gameId=${encodeURIComponent(gameId)}` : ''}`, {
+					credentials: 'same-origin', cache: 'no-store',
+				});
+				const body = await response.json().catch(() => ({})) as { lobbies?: LobbyRow[]; error?: string; refreshAfterSeconds?: number; truncated?: boolean };
+				if (!response.ok) {
+					lobbyStopped = true;
+					stopLobbyTimer();
+					lobbySay(body.error === 'lobby_disabled' ? 'Open rooms are turned off right now — use a room code to join.' : 'Open rooms are unavailable right now — use a room code to join.');
+					return;
+				}
+				const rows = Array.isArray(body.lobbies) ? body.lobbies : [];
+				lobbyList.replaceChildren();
+				if (rows.length === 0) {
+					const empty = document.createElement('li');
+					empty.className = 'room-tools__lobby-meta';
+					empty.textContent = 'No open rooms right now. Create one and it appears here for everyone.';
+					lobbyList.appendChild(empty);
+				} else {
+					for (const row of rows) lobbyList.appendChild(paintLobby(row));
+				}
+				lobbySay(rows.length === 0 ? '' : `${rows.length} open room${rows.length === 1 ? '' : 's'} · anyone may join${body.truncated ? ' (list truncated)' : ''}.`);
+			} catch {
 				lobbyStopped = true;
-				if (lobbyTimer) { window.clearInterval(lobbyTimer); lobbyTimer = 0; }
-				lobbySay(body.error === 'lobby_disabled' ? 'Open rooms are turned off right now — use a room code to join.' : 'Open rooms are unavailable right now — use a room code to join.');
-				return;
+				stopLobbyTimer();
+				lobbySay('Open rooms could not be loaded — use a room code to join.');
+			} finally {
+				if (lobbyRefresh) lobbyRefresh.disabled = false;
 			}
-			const rows = Array.isArray(body.lobbies) ? body.lobbies : [];
-			lobbyList.replaceChildren();
-			if (rows.length === 0) {
-				const empty = document.createElement('li');
-				empty.className = 'room-tools__lobby-meta';
-				empty.textContent = 'No open rooms right now. Create one and it appears here for everyone.';
-				lobbyList.appendChild(empty);
-			} else {
-				for (const row of rows) lobbyList.appendChild(paintLobby(row));
-			}
-			lobbySay(rows.length === 0 ? '' : `${rows.length} open room${rows.length === 1 ? '' : 's'} · anyone may join${body.truncated ? ' (list truncated)' : ''}.`);
-		} catch {
-			lobbySay('Open rooms could not be loaded — use a room code to join.');
-		} finally {
-			if (lobbyRefresh) lobbyRefresh.disabled = false;
-		}
+		})().finally(() => { lobbyRequest = null; });
+		return lobbyRequest;
 	}
+
 	function startLobbyTimer(seconds: number): void {
-		if (lobbyTimer) window.clearInterval(lobbyTimer);
+		stopLobbyTimer();
+		// A completed fetch can race a visibility change. Never create a timer
+		// after the tab has gone into the background or an API/network error.
+		if (lobbyStopped || document.visibilityState === 'hidden') return;
 		// No faster than the server-side cache: polling harder than the cache TTL
 		// only reads the same list and spends the per-IP budget.
 		const period = Math.max(LOBBY_CONFIG.minRefreshSeconds, seconds) * 1_000;
 		lobbyTimer = window.setInterval(() => { void loadLobbies(); }, period);
 	}
 	if (lobbyList) {
-		void loadLobbies().then(() => startLobbyTimer(LOBBY_CONFIG.cacheTtlSeconds));
-		lobbyRefresh?.addEventListener('click', () => void loadLobbies());
+		if (document.visibilityState !== 'hidden') {
+			void loadLobbies().then(() => startLobbyTimer(LOBBY_CONFIG.cacheTtlSeconds));
+		}
+		lobbyRefresh?.addEventListener('click', () => {
+			// An explicit refresh is also the user's retry after a transient error.
+			lobbyStopped = false;
+			void loadLobbies().then(() => startLobbyTimer(LOBBY_CONFIG.cacheTtlSeconds));
+		});
 		document.addEventListener('visibilitychange', () => {
-			if (document.visibilityState === 'hidden') { if (lobbyTimer) { window.clearInterval(lobbyTimer); lobbyTimer = 0; } }
-			else if (!lobbyTimer && !lobbyStopped) startLobbyTimer(LOBBY_CONFIG.cacheTtlSeconds);
+			if (document.visibilityState === 'hidden') stopLobbyTimer();
+			else if (!lobbyStopped) void loadLobbies().then(() => startLobbyTimer(LOBBY_CONFIG.cacheTtlSeconds));
 		});
 	}
 
@@ -387,7 +409,15 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 		}, (state, info) => {
 			observer.onSocket?.(state === 'connected' ? activeSocket : null);
 			if (state === 'connecting') { if (leaveButton) leaveButton.disabled = true; setChatEnabled(false); say('Connecting to room…'); }
-			else if (state === 'connected') { if (leaveButton) leaveButton.disabled = false; setChatEnabled(CHAT_CONFIG.enabled); }
+			else if (state === 'connected') {
+				if (leaveButton) leaveButton.disabled = false;
+				setChatEnabled(CHAT_CONFIG.enabled);
+				// Move keyboard users into the joined room instead of leaving focus
+				// on a stale lobby Join button. The code readout is the fallback when
+				// room chat is disabled.
+				if (CHAT_CONFIG.enabled && chatInput && !chatInput.disabled) chatInput.focus({ preventScroll: true });
+				else codeOutput?.focus({ preventScroll: true });
+			}
 			else if (state === 'closed') {
 				if (leaveButton) leaveButton.disabled = true;
 				setChatEnabled(false);
