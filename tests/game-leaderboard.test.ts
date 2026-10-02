@@ -134,6 +134,7 @@ test('the client renders fetched rows with ranks and scores', async () => {
 
 	const rows = dom.window.document.querySelectorAll('[data-board-rows] > li');
 	assert.equal(rows.length, 2);
+	assert.match(rows[0]!.className, /glass-item/, 'fetched rows share the glass item surface');
 	assert.equal(rows[0]!.querySelector('.leaderboard-row__rank')!.textContent, '#1');
 	assert.equal(rows[0]!.querySelector('strong')!.textContent, '@ada · Ada Lovelace');
 	assert.equal(rows[0]!.querySelector('.leaderboard-row__score')!.textContent, '1,200');
@@ -188,7 +189,7 @@ test('an initial ?mode= wins, and the client says so when a board is empty', asy
 	await tick(10);
 	assert.ok(calls.some((call) => call.url.includes('mode=normal')), 'a shared link opens the mode it names');
 	const empty = dom.window.document.querySelector('[data-board-rows]')!.textContent ?? '';
-	assert.match(empty, /No verified runs on this board yet/);
+	assert.match(empty, /No scores on this board yet/);
 });
 
 test('a rate-limited board explains itself and a guest sees guest framing', async () => {

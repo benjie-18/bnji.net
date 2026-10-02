@@ -28,14 +28,14 @@ const modeSummary = modes.map((mode) => MODE_LABEL[mode] ?? mode).join(' · ');
 
 <Layout
 	title={`${game.title} leaderboard`}
-	description={`Verified ${game.title} scores on bnji.net — ${modeSummary}.`}
+	description={`${game.title} leaderboard on bnji.net — ${modeSummary}.`}
 >
 	<PageHeader
 		index="07"
 		label={`GAMES / ${game.title.toUpperCase()} / LEADERBOARD`}
 		titleId="page-title"
 		title={`${game.title} leaderboard`}
-		description={`Every row here is a run a server verifier accepted. ${modeSummary}.`}
+		description={`Scores for ${modeSummary}.`}
 	/>
 
 	<div class="container leaderboard-body">

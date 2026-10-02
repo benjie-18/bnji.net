@@ -8,8 +8,8 @@
  * §8.1). Surfaces reuse the site's glass language directly: every panel is
  * a `data-glass` element (styles/glass.css) and the submit control is a
  * GlassButton, so this page cannot drift from the rest of the site.
- * The disclosure below is the phase's plain-language copy (§9.5/§11 wording
- * mirrored): rows live with the account, nothing is emailed or pushed.
+ * The short note identifies the account data saved by this surface; the
+ * presence socket itself is transient and stores no durable location history.
  */
 import Layout from '../layouts/Layout.astro';
 import PageHeader from '../components/PageHeader.astro';
@@ -38,10 +38,7 @@ const directoryOn = DIRECTORY_CONFIG.enabled;
 		</section>
 
 		<section class="friends-panel" data-friends-signed-in data-glass="raised" hidden>
-			<p class="friends-disclosure">
-				Stored while your account exists and included in your account export. Presence shows
-				only to accepted friends, only while a page is open; your friend list is private.
-			</p>
+			<p class="friends-disclosure">Friend requests and blocks are saved to your account.</p>
 
 			<form class="friends-request" data-friends-request-form>
 				<label for="friends-request-handle">Send a request by exact handle</label>
@@ -134,14 +131,21 @@ const directoryOn = DIRECTORY_CONFIG.enabled;
 	.friends-status { min-height: 1.25rem; font-size: var(--text-small); }
 	.friends-status[data-tone='error'] { color: var(--danger); }
 
-	/* The surface itself comes from [data-glass] (glass.css) — only layout. */
-	.friends-panel { padding: clamp(1.15rem, 2.4vw, 1.75rem); }
+	/* Keep the full flow inside one softly squared glass surface. */
+	.friends-panel {
+		display: grid;
+		align-content: start;
+		gap: var(--space-4);
+		min-inline-size: 0;
+		padding: clamp(1.15rem, 2.4vw, 1.75rem);
+	}
+	.friends-panel[data-glass='raised'] { --parent-radius: var(--glass-radius-md); border-radius: var(--parent-radius); }
 	.friends-panel[hidden] { display: none; }
-	.friends-panel > h2 { margin: 0 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
+	.friends-panel > h2 { margin: 0; color: var(--text-strong); font-size: var(--text-title); }
 	.friends-panel p { margin: 0; max-width: 52rem; color: var(--text-muted); }
 	.friends-panel a { color: var(--text-strong); }
 
-	.friends-disclosure { margin-bottom: 1.25rem !important; font-size: var(--text-small); line-height: 1.6; }
+	.friends-disclosure { font-size: var(--text-small); line-height: 1.6; }
 
 	.friends-request label { display: block; margin-bottom: 0.4rem; color: var(--text-strong); font-weight: 600; }
 	.friends-request__row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
@@ -157,11 +161,11 @@ const directoryOn = DIRECTORY_CONFIG.enabled;
 	}
 	.friends-hint { margin-top: 0.55rem !important; font-size: var(--text-small); }
 
-	.friends-search { display: grid; gap: 0.5rem; margin-top: 1.5rem; padding: clamp(0.9rem, 1.8vw, 1.25rem); }
+	.friends-search { display: grid; gap: var(--space-2); margin: 0; padding: clamp(0.9rem, 1.8vw, 1.25rem); }
 	.friends-search label { color: var(--text-strong); font-weight: 600; }
-	.friends-tabs { margin-top: 1.5rem; }
+	.friends-tabs { margin: 0; }
 	.friends-tab-count { color: var(--text-dim); font-size: var(--text-micro); }
-	.friends-grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); margin-top: 1rem; }
+	.friends-grid { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); margin: 0; }
 	.friends-section[hidden] { display: none; }
 	.friends-search__row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
 	.friends-search input {

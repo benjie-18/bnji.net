@@ -78,3 +78,20 @@ lockfile. Current results:
 npm audit             0 vulnerabilities
 npm audit --omit=dev  0 vulnerabilities
 ```
+
+## Lockfile repair and audit refresh (2026-10-02)
+
+A clean `npm ci` initially failed because the lockfile omitted the Cloudflare
+adapter's `esbuild@0.28.2` package and optional platform records. Refreshing the
+lockfile restored those records and removed a stale nested `jsdom`/`undici`
+entry; `package.json` is unchanged. The same fresh audit identified a newly
+advisory-affected transitive Astro dependency, so `npm audit fix
+--package-lock-only` updated `devalue` from `5.9.1` to `5.9.4` within its
+existing semver range. No direct dependency or override changed.
+
+Verified with a clean `npm ci`, the full test suite, and `npm run check`:
+
+```text
+npm audit             0 vulnerabilities
+npm audit --omit=dev  0 vulnerabilities
+```

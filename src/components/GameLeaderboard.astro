@@ -22,6 +22,7 @@ const current = initialMode && modes.includes(initialMode) ? initialMode : modes
 
 <section
 	class="glass-panel leaderboard"
+	data-glass="raised large"
 	data-board
 	data-game-id={game.id}
 	aria-labelledby="leaderboard-title"
@@ -30,9 +31,8 @@ const current = initialMode && modes.includes(initialMode) ? initialMode : modes
 		<div>
 			<p class="eyebrow">Leaderboard</p>
 			<h2 id="leaderboard-title">{game.title}</h2>
-			<p class="leaderboard__note">Only runs a server verifier accepted are listed. A row shows the player's current public label, so a rename updates every board at once.</p>
 		</div>
-		<p class="glass-note leaderboard__you" data-board-you hidden>
+		<p class="glass-item leaderboard__you" data-board-you hidden>
 			<span class="glass-label">You</span> <span data-board-you-value></span>
 		</p>
 	</header>
@@ -61,7 +61,7 @@ const current = initialMode && modes.includes(initialMode) ? initialMode : modes
 	<ol class="leaderboard__rows" data-board-rows></ol>
 	<p class="leaderboard__status" data-board-status role="status" aria-live="polite">Loading the board…</p>
 	<div class="leaderboard__actions">
-		<button type="button" class="glass-button" data-board-more hidden>Load more</button>
+		<button type="button" class="glass-button glass-button--primary" data-board-more hidden>Load more</button>
 	</div>
 </section>
 
@@ -71,21 +71,31 @@ const current = initialMode && modes.includes(initialMode) ? initialMode : modes
 </script>
 
 <style>
-	.leaderboard { display: grid; gap: 1.1rem; padding: clamp(1.1rem, 3vw, 1.7rem); }
-	.leaderboard__head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 0.75rem 1.5rem; }
-	.leaderboard__head h2 { margin: 0.25rem 0 0; color: var(--text-strong); font-size: var(--text-title); }
-	.leaderboard__note { max-width: 62ch; margin: 0.5rem 0 0; color: var(--text-muted); line-height: 1.6; }
-	.leaderboard__you { margin: 0; min-height: 1.6em; }
-	.leaderboard__rows { display: grid; gap: 0.4rem; margin: 0; padding: 0; list-style: none; }
-	:global(.leaderboard-row--empty) { padding: 1rem; color: var(--text-muted); }
-	.leaderboard__status { min-height: 1.6em; margin: 0; color: var(--text-muted); font-size: var(--text-small); }
-	.leaderboard__actions { display: flex; gap: 0.6rem; }
-	:global(.leaderboard-row__rank) { color: var(--text-dim); font-size: var(--text-small); min-inline-size: 3.2rem; }
-	:global(.leaderboard-row__main) { display: grid; gap: 0.15rem; }
+	.leaderboard { display: grid; gap: var(--space-4); padding: clamp(var(--space-4), 3vw, var(--space-6)); }
+	.leaderboard__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); }
+	.leaderboard__head h2 { margin: var(--space-1) 0 0; color: var(--text-strong); font-size: var(--text-title); }
+	.leaderboard__you { margin: 0; min-height: 1.6em; border-color: var(--accent-line); background: var(--accent-soft); color: var(--text-strong); }
+	.leaderboard__rows { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+	.leaderboard__rows :global(.leaderboard-row) {
+		display: grid;
+		grid-template-columns: minmax(var(--space-7), auto) minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-2) var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+	}
+	.leaderboard__rows :global(.leaderboard-row:nth-child(-n + 3)) { border-color: var(--accent-line); background: var(--glass-bg-raised); }
+	.leaderboard__rows :global(.leaderboard-row--empty) { display: block; padding: var(--space-4); color: var(--text-strong); }
+	.leaderboard__status { min-height: 1.6em; margin: 0; color: var(--text); font-size: var(--text-small); }
+	.leaderboard__actions { display: flex; gap: var(--space-2); }
+	:global(.leaderboard-row__rank) { color: var(--accent-strong); font-size: var(--text-small); font-weight: 700; min-inline-size: var(--space-7); }
+	:global(.leaderboard-row__main) { display: grid; gap: var(--space-1); }
 	:global(.leaderboard-row__main strong) { color: var(--text-strong); overflow-wrap: anywhere; }
 	:global(.leaderboard-row__meta) { color: var(--text-muted); font-size: var(--text-micro); }
-	:global(.leaderboard-row__score) { color: var(--text-strong); font-size: var(--text-lead); }
+	:global(.leaderboard-row__score) { color: var(--text-strong); font-size: var(--text-lead); font-weight: 700; }
 	@media (max-width: 560px) {
+		.leaderboard__rows :global(.leaderboard-row) { grid-template-columns: minmax(0, 1fr) auto; }
 		:global(.leaderboard-row__rank) { min-inline-size: 0; }
 	}
 </style>

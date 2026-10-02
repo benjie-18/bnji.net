@@ -14,8 +14,8 @@
  *     read watermark (§7.1), seen indicator;
  *   - rendering is textContent-only for authored content (§12.1); images are
  *     same-origin <img> to the authenticated media route (nosniff, no-store);
- *   - the disclosure line says plainly what is stored, who can read it, and
- *     that there is no end-to-end encryption (§12.6, owner answer D10).
+ *   - the disclosure line states the retention window and who can read a
+ *     conversation, keeping the policy value sourced from the API config.
  */
 
 type Conversation = {
@@ -189,8 +189,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 	function renderDisclosure(): void {
 		disclosure.textContent =
 			`Messages are stored on this site for ${config.retentionDays} days so you can catch up when you come back. ` +
-			'The two people in a conversation can read them. Moderators only read a message if it is reported, ' +
-			'and this site does not use end-to-end encryption.';
+			'The two people in a conversation can read them.';
 	}
 
 	function fail(error: unknown, target: HTMLElement = status): void {

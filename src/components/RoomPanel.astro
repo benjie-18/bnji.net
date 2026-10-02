@@ -65,7 +65,7 @@ const panelId = `room-${globalThis.crypto.randomUUID()}`;
 
 	{CHAT_CONFIG.enabled && (
 		<div class="room-panel__chat" data-chat-panel>
-			<p class="room-panel__note">Plain text for everyone in the room. Messages live only while this room exists (up to 2 hours) and are deleted with it &mdash; not encrypted, not permanent, no link previews. You can report another member's message; reports are kept for review after the room is gone.</p>
+			<p class="room-panel__note">Room chat is visible to room members while a room exists (up to 2 hours). Messages are then deleted.</p>
 			<!-- Deliberately no role="log": it would override the <ol>'s implicit list role (axe "listitem"). -->
 			<ol class="room-panel__chat-messages" data-chat-messages aria-live="polite" aria-label="Room chat messages"></ol>
 			<p class="room-panel__chat-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>

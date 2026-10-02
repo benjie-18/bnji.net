@@ -16,13 +16,6 @@ export type Game = {
 	modes?: readonly string[];
 };
 
-export const GAME_STATUS_LABEL: Record<GameStatus, string> = {
-	available: 'Available in the Lab',
-	planned: 'Planned',
-	'in-development': 'In development',
-	unavailable: 'Temporarily unavailable',
-};
-
 const GAME_ID_PATTERN = /^bnji\.[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const GAME_STATUSES = new Set<GameStatus>(['available', 'planned', 'in-development', 'unavailable']);
 const GAME_CAPABILITIES = new Set<GameCapability>(['keyboard', 'touch', 'pointer', 'gamepad', 'canvas-2d', 'webgl', 'webgpu', 'audio']);
@@ -38,6 +31,7 @@ export function defineGameCatalog<const T extends readonly Game[]>(games: T): T 
 		ids.add(game.id);
 		if (typeof game.title !== 'string' || !game.title.trim()) throw new Error(`${game.id} needs a title`);
 		if (typeof game.description !== 'string' || !game.description.trim()) throw new Error(`${game.id} needs a description`);
+		if (game.description.trim().split(/\s+/u).length > 12) throw new Error(`${game.id} description must be 12 words or fewer`);
 		if (!GAME_STATUSES.has(game.status)) throw new Error(`${game.id} has an invalid status`);
 		const destinations = Number(game.href !== undefined) + Number(game.labHref !== undefined);
 		if (game.status === 'available' && destinations !== 1) throw new Error(`${game.id} must have exactly one destination while available`);
@@ -101,7 +95,7 @@ export const GAMES = defineGameCatalog([
 	{
 		id: 'bnji.isometric-stack',
 		title: 'Isometric Stack',
-		description: 'Drop alternating blocks at one fixed speed and hold your combo — the tallest verified run takes the leaderboard.',
+		description: 'Drop alternating blocks, keep your combo, and chase the leaderboard.',
 		status: 'available',
 		href: '/games/stack/',
 		capabilities: ['keyboard', 'touch', 'pointer', 'canvas-2d'],
@@ -110,7 +104,7 @@ export const GAMES = defineGameCatalog([
 	{
 		id: 'bnji.chess',
 		title: 'Chess',
-		description: 'Play a full game in a private room with server-validated moves, or practise both sides locally. Fastest checkmate claims the leaderboard.',
+		description: 'Play in private rooms or practice locally; fastest checkmate tops the board.',
 		status: 'available',
 		href: '/games/chess/',
 		capabilities: ['keyboard', 'pointer'],
@@ -119,7 +113,7 @@ export const GAMES = defineGameCatalog([
 	{
 		id: 'bnji.pvp-minesweeper',
 		title: 'PvP Minesweeper',
-		description: "Two or more rivals vote a difficulty, plant mines on each other's boards, then race to clear the board they received. Wins count per difficulty.",
+		description: "Vote a difficulty, plant mines on rivals' boards, then race to clear.",
 		status: 'available',
 		href: '/games/pvp-minesweeper/',
 		capabilities: ['keyboard', 'touch', 'pointer'],

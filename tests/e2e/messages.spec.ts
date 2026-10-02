@@ -151,11 +151,12 @@ test('the messages page discloses, lists, threads, sends, and handles live frame
 	await page.goto('/messages/');
 	await expect(page.locator('[data-dm-status]')).toContainText('Signed in as Player One. 1 conversation(s).');
 
-	// §12.6 + owner answer D10: what is stored, who can read it, no E2E implication.
+	// The retention window is config-driven, and the participants are named plainly.
 	const disclosure = page.locator('[data-dm-disclosure]');
 	await expect(disclosure).toContainText('60 days');
-	await expect(disclosure).toContainText('Moderators only read a message if it is reported');
-	await expect(disclosure).toContainText('does not use end-to-end encryption');
+	await expect(disclosure).toContainText('The two people in a conversation can read them.');
+	await expect(disclosure).not.toContainText('Moderators only read a message if it is reported');
+	await expect(disclosure).not.toContainText('end-to-end encryption');
 
 	// List: partner identity as handle + label, preview, unread badge.
 	const item = page.locator('[data-dm-list] button');

@@ -11,6 +11,7 @@ import { listPaintActivity, PAINT_ACTIVITY_MAX_ROWS, preparePaintActivityTrim, p
 import { closeStaleGameSessions, MAX_RETENTION_ROWS_PER_TABLE, MAX_RETENTION_ROWS_PER_TABLE_CATCH_UP, MAX_RETENTION_SWEEP_QUERIES, purgeGameRetention, runRetentionSweep } from '../src/server/tracking-retention';
 import { defineGameCatalog, GAMES, type Game } from '../src/data/games';
 import { updateSiteSettings } from '../src/server/site-settings-store';
+import { flatNavItems, isNavGroup, PRIMARY_NAV } from '../src/data/navigation';
 
 const ADMIN_TOKEN = 'games-test-admin-token';
 const GAME_ID = 'bnji.glass-minesweeper';
@@ -521,14 +522,54 @@ test('games catalog and navigation have a real empty state and preserve Lab owne
 	assert.match(footer, /aria-label="Site"/);
 	assert.doesNotMatch(page, /components\/lab\//);
 	assert.equal(new Set(GAMES.map((game) => game.id)).size, GAMES.length);
+	for (const game of GAMES) assert.ok(game.description.trim().split(/\s+/u).length <= 12, `${game.id} card copy stays concise`);
+	assert.doesNotMatch(card, /games-card__id|games-card__top|GAME_STATUS_LABEL|<Chip/);
+	assert.doesNotMatch(card, /Available in the Lab/);
 	// Catalog mode vocabulary: Lab experiments share `default`; chess scores `fastest-mate`; PvP Minesweeper ranks per difficulty.
 	assert.deepEqual([...new Set(GAMES.flatMap((game) => game.modes ?? []))].sort(), ['default', 'fastest-mate', 'hard', 'normal', 'quick']);
+});
+
+test('Community navigation groups the board, messages, and friends pages', () => {
+	const community = PRIMARY_NAV.find((entry) => entry.label === 'Community');
+	assert.ok(community && isNavGroup(community));
+	assert.deepEqual(community.items.map((item) => item.href), ['/board/', '/messages/', '/friends/']);
+	const flattened = flatNavItems(PRIMARY_NAV);
+	for (const href of ['/board/', '/messages/', '/friends/']) {
+		assert.ok(flattened.some((item) => item.href === href), `${href} remains reachable`);
+		assert.equal(PRIMARY_NAV.some((entry) => !isNavGroup(entry) && entry.href === href), false, `${href} is not a top-level standalone link`);
+	}
+});
+
+test('global and per-game leaderboards use glass surfaces without the removed helper copy', () => {
+	const catalog = readFileSync(new URL('../src/pages/games.astro', import.meta.url), 'utf8');
+	const panel = readFileSync(new URL('../src/components/GameLeaderboard.astro', import.meta.url), 'utf8');
+	const client = readFileSync(new URL('../src/scripts/game-leaderboard.ts', import.meta.url), 'utf8');
+	assert.match(catalog, /class="games-leaderboards" data-glass="raised large"/);
+	assert.match(catalog, /<h2 id="leaderboards-title">Leaderboards<\/h2>/);
+	assert.match(catalog, /class="glass-item games-board"/);
+	assert.doesNotMatch(catalog, /Server-verified runs only\.|Verified scores/);
+	assert.match(panel, /data-glass="raised large"/);
+	assert.doesNotMatch(panel, /Only runs a server verifier accepted are listed/);
+	assert.match(client, /item\.className = 'glass-item glass-row leaderboard-row'/);
+});
+
+test('room-chat panels keep the audience and short retention note without the removed detail', () => {
+	const catalog = readFileSync(new URL('../src/pages/games.astro', import.meta.url), 'utf8');
+	const roomPanel = readFileSync(new URL('../src/components/RoomPanel.astro', import.meta.url), 'utf8');
+	const roomClient = readFileSync(new URL('../src/scripts/game-room-ui.ts', import.meta.url), 'utf8');
+	const note = 'Room chat is visible to room members while a room exists (up to 2 hours). Messages are then deleted.';
+	for (const source of [catalog, roomPanel]) {
+		assert.ok(source.includes(note), 'each room-chat surface names readers and retention');
+		assert.doesNotMatch(source, /not encrypted|reports are kept for review|no link previews/i);
+	}
+	assert.doesNotMatch(roomClient, /Messages are stored only while this room exists/);
 });
 
 test('catalog construction rejects duplicate, malformed, and misleading entries instead of silently overwriting IDs', () => {
 	const valid = GAMES[0]!;
 	assert.throws(() => defineGameCatalog([valid, valid] as unknown as readonly Game[]), /Duplicate game ID/);
 	assert.throws(() => defineGameCatalog([{ ...valid, id: 'bnji.Bad ID' }] as unknown as readonly Game[]), /invalid stable game ID/);
+	assert.throws(() => defineGameCatalog([{ ...valid, description: 'One two three four five six seven eight nine ten eleven twelve thirteen.' }] as unknown as readonly Game[]), /12 words or fewer/);
 	assert.throws(() => defineGameCatalog([{ ...valid, labHref: undefined, href: undefined }] as unknown as readonly Game[]), /exactly one destination/);
 	assert.throws(() => defineGameCatalog([{ ...valid, labHref: '/lab/#bad path' }] as unknown as readonly Game[]), /invalid Lab link/);
 	assert.throws(() => defineGameCatalog([{ ...valid, status: 'planned' }] as unknown as readonly Game[]), /cannot have a playable destination/);

@@ -77,10 +77,11 @@ test('the friends page discloses, lists, and sends the exact action bodies', asy
 	const { postBodies, deleteBodies } = mockFriendsApi(page);
 	await page.goto('/friends/');
 
-	// Plain-language disclosure (§8.1/§9.5 wording) before any interaction.
+	// The saved account data is identified before any interaction.
 	const disclosure = page.locator('.friends-disclosure');
-	await expect(disclosure).toContainText('delete the account and they leave with it');
-	await expect(disclosure).toContainText('friend list is private');
+	await expect(disclosure).toHaveText('Friend requests and blocks are saved to your account.');
+	await expect(disclosure).not.toContainText('included in your account export');
+	await expect(disclosure).not.toContainText('friend list is private');
 
 	// Lists render from GET — three sections populated, empty states hidden.
 	await expect(page.locator('[data-friends-list="incoming"] li')).toHaveCount(1);

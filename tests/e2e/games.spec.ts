@@ -20,7 +20,10 @@ test('Games catalog renders at this project viewport without horizontal overflow
 	// The catalog section is an h2 "Games" under an eyebrow label; the lab lives
 	// on /lab/, not on this page.
 	await expect(page.getByRole('heading', { level: 2, name: 'Games' })).toBeVisible();
+	await expect(page.getByRole('heading', { level: 2, name: 'Leaderboards' })).toBeVisible();
 	await expect(page.getByRole('heading', { level: 2, name: 'Private room' })).toBeVisible();
+	await expect(page.locator('.games-card__id')).toHaveCount(0);
+	await expect(page.locator('.games-card .chip')).toHaveCount(0);
 	expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 	await expectNoAxeViolations(page);
 });
