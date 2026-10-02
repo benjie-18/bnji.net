@@ -2,10 +2,12 @@
 import Chip from './Chip.astro';
 import GlassPanel from './GlassPanel.astro';
 import { GAME_STATUS_LABEL, type Game } from '../data/games';
+import { leaderboardHref } from '../data/game-adapters';
 
 interface Props { game: Game }
 const { game } = Astro.props;
 const href = game.href ?? game.labHref;
+const board = leaderboardHref(game);
 const capabilityText = game.capabilities?.join(' · ');
 ---
 <GlassPanel pad="md" class="games-card" as="article">
@@ -16,7 +18,11 @@ const capabilityText = game.capabilities?.join(' · ');
 	<h3>{game.title}</h3>
 	<p>{game.description}</p>
 	<div class="games-card__footer">
-		{href ? <a class="games-card__link" href={href}>{game.labHref ? 'Open in the Lab' : 'Play'} <span aria-hidden="true">↗</span></a> : <span class="games-card__link" aria-disabled="true">{game.status === 'unavailable' ? 'Temporarily offline' : 'Not playable yet'}</span>}
+		<span class="games-card__actions">
+			{/* The leaderboard is not a second way to play: it sits after Play, and it exists only where a server verifier can score the game. */}
+			{href ? <a class="games-card__link" href={href}>{game.labHref ? 'Open in the Lab' : 'Play'} <span aria-hidden="true">↗</span></a> : <span class="games-card__link" aria-disabled="true">{game.status === 'unavailable' ? 'Temporarily offline' : 'Not playable yet'}</span>}
+			{board && <a class="games-card__link games-card__board" href={board}>Leaderboard</a>}
+		</span>
 		{capabilityText && <span class="games-capabilities">{capabilityText}</span>}
 	</div>
 </GlassPanel>
@@ -28,7 +34,10 @@ const capabilityText = game.capabilities?.join(' · ');
 	.games-card h3 { margin: 1.1rem 0 0.45rem; color: var(--text-strong); font-size: var(--text-lead); }
 	.games-card p { color: var(--text-muted); line-height: 1.65; }
 	.games-card__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 1.25rem; }
+	.games-card__actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
 	.games-card__link { color: var(--accent-strong); text-decoration: none; font-weight: 600; }
+	.games-card__board { color: var(--text-muted); font-weight: 500; }
+	.games-card__board:hover { color: var(--accent-strong); }
 	.games-card__link:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 4px; border-radius: var(--radius-sm); }
 	.games-card__link[aria-disabled='true'] { color: var(--text-muted); cursor: default; }
 	.games-capabilities { color: var(--text-dim); font-size: var(--text-micro); }

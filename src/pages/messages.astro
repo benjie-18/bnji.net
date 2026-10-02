@@ -22,14 +22,11 @@ import PageHeader from '../components/PageHeader.astro';
 	/>
 
 	<div class="container dm-body" data-messages-root>
-		<p class="dm-status" data-dm-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
-
 		<section class="dm-panel dm-signin" data-dm-signin data-glass="raised" hidden>
 			<h2>Messages are for accounts</h2>
 			<p>
-				Direct messages need a registered account so conversations stay attached to
-				whoever owns them. <a href="/games/">Create one on the Games page</a> (or sign
-				in there with your recovery code), then come back.
+				Conversations belong to accounts. <a href="/games/">Create one on the Games page</a>
+				(or sign in with your recovery code), then come back.
 			</p>
 		</section>
 
@@ -41,10 +38,12 @@ import PageHeader from '../components/PageHeader.astro';
 					<form class="dm-new" data-dm-new-form>
 						<label for="dm-new-handle">Start a conversation</label>
 						<div class="dm-new__row">
-							<input id="dm-new-handle" name="handle" type="text" placeholder="exact handle" pattern="[a-z0-9_]{3,20}" minlength="3" maxlength="20" autocomplete="off" required data-dm-new-handle />
-							<button type="submit">Open</button>
+							<input id="dm-new-handle" class="glass-field" name="handle" type="text" placeholder="exact handle" pattern="[a-z0-9_]{3,20}" minlength="3" maxlength="20" autocomplete="off" required data-dm-new-handle />
+							<button type="submit" class="glass-button glass-button--primary glass-button--sm" data-glass="">Open</button>
 						</div>
-						<p class="dm-hint">Handles are public and matched exactly — no directory, no suggestions.</p>
+						<!-- Feedback for the composer sits with the composer. -->
+						<p class="dm-status glass-status" data-dm-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
+						<p class="dm-hint glass-note">Exact handles only.</p>
 					</form>
 
 					<h2 class="dm-side__title">Conversations</h2>
@@ -63,17 +62,17 @@ import PageHeader from '../components/PageHeader.astro';
 					<form class="dm-composer" data-dm-composer hidden>
 						<div class="dm-image-chip" data-dm-image-chip hidden>
 							<span data-dm-image-name></span>
-							<button type="button" data-dm-image-remove aria-label="Remove attached image">✕</button>
+							<button type="button" class="glass-button glass-button--quiet glass-button--sm" data-glass="" data-dm-image-remove aria-label="Remove attached image">✕</button>
 						</div>
 						<div class="dm-composer__row">
-							<textarea data-dm-text rows="2" placeholder="Write a message" aria-label="Message"></textarea>
+							<textarea class="glass-field" data-dm-text rows="2" placeholder="Write a message" aria-label="Message"></textarea>
 							<div class="dm-composer__buttons">
 								<label class="dm-attach" data-dm-attach>
 									<input type="file" accept="image/png,image/jpeg,image/webp" data-dm-image-input hidden />
 									<span aria-hidden="true">🖼</span>
 									<span class="sr-only">Attach an image</span>
 								</label>
-								<button type="submit" data-dm-send>Send</button>
+								<button type="submit" class="glass-button glass-button--primary glass-button--sm" data-glass="" data-dm-send>Send</button>
 							</div>
 						</div>
 					</form>
@@ -85,51 +84,54 @@ import PageHeader from '../components/PageHeader.astro';
 
 <style>
 	.dm-body { display: grid; gap: 1rem; padding-block: 1.5rem 4rem; }
-	.dm-status { min-height: 1.4em; margin: 0; color: var(--text-muted); font-size: var(--text-micro); }
-	/* Surface/border come from [data-glass] (glass.css) — same asset every
-	   other panel on the site uses; here only size and radius remain. */
-	.dm-panel { border-radius: var(--radius-lg); padding: 1.25rem; }
+	.dm-status { min-height: 1.4em; }
+	/* Surface/border come from [data-glass] (glass.css) — the same asset every
+	   other panel on the site uses; only size and radius remain here. */
+	.dm-panel { border-radius: var(--glass-radius-lg, var(--radius-lg)); padding: clamp(1.1rem, 3vw, 1.5rem); }
 	.dm-signin h2 { margin: 0 0 0.5rem; color: var(--text-strong); font-size: var(--text-title); }
-	.dm-signin p { margin: 0; max-width: 44rem; color: var(--text-muted); }
+	.dm-signin p { margin: 0; max-width: 44rem; color: var(--text-muted); line-height: 1.6; }
 	.dm-signin a { color: var(--text-strong); }
-	.dm-disclosure { margin: 0 0 1rem; padding: 0.7rem 0.9rem; border-left: 3px solid var(--signal, #7cc4ff); background: rgba(124,196,255,0.06); color: var(--text-muted); font-size: var(--text-small, 0.9rem); border-radius: 0 8px 8px 0; }
+	.dm-disclosure { margin: 0 0 1rem; padding: 0.65rem 0.85rem; border-left: 3px solid var(--accent-line); border-radius: 0 var(--glass-radius-sm, 10px) var(--glass-radius-sm, 10px) 0; background: var(--glass-bg-quiet); color: var(--text-muted); font-size: var(--text-small); }
 	.dm-layout { display: grid; grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
 	@media (max-width: 760px) { .dm-layout { grid-template-columns: 1fr; } }
 	.dm-side { display: grid; gap: 0.75rem; }
-	.dm-new { display: grid; gap: 0.35rem; }
-	.dm-new label { color: var(--text-strong); font-weight: 600; font-size: var(--text-small, 0.9rem); }
+	.dm-new { display: grid; gap: 0.4rem; }
+	.dm-new label { color: var(--text-strong); font-weight: 600; font-size: var(--text-small); }
 	.dm-new__row { display: flex; gap: 0.5rem; }
-	.dm-new__row input { flex: 1; min-width: 0; }
-	.dm-new__row button { white-space: nowrap; }
-	.dm-hint { margin: 0; color: var(--text-muted); font-size: var(--text-micro); }
-	.dm-side__title { margin: 0.5rem 0 0; font-size: var(--text-small, 0.9rem); letter-spacing: var(--tracking-snug); text-transform: uppercase; color: var(--text-muted); }
-	.dm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; max-height: 24rem; overflow-y: auto; }
-	.dm-list button { width: 100%; text-align: left; display: grid; gap: 0.15rem; padding: 0.6rem 0.7rem; border: 1px solid var(--line, rgba(255,255,255,0.08)); border-radius: 10px; background: transparent; color: var(--text); cursor: pointer; }
-	.dm-list button[aria-current="true"] { border-color: var(--signal, #7cc4ff); }
-	.dm-list__name { display: flex; justify-content: space-between; gap: 0.5rem; color: var(--text-strong); font-weight: 600; }
-	.dm-list__preview { color: var(--text-muted); font-size: var(--text-micro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.dm-list__badge { min-width: 1.3rem; text-align: center; padding: 0 0.3rem; border-radius: 999px; background: var(--signal, #7cc4ff); color: #08131d; font-size: 0.72rem; font-weight: 700; }
-	.dm-empty, .dm-thread-empty { margin: 0; color: var(--text-muted); font-size: var(--text-small, 0.9rem); }
-	.dm-thread-wrap { display: grid; gap: 0.6rem; min-height: 20rem; border: 1px solid var(--line, rgba(255,255,255,0.08)); border-radius: 14px; padding: 1rem; }
+	.dm-new__row :global(.glass-field) { flex: 1; min-width: 0; }
+	.dm-new__row :global(.glass-button) { white-space: nowrap; }
+	.dm-hint { margin: 0; }
+	.dm-side__title { margin: 0.5rem 0 0; font-size: var(--text-small); letter-spacing: var(--tracking-snug); text-transform: uppercase; color: var(--text-muted); }
+	.dm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; max-height: 24rem; overflow-y: auto; overscroll-behavior: contain; }
+	/* Rows are painted by messages-ui.ts, so those selectors are global by
+	   necessity: a scoped rule never matches a node the client created. */
+	:global(.dm-list button) { width: 100%; text-align: left; display: grid; gap: 0.15rem; padding: 0.6rem 0.75rem; border: 1px solid var(--glass-border); border-radius: var(--glass-radius-sm, 10px); background: var(--glass-bg-quiet); color: var(--text); font: inherit; cursor: pointer; transition: border-color var(--dur-fast, 150ms) var(--ease-out, ease), background var(--dur-fast, 150ms) var(--ease-out, ease); }
+	@media (hover: hover) and (pointer: fine) { :global(.dm-list button:hover) { border-color: var(--accent-line); background: var(--glass-bg-raised); } }
+	:global(.dm-list button:focus-visible) { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+	:global(.dm-list button[aria-current='true']) { border-color: var(--accent-strong); background: var(--glass-bg-raised); }
+	:global(.dm-list__name) { display: flex; justify-content: space-between; gap: 0.5rem; color: var(--text-strong); font-weight: 600; }
+	:global(.dm-list__preview) { color: var(--text-muted); font-size: var(--text-micro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	:global(.dm-list__badge) { min-width: 1.3rem; text-align: center; padding: 0 0.3rem; border-radius: var(--radius-pill); background: var(--accent-strong); color: var(--text-inverse, #10121a); font-size: 0.72rem; font-weight: 700; }
+	.dm-empty, .dm-thread-empty { margin: 0; color: var(--text-muted); font-size: var(--text-small); }
+	.dm-thread-wrap { display: grid; gap: 0.6rem; min-height: 20rem; padding: 1rem; border: 1px solid var(--glass-border); border-radius: var(--glass-radius-md, 16px); background: var(--glass-bg-quiet); }
 	.dm-thread-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
 	.dm-thread-head h2 { margin: 0; font-size: var(--text-title); color: var(--text-strong); }
 	.dm-conn { color: var(--text-muted); font-size: var(--text-micro); }
-	.dm-thread { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; max-height: 50vh; overflow-y: auto; }
-	.dm-msg { max-width: min(36rem, 85%); justify-self: start; padding: 0.5rem 0.75rem; border-radius: 12px 12px 12px 4px; background: rgba(255,255,255,0.05); }
-	.dm-msg--me { justify-self: end; border-radius: 12px 12px 4px 12px; background: rgba(124,196,255,0.14); }
-	.dm-msg__body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
-	.dm-msg img { display: block; max-width: 100%; max-height: 22rem; border-radius: 8px; margin-block: 0.35rem; }
-	.dm-msg__meta { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.25rem; color: var(--text-muted); font-size: var(--text-micro); }
-	.dm-msg__meta button { border: none; background: none; color: var(--text-muted); cursor: pointer; font-size: var(--text-micro); padding: 0; text-decoration: underline; }
-	.dm-msg__meta button:hover { color: var(--text-strong); }
+	.dm-thread { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; max-height: 50vh; overflow-y: auto; overscroll-behavior: contain; }
+	:global(.dm-msg) { max-width: min(36rem, 85%); justify-self: start; padding: 0.5rem 0.75rem; border: 1px solid var(--glass-border); border-radius: var(--glass-radius-md, 16px) var(--glass-radius-md, 16px) var(--glass-radius-md, 16px) 4px; background: var(--glass-bg); }
+	:global(.dm-msg--me) { justify-self: end; border-radius: var(--glass-radius-md, 16px) var(--glass-radius-md, 16px) 4px var(--glass-radius-md, 16px); border-color: var(--accent-line); background: var(--accent-soft); }
+	:global(.dm-msg__body) { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+	:global(.dm-msg img) { display: block; max-width: 100%; max-height: 22rem; border-radius: var(--glass-radius-sm, 10px); margin-block: 0.35rem; }
+	:global(.dm-msg__meta) { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.25rem; color: var(--text-muted); font-size: var(--text-micro); }
+	:global(.dm-msg__meta button) { padding: 0; border: none; background: none; color: var(--text-muted); cursor: pointer; font: inherit; font-size: var(--text-micro); text-decoration: underline; }
+	:global(.dm-msg__meta button:hover) { color: var(--text-strong); }
 	.dm-composer { display: grid; gap: 0.5rem; }
 	.dm-composer__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
 	.dm-composer textarea { resize: vertical; min-height: 2.6rem; }
 	.dm-composer__buttons { display: flex; gap: 0.4rem; align-items: center; }
-	.dm-attach { display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem; border: 1px solid var(--line, rgba(255,255,255,0.08)); border-radius: 10px; cursor: pointer; }
-	.dm-attach:hover { border-color: var(--signal, #7cc4ff); }
-	.dm-image-chip { display: inline-flex; align-items: center; gap: 0.5rem; justify-self: start; padding: 0.3rem 0.6rem; border: 1px solid var(--signal, #7cc4ff); border-radius: 999px; color: var(--text-strong); font-size: var(--text-micro); }
-	.dm-image-chip button { border: none; background: none; color: var(--text-muted); cursor: pointer; }
+	.dm-attach { display: inline-flex; align-items: center; justify-content: center; width: 2.6rem; height: 2.6rem; border: 1px solid var(--glass-border); border-radius: var(--glass-radius-sm, 10px); background: var(--glass-bg-quiet); cursor: pointer; transition: border-color var(--dur-fast, 150ms) var(--ease-out, ease); }
+	.dm-attach:hover { border-color: var(--accent-strong); }
+	.dm-image-chip { display: inline-flex; align-items: center; gap: 0.5rem; justify-self: start; padding: 0.25rem 0.35rem 0.25rem 0.6rem; border: 1px solid var(--accent-line); border-radius: var(--radius-pill); background: var(--glass-bg-quiet); color: var(--text-strong); font-size: var(--text-micro); }
 </style>
 
 <script>

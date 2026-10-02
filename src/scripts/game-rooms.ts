@@ -30,6 +30,14 @@ export type RoomNotice = {
 	/** Actor-only `action_result` payload (e.g. a racer's private field view). */
 	reply?: unknown;
 };
+/**
+ * Why a room socket closed. The WebSocket close code is the only place the
+ * server can explain a refusal AFTER the handshake (a kicked member is closed
+ * with 4003, a gone room with 4002), and the UI cannot guess it from the code
+ * string — so it travels with the status change.
+ */
+export type RoomCloseInfo = { code: number; reason: string };
+
 export async function createGameRoom(gameId: string): Promise<{ roomCode: string; expiresAt: number; capacity: number }> {
 	const response = await fetch('/api/games/rooms', {
 		method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ gameId }),
@@ -40,7 +48,11 @@ export async function createGameRoom(gameId: string): Promise<{ roomCode: string
 	}
 	return { roomCode: body.roomCode, expiresAt: body.expiresAt, capacity: body.capacity };
 }
-export function connectGameRoom(code: string, onNotice: (message: RoomNotice) => void, onStatus: (state: 'connecting' | 'connected' | 'closed' | 'error') => void): WebSocket {
+export function connectGameRoom(
+	code: string,
+	onNotice: (message: RoomNotice) => void,
+	onStatus: (state: 'connecting' | 'connected' | 'closed' | 'error', info?: RoomCloseInfo) => void,
+): WebSocket {
 	if (!/^[A-Za-z0-9_-]{22}$/.test(code)) throw new Error('invalid_room_code');
 	const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
 	const socket = new WebSocket(`${protocol}//${location.host}/api/games/rooms/${encodeURIComponent(code)}/ws`);
@@ -54,7 +66,7 @@ export function connectGameRoom(code: string, onNotice: (message: RoomNotice) =>
 			if (message && message.v === 1 && typeof message.type === 'string') onNotice(message);
 		} catch { /* invalid protocol payload is ignored by this display-only client */ }
 	});
-	socket.addEventListener('close', () => onStatus('closed'));
+	socket.addEventListener('close', (event) => onStatus('closed', { code: event.code, reason: event.reason }));
 	socket.addEventListener('error', () => onStatus('error'));
 	return socket;
 }

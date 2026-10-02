@@ -7,6 +7,10 @@
 import GameShell from '../../components/GameShell.astro';
 import PageHeader from '../../components/PageHeader.astro';
 import Layout from '../../layouts/Layout.astro';
+import { getGame } from '../../data/games';
+import { leaderboardHref } from '../../data/game-adapters';
+
+const boardHref = leaderboardHref(getGame('bnji.isometric-stack')!);
 
 const instructions =
 	'Press Space or tap the tower to drop the moving block. Land it squarely on the slab below — ' +
@@ -24,7 +28,7 @@ const instructions =
 	/>
 
 	<div class="container stack-body">
-		<GameShell gameId="bnji.isometric-stack" title="Isometric Stack" instructions={instructions} initialState="ready">
+		<GameShell gameId="bnji.isometric-stack" title="Isometric Stack" instructions={instructions} initialState="ready" boardHref={boardHref}>
 			<div class="stack-layout">
 				<div class="stack-side" data-glass>
 					<p class="stack-mode">One fixed speed · leaderboard mode</p>
@@ -39,7 +43,9 @@ const instructions =
 							<span class="stack-value mono" data-stack-best>0</span>
 						</div>
 					</div>
-					<p class="stack-combo mono" data-stack-combo hidden>COMBO ×<span data-stack-combo-count>1</span></p>
+					<!-- Reserved slot: the chip is hidden with a class, never removed, so the
+					     controls under it keep their position between combo and no-combo drops. -->
+					<p class="stack-combo mono stack-combo--idle" data-stack-combo aria-hidden="true">COMBO ×<span data-stack-combo-count>1</span></p>
 					<div class="stack-actions">
 						<button type="button" class="stack-button" data-stack-reset>Reset</button>
 						<button type="button" class="stack-button" data-stack-sound aria-pressed="false">Sound off</button>
@@ -47,13 +53,22 @@ const instructions =
 					</div>
 				</div>
 
-				<div class="stack-viewport">
+				<div class="stack-viewport" data-game-field>
 					<canvas class="stack-canvas" data-stack-canvas width="640" height="520" aria-label="Isometric stack tower canvas — Space or tap drops a block" role="img"></canvas>
+					<!--
+						The game-over card lives INSIDE the viewport. A miss must not swap the
+						GameShell to its results panel: that reflows the whole page and hides
+						the tower at the exact moment the player is looking at it.
+					-->
 					<div class="stack-overlay" data-stack-overlay>
 						<div class="stack-overlay-card">
-							<h3 class="stack-overlay-title mono">ISO STACK</h3>
-							<p class="stack-overlay-desc">Tap or press Space to drop layers. Align blocks cleanly to maintain the tower surface.</p>
-							<button class="stack-button stack-button--primary" type="button" data-stack-start>Start game</button>
+							<h3 class="stack-overlay-title mono" data-stack-overlay-title>ISO STACK</h3>
+							<p class="stack-overlay-desc" data-stack-overlay-desc>Tap or press Space to drop layers. Align blocks cleanly to maintain the tower surface.</p>
+							<div class="stack-overlay-actions">
+								<button class="stack-button stack-button--primary" type="button" data-stack-start>Start game</button>
+								<button class="stack-button" type="button" data-stack-again hidden>Play again</button>
+								<button class="stack-button" type="button" data-stack-overlay-claim hidden>Claim leaderboard score</button>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -133,10 +148,15 @@ const instructions =
 		border-radius: 999px;
 		align-self: start;
 		justify-self: start;
+		min-inline-size: 6.5rem;
+		min-block-size: 2.1rem;
+		display: inline-flex;
+		align-items: center;
 		background: rgba(110 168 254 / 0.18);
 		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
 		font-size: 0.85rem;
 	}
+	.stack-combo--idle { visibility: hidden; }
 	.stack-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 	.stack-button {
 		padding: 0.45rem 0.9rem;
@@ -153,10 +173,16 @@ const instructions =
 		position: relative;
 		border-radius: var(--radius-lg, 16px);
 		overflow: hidden;
-		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.2));
-		background: rgba(8 12 24 / 0.45);
+		border: 1px solid var(--game-field-line, var(--glass-border, rgba(255 255 255 / 0.2)));
+		background: var(--game-field, rgba(8 12 24 / 0.45));
 	}
-	.stack-canvas { display: block; width: 100%; height: auto; touch-action: manipulation; cursor: pointer; }
+	/*
+	 * The canvas owns its box (aspect-ratio) BEFORE the first frame, because the
+	 * client sizes the backing store from getBoundingClientRect() times DPR.
+	 * `height: auto` alone resolves against the attribute height until CSS loads,
+	 * which is how a retina canvas ends up blurry and mis-scaled.
+	 */
+	.stack-canvas { display: block; width: 100%; height: auto; aspect-ratio: 640 / 520; touch-action: manipulation; cursor: pointer; }
 	.stack-overlay {
 		position: absolute;
 		inset: 0;
@@ -174,6 +200,8 @@ const instructions =
 		padding: 1.25rem;
 	}
 	.stack-overlay-title { margin: 0; letter-spacing: 0.2em; }
+	.stack-overlay-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
+	.stack-overlay-actions .stack-button { min-inline-size: 9rem; }
 	.stack-overlay-desc { margin: 0; max-width: 26rem; color: var(--text-muted, #9aa3b2); font-size: 0.92rem; }
 	.stack-results { display: grid; gap: 0.9rem; justify-items: start; }
 	.stack-results__note { font-weight: 600; }
@@ -188,6 +216,7 @@ const instructions =
 	}
 	.stack-claim h3 { font-size: 1rem; margin: 0; }
 	.stack-claim__note, .stack-claim__status { font-size: 0.85rem; color: var(--text-muted, #9aa3b2); margin: 0; }
+	.stack-claim button[type='submit'], .stack-actions .stack-button { min-inline-size: 9rem; }
 	.stack-claim input {
 		padding: 0.5rem 0.7rem;
 		border-radius: 10px;

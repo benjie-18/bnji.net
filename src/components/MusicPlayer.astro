@@ -588,8 +588,7 @@ const queue = tracks.map((track, index) => ({
 		font-size: var(--text-micro);
 		letter-spacing: var(--tracking-mono);
 	}
-	.music-player__progress-note,
-	.music-player__empty {
+	:global(.music-player__progress-note), :global(.music-player__empty) {
 		margin: 0;
 		color: var(--text-muted);
 		font-size: var(--text-small);
@@ -603,17 +602,17 @@ const queue = tracks.map((track, index) => ({
 		font-size: var(--text-micro);
 	}
 
-	.music-player__track-list {
+	:global(.music-player__track-list) {
 		display: grid;
 		gap: var(--space-1);
 		margin: 0;
 		padding: 0;
 		list-style: none;
 	}
-	.music-player__track-list li {
+	:global(.music-player__track-list li) {
 		min-inline-size: 0;
 	}
-	.music-player__track {
+	:global(.music-player__track) {
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr) auto;
 		align-items: center;
@@ -628,45 +627,44 @@ const queue = tracks.map((track, index) => ({
 		cursor: pointer;
 		transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 	}
-	.music-player__track:hover {
+	:global(.music-player__track:hover) {
 		border-color: var(--glass-border);
 		background: var(--glass-bg-quiet);
 	}
-	.music-player__track:focus-visible {
+	:global(.music-player__track:focus-visible) {
 		outline: 2px solid var(--accent-strong);
 		outline-offset: 2px;
 	}
-	.music-player__track[aria-pressed='true'] {
+	:global(.music-player__track[aria-pressed='true']) {
 		border-color: var(--accent-line);
 		background: var(--accent-soft);
 	}
-	.music-player__track-number {
+	:global(.music-player__track-number) {
 		color: var(--text-dim);
 		font-size: var(--text-micro);
 	}
-	.music-player__track-copy {
+	:global(.music-player__track-copy) {
 		display: grid;
 		min-inline-size: 0;
 		gap: var(--space-1);
 	}
-	.music-player__track-title,
-	.music-player__track-meta {
+	:global(.music-player__track-title), :global(.music-player__track-meta) {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.music-player__track-title {
+	:global(.music-player__track-title) {
 		font-size: var(--text-small);
 		font-weight: 600;
 	}
-	.music-player__track-meta {
+	:global(.music-player__track-meta) {
 		color: var(--text-muted);
 		font-size: var(--text-micro);
 	}
-	.music-player__track-meta--album {
+	:global(.music-player__track-meta--album) {
 		color: var(--text-dim);
 	}
-	.music-player__provider {
+	:global(.music-player__provider) {
 		color: var(--text-dim);
 		font-size: var(--text-micro);
 		text-transform: uppercase;

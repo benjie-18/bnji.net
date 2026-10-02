@@ -8,6 +8,10 @@ import GameShell from '../../components/GameShell.astro';
 import PageHeader from '../../components/PageHeader.astro';
 import RoomPanel from '../../components/RoomPanel.astro';
 import Layout from '../../layouts/Layout.astro';
+import { getGame } from '../../data/games';
+import { leaderboardHref } from '../../data/game-adapters';
+
+const boardHref = leaderboardHref(getGame('bnji.chess')!);
 
 const instructions =
 	'Click a piece, then a highlighted square to move. Promotion is automatic (queen). ' +
@@ -25,7 +29,7 @@ const instructions =
 	/>
 
 	<div class="container chess-body">
-		<GameShell gameId="bnji.chess" title="Chess" instructions={instructions} initialState="ready">
+		<GameShell gameId="bnji.chess" title="Chess" instructions={instructions} initialState="ready" boardHref={boardHref}>
 			<div class="chess-layout">
 				<div class="chess-side" data-glass>
 					<p class="chess-mode" data-chess-mode>Practice mode</p>
@@ -146,7 +150,7 @@ const instructions =
 		overflow: hidden;
 		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.2));
 	}
-	.chess-square {
+	:global(.chess-square) {
 		display: grid;
 		place-items: center;
 		border: 0;
@@ -156,19 +160,19 @@ const instructions =
 		line-height: 1;
 		position: relative;
 	}
-	.chess-square.is-light { background: #cfd8e6; }
-	.chess-square.is-dark { background: #4f6280; }
-	.chess-square.is-white { color: #f7f9fc; text-shadow: 0 1px 2px #1b2436, 0 0 1px #1b2436; }
-	.chess-square.is-black { color: #171d29; }
-	.chess-square.is-selected { outline: 3px solid var(--accent, #6ea8fe); outline-offset: -3px; }
-	.chess-square.is-target::after {
+	:global(.chess-square.is-light) { background: #cfd8e6; }
+	:global(.chess-square.is-dark) { background: #4f6280; }
+	:global(.chess-square.is-white) { color: #f7f9fc; text-shadow: 0 1px 2px #1b2436, 0 0 1px #1b2436; }
+	:global(.chess-square.is-black) { color: #171d29; }
+	:global(.chess-square.is-selected) { outline: 3px solid var(--accent, #6ea8fe); outline-offset: -3px; }
+	:global(.chess-square.is-target::after) {
 		content: '';
 		position: absolute;
 		inset: 0;
 		background: radial-gradient(circle, rgba(110 168 254 / 0.85) 26%, transparent 28%);
 		pointer-events: none;
 	}
-	.chess-square:focus-visible { outline: 3px solid var(--accent, #6ea8fe); outline-offset: -3px; z-index: 1; }
+	:global(.chess-square:focus-visible) { outline: 3px solid var(--accent, #6ea8fe); outline-offset: -3px; z-index: 1; }
 	.chess-moves {
 		display: grid;
 		gap: 0.5rem;

@@ -1,0 +1,55 @@
+---
+/**
+ * `/games/<slug>/leaderboard/` — one static page per scored game.
+ *
+ * Static, not server-rendered: the shell, the tabs and the mode copy come from
+ * the catalog, and the rows are fetched from `/api/games/leaderboard` by the
+ * client. That keeps the page cacheable, keeps D1 out of the render path, and
+ * means a rename updates every board without a rebuild (labels are composed at
+ * READ time from `game_players`).
+ */
+import GameLeaderboard from '../../../components/GameLeaderboard.astro';
+import PageHeader from '../../../components/PageHeader.astro';
+import Layout from '../../../layouts/Layout.astro';
+import { getStandaloneGames } from '../../../data/games';
+import { hasLeaderboard, MODE_LABEL } from '../../../data/game-adapters';
+
+export function getStaticPaths() {
+	return getStandaloneGames()
+		.filter(hasLeaderboard)
+		// `/games/stack/` → `stack`; the leaderboard route is a sibling of the game.
+		.map((game) => ({ params: { game: (game.href ?? '').replace(/^\/games\//, '').replace(/\/$/, '') }, props: { game } }));
+}
+
+const { game } = Astro.props;
+const modes = game.modes ?? ['default'];
+const modeSummary = modes.map((mode) => MODE_LABEL[mode] ?? mode).join(' · ');
+---
+
+<Layout
+	title={`${game.title} leaderboard`}
+	description={`Verified ${game.title} scores on bnji.net — ${modeSummary}.`}
+>
+	<PageHeader
+		index="07"
+		label={`GAMES / ${game.title.toUpperCase()} / LEADERBOARD`}
+		titleId="page-title"
+		title={`${game.title} leaderboard`}
+		description={`Every row here is a run a server verifier accepted. ${modeSummary}.`}
+	/>
+
+	<div class="container leaderboard-body">
+		<p class="leaderboard-nav">
+			<a class="glass-link" href={game.href}>&larr; Play {game.title}</a>
+			<a class="glass-link" href="/games/">All games</a>
+		</p>
+		<GameLeaderboard game={game} />
+	</div>
+</Layout>
+
+<style>
+	.leaderboard-body { display: grid; gap: clamp(1rem, 3vw, 1.75rem); padding-block: 0 6rem; }
+	.leaderboard-nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin: 0; }
+	.leaderboard-nav a { color: var(--accent-strong); font-weight: 600; text-decoration: none; }
+	.leaderboard-nav a:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 4px; border-radius: var(--radius-sm); }
+</style>

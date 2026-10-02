@@ -27,6 +27,7 @@ import {
 	indexToSquare,
 } from '../../game/chess-rules';
 import type { GameModule } from '../game-runtime';
+import { autoSubmitRun, createRunToken, idempotencyKey, submitRun } from '../game-scores';
 import type { RoomNotice } from '../game-rooms';
 import { setGameShellState } from '../game-shell';
 
@@ -79,11 +80,8 @@ function reasonText(reason: string): string {
 		default: return reason ? `Game over (${reason})` : 'Game over';
 	}
 }
-function randomIdempotencyKey(): string {
-	const bytes = new Uint8Array(18);
-	crypto.getRandomValues(bytes);
-	return Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 32);
-}
+/* Score claims go through the shared client (`../game-scores`), which owns the
+ * beat-the-standing decision, the exact request body and the stable run keys. */
 
 export type ChessGame = ReturnType<typeof createChessGame>;
 
@@ -117,6 +115,9 @@ export function createChessGame() {
 	let inputLocked = false;
 	let claimColor: Seat | null = null;
 	let claimDone = false;
+	/** Per-GAME idempotency token, so a manual claim after an automatic try is one submission. */
+	let runToken = createRunToken();
+	let autoClaimed = false;
 	let resultsAcknowledged = false;
 	let pending: { base: number; state: Record<string, unknown> } | null = null;
 	let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -206,6 +207,10 @@ export function createChessGame() {
 		}
 		if (movesEl) {
 			const moves = currentMoves();
+			// Auto-scroll only when the reader is ALREADY at the tail. Forcing the
+			// list to the bottom on every ply makes it impossible to scroll back
+			// and read the opening of a long game.
+			const atTail = movesEl.scrollHeight - movesEl.scrollTop - movesEl.clientHeight < 12;
 			movesEl.replaceChildren();
 			for (let i = 0; i < moves.length; i += 2) {
 				const item = document.createElement('li');
@@ -215,6 +220,7 @@ export function createChessGame() {
 				item.textContent = black ? `${number}. ${white} ${black}` : `${number}. ${white}`;
 				movesEl.appendChild(item);
 			}
+			if (atTail) movesEl.scrollTop = movesEl.scrollHeight;
 		}
 		if (over) {
 			const winner = over.winner === 'draw' ? 'Draw' : `${seatTitle(over.winner)} wins`;
@@ -241,6 +247,12 @@ export function createChessGame() {
 			}
 		}
 		if (claimOpen) claimOpen.hidden = !(claimable && !claimDone && over);
+		if (claimable && over && !autoClaimed && !claimDone) {
+			autoClaimed = true;
+			// Fire and forget: the board must not wait on the network, and a guest
+			// simply keeps the manual form (the shared client skips guests).
+			void maybeAutoClaim(currentMoves().length);
+		}
 		// Terminal results flow (recipe): announce through the shell's results
 		// slot once per game; "Back to the board" returns to the ready panel.
 		if (over && !resultsAcknowledged && !claimDone && document.querySelector<HTMLElement>('[data-game-shell]')?.dataset.gameState === 'ready') {
@@ -445,48 +457,74 @@ export function createChessGame() {
 	}
 
 	// ------------------------------------------------------------------ claim
+	/**
+	 * Submit the checkmate automatically when it beats the caller's standing.
+	 * Chess scores are "fewer plies is better", so the stored comparison runs on
+	 * the score with plies as the tie-break — the same pair the manual form sends.
+	 */
+	async function maybeAutoClaim(plies: number): Promise<void> {
+		const score = fastestMateScore(plies);
+		const result = await autoSubmitRun({
+			gameId: CHESS_GAME_ID, mode: CHESS_MODE_ID, score, tieBreak: plies,
+			proof: { moves: currentMoves(), color: claimColor }, idempotencyKey: idempotencyKey('che', runToken),
+		});
+		if (!result.submitted) {
+			if (claimStatus) {
+				claimStatus.textContent = result.reason === 'not_best'
+					? 'Not a faster mate than your standing, so nothing was submitted.'
+					: 'Sign in to submit this mate automatically, or type a name below.';
+			}
+			render();
+			return;
+		}
+		if (result.outcome.kind === 'stored') {
+			claimDone = true;
+			if (claimForm) claimForm.hidden = true;
+			if (claimStatus) claimStatus.textContent = `Score recorded: ${result.outcome.score.toLocaleString()}.`;
+		} else if (result.outcome.kind === 'duplicate') {
+			claimDone = true;
+			if (claimForm) claimForm.hidden = true;
+		} else if (result.outcome.kind === 'unreachable') {
+			if (claimStatus) claimStatus.textContent = 'Could not reach the leaderboard. Try again in a moment.';
+		} else if (result.outcome.kind === 'rejected') {
+			if (claimStatus) claimStatus.textContent = result.outcome.message;
+		}
+		render();
+	}
+
 	async function submitClaim(): Promise<void> {
 		if (!claimColor || claimDone || !claimForm) return;
 		const moves = currentMoves();
 		const plies = moves.length;
+		const displayName = claimName?.value.trim() ?? '';
+		if (!displayName) { if (claimStatus) claimStatus.textContent = 'Enter a display name (1–24 characters).'; return; }
 		if (claimStatus) claimStatus.textContent = 'Submitting…';
 		const submit = claimForm.querySelector<HTMLButtonElement>('button[type="submit"]');
 		if (submit) submit.disabled = true;
+		if (claimName) claimName.disabled = true;
 		try {
-			const response = await fetch('/api/games/scores', {
-				method: 'POST',
-				credentials: 'same-origin',
-				cache: 'no-store',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					gameId: CHESS_GAME_ID,
-					mode: CHESS_MODE_ID,
-					score: fastestMateScore(plies),
-					tieBreak: plies,
-					displayName: claimName?.value.trim() ?? '',
-					idempotencyKey: randomIdempotencyKey(),
-					proof: { moves, color: claimColor },
-				}),
+			// Same stable key as the automatic attempt: this is one submission.
+			const outcome = await submitRun({
+				gameId: CHESS_GAME_ID, mode: CHESS_MODE_ID, score: fastestMateScore(plies), tieBreak: plies,
+				displayName, idempotencyKey: idempotencyKey('che', runToken), proof: { moves, color: claimColor },
 			});
-			const body = await response.json().catch(() => ({})) as { error?: string; score?: number };
-			if (response.ok) {
+			if (outcome.kind === 'stored') {
 				claimDone = true;
-				if (claimStatus) claimStatus.textContent = `Score recorded: ${Number(body.score ?? fastestMateScore(plies)).toLocaleString()}. The leaderboard is on the Games page.`;
+				if (claimStatus) claimStatus.textContent = `Score recorded: ${outcome.score.toLocaleString()}. The leaderboard is on the Games page.`;
 				claimForm.hidden = true;
 				render();
 				return;
 			}
 			if (claimStatus) {
-				claimStatus.textContent =
-					body.error === 'invalid_display_name' ? 'Enter a display name (1–24 characters).'
-					: body.error === 'score_rejected' ? 'The server could not verify this game record.'
-					: body.error === 'rate_limited' ? 'Too many claims right now — try again shortly.'
-					: body.error === 'invalid_mode' || body.error === 'unknown_game' ? 'Leaderboard submission is unavailable right now.'
-					: 'The claim could not be verified. Try again in a moment.';
+				claimStatus.textContent = outcome.kind === 'duplicate' ? 'This mate was already submitted.'
+					: outcome.kind === 'not-best' ? 'The board already holds a faster mate for you.'
+					: outcome.kind === 'unreachable' ? 'Could not reach the server. Try again when online.'
+					: outcome.message;
 			}
 		} catch {
 			if (claimStatus) claimStatus.textContent = 'Could not reach the server. Try again when online.';
 		} finally {
+			if (claimName) claimName.disabled = false;
 			if (submit) submit.disabled = false;
 		}
 	}
@@ -516,6 +554,8 @@ export function createChessGame() {
 		practiceEngine = initialChessState();
 		selected = null;
 		claimDone = false;
+		autoClaimed = false;
+		runToken = createRunToken();
 		resultsAcknowledged = false;
 		inputLocked = false;
 		if (claimForm) claimForm.hidden = true;

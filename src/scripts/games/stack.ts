@@ -6,6 +6,17 @@
  * Gameplay math is owned by `src/game/stack-rules.ts`: the renderer feeds
  * quantized drop positions into the same `stackDrop` the verifier replays, so
  * a claimed run is reconstructed server-side rather than trusted.
+ *
+ * Rendering notes that are easy to regress:
+ *  - The canvas backing store is the CSS box times devicePixelRatio (the page
+ *    gives the canvas an aspect-ratio so that box exists before the first
+ *    frame); every projection reads the backing store, so one path serves 1x
+ *    and retina.
+ *  - Only the two faces a viewer can actually see are painted: the +z face
+ *    (p3 → p2 → p6 → p7) and the +x face. Painting far faces too is invisible
+ *    on an opaque block and shows as a wrong-coloured slab on a fading one.
+ *  - Sparks live in WORLD coordinates and are projected at draw time, so they
+ *    rise and fall with the tower instead of staying glued to a screen pixel.
  */
 import type { GameModule } from '../game-runtime';
 import {
@@ -17,6 +28,7 @@ import {
 	type StackRun,
 } from '../../game/stack-rules';
 import { setGameShellState } from '../game-shell';
+import { autoSubmitRun, createRunToken, idempotencyKey, readStanding, submitRun, type Standing } from '../game-scores';
 
 const STACK_GAME_ID = 'bnji.isometric-stack';
 const STACK_MODE_ID = 'default';
@@ -25,13 +37,7 @@ const SPEED_PX_PER_SEC = 155; // the ONE fixed speed — no difficulty or speed 
 const BEST_STORAGE_KEY = 'bnji:stack:best';
 
 type Debris = { x: number; y: number; z: number; w: number; d: number; vy: number; vx: number; vz: number; opacity: number; colorIndex: number };
-type Spark = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: string };
-
-function randomIdempotencyKey(): string {
-	const bytes = new Uint8Array(18);
-	crypto.getRandomValues(bytes);
-	return Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 32);
-}
+type Spark = { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; maxLife: number; size: number; color: string };
 
 export type StackGame = ReturnType<typeof createStackGame>;
 
@@ -45,7 +51,11 @@ export function createStackGame() {
 	const comboCountEl = document.querySelector<HTMLElement>('[data-stack-combo-count]');
 	const statusEl = document.querySelector<HTMLElement>('[data-stack-status]');
 	const overlay = document.querySelector<HTMLElement>('[data-stack-overlay]');
+	const overlayTitle = document.querySelector<HTMLElement>('[data-stack-overlay-title]');
+	const overlayDesc = document.querySelector<HTMLElement>('[data-stack-overlay-desc]');
 	const startButton = document.querySelector<HTMLButtonElement>('[data-stack-start]');
+	const againButton = document.querySelector<HTMLButtonElement>('[data-stack-again]');
+	const overlayClaim = document.querySelector<HTMLButtonElement>('[data-stack-overlay-claim]');
 	const resetButton = document.querySelector<HTMLButtonElement>('[data-stack-reset]');
 	const soundButton = document.querySelector<HTMLButtonElement>('[data-stack-sound]');
 	const claimForm = document.querySelector<HTMLFormElement>('[data-stack-claim]');
@@ -54,7 +64,8 @@ export function createStackGame() {
 	const claimNote = document.querySelector<HTMLElement>('[data-stack-claim-note]');
 	const claimStatus = document.querySelector<HTMLElement>('[data-stack-claim-status]');
 	const resultNote = document.querySelector<HTMLElement>('[data-stack-result-note]');
-	const againButton = document.querySelector<HTMLButtonElement>('[data-stack-results-again]');
+	const resultsAgain = document.querySelector<HTMLButtonElement>('[data-stack-results-again]');
+	const nameInput = claimForm?.querySelector<HTMLInputElement>('[name="displayName"]') ?? null;
 
 	// -------------------------------------------------------------- game state
 	let run: StackRun = stackStart();
@@ -77,6 +88,14 @@ export function createStackGame() {
 	let sparks: Spark[] = [];
 	let animId = 0;
 	let lastTime = performance.now();
+	/** Device pixels per CSS pixel; 1 until the first fit. */
+	let dpr = 1;
+	/** One stable key per RUN: the automatic submit and a later manual claim are one submission. */
+	let runToken = createRunToken();
+	/** Server-measured standing once read, so the HUD shows the account's real best. */
+	let standing: Standing | null = null;
+	/** Why the run was not auto-submitted, for the overlay copy. */
+	let skipReason: 'not_best' | 'guest' | 'unreadable' | null = null;
 
 	try {
 		const stored = Number(localStorage.getItem(BEST_STORAGE_KEY));
@@ -88,6 +107,16 @@ export function createStackGame() {
 		const shell = document.querySelector<HTMLElement>('[data-game-shell]');
 		if (shell && shell.dataset.gameState !== state) setGameShellState(shell, state);
 	}
+	/** Park the camera and the card on the intro/over message — INSIDE the viewport. */
+	function showOverlay(kind: 'intro' | 'over'): void {
+		if (!overlay) return;
+		overlay.dataset.stackOverlay = kind;
+		overlay.hidden = false;
+		if (startButton) startButton.hidden = kind !== 'intro';
+		if (againButton) againButton.hidden = kind === 'intro';
+		if (overlayClaim) overlayClaim.hidden = kind === 'intro' || claimDone;
+	}
+	function hideOverlay(): void { if (overlay) overlay.hidden = true; }
 	function playTone(freq: number, type: OscillatorType = 'sine', dur = 0.22): void {
 		if (!audioEnabled) return;
 		try {
@@ -111,6 +140,24 @@ export function createStackGame() {
 	}
 
 	// ------------------------------------------------------------- rendering
+	/**
+	 * Size the backing store to the CSS box at device-pixel resolution. The page
+	 * gives the canvas `aspect-ratio`, so `getBoundingClientRect()` answers with a
+	 * real height even before the first frame. Without this the canvas renders at
+	 * its attribute size on every display, which is blurry on retina and wrong on
+	 * any layout narrower than 640px.
+	 */
+	function fitCanvas(): void {
+		if (!canvas) return;
+		const rect = canvas.getBoundingClientRect();
+		const cssWidth = Math.max(1, rect.width || canvas.clientWidth || 640);
+		const cssHeight = Math.max(1, rect.height || cssWidth * (520 / 640));
+		dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+		const width = Math.round(cssWidth * dpr);
+		const height = Math.round(cssHeight * dpr);
+		if (canvas.width !== width) canvas.width = width;
+		if (canvas.height !== height) canvas.height = height;
+	}
 	const isLight = (): boolean => document.documentElement.dataset.theme === 'light';
 	function getColors(index: number): { top: string; left: string; right: string; edge: string } {
 		const hue = (195 + index * 10) % 360;
@@ -124,8 +171,8 @@ export function createStackGame() {
 		};
 	}
 	const projectIso = (x: number, y: number, z: number, originX: number, originY: number) => ({
-		x: originX + (x - z) * 0.866025,
-		y: originY + (x + z) * 0.4 - (y - cameraY),
+		x: originX + (x - z) * 0.866025 * dpr,
+		y: originY + ((x + z) * 0.4 - (y - cameraY)) * dpr,
 		depth: x + z,
 	});
 	function drawIsoBox(x: number, y: number, z: number, w: number, d: number, h: number, colorIdx: number, opacity = 1): void {
@@ -143,37 +190,54 @@ export function createStackGame() {
 		const p7 = projectIso(x - w / 2, y + h, z + d / 2, ox, oy);
 		ctx.save();
 		ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+		// Left face: the +z side the viewer sees (NOT the hidden −x face).
 		ctx.fillStyle = colors.left;
 		ctx.beginPath();
-		ctx.moveTo(p3.x, p3.y); ctx.lineTo(p0.x, p0.y); ctx.lineTo(p4.x, p4.y); ctx.lineTo(p7.x, p7.y);
+		ctx.moveTo(p3.x, p3.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p6.x, p6.y); ctx.lineTo(p7.x, p7.y);
 		ctx.closePath(); ctx.fill();
+		// Right face: the +x side.
 		ctx.fillStyle = colors.right;
 		ctx.beginPath();
 		ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p6.x, p6.y); ctx.lineTo(p5.x, p5.y);
 		ctx.closePath(); ctx.fill();
+		// Top face.
 		ctx.fillStyle = colors.top;
 		ctx.beginPath();
 		ctx.moveTo(p4.x, p4.y); ctx.lineTo(p5.x, p5.y); ctx.lineTo(p6.x, p6.y); ctx.lineTo(p7.x, p7.y);
 		ctx.closePath(); ctx.fill();
 		ctx.strokeStyle = colors.edge;
-		ctx.lineWidth = 1;
+		ctx.lineWidth = Math.max(1, dpr);
 		ctx.beginPath();
 		ctx.moveTo(p4.x, p4.y); ctx.lineTo(p5.x, p5.y); ctx.lineTo(p6.x, p6.y); ctx.lineTo(p7.x, p7.y);
 		ctx.closePath(); ctx.stroke();
 		ctx.restore();
 	}
-	function spawnSparks(screenX: number, screenY: number, count: number): void {
+	/** Perfect-drop burst, in WORLD space, so it rises with the tower. */
+	function spawnSparks(x: number, y: number, z: number, count: number): void {
 		for (let i = 0; i < count; i += 1) {
 			const angle = Math.random() * Math.PI * 2;
-			const speed = 2 + Math.random() * 5;
-			sparks.push({ x: screenX, y: screenY, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 1.5, life: 0, maxLife: 0.5 + Math.random() * 0.4, size: 2 + Math.random() * 3, color: '#38bdf8' });
+			const speed = 70 + Math.random() * 150;
+			sparks.push({
+				x, y, z,
+				vx: Math.cos(angle) * speed, vz: Math.sin(angle) * speed,
+				vy: 60 + Math.random() * 120,
+				life: 0, maxLife: 0.5 + Math.random() * 0.4,
+				size: 2 + Math.random() * 3,
+				color: isLight() ? '#0284c7' : '#38bdf8',
+			});
 		}
 	}
 	function paintHud(): void {
 		if (scoreEl) scoreEl.textContent = String(run.score);
-		if (bestEl) bestEl.textContent = String(bestScore);
+		const serverBest = standing?.best ? Math.max(bestScore, standing.best.score) : bestScore;
+		if (bestEl) bestEl.textContent = String(serverBest);
 		if (comboCountEl) comboCountEl.textContent = String(run.combo);
-		if (comboEl) comboEl.hidden = run.combo < 2;
+		// Reserved slot: the combo chip is never removed, only hidden, so the
+		// controls under it do not jump between combo and no-combo drops.
+		if (comboEl) {
+			comboEl.classList.toggle('stack-combo--idle', run.combo < 2);
+			comboEl.setAttribute('aria-hidden', run.combo < 2 ? 'true' : 'false');
+		}
 	}
 
 	const render = (now: number): void => {
@@ -190,32 +254,42 @@ export function createStackGame() {
 			const piece = debris[i]!;
 			piece.vy -= 900 * dt;
 			piece.y += piece.vy * dt;
-			piece.x += piece.vx;
-			piece.z += piece.vz;
+			piece.x += piece.vx * dt * 60;
+			piece.z += piece.vz * dt * 60;
 			piece.opacity -= 0.65 * dt;
-			if (piece.opacity <= 0 || piece.y < -250) debris.splice(i, 1);
+			if (piece.opacity <= 0 || piece.y < -260) debris.splice(i, 1);
 		}
 		for (let i = sparks.length - 1; i >= 0; i -= 1) {
 			const spark = sparks[i]!;
 			spark.life += dt;
 			if (spark.life >= spark.maxLife) { sparks.splice(i, 1); continue; }
-			spark.x += spark.vx;
-			spark.y += spark.vy;
-			spark.vy += 2.5 * dt * 60;
+			spark.vy -= 260 * dt;
+			spark.x += spark.vx * dt;
+			spark.y += spark.vy * dt;
+			spark.z += spark.vz * dt;
 		}
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 		const ox = canvas.width / 2;
 		const oy = canvas.height * 0.74;
+		// Ground contact shadow: clamped to the canvas and faded as the tower
+		// grows, so a tall run is not sitting on a heavy plate whose real subject
+		// is a base far below the viewport. Skipped entirely when off-screen.
 		const shadowCenter = projectIso(0, 0, 0, ox, oy);
-		ctx.save();
-		const shadow = ctx.createRadialGradient(shadowCenter.x, shadowCenter.y, 10, shadowCenter.x, shadowCenter.y, 150);
-		shadow.addColorStop(0, isLight() ? 'rgba(30, 80, 140, 0.35)' : 'rgba(0, 0, 0, 0.55)');
-		shadow.addColorStop(1, 'transparent');
-		ctx.fillStyle = shadow;
-		ctx.beginPath();
-		ctx.ellipse(shadowCenter.x, shadowCenter.y, 150, 70, 0, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.restore();
+		const fade = Math.max(0.18, 1 - run.layers.length / 18);
+		const radiusX = Math.min(canvas.width * 0.42, 150 * dpr);
+		const radiusY = Math.min(canvas.height * 0.3, 70 * dpr);
+		if (radiusX > 2 && radiusY > 2 && shadowCenter.y > -radiusY && shadowCenter.y < canvas.height + radiusY) {
+			ctx.save();
+			ctx.globalAlpha = fade;
+			const shadow = ctx.createRadialGradient(shadowCenter.x, shadowCenter.y, 10, shadowCenter.x, shadowCenter.y, radiusX);
+			shadow.addColorStop(0, isLight() ? 'rgba(30, 80, 140, 0.35)' : 'rgba(0, 0, 0, 0.55)');
+			shadow.addColorStop(1, 'transparent');
+			ctx.fillStyle = shadow;
+			ctx.beginPath();
+			ctx.ellipse(shadowCenter.x, shadowCenter.y, radiusX, radiusY, 0, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.restore();
+		}
 		run.layers.forEach((layer, index) => {
 			drawIsoBox(layer.x, index * LAYER_HEIGHT, layer.z, layer.w, layer.d, LAYER_HEIGHT, index);
 		});
@@ -228,11 +302,12 @@ export function createStackGame() {
 			drawIsoBox(curX, run.layers.length * LAYER_HEIGHT, curZ, prev.w, prev.d, LAYER_HEIGHT, run.layers.length);
 		}
 		for (const spark of sparks) {
+			const point = projectIso(spark.x, spark.y, spark.z, ox, oy);
 			ctx.save();
-			ctx.globalAlpha = 1 - spark.life / spark.maxLife;
+			ctx.globalAlpha = Math.max(0, 1 - spark.life / spark.maxLife);
 			ctx.fillStyle = spark.color;
 			ctx.beginPath();
-			ctx.arc(spark.x, spark.y, spark.size, 0, Math.PI * 2);
+			ctx.arc(point.x, point.y, spark.size * dpr, 0, Math.PI * 2);
 			ctx.fill();
 			ctx.restore();
 		}
@@ -256,17 +331,26 @@ export function createStackGame() {
 		gameOver = false;
 		claimDone = false;
 		resultsAcknowledged = false;
+		skipReason = null;
+		runToken = createRunToken();
 		if (claimForm) claimForm.hidden = true;
 		if (claimStatus) claimStatus.textContent = '';
 		if (resultNote) resultNote.textContent = '';
 		playing = true;
 		started = true;
-		if (overlay) overlay.hidden = true;
+		hideOverlay();
 		spawnActive();
 		paintHud();
 		say('Playing — Space or tap to drop the block.');
 		showShell('ready');
 	}
+	/**
+	 * End the run. The game-over card is the overlay INSIDE the viewport, and the
+	 * shell stays in `ready`: swapping the whole panel on every miss reflows the
+	 * page and hides the tower the player is still looking at. The claim form
+	 * remains reachable — the overlay's \"Claim score\" button (or the side panel)
+	 * opens the results panel, which is where the form lives.
+	 */
 	function endRun(): void {
 		playing = false;
 		gameOver = true;
@@ -277,19 +361,60 @@ export function createStackGame() {
 		}
 		paintHud();
 		say(`Game over — score ${run.score} across ${run.layers.length - 1} layers.`);
-		const shellReady = document.querySelector<HTMLElement>('[data-game-shell]')?.dataset.gameState === 'ready';
-		if (!claimDone && !resultsAcknowledged && shellReady) {
-			if (resultNote) resultNote.textContent = `Score ${run.score} · ${run.layers.length - 1} layers · best combo ×${run.maxCombo}.`;
-			showShell('results');
+		if (resultNote) resultNote.textContent = `Score ${run.score} · ${run.layers.length - 1} layers · best combo ×${run.maxCombo}.`;
+		if (overlayTitle) overlayTitle.textContent = 'Run over';
+		if (overlayDesc) overlayDesc.textContent = `Score ${run.score} · ${run.layers.length - 1} layers · best combo ×${run.maxCombo}.`;
+		showOverlay('over');
+		renderClaimable();
+		void autoSubmitRunForRun();
+	}
+	/**
+	 * Submit only a run that beats the server-read standing. `unreadable` and
+	 * `guest` submit nothing and leave the manual form; either way the stable run
+	 * key means a later manual claim is the SAME submission.
+	 */
+	async function autoSubmitRunForRun(): Promise<void> {
+		const result = await autoSubmitRun({
+			gameId: STACK_GAME_ID, mode: STACK_MODE_ID,
+			score: run.score, tieBreak: stackTieBreak(run.layers.length),
+			proof: { drops, fatal: fatalPos }, idempotencyKey: idempotencyKey('stk', runToken),
+		});
+		if (result.submitted) {
+			claimDone = true;
+			skipReason = null;
+			if (claimForm) claimForm.hidden = true;
+			if (claimOpen) claimOpen.hidden = true;
+			if (overlayClaim) overlayClaim.hidden = true;
+			if (overlayDesc && result.outcome.kind === 'stored') {
+				overlayDesc.textContent = `Score ${run.score} · ${run.layers.length - 1} layers · submitted to the Isometric Stack leaderboard.`;
+			}
+			if (claimStatus && result.outcome.kind === 'stored') claimStatus.textContent = result.outcome.message;
+		} else if (result.reason === 'not_best') {
+			skipReason = 'not_best';
+		} else if (result.reason === 'guest') {
+			skipReason = 'guest';
+		} else {
+			skipReason = 'unreadable';
 		}
 		renderClaimable();
 	}
 	function renderClaimable(): void {
 		const claimable = gameOver && run.score >= 1 && !claimDone;
+		// Reserved slots: these controls are hidden, not re-created, so the panel
+		// does not jump between a claimable run and one that was auto-submitted.
 		if (claimForm) claimForm.hidden = !claimable;
 		if (claimOpen) claimOpen.hidden = !claimable;
-		if (claimNote && claimable) {
-			claimNote.textContent = `Score ${run.score} · ${run.layers.length - 1} layers · leaderboard tie-break ${stackTieBreak(run.layers.length)} (deeper runs win ties).`;
+		if (overlayClaim) overlayClaim.hidden = !claimable;
+		if (againButton) againButton.hidden = !gameOver;
+		if (claimNote) {
+			claimNote.textContent = claimable
+				? `Score ${run.score} · ${run.layers.length - 1} layers · leaderboard tie-break ${stackTieBreak(run.layers.length)} (deeper runs win ties). Sign in to submit automatically; otherwise type a name.`
+				: '';
+		}
+		if (claimStatus && claimable) {
+			claimStatus.textContent = skipReason === 'not_best' ? 'This run did not beat your standing, so nothing was submitted.'
+				: skipReason === 'unreadable' ? 'Your standing could not be checked, so nothing was submitted automatically.'
+				: skipReason === 'guest' ? 'Guest runs are claimed with a display name below.' : '';
 		}
 	}
 	function dropBlock(): void {
@@ -299,6 +424,20 @@ export function createStackGame() {
 		if (!step.ok) { say(step.error === 'too_deep' ? 'Run is too deep to continue.' : 'That drop is out of range.'); return; }
 		if (step.result.kind === 'miss') {
 			fatalPos = posQ;
+			// The miss must be SEEN: the block that fell wide is pushed off the
+			// tower as debris, so the run ends where the player watched it end
+			// instead of the tower silently freezing.
+			const prev = run.layers[run.layers.length - 1]!;
+			const axis = run.axis;
+			debris.push({
+				x: axis === 'x' ? posQ : prev.x,
+				y: run.layers.length * LAYER_HEIGHT,
+				z: axis === 'z' ? posQ : prev.z,
+				w: prev.w, d: prev.d, vy: -20,
+				vx: axis === 'x' ? Math.sign(posQ - prev.x) * 1.6 : 0,
+				vz: axis === 'z' ? Math.sign(posQ - prev.z) * 1.6 : 0,
+				opacity: 1, colorIndex: run.layers.length,
+			});
 			endRun();
 			return;
 		}
@@ -308,8 +447,7 @@ export function createStackGame() {
 		const prev = run.layers[run.layers.length - 2]!;
 		if (placed.perfect) {
 			playTone(480 + run.combo * 55, 'triangle', 0.35);
-			const screen = projectIso(placed.layer.x, run.layers.length * LAYER_HEIGHT, placed.layer.z, canvas!.width / 2, canvas!.height * 0.74);
-			spawnSparks(screen.x, screen.y, 16);
+			spawnSparks(placed.layer.x, run.layers.length * LAYER_HEIGHT, placed.layer.z, 16);
 		} else {
 			playTone(300 + (run.layers.length % 8) * 28, 'sine', 0.18);
 			const overhang = Math.abs(placed.diff);
@@ -342,10 +480,13 @@ export function createStackGame() {
 		sparks = [];
 		claimDone = false;
 		resultsAcknowledged = false;
+		skipReason = null;
 		if (claimForm) claimForm.hidden = true;
 		if (claimStatus) claimStatus.textContent = '';
 		if (resultNote) resultNote.textContent = '';
-		if (overlay) overlay.hidden = false;
+		showOverlay('intro');
+		if (overlayTitle) overlayTitle.textContent = 'ISO STACK';
+		if (overlayDesc) overlayDesc.textContent = 'Tap or press Space to drop layers. Align blocks cleanly to maintain the tower surface.';
 		paintHud();
 		say('Ready — start a new run when you are.');
 		showShell('ready');
@@ -353,44 +494,37 @@ export function createStackGame() {
 
 	// ------------------------------------------------------------- claim flow
 	async function submitClaim(): Promise<void> {
-		if (!claimForm || !claimDone || fatalPos === null) return;
-		const nameInput = claimForm.querySelector<HTMLInputElement>('[name="displayName"]');
-		const submit = claimForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+		if (!claimForm || claimDone) return;
 		const displayName = nameInput?.value.trim() ?? '';
 		if (!displayName) { if (claimStatus) claimStatus.textContent = 'Type a name first.'; return; }
+		const submit = claimForm.querySelector<HTMLButtonElement>('button[type="submit"]');
 		if (submit) submit.disabled = true;
 		if (nameInput) nameInput.disabled = true;
 		if (claimStatus) claimStatus.textContent = 'Checking the run…';
 		try {
-			const response = await fetch('/api/games/scores', {
-				method: 'POST', credentials: 'same-origin', cache: 'no-store',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					gameId: STACK_GAME_ID, mode: STACK_MODE_ID, score: run.score, tieBreak: stackTieBreak(run.layers.length),
-					displayName, idempotencyKey: randomIdempotencyKey(),
-					proof: { drops, fatal: fatalPos },
-				}),
+			// Same stable key as the automatic attempt: this is one submission.
+			const outcome = await submitRun({
+				gameId: STACK_GAME_ID, mode: STACK_MODE_ID, score: run.score, tieBreak: stackTieBreak(run.layers.length),
+				displayName, idempotencyKey: idempotencyKey('stk', runToken), proof: { drops, fatal: fatalPos },
 			});
-			const body = await response.json().catch(() => ({})) as { score?: number; tieBreak?: number | null; error?: string };
-			if (response.status === 201 || response.status === 202) {
+			if (outcome.kind === 'stored') {
 				claimDone = true;
-				if (claimStatus) claimStatus.textContent = `Score recorded: ${Number(body.score ?? run.score).toLocaleString()} on the Isometric Stack leaderboard.`;
+				if (claimStatus) claimStatus.textContent = `Score recorded: ${outcome.score.toLocaleString()} on the Isometric Stack leaderboard.`;
 				if (claimForm) claimForm.hidden = true;
 				if (claimOpen) claimOpen.hidden = true;
-			} else if (response.status === 409) {
-				if (claimStatus) claimStatus.textContent = 'This run was already submitted.';
+				if (overlayClaim) overlayClaim.hidden = true;
+			} else if (outcome.kind === 'duplicate') {
 				claimDone = true;
-			} else if (response.status === 403) {
-				if (claimStatus) claimStatus.textContent = 'Score submissions must come from this page.';
-			} else if (response.status === 429) {
-				if (claimStatus) claimStatus.textContent = 'Too many claims right now — try again shortly.';
-			} else if (response.status === 422) {
-				if (claimStatus) claimStatus.textContent = 'The run could not be verified — replay it and claim again.';
+				if (claimStatus) claimStatus.textContent = 'This run was already submitted.';
+			} else if (outcome.kind === 'unreachable') {
+				if (claimStatus) claimStatus.textContent = 'Could not reach the server. Try again when online.';
+			} else if (outcome.kind === 'not-best') {
+				if (claimStatus) claimStatus.textContent = 'The board already holds a stronger run for you.';
 			} else {
-				if (claimStatus) claimStatus.textContent = 'Could not submit right now. Try again in a moment.';
+				if (claimStatus) claimStatus.textContent = outcome.message;
 			}
 		} catch {
-			if (claimStatus) claimStatus.textContent = 'Could not reach the leaderboard. Try again in a moment.';
+			if (claimStatus) claimStatus.textContent = 'Could not reach the server. Try again when online.';
 		} finally {
 			if (nameInput) nameInput.disabled = false;
 			if (submit) submit.disabled = false;
@@ -409,6 +543,8 @@ export function createStackGame() {
 	};
 	window.addEventListener('keydown', onKeydown);
 	startButton?.addEventListener('click', () => startRun());
+	againButton?.addEventListener('click', () => startRun());
+	resultsAgain?.addEventListener('click', () => startRun());
 	resetButton?.addEventListener('click', () => resetToStart());
 	soundButton?.addEventListener('click', () => {
 		audioEnabled = !audioEnabled;
@@ -420,13 +556,29 @@ export function createStackGame() {
 	});
 	claimForm?.addEventListener('submit', (event) => { event.preventDefault(); void submitClaim(); });
 	claimOpen?.addEventListener('click', () => { resultsAcknowledged = false; renderClaimable(); showShell('results'); });
+	overlayClaim?.addEventListener('click', () => { resultsAcknowledged = false; renderClaimable(); showShell('results'); });
 	claimBack?.addEventListener('click', () => { resultsAcknowledged = true; showShell('ready'); });
-	againButton?.addEventListener('click', () => startRun());
+	const onResize = (): void => fitCanvas();
+	window.addEventListener('resize', onResize);
+	let resizeObserver: ResizeObserver | undefined;
+	if (canvas && typeof ResizeObserver !== 'undefined') {
+		resizeObserver = new ResizeObserver(() => fitCanvas());
+		resizeObserver.observe(canvas);
+	}
 
 	const module: GameModule = {
 		init: () => {
+			fitCanvas();
 			paintHud();
 			say('Ready — start a new run when you are.');
+			// The standing read also teaches the HUD the account's real best (and
+			// whether a run is even auto-submittable). Deliberately not awaited by
+			// the render loop: the tower must not wait on the network.
+			void readStanding(STACK_GAME_ID, STACK_MODE_ID).then((result) => {
+				if (!result.ok) return;
+				standing = result.standing;
+				paintHud();
+			});
 			if (!paused) { lastTime = performance.now(); animId = requestAnimationFrame(render); }
 			return {
 				pause: () => {
@@ -436,6 +588,7 @@ export function createStackGame() {
 				resume: () => {
 					if (!paused) return;
 					paused = false;
+					fitCanvas();
 					lastTime = performance.now();
 					animId = requestAnimationFrame(render);
 				},
@@ -443,6 +596,8 @@ export function createStackGame() {
 					paused = true;
 					cancelAnimationFrame(animId);
 					window.removeEventListener('keydown', onKeydown);
+					window.removeEventListener('resize', onResize);
+					resizeObserver?.disconnect();
 					if (audioCtx) { void audioCtx.close().catch(() => undefined); audioCtx = null; }
 				},
 			};

@@ -294,7 +294,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 		transition: transform 0.65s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
-	.settings-gear.is-spinning .settings-gear__icon {
+	:global(.settings-gear.is-spinning .settings-gear__icon) {
 		animation: gear-spin 0.65s cubic-bezier(0.25, 1, 0.5, 1);
 	}
 
@@ -308,9 +308,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.settings-gear,
-		.settings-gear:hover,
-		.settings-gear.is-spinning .settings-gear__icon {
+		:global(.settings-gear), :global(.settings-gear:hover), :global(.settings-gear.is-spinning .settings-gear__icon) {
 			transition: none;
 			transform: none;
 			animation: none;
@@ -377,7 +375,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 		transition: transform var(--dur-fast) var(--ease-out);
 	}
 
-	.nav-group.is-open .nav-group__chevron {
+	:global(.nav-group.is-open .nav-group__chevron) {
 		transform: rotate(180deg);
 	}
 
@@ -405,7 +403,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 			visibility 0s linear var(--dur-fast);
 	}
 
-	.nav-group.is-open .nav-dropdown {
+	:global(.nav-group.is-open .nav-dropdown) {
 		opacity: 1;
 		visibility: visible;
 		transform: none;
@@ -416,9 +414,9 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 			visibility 0s;
 	}
 
-	/* Edge-aware flip: initNavDropdowns measures the panel against the right
+	:global(/* Edge-aware flip: initNavDropdowns measures the panel against the right
 	   viewport edge on every open and toggles this. */
-	.nav-group .nav-dropdown--flip {
+	.nav-group .nav-dropdown--flip) {
 		inset-inline-start: auto;
 		inset-inline-end: 0;
 	}
@@ -542,7 +540,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 				visibility 0s linear var(--dur-fast);
 		}
 
-		.nav-list.is-open {
+		:global(.nav-list.is-open) {
 			opacity: 1;
 			visibility: visible;
 			transform: none;
@@ -591,7 +589,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 			transform: none;
 		}
 
-		.nav-group.is-open .nav-dropdown {
+		:global(.nav-group.is-open .nav-dropdown) {
 			display: grid;
 			height: auto;
 			padding: 0.25rem 0.5rem 0.5rem;
