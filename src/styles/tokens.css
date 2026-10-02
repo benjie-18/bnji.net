@@ -102,7 +102,47 @@
 	--paint-line-height: 1.55;
 	--paint-swatch-shadow: 0 1px 3px var(--glass-shadow-contact);
 
+	/* --- Game surfaces ----------------------------------------------------- */
+	/* The Stack field is the one load-bearing flat rectangle on the site, so its
+	   plate, its overlay and the ink on an accent fill are tokens rather than
+	   per-page hexes. The action-row size is here too: a rail that a button can
+	   appear in must keep its height, and 2.6rem is exactly one button tall. */
+	--game-field: rgba(8 12 24 / 0.45);
+	--game-field-scrim: rgba(5 8 18 / 0.66);
+	--game-on-accent: #0b1020;
+	--game-action-row-size: 2.6rem;
+	/* Chess and Minesweeper paint a fixed field whose squares are not page
+	   surfaces, so their colours are tokens too — a page that rendered a board
+	   with a hand-picked hex would not match the one next to it. Both themes
+	   keep the same board: the plate is dark in either, and the inks below are
+	   chosen against that plate rather than against --bg. */
+	--game-board-light: #cfd8e6;
+	--game-board-dark: #4f6280;
+	--game-piece-light: #f7f9fc;
+	--game-piece-dark: #171d29;
+	--game-move-hint: rgba(110 168 254 / 0.85);
+	--game-cell-hidden: rgba(255 255 255 / 0.16);
+	--game-cell-shade: rgba(0 0 0 / 0.32);
+	--game-cell-plate: rgba(0 0 0 / 0.35);
+	--game-count-n1: #6ea8fe;
+	--game-count-n2: #63d4a0;
+	--game-count-n3: #ff8f8f;
+	--game-count-n4: #c7a6ff;
+	--game-count-many: #ffcf6b;
+
 	/* --- Liquid Glass 2027 Optical System (Dark) --------------------------- */
+	/* Geometry, not colour: one scale for how round and how inset a glass
+	   surface is, so [data-glass] variants in glass.css can be picked without a
+	   page ever choosing a radius by hand. A dock is the roundest thing on the
+	   page, a nested quiet box the least. */
+	--glass-radius-sm: 10px;
+	--glass-radius-md: 16px;
+	--glass-radius-lg: 24px;
+	--glass-radius-pill: 9999px;
+	--glass-pad-sm: 10px;
+	--glass-pad-md: 16px;
+	--glass-pad-lg: 24px;
+
 	/* Adaptive luminance: glass_L = 0.58 * backdrop_L + 34
 	   Backdrop L ≈ 6% -> glass_L ≈ 37.5% -> base fill ~ rgba(255, 255, 255, 0.045) */
 	--glass-bg: rgba(255, 255, 255, 0.045);
@@ -414,6 +454,13 @@
 	--glass-clear-dimming: rgba(10, 40, 75, 0.08); /* 35% dimming layer on bright fields */
 	--glass-bg-fallback: rgba(244, 252, 255, 0.94);
 	--bg-surface: #ffffff;
+
+	/* A white field behind a dark tower reads as paper, and the overlay has to
+	   stay legible over a bright canvas, so both go the other way here. Text on
+	   --accent is light because the light theme's accent is a deep cyan. */
+	--game-field: rgba(255, 255, 255, 0.66);
+	--game-field-scrim: rgba(255, 255, 255, 0.86);
+	--game-on-accent: #f4fbff;
 
 	/* Fresnel rim: the bright top grazing reflection. */
 	--glass-fresnel-top: rgba(255, 255, 255, 0.95);

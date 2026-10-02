@@ -1,0 +1,159 @@
+/* ==========================================================================
+ * Game surfaces a script paints.
+ *
+ * These rules are global on purpose. The chess board, the minesweeper field and
+ * the mine-laying targets are built at view time by `src/scripts/games/*.ts`,
+ * and Astro scopes a page's <style> block to the markup that page compiles: a
+ * node created in a script carries no scope attribute, so an identical rule in
+ * the page file silently never applies. (That is exactly how the chess board
+ * ended up rendering without its squares and the race field with bare buttons.)
+ *
+ * So: anything a game renders itself lives here, imported from the game page's
+ * frontmatter. What the page's own markup owns — layout, panels, the action
+ * strip — stays in the page, on the shared primitives in styles/glass.css.
+ * ========================================================================== */
+
+/* --- Chess ---------------------------------------------------------------- */
+
+.chess-board {
+	display: grid;
+	grid-template-columns: repeat(8, clamp(2.1rem, 7vw, 3.4rem));
+	grid-template-rows: repeat(8, clamp(2.1rem, 7vw, 3.4rem));
+	border-radius: var(--glass-radius-md);
+	overflow: hidden;
+	border: 1px solid var(--glass-border);
+}
+
+.chess-square {
+	display: grid;
+	place-items: center;
+	position: relative;
+	border: 0;
+	padding: 0;
+	cursor: pointer;
+	font-size: clamp(1.35rem, 5vw, 2.2rem);
+	line-height: 1;
+}
+
+.chess-square.is-light { background: var(--game-board-light); }
+.chess-square.is-dark { background: var(--game-board-dark); }
+.chess-square.is-white {
+	color: var(--game-piece-light);
+	text-shadow: 0 1px 2px var(--game-board-dark), 0 0 1px var(--game-board-dark);
+}
+.chess-square.is-black { color: var(--game-piece-dark); }
+
+/* Selected and legal-move both outline the square: one is where the piece is,
+   the other is where it may go, and neither may change the grid's metrics. */
+.chess-square.is-selected { outline: 3px solid var(--accent-strong); outline-offset: -3px; }
+
+.chess-square.is-target::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(circle, var(--game-move-hint) 26%, transparent 28%);
+	pointer-events: none;
+}
+
+.chess-square:focus-visible {
+	outline: 3px solid var(--accent-strong);
+	outline-offset: -3px;
+	z-index: 1;
+}
+
+/* --- Minesweeper ------------------------------------------------------------ */
+
+.ms-board {
+	display: grid;
+	grid-template-columns: repeat(var(--ms-size, 6), clamp(1.7rem, 6vw, 3rem));
+	grid-template-rows: repeat(var(--ms-size, 6), clamp(1.7rem, 6vw, 3rem));
+	gap: 2px;
+	padding: 6px;
+	border-radius: var(--glass-radius-sm);
+	border: 1px solid var(--glass-border);
+	background: var(--game-cell-plate);
+}
+
+.ms-cell {
+	display: grid;
+	place-items: center;
+	position: relative;
+	border: 0;
+	padding: 0;
+	border-radius: var(--radius-xs);
+	font-size: clamp(0.8rem, 3vw, 1.1rem);
+	font-weight: 700;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.ms-cell.is-hidden {
+	background: var(--game-cell-hidden);
+	box-shadow: inset 0 -2px 0 var(--glass-edge-dark);
+}
+
+.ms-cell.is-hidden:hover { background: var(--glass-highlight); }
+.ms-cell.is-revealed { background: var(--game-cell-shade); cursor: default; color: var(--text); }
+.ms-cell.is-editor.is-revealed { cursor: pointer; }
+.ms-cell.is-pending { animation: ms-pulse var(--dur-slow) ease-in-out infinite alternate; }
+
+/* The classic count inks, chosen against a dark plate — a minefield is not a
+   page surface, so these do not follow the theme the way text does. */
+.ms-cell[data-value='1'] { color: var(--game-count-n1); }
+.ms-cell[data-value='2'] { color: var(--game-count-n2); }
+.ms-cell[data-value='3'] { color: var(--game-count-n3); }
+.ms-cell[data-value='4'] { color: var(--game-count-n4); }
+.ms-cell:is([data-value='5'], [data-value='6'], [data-value='7'], [data-value='8']) { color: var(--game-count-many); }
+.ms-cell.is-mine { background: var(--danger-soft); color: var(--game-count-n3); cursor: default; }
+.ms-cell.is-boom { background: var(--danger-line); color: var(--game-piece-light); }
+.ms-cell.is-armed { background: var(--signal-soon); color: var(--game-piece-dark); }
+
+.ms-cell:focus-visible {
+	outline: 3px solid var(--accent-strong);
+	outline-offset: 1px;
+	z-index: 1;
+}
+
+@keyframes ms-pulse {
+	from { background: var(--game-cell-hidden); }
+	to { background: var(--accent-line); }
+}
+
+/* Whose board you are laying mines on. The row lives in the phase panel, which
+   the client rebuilds per round. */
+.ms-target {
+	padding: 0.35rem 0.8rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-pill);
+	background: transparent;
+	color: inherit;
+	font-family: var(--font-mono);
+	font-size: var(--text-small);
+	cursor: pointer;
+	transition:
+		background var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out);
+}
+
+.ms-target.is-active {
+	background: var(--accent);
+	border-color: transparent;
+	color: var(--game-on-accent);
+	font-weight: 600;
+}
+
+.ms-target:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+	.ms-cell.is-pending { animation: none; background: var(--accent-line); }
+	.ms-target { transition: none; }
+}
+
+@media (forced-colors: active) {
+	.ms-cell.is-hidden,
+	.ms-cell.is-revealed,
+	.ms-cell.is-mine,
+	.ms-cell.is-boom { border: 1px solid CanvasText; }
+	.chess-square.is-selected,
+	.chess-square:focus-visible { outline-color: Highlight; }
+}
