@@ -293,7 +293,8 @@ test('the full local flow: boot → start by handle → open → send → live f
 	assert.match(byAttr(dom, 'dm-status').textContent ?? '', /Signed in as Test One\. No conversations yet\./);
 	assert.equal(byAttr(dom, 'dm-signed-in').hidden, false);
 	assert.match(byAttr(dom, 'dm-disclosure').textContent ?? '', /60 days/);
-	assert.match(byAttr(dom, 'dm-disclosure').textContent ?? '', /end-to-end encryption/);
+	assert.match(byAttr(dom, 'dm-disclosure').textContent ?? '', /The two people in a conversation can read them/);
+	assert.doesNotMatch(byAttr(dom, 'dm-disclosure').textContent ?? '', /Moderators only read|end-to-end encryption/);
 	assert.equal((win.document.querySelector('[data-dm-list]') as HTMLElement).childElementCount, 0);
 
 	// Start by exact handle — the flow that always failed for the user.
@@ -622,6 +623,12 @@ test('incoming WebSocket message does not snap thread.scrollTop to bottom if use
 	await claimHandle(bob, 'scroll_two', '203.0.113.82');
 	makeFriends(db, 'Scroll One', 'Scroll Two');
 	activeCookie = alice;
+	const opened = await conversationsApi.POST(requestContext('/api/dm/conversations', {
+		method: 'POST', cookie: alice, body: { handle: 'scroll_two' },
+	}));
+	assert.equal(opened.status, 200, await opened.clone().text());
+	const { conversation } = await opened.json() as { conversation: { mySide: 'lo' | 'hi' } };
+	const incomingSide = conversation.mySide === 'lo' ? 'hi' : 'lo';
 
 	const dom = await mountFreshDom('?handle=scroll_two');
 	await tick(40);
@@ -635,7 +642,7 @@ test('incoming WebSocket message does not snap thread.scrollTop to bottom if use
 		data: JSON.stringify({
 			t: 'dm_new',
 			v: 1,
-			m: { n: 10, senderSide: 'hi', body: 'incoming while scrolled up', imageId: null, at: Date.now() },
+			m: { n: 10, senderSide: incomingSide, body: 'incoming while scrolled up', imageId: null, at: Date.now() },
 		}),
 	});
 	await tick(10);

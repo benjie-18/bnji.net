@@ -61,7 +61,7 @@ export function mountGameLeaderboard(root: HTMLElement): void {
 
 	function paintRow(index: number, row: BoardRow): HTMLLIElement {
 		const item = document.createElement('li');
-		item.className = 'glass-row leaderboard-row';
+		item.className = 'glass-item glass-row leaderboard-row';
 		const rank = document.createElement('span');
 		rank.className = 'leaderboard-row__rank mono';
 		rank.textContent = `#${page * PAGE_SIZE + index + 1}`;
@@ -105,8 +105,8 @@ export function mountGameLeaderboard(root: HTMLElement): void {
 				rows.forEach((row, index) => list.appendChild(paintRow(index, row)));
 				if (page === 0 && rows.length === 0) {
 					const empty = document.createElement('li');
-					empty.className = 'leaderboard-row leaderboard-row--empty';
-					empty.textContent = 'No verified runs on this board yet. Be the first.';
+					empty.className = 'glass-item leaderboard-row--empty';
+					empty.textContent = 'No scores on this board yet. Be the first.';
 					list.appendChild(empty);
 				}
 			}
@@ -130,7 +130,7 @@ export function mountGameLeaderboard(root: HTMLElement): void {
 			const body = await response.json() as { best?: { score: number } | null; rank?: number | null; entries?: number; scope?: string };
 			you.hidden = false;
 			if (!body.best) {
-				youValue.textContent = 'No verified run yet — your first scored run appears here.';
+				youValue.textContent = 'No score yet — your first scored run appears here.';
 				return;
 			}
 			const rank = typeof body.rank === 'number' ? `rank #${body.rank} of ${body.entries ?? '?'}` : `among ${body.entries ?? '?'} runs`;

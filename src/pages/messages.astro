@@ -4,9 +4,8 @@
  * accounts (plan §7.1). Static shell; every piece of data arrives over the
  * authenticated API, so nothing private is baked into the build.
  *
- * The disclosure line is mandatory product copy (plan §12.6 + owner answer
- * D10): plainly what is stored, who can read it, and that there is no
- * end-to-end encryption — the site may never imply otherwise.
+ * The short disclosure is populated from the public messaging config, so its
+ * retention window stays accurate without exposing conversation data in HTML.
  */
 import Layout from '../layouts/Layout.astro';
 import PageHeader from '../components/PageHeader.astro';

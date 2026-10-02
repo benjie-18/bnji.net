@@ -48,8 +48,10 @@ test('room chat joins, renders history with dedupe and tombstones, sends frames,
 
 	await page.goto('/games/');
 	const note = page.locator('.room-tools__chat-note');
-	await expect(note).toContainText('Messages are stored only while this room exists');
-	await expect(note).toContainText('not encrypted');
+	await expect(note).toContainText('visible to room members');
+	await expect(note).toContainText('up to 2 hours');
+	await expect(note).not.toContainText('not encrypted');
+	await expect(note).not.toContainText('reports are kept for review');
 
 	await page.locator('[data-room-create]').getByRole('button', { name: 'Create a room' }).click();
 	await expect.poll(() => socket !== null).toBe(true);

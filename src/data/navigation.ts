@@ -24,7 +24,7 @@ export type NavItem = {
 
 /**
  * A dropdown in the header pill: one trigger label, several destinations.
- * Groups exist so the top level stays short (Home · Projects · Board · Me)
+ * Groups exist so the top level stays short (Home · Projects · Community · Me)
  * while every route remains one click — or two — away. Rendered by
  * Header.astro; behaviour (keyboard, touch, edge-aware placement) lives in
  * scripts/interactions.ts → initNavDropdowns.
@@ -50,8 +50,8 @@ export function flatNavItems(entries: readonly NavEntry[]): NavItem[] {
 
 /**
  * Floating pill nav: four top-level entries so it fits a phone in the sheet.
- * Projects and Me are dropdowns (see NavGroup); their destinations appear
- * ONLY inside the dropdown, never as standalone top-level links.
+ * Projects, Community and Me are dropdowns (see NavGroup); their destinations
+ * appear ONLY inside the dropdown, never as standalone top-level links.
  */
 export const PRIMARY_NAV: NavEntry[] = [
 	{ label: 'Home', href: '/', description: 'Back to the hub' },
@@ -65,7 +65,15 @@ export const PRIMARY_NAV: NavEntry[] = [
 			{ label: 'Tools', href: '/tools/', description: 'Image and JSON tools that run locally' },
 		],
 	},
-	{ label: 'Board', href: '/board/', description: 'The public message board' },
+	{
+		label: 'Community',
+		slug: 'community',
+		items: [
+			{ label: 'Board', href: '/board/', description: 'The public message board' },
+			{ label: 'Messages', href: '/messages/', description: 'Private messages between accounts' },
+			{ label: 'Friends', href: '/friends/', description: 'Friend requests and presence' },
+		],
+	},
 	{
 		label: 'Me',
 		slug: 'me',
@@ -75,8 +83,6 @@ export const PRIMARY_NAV: NavEntry[] = [
 			// re-add this entry to put the link back.
 			// { label: 'About', href: '/about/', description: 'What this site is' },
 			{ label: 'Profile', href: '/gizlyy/', description: 'Personal social profile' },
-			{ label: 'Messages', href: '/messages/', description: 'Private messages between accounts' },
-			{ label: 'Friends', href: '/friends/', description: 'Friend requests and presence' },
 			{ label: 'Blog', href: '/blog/', description: 'Notes and placeholder writing' },
 			{ label: 'Contact', href: '/contact/', description: 'Leave a message' },
 		],

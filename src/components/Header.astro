@@ -10,8 +10,8 @@
  * which opens the SettingsOverlay (Layout.astro) via scripts/settings-overlay.ts.
  * The theme toggle that used to sit here now lives inside that overlay.
  *
- * Structure: four top-level entries — Home, Projects ▾, Board, Me ▾. The two
- * groups are disclosure dropdowns: a real <button> trigger (aria-expanded /
+ * Structure: four top-level entries — Home, Projects ▾, Community ▾, Me ▾.
+ * The groups are disclosure dropdowns: a real <button> trigger (aria-expanded /
  * aria-controls) plus a glass panel (data-glass="raised" — the same token-
  * driven surface system as the pill, correct in both themes by construction;
  * no hand-rolled backdrop-filter here). Grouped destinations appear ONLY
@@ -416,7 +416,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 
 	/* Edge-aware flip: initNavDropdowns measures the panel against the right
 	   viewport edge on every open and toggles this. */
-	.nav-group .nav-dropdown.nav-dropdown--flip {
+	.nav-group .nav-dropdown:global(.nav-dropdown--flip) {
 		inset-inline-start: auto;
 		inset-inline-end: 0;
 	}

@@ -397,7 +397,7 @@ export function mountGameRooms(root: HTMLElement, observer: RoomObserver = {}): 
 			if (message.type === 'snapshot') {
 				isHost = Boolean(message.isHost);
 				say(`Connected to ${message.gameId ?? 'room'} · version ${message.revision ?? 0} · ${message.connectedMembers ?? 1} member${message.connectedMembers === 1 ? '' : 's'}. ${message.isHost ? 'You are the room host.' : message.hasHost ? 'Another member is the room host.' : 'The room has no connected host.'} ${hasRegisteredAdapter(message.gameId) ? 'Game rules are validated on the server.' : 'No game adapter is registered, so game-state updates are disabled.'}`);
-				chatSay(CHAT_CONFIG.enabled ? 'Connected to chat. Messages are stored only while this room exists.' : 'Chat is turned off right now.');
+				chatSay(CHAT_CONFIG.enabled ? 'Connected to chat.' : 'Chat is turned off right now.');
 			}
 			else if (message.type === 'presence') {
 				isHost = Boolean(message.isHost);

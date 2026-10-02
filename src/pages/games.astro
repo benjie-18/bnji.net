@@ -120,7 +120,7 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 			</form>
 			{CHAT_CONFIG.enabled && (
 			<div class="room-tools__chat" data-chat-panel>
-				<p class="room-tools__chat-note">Plain text for the room. Stored only while the room exists (&le;2 h), deleted with it, not encrypted. Reported messages are kept for review.</p>
+				<p class="room-tools__chat-note">Room chat is visible to room members while a room exists (up to 2 hours). Messages are then deleted.</p>
 				<!-- aria-live announces new messages. Deliberately no role="log": it would
 				     override the <ol>'s implicit list role and break every <li>'s semantics
 				     (axe "listitem"). The status line below carries the announcements text. -->
@@ -159,24 +159,23 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 		</section>
 
 		{boards.length > 0 && (
-			<section aria-labelledby="leaderboards-title">
+			<section class="games-leaderboards" data-glass="raised large" aria-labelledby="leaderboards-title">
 				<div class="games-section-heading">
 					<div>
 						<p class="eyebrow">02 / LEADERBOARDS</p>
-						<h2 id="leaderboards-title">Verified scores</h2>
+						<h2 id="leaderboards-title">Leaderboards</h2>
 					</div>
-					<span class="mono games-count">{boards.length} ranked</span>
+					<span class="mono glass-item games-count">{boards.length} ranked</span>
 				</div>
-				<p class="games-section-note">Server-verified runs only.</p>
 				<ul class="games-boards">
 					{boards.map((game) => (
-						<li class="glass-row glass-row--split">
-							<span class="glass-row__main">
+						<li class="glass-item games-board">
+							<span class="games-board__main">
 								<strong>{game.title}</strong>
-								<span class="glass-row__meta">{(game.modes ?? ['default']).map((mode) => MODE_LABEL[mode] ?? mode).join(' · ')}</span>
+								<span class="games-board__meta">{(game.modes ?? ['default']).map((mode) => MODE_LABEL[mode] ?? mode).join(' · ')}</span>
 							</span>
-							<span class="glass-row__actions">
-								<a class="glass-button glass-button--sm" href={leaderboardHref(game)}>Open leaderboard</a>
+							<span class="games-board__actions">
+								<a class="glass-button glass-button--sm glass-button--primary" href={leaderboardHref(game)}>Open leaderboard</a>
 								<a class="glass-button glass-button--sm" href={game.href}>Play</a>
 							</span>
 						</li>
@@ -294,8 +293,15 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	:global(.room-tools__lobby-meta) { color: var(--text-muted); font-size: var(--text-small); }
 	.room-tools__lobby-status { min-height: 1.5em; font-size: var(--text-small); }
 	.room-tools__members { grid-column: 1 / -1; display: grid; gap: 0.45rem; }
-	.games-section-note { max-width: 70ch; margin: 0 0 1rem; color: var(--text-muted); line-height: 1.6; }
-	.games-boards { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+	.games-leaderboards { display: grid; gap: var(--space-4); padding: clamp(var(--space-4), 3vw, var(--space-6)); }
+	.games-leaderboards .games-section-heading { align-items: center; margin-block-end: 0; }
+	.games-leaderboards .games-count { display: inline-flex; align-items: center; padding: var(--space-2) var(--space-3); border-color: var(--glass-border-strong); background: var(--glass-bg-raised); color: var(--text-strong); }
+	.games-boards { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+	.games-leaderboards .games-board { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-3) var(--space-4); padding: var(--space-3) var(--space-4); border-color: var(--glass-border-strong); background: var(--glass-bg-raised); }
+	.games-board__main { display: grid; gap: var(--space-1); min-inline-size: 0; overflow-wrap: anywhere; }
+	.games-board__main strong { color: var(--text-strong); font-size: var(--text-lead); }
+	.games-board__meta { color: var(--text); font-size: var(--text-small); white-space: normal; }
+	.games-board__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 	.room-tools__status { grid-column: 1 / -1; min-height: 1.5em; }
 	.room-tools__status output { margin-inline: 0.4rem; color: var(--text-strong); font-family: var(--font-mono, monospace); overflow-wrap: anywhere; user-select: all; }
 	.room-tools__status > div { margin-top: 0.35rem; }
@@ -319,7 +325,9 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 	@media (max-width: 800px) { .games-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 	@media (max-width: 560px) {
 		.games-grid, .player-tools__guest, .room-tools, .room-tools__forms, .room-tools__name, .room-tools__chat-form { grid-template-columns: 1fr; }
+		.games-leaderboards .games-board { grid-template-columns: 1fr; }
 		.games-section-heading, .player-tools__head, .player-tools__saves-head { align-items: start; flex-direction: column; }
+		.games-board__actions { justify-content: flex-start; }
 		:global(.player-tools__save) { grid-template-columns: 1fr; }
 		:global(.player-tools__choices) { display: grid; grid-template-columns: 1fr; }
 		:global(.player-tools .glass-button) { width: 100%; }
