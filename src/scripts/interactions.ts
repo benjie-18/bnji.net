@@ -581,10 +581,12 @@ export function initNavDropdowns(): void {
 		const EDGE_MARGIN = 8;
 		const triggerRect = group.trigger.getBoundingClientRect();
 		const panelWidth = group.panel.offsetWidth || 208; // 13rem fallback
-		const pill = group.root.closest('.nav-pill');
-		const pillRight = pill ? pill.getBoundingClientRect().right : window.innerWidth;
-		const maxRight = Math.min(window.innerWidth - EDGE_MARGIN, pillRight);
-		if (triggerRect.left + panelWidth > maxRight) {
+		const pill = group.root.closest<HTMLElement>('.nav-pill');
+		const limit = Math.min(
+			pill ? pill.getBoundingClientRect().right : Infinity,
+			window.innerWidth - EDGE_MARGIN,
+		);
+		if (triggerRect.left + panelWidth > limit) {
 			group.panel.classList.add('nav-dropdown--flip');
 		}
 	};
