@@ -95,7 +95,7 @@ export function createStackGame() {
 	/** Server-measured standing once read, so the HUD shows the account's real best. */
 	let standing: Standing | null = null;
 	/** Why the run was not auto-submitted, for the overlay copy. */
-	let skipReason: 'not_best' | 'guest' | 'unreadable' | null = null;
+	let skipReason: 'not_best' | 'guest' | 'unreadable' | 'submission_failed' | null = null;
 
 	try {
 		const stored = Number(localStorage.getItem(BEST_STORAGE_KEY));
@@ -396,16 +396,32 @@ export function createStackGame() {
 			score: run.score, tieBreak: stackTieBreak(run.layers.length),
 			proof: { drops, fatal: fatalPos }, idempotencyKey: idempotencyKey('stk', runToken),
 		});
+		// `result.submitted` only means the client DECIDED to POST. Whether the
+		// claim actually LANDED decides `claimDone`: a rejected or unreachable
+		// submission stored nothing, so the claim controls must stay up (the
+		// manual form reuses the run's idempotency key, making the retry the
+		// same submission). Marking the claim done here anyway is how a server
+		// outage silently ate finished runs.
 		if (result.submitted) {
-			claimDone = true;
-			skipReason = null;
-			if (claimForm) claimForm.hidden = true;
-			if (claimOpen) claimOpen.hidden = true;
-			if (overlayClaim) overlayClaim.hidden = true;
-			if (overlayDesc && result.outcome.kind === 'stored') {
-				overlayDesc.textContent = `Score ${run.score} · ${run.layers.length - 1} layers · submitted to the Isometric Stack leaderboard.`;
+			const outcome = result.outcome;
+			if (outcome.kind === 'stored') {
+				claimDone = true;
+				skipReason = null;
+				hideClaimControls();
+				if (overlayDesc) overlayDesc.textContent = `Score ${run.score} · ${run.layers.length - 1} layers · submitted to the Isometric Stack leaderboard.`;
+				if (claimStatus) claimStatus.textContent = outcome.message;
+			} else if (outcome.kind === 'duplicate') {
+				// The run is already on the board — as good as stored.
+				claimDone = true;
+				skipReason = null;
+				hideClaimControls();
+				if (claimStatus) claimStatus.textContent = 'This run was already submitted.';
+			} else if (outcome.kind === 'not-best') {
+				skipReason = 'not_best';
+			} else {
+				// rejected | unreachable: nothing was stored; keep the claim open.
+				skipReason = 'submission_failed';
 			}
-			if (claimStatus && result.outcome.kind === 'stored') claimStatus.textContent = result.outcome.message;
 		} else if (result.reason === 'not_best') {
 			skipReason = 'not_best';
 		} else if (result.reason === 'guest') {
@@ -414,6 +430,12 @@ export function createStackGame() {
 			skipReason = 'unreadable';
 		}
 		renderClaimable();
+	}
+	/** The run is on the board; every claim affordance goes away. */
+	function hideClaimControls(): void {
+		if (claimForm) claimForm.hidden = true;
+		if (claimOpen) claimOpen.hidden = true;
+		if (overlayClaim) overlayClaim.hidden = true;
 	}
 	function renderClaimable(): void {
 		const claimable = gameOver && run.score >= 1 && !claimDone;
@@ -431,7 +453,9 @@ export function createStackGame() {
 		if (claimStatus && claimable) {
 			claimStatus.textContent = skipReason === 'not_best' ? 'This run did not beat your standing, so nothing was submitted.'
 				: skipReason === 'unreadable' ? 'Your standing could not be checked, so nothing was submitted automatically.'
-				: skipReason === 'guest' ? 'Guest runs are claimed with a display name below.' : '';
+				: skipReason === 'guest' ? 'Guest runs are claimed with a display name below.'
+				: skipReason === 'submission_failed' ? 'The automatic submission failed — this run is NOT on the leaderboard. Claim it below to try again.'
+				: '';
 		}
 	}
 	function dropBlock(): void {
@@ -529,9 +553,7 @@ export function createStackGame() {
 			if (outcome.kind === 'stored') {
 				claimDone = true;
 				if (claimStatus) claimStatus.textContent = `Score recorded: ${outcome.score.toLocaleString()} on the Isometric Stack leaderboard.`;
-				if (claimForm) claimForm.hidden = true;
-				if (claimOpen) claimOpen.hidden = true;
-				if (overlayClaim) overlayClaim.hidden = true;
+				hideClaimControls();
 			} else if (outcome.kind === 'duplicate') {
 				claimDone = true;
 				if (claimStatus) claimStatus.textContent = 'This run was already submitted.';

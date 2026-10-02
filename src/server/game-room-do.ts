@@ -9,9 +9,9 @@ import {
 	type RoomChatFrame, type RoomChatDeleteFrame, type RoomMemberFrame,
 } from './game-room-protocol';
 import { authorizeGameAction, authorizeRoomStateTransition, redactGameState, verifyRoundWin, type GameActionRequest } from './room-authority';
-// Side effect: registers the game authorities/adapters inside this isolate.
-import './game-adapters/chess';
-import './game-adapters/pvp-minesweeper';
+// Side effect: registers EVERY game's adapters (authorities and verifiers)
+// inside this isolate — the one import point shared with the scores route.
+import './game-adapters/register-all';
 
 interface RoomEnv { ACCESS_SECRET?: string }
 type Principal = { key: string; hash: string };

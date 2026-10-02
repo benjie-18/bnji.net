@@ -1,6 +1,13 @@
 /**
  * `bnji.stack` adapter contracts: the score verifier reconstructs a run from
  * the shared rules, and the HTTP score route stores only what it recomputes.
+ *
+ * Note: this file imports the adapter itself, which registers its verifier as
+ * a side effect — so it can NOT tell you whether the score ROUTE wires the
+ * adapter up (that masking is exactly how the route shipped without Stack's
+ * verifier). That invariant lives in `tests/score-verifier-registry.test.ts`,
+ * which imports the route alone and fails unless every standalone game's
+ * verifier is registered.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

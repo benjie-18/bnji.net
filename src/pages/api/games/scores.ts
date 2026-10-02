@@ -8,9 +8,13 @@ import { appendPlayerCookies, PlayerContextStorageError, resolvePlayerContext, t
 import { insertValidatedScore, type D1Database } from '../../../server/game-store';
 import { getScoreVerifier } from '../../../server/score-verifiers';
 import { serverEnvironment } from '../../../server/env';
-// Side effect: registers the score verifiers (`bnji.chess`, `bnji.pvp-minesweeper`) in this isolate.
-import '../../../server/game-adapters/chess';
-import '../../../server/game-adapters/pvp-minesweeper';
+// Side effect: registers EVERY game's score verifier (`bnji.chess`,
+// `bnji.pvp-minesweeper`, `bnji.isometric-stack`, …) in this isolate. This is
+// the one import point — `tests/score-verifier-registry.test.ts` fails if a
+// standalone game's verifier is missing from it, which is exactly how the
+// Stack submissions outage (`503 verifier_unavailable`) would have been
+// caught before shipping.
+import '../../../server/game-adapters/register-all';
 
 export const prerender = false;
 const RATE_WINDOW_MS = 60_000;
