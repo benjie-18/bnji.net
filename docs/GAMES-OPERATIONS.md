@@ -174,3 +174,36 @@ principal.
 3. Mount with `mountGameLifecycle` and `mountGameSession`; implement `pause`, `resume`, and `destroy` to stop loops/audio/timers/listeners, pause while offscreen/hidden, and follow reduced-motion. The shared shell's pause/resume events feed the lifecycle, but game handles still own their resources. Use DOM-backed semantic controls and a non-WebGL/non-audio fallback where relevant. Do not initialize WebGPU/audio just to probe support.
 4. If public scores are appropriate, add an authoritative server verifier via `registerScoreVerifier(gameId, verifier)` in `src/server/score-verifiers.ts`. Make the verifier derive score/result from server-owned state or validate a cryptographically bound run/replay; reject client claims that cannot be reconstructed. For multiplayer rounds, prefer the DO attestation seam: verify the win against room state inside the verifier (see `pvp-minesweeper.ts`) and return `increment: true` so the route computes `current + 1` instead of trusting any client total. The public API then stores only the validator's returned score, applies one-best-per-guest-session/mode and top-500 bounds, and shares anonymous/player references through `resolvePlayerContext`.
 5. **Implemented in part two:** game modules can use the shared `player-context` resolver, versioned save contract, or generic rooms. Continue to keep game-specific rules/verifiers inside the game adapter; the generic room service does not validate them.
+
+## Open lobbies, the kick lockout and per-game leaderboards (2026-10-01)
+
+**Listing.** `GET /api/games/lobbies[?gameId=…]` is the public discovery read:
+`room_registry` candidates (`expires_at > now`, newest first, `listLimit` 24) +
+one `GET /lobby` probe per candidate DO (8 in flight, 1.5 s each), KV-cached for
+`LOBBY_CONFIG.cacheTtlSeconds` (10 s) under `bnji-lobby:<gameId|all>`, rate-limited
+30/min per IP. The panel polls no faster than `minRefreshSeconds` (15 s) and stops
+polling entirely after a failed read. Cost per uncached page view: one D1 read
+plus up to 24 subrequests; at Free-plan ceilings that is the number to watch if
+the Games page is ever hit hard. A room that answers `410` (gone/expired), does
+not answer, disagrees about its game id, is full, or is not `live:true` is dropped
+from the list and counted in `stale`/`truncated` in the JSON.
+
+**Kicks.** A host kick (`{"type":"kick","member":…}` on the room socket) and an
+admin kick (Chat tab) share one path: the principal goes into the DO-local
+`game_room_kicks` table, the membership row is deleted, the socket closes `4003`,
+and any reconnect attempt is refused with `403 room_kicked` for the room's
+remaining lifetime. The lockout dies with the room (`teardown()` deletes the
+table), so it can never leak into a later room that reuses a code, and it is not
+in D1 — an admin close and an expiry clean it the same way. Operator-visible
+consequence: a kicked player cannot be let back in before the room expires; delete
+the room if that is needed. `chat_moderation_log` records `kick`/`kick_admin`
+(with hashed principals) as before.
+
+**Leaderboards.** `/games/<slug>/leaderboard/` is prerendered per scored game
+(`stack`, `chess`, `pvp-minesweeper`) and reads `GET /api/games/leaderboard`
+(60/min per IP, 25 rows/page, 20 pages over the 500-row/game/mode cap) and
+`GET /api/games/scores/my` (60/min per account/guest) for "your best". Labels are
+composed at read time from `game_players.handle` + `display_name`, so there is
+nothing to backfill after a rename and no extra storage. Only games with a
+registered server score verifier get a page; the hub card link is generated from
+the same `hasLeaderboard` predicate the prerender uses, so the two cannot drift.

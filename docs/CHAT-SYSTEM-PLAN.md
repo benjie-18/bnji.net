@@ -653,6 +653,19 @@ asked, each with the owner's decision.
    owner added: full IPs and stored sticker images are *allowed*, each needing
    its own register row before it ships.)
 
+### Amendment 2026-10-01 — a kick is a lockout
+
+Phase B shipped a host kick as a disconnect + membership delete. The owner's
+open-lobby request ("…with the host able to kick them") made the gap
+load-bearing: in a **listed** room a kicked player could walk straight back in,
+which is a doorbell, not a kick. Amendment: the room DO keeps a
+`game_room_kicks` table (hashed principal → kicked_at/member_id/label); a host or
+admin kick writes it before deleting the seat, closes the socket `4003`, and the
+`/ws` upgrade refuses a kicked principal with `403 room_kicked` until the room is
+torn down (`teardown()` deletes the table with the rest of the room's state).
+Nothing else in the moderation model moved: mutes still survive reconnects, bans
+are still D1-scoped and outlive the room, and no kick data is written to D1.
+
 ## 16. What this plan does not do
 
 - It does not write any code, migration, config or binding.

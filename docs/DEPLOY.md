@@ -27,7 +27,7 @@ The migration command is safe to re-run; D1 applies only what is missing.
 
 | Area | Change | Owner action |
 | --- | --- | --- |
-| D1 | Additive migrations `0011_games.sql` (sessions/scores), `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves), `0013_names.sql` (guest display names, account handles) and `0014_chat_moderation.sql` (Phase C: room registry, reports, reporters, moderation log, bans) and `0015_dm.sql` (Phase D: `dm_conversations`, `dm_messages`, `dm_attachments`, `dm_reports`, `dm_reporters`) and `0016_friends.sql` (Phase E: `player_friends`, `player_blocks`) | Apply only pending migrations to existing `bnji-board` after backup |
+| D1 | Additive migrations `0011_games.sql` (sessions/scores), `0012_game_players_saves.sql` (players, digested sessions, hashed-IP auth limits, bounded saves), `0013_names.sql` (guest display names, account handles) and `0014_chat_moderation.sql` (Phase C: room registry, reports, reporters, moderation log, bans) and `0015_dm.sql` (Phase D: `dm_conversations`, `dm_messages`, `dm_attachments`, `dm_reports`, `dm_reporters`) and `0016_friends.sql` (Phase E: `player_friends`, `player_blocks`) and `0017_room_lobby_index.sql` (open lobbies: one index on `room_registry (game_id, expires_at)`; no table, no column, no data change) | Apply only pending migrations to existing `bnji-board` after backup |
 | Worker / Durable Objects | Astro HTTP handler, hourly retention Cron, SQLite class `GameRoom` (migration `game-rooms-v1`) and SQLite class `DMConversation` (migration `dm-conversations-v1`, binding `DM_CONVERSATIONS`) and SQLite class `Presence` (migration `presence-v1`, binding `PRESENCE`) | Deploy `src/worker.ts`; Wrangler applies the new class migrations; confirm trigger and all three bindings |
 | Admin | Games & play view and configurable raw tracking retention | No new credential; existing `/admin` guard applies |
 | Secrets/resources | No new secret, paid product, or third-party service; Phases D+E add only the free `DM_CONVERSATIONS` and `PRESENCE` DO bindings (no R2) | None |
@@ -56,7 +56,7 @@ migrations have run in its own `d1_migrations` table, so this command applies
 npx wrangler d1 migrations apply bnji-board --remote
 ```
 
-The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql`, `0012_game_players_saves.sql`, `0013_names.sql`, `0014_chat_moderation.sql`, `0015_dm.sql` and `0016_friends.sql` (unless earlier ones were applied already). Review the list before continuing. If legacy migrations also
+The unapplied list depends on the database's migration history. If it is already current through `0010_secret_code_uses.sql`, it should list `0011_games.sql`, `0012_game_players_saves.sql`, `0013_names.sql`, `0014_chat_moderation.sql`, `0015_dm.sql`, `0016_friends.sql` and `0017_room_lobby_index.sql` (unless earlier ones were applied already). Review the list before continuing. If legacy migrations also
 appear, confirm that is expected for the target database; migration `0001`
 should not be assumed harmless merely because it uses `CREATE TABLE IF NOT
 EXISTS`—review the database state and backup first.
@@ -95,6 +95,16 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `dm_attachments` | `/messages/` images (chat plan Phase D) | Base64 image bytes (≤1.4 MB decoded, sniffed PNG/JPEG/WebP), claimed by exactly one message; purged with the message or when an upload is never claimed |
 | `dm_reports` | DM report flow (chat plan Phase D, plan §12.5) | Content snapshot at report time, hashed author/reporter, status open/resolved/dismissed; shared retention sweep |
 | `dm_reporters` | DM report de-duplication | Distinct-report counting per conversation message, hashed reporter; with its report |
+
+`0017_room_lobby_index.sql` adds **one index and nothing else**
+(`idx_room_registry_game ON room_registry (game_id, expires_at)`) so the public
+lobby listing seeks the registry instead of scanning it. Its header also records
+the framing change that comes with the feature: `0014` treated the room code as
+the thing keeping rooms private, and public listing supersedes that — the code
+is now published by `GET /api/games/lobbies` (uncached, rate-limited, no
+membership required), while never entering an index, a prerendered page, a URL,
+a share link or an analytics event. Re-running it is a no-op; dropping it only
+costs the listing a scan.
 
 Migration `0004` added four columns to the existing `board_messages`:
 `report_count`, `reported_at`, `status_note`, `moderated_at`. Migration `0006`

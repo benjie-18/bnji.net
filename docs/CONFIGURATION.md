@@ -377,6 +377,41 @@ The DM routes read `FRIENDS_CONFIG.enabled` too: with it on, `POST
 pair are accepted friends and unblocked — owner answer D7, enforced from
 Phase E. Reads, media and the conversation socket stay membership-gated.
 
+## 8e. Open lobbies & the people index — PUBLIC (2026-10-01)
+
+Two owner-requested discovery surfaces, each with its own config file:
+
+- `src/config/lobby.config.ts` (`LOBBY_CONFIG`) — **open lobbies**: every room a
+  player creates is listed for anyone to join (`GET /api/games/lobbies`),
+  built from `room_registry` rows plus a live `GET /lobby` probe of each room's
+  DO. Publishing the list means the room code stops being a secret; what does
+  **not** change is that a room's state and chat remain readable only by its
+  members. Decision record: [`GAMES-DECISIONS.md`](./GAMES-DECISIONS.md).
+- `src/config/directory.config.ts` (`DIRECTORY_CONFIG`) — **the people index**:
+  handle-fragment search (`GET /api/people`) that feeds friend requests on
+  `/friends/`. Rows are two public labels plus the caller's own relationship;
+  blocked pairs are filtered in SQL so the endpoint cannot be used to discover a
+  block. Account-only; the panel hides itself when the switch is off.
+
+| Value | Location | Notes |
+| --- | --- | --- |
+| `LOBBY_CONFIG.enabled` | `src/config/lobby.config.ts` | Master switch, default `true`. `false` = `GET /api/games/lobbies` answers `503 lobby_disabled`, the panel hides itself, and rooms keep working for their code-holders. |
+| `LOBBY_CONFIG.listLimit` | same | 24 candidate registry rows per request, newest first. More than that → `truncated: true` in the response. |
+| `LOBBY_CONFIG.probeConcurrency` | same | 8 live DO probes in flight at once. |
+| `LOBBY_CONFIG.probeTimeoutMs` | same | 1,500 ms per probe. A room that does not answer is **not** listed: the list promises joinability, not existence. |
+| `LOBBY_CONFIG.cacheTtlSeconds` | same | 10 s KV cache per game — the freshness the UI promises, and the reason a busy lobby page does not cost one D1 read + N subrequests per visitor. |
+| `LOBBY_CONFIG.minRefreshSeconds` | same | 15 s floor for the client's refresh loop, so the UI cannot out-poll the cache. |
+| `LOBBY_CONFIG.rate` | same | 30 requests / 60 s **per IP**, KV prefix `bnji-lobby:`. Breach → `429 rate_limited`. |
+| `DIRECTORY_CONFIG.enabled` | `src/config/directory.config.ts` | Master switch, default `true`. `false` = `GET /api/people` answers `503 directory_disabled` and the search panel is not rendered; exact-handle requests keep working. It also requires `FRIENDS_CONFIG.enabled` (the index exists to feed a request). |
+| `DIRECTORY_CONFIG.pageSize` | same | 30 rows; the endpoint reports `truncated` rather than paging. |
+| `DIRECTORY_CONFIG.minQueryLength` / `maxQueryLength` | same | 3 / 20 characters. Short, long or invalid fragments → `400` (`query_too_short` / `invalid_query`). |
+| `DIRECTORY_CONFIG.rate` | same | 30 requests / 60 s **per account**, KV prefix `people-index:`. |
+| `DIRECTORY_CONFIG.searchDebounceMs` | same | 350 ms client-side debounce; the budget is sized for a panel that searches as you type. |
+
+Both features are public config (no secret, no binding, no paid resource); the
+lobby cache reuses the existing `BOARD_KV`, and the kick lockout is DO-local
+state with no migration of its own.
+
 ## 9. Deployment — INFRA (change deliberately, never silently)
 
 | Value | Location | Notes |
