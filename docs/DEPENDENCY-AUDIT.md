@@ -44,9 +44,10 @@ Re-run these commands after dependency changes; advisory databases and package v
 
 ## Chat harness addition: Vitest Workers pool (2026-09-30)
 
-**Checked:** 2026-09-30 (America/Toronto), Node 22 / npm 11 (the lockfile was
-regenerated with npm 11 because npm 10.9.8's arborist crashes on the vitest 4
-peer graph; `npm ci` with any npm reads it back normally).
+**Checked:** 2026-09-30 (America/Toronto), Node 22 / npm 11 (the lockfile is
+regenerated with npm 11: npm 10.9.8 resolves the vitest 4 peer graph
+differently, and each major writes package placement the other's `npm ci`
+rejects — see "Workers Builds lockfile repair" below).
 
 Added as **Tier A dev-only** dependencies per
 [`DEPENDENCY-POLICY.md`](./DEPENDENCY-POLICY.md) §5 (the plan's recommended
@@ -81,6 +82,10 @@ npm audit --omit=dev  0 vulnerabilities
 
 ## Lockfile repair and audit refresh (2026-10-02)
 
+> Run with npm 10, and superseded the next day — see "Workers Builds lockfile
+> repair" below. The `devalue` refresh it made is kept; its package placement
+> is not.
+
 A clean `npm ci` initially failed because the lockfile omitted the Cloudflare
 adapter's `esbuild@0.28.2` package and optional platform records. Refreshing the
 lockfile restored those records and removed a stale nested `jsdom`/`undici`
@@ -94,4 +99,51 @@ Verified with a clean `npm ci`, the full test suite, and `npm run check`:
 ```text
 npm audit             0 vulnerabilities
 npm audit --omit=dev  0 vulnerabilities
+```
+
+## Workers Builds lockfile repair (2026-10-02)
+
+The Workers Builds deploy failed at the install step:
+
+    Installing project dependencies: npm clean-install --progress=false
+    npm error code EUSAGE
+    npm error `npm ci` can only install packages when your package.json and
+    package-lock.json or npm-shrinkwrap.json are in sync.
+    npm error Missing: undici@7.29.1 from lock file
+
+Cause: the "Lockfile repair and audit refresh" above was written with **npm 10**,
+while Workers Builds runs Node 24, whose npm is **11.x** (the build log's option
+list — `--allow-directory`, `--allow-file`, `--allow-git`, `--allow-remote`,
+`--allow-scripts` — and the `Missing: … from lock file` line are npm 11). The
+two majors resolve this graph's vitest 4 / `vite`-peer tree differently, and
+each rejects the other's package placement:
+
+- npm 10 writes an `@astrojs/cloudflare` → nested `esbuild@0.28.2` tree (plus 26
+  platform records) and drops `node_modules/jsdom/node_modules/undici@7.29.1`,
+  which the `@cloudflare/vitest-pool-workers` override requires. npm 11's
+  `npm ci` then fails with `Missing: undici@7.29.1 from lock file` — the
+  production deploy error.
+- npm 11 drops that nested esbuild tree; npm 10's `npm ci` then fails with
+  `Missing: esbuild@0.28.2 from lock file` (what the repair above was reacting
+  to).
+
+Fix: `package-lock.json` regenerated with npm 11.21 (`npm install
+--package-lock-only`); `package.json` is unchanged, and the `devalue` 5.9.1 →
+5.9.4 refresh from the previous repair is preserved. The lockfile again records
+`node_modules/jsdom/node_modules/undici@7.29.1` and no nested adapter esbuild.
+
+**Rule from here on: regenerate the lockfile with npm 11 (the npm that ships
+with Node 24, which Workers Builds uses) and confirm `npm ci` exits 0 before
+committing.** npm 10 does not error locally; it silently rewrites package
+placement into a shape the deploy rejects.
+
+Verified after the repair:
+
+```text
+npm ci (npm 11.21.0, reproduced the failure before the fix)  exit 0, 329 packages
+npm ci (npm 12.2.0)                                         exit 0
+clean npm ci → npm run check → npm test                     all green (49 tests,
+                                                            Total Upload 1367.79 KiB / gzip 339.66 KiB)
+npm audit                                                   0 vulnerabilities
+npm audit --omit=dev                                        0 vulnerabilities
 ```

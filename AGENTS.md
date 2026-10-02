@@ -16,7 +16,11 @@ tiny, the design coherent and the deployment boring.
    justification in the same commit; Tier C (visitor-facing or architecture
    changing) needs a decision record and a measured first-paint budget. Commit
    the lockfile with the manifest, keep `npm audit` clean, and update
-   `docs/DEPENDENCY-AUDIT.md` when production dependencies change.
+   `docs/DEPENDENCY-AUDIT.md` when production dependencies change. Regenerate
+   the lockfile with **npm 11** (the npm that ships with Node 24, which Workers
+   Builds runs) and commit it only after `npm ci` exits 0: npm 10 rewrites this
+   graph's package placement into a shape the deploy's `npm ci` rejects
+   (`Missing: undici@7.29.1 from lock file`, 2026-10-02).
 2. **Do not modify deployment infrastructure silently.** `wrangler.json`, the
    Worker entry, D1 migrations, bindings and Durable Object classes may change
    when a planned feature needs it (see `docs/CHAT-SYSTEM-PLAN.md`), but each
