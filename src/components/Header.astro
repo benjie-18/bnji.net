@@ -375,7 +375,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 		transition: transform var(--dur-fast) var(--ease-out);
 	}
 
-	:global(.nav-group.is-open .nav-group__chevron) {
+	.nav-group:global(.is-open) .nav-group__chevron {
 		transform: rotate(180deg);
 	}
 
@@ -403,7 +403,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 			visibility 0s linear var(--dur-fast);
 	}
 
-	:global(.nav-group.is-open .nav-dropdown) {
+	.nav-group:global(.is-open) .nav-dropdown {
 		opacity: 1;
 		visibility: visible;
 		transform: none;
@@ -414,9 +414,9 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 			visibility 0s;
 	}
 
-	:global(/* Edge-aware flip: initNavDropdowns measures the panel against the right
+	/* Edge-aware flip: initNavDropdowns measures the panel against the right
 	   viewport edge on every open and toggles this. */
-	.nav-group .nav-dropdown--flip) {
+	.nav-group .nav-dropdown.nav-dropdown--flip {
 		inset-inline-start: auto;
 		inset-inline-end: 0;
 	}
@@ -589,7 +589,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 			transform: none;
 		}
 
-		:global(.nav-group.is-open .nav-dropdown) {
+		.nav-group:global(.is-open) .nav-dropdown {
 			display: grid;
 			height: auto;
 			padding: 0.25rem 0.5rem 0.5rem;
