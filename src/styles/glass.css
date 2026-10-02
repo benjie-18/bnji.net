@@ -589,6 +589,15 @@ html[data-theme='light'] .glass-button {
 	border-radius: var(--parent-radius, var(--radius-pill));
 }
 
+.glass-tabs__list {
+	position: relative;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	align-items: center;
+	max-inline-size: 100%;
+}
+
 .glass-tabs__item {
 	position: relative;
 	z-index: 1;
@@ -623,7 +632,7 @@ html[data-theme='light'] .glass-button {
 .glass-tabs__indicator {
 	position: absolute;
 	z-index: 0;
-	inset: var(--tab-t, 0.35rem) var(--tab-r, 100%) var(--tab-b, 0.35rem) var(--tab-l, 0.35rem);
+	inset: var(--tab-t, 0) var(--tab-r, 100%) var(--tab-b, 0) var(--tab-l, 0);
 	border-radius: var(--radius-pill);
 	background: var(--glass-bg-raised);
 	border: 1px solid var(--accent-line);
