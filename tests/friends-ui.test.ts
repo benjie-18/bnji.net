@@ -43,7 +43,33 @@ function friendsDom(): JSDOM {
 }
 
 type Call = { url: string; method: string; body: unknown; headers: Headers };
-function install(dom: JSDOM, handler: (call: Call) => { status?: number; body: unknown }) {
+
+type FakeSocketListener = (event: { data?: unknown }) => void;
+class FakeFriendsWebSocket {
+	static readonly OPEN = 1;
+	static instances: FakeFriendsWebSocket[] = [];
+	readonly url: string;
+	readyState = 0;
+	readonly sent: string[] = [];
+	private listeners = new Map<string, FakeSocketListener[]>();
+	constructor(url: string) { this.url = url; FakeFriendsWebSocket.instances.push(this); }
+	addEventListener(type: string, listener: FakeSocketListener): void {
+		const entries = this.listeners.get(type) ?? [];
+		entries.push(listener);
+		this.listeners.set(type, entries);
+	}
+	emit(type: string, event: { data?: unknown } = {}): void {
+		for (const listener of this.listeners.get(type) ?? []) listener(event);
+	}
+	send(data: string): void { this.sent.push(data); }
+	close(): void {
+		if (this.readyState === 3) return;
+		this.readyState = 3;
+		this.emit('close');
+	}
+}
+
+function install(dom: JSDOM, handler: (call: Call) => { status?: number; body: unknown } | Promise<{ status?: number; body: unknown }>) {
 	const calls: Call[] = [];
 	const g = globalThis as Record<string, unknown>;
 	g.window = dom.window;
@@ -51,12 +77,9 @@ function install(dom: JSDOM, handler: (call: Call) => { status?: number; body: u
 	g.location = dom.window.location;
 	g.requestAnimationFrame = (callback: FrameRequestCallback) => Number(setTimeout(() => callback(0), 0));
 	g.cancelAnimationFrame = (handle: number) => clearTimeout(handle);
-	g.WebSocket = class {
-		static readonly OPEN = 1;
-		readyState = 0;
-		close(): void { /* presence socket: not under test here */ }
-		addEventListener(): void { /* no frames */ }
-	} as unknown as typeof WebSocket;
+	FakeFriendsWebSocket.instances = [];
+	Object.defineProperty(dom.window, '__friendsSockets', { configurable: true, value: FakeFriendsWebSocket.instances });
+	g.WebSocket = FakeFriendsWebSocket as unknown as typeof WebSocket;
 	g.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 		const call: Call = {
@@ -66,10 +89,14 @@ function install(dom: JSDOM, handler: (call: Call) => { status?: number; body: u
 			headers: new Headers(init?.headers),
 		};
 		calls.push(call);
-		const result = handler(call);
+		const result = await handler(call);
 		return new Response(JSON.stringify(result.body), { status: result.status ?? 200, headers: { 'content-type': 'application/json' } });
 	}) as unknown as typeof fetch;
 	return calls;
+}
+
+function sockets(dom: JSDOM): FakeFriendsWebSocket[] {
+	return (dom.window as unknown as { __friendsSockets: FakeFriendsWebSocket[] }).__friendsSockets;
 }
 
 function mountWith(t: { after(fn: () => void): void }, dom: JSDOM): HTMLElement {
@@ -178,6 +205,70 @@ test('people search refuses fragments under the configured minimum and explains 
 	await tick(450);
 	assert.equal(calls.filter((call) => call.url.startsWith('/api/people')).length, 1);
 	assert.match(q(dom, '[data-people-status]').textContent ?? '', /No handles match that fragment\./);
+});
+
+test('presence reconnects after a close without invalidating its own retry timer', async (t) => {
+	const dom = friendsDom();
+	install(dom, () => ({ body: emptyLists() }));
+	const root = mountWith(t, dom);
+	mountFriends(root);
+	await tick(15);
+	assert.equal(sockets(dom).length, 1, 'the signed-in friends page opens one presence socket');
+
+	sockets(dom)[0]!.close();
+	await tick(1_100);
+	assert.equal(sockets(dom).length, 2, 'a closed socket is replaced after the backoff timer');
+});
+
+test('a mutual request that becomes friends restarts the caller presence socket', async (t) => {
+	const dom = friendsDom();
+	install(dom, (call) => call.method === 'POST'
+		? { body: { ...emptyLists(), friends: [entry('ada', 'Ada')], changed: 'friends' } }
+		: { body: emptyLists() });
+	const root = mountWith(t, dom);
+	mountFriends(root);
+	await tick(15);
+	assert.equal(sockets(dom).length, 1);
+
+	const input = q(dom, '[data-friends-request-handle]') as unknown as HTMLInputElement;
+	input.value = 'ada';
+	q(dom, '[data-friends-request-form]').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+	await tick(20);
+	assert.equal(sockets(dom).length, 2, 'a mutual request updates the accepted-friend list even though the action was request');
+});
+
+test('a remote presence refresh replaces the socket and reloads the private lists', async (t) => {
+	const dom = friendsDom();
+	const calls = install(dom, () => ({ body: emptyLists() }));
+	const root = mountWith(t, dom);
+	mountFriends(root);
+	await tick(15);
+	const first = sockets(dom)[0]!;
+	first.emit('message', { data: JSON.stringify({ t: 'presence_refresh', v: 1 }) });
+	await tick(20);
+	assert.equal(sockets(dom).length, 2, 'the invalidated server attachment is replaced');
+	assert.equal(calls.filter((call) => call.url === '/api/friends' && call.method === 'GET').length, 2, 'the target account reloads its own current list');
+});
+
+test('a late people-search response cannot overwrite a shortened query', async (t) => {
+	const dom = friendsDom();
+	let resolvePeople!: (value: { status?: number; body: unknown }) => void;
+	const pending = new Promise<{ status?: number; body: unknown }>((resolve) => { resolvePeople = resolve; });
+	install(dom, (call) => call.url.startsWith('/api/people') ? pending : { body: emptyLists() });
+	const root = mountWith(t, dom);
+	mountFriends(root);
+	await tick(15);
+
+	const input = q(dom, '[data-people-query]') as unknown as HTMLInputElement;
+	input.value = 'ada';
+	q(dom, '[data-people-search]').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+	await tick(5);
+	input.value = 'ad';
+	input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	resolvePeople({ body: { people: [{ handle: 'ada', displayName: 'Ada', friendState: 'none' }], truncated: false } });
+	await tick(10);
+	assert.equal(q(dom, '[data-people-results]').children.length, 0, 'the stale result is discarded immediately after input changes');
+	assert.match(q(dom, '[data-people-status]').textContent ?? '', /Type at least 3 characters\./);
 });
 
 test('search results offer the action that matches the caller’s own relationship', async (t) => {

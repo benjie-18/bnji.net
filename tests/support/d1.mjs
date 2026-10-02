@@ -44,6 +44,12 @@ class Statement {
 		return { meta: { changes: Number(info.changes) } };
 	}
 
+	/** D1 batch preserves each statement's result in the original order. */
+	batchResult() {
+		if (/^\s*(SELECT|PRAGMA|EXPLAIN)\b/i.test(this.sql)) return this.all();
+		return this.run();
+	}
+
 	first(column) {
 		const row = this.db.prepare(this.sql).get(...this.values);
 		if (row === undefined || row === null) return null;
@@ -66,17 +72,18 @@ export function createTestD1() {
 			return new Statement(raw, sql);
 		},
 		async batch(statements) {
+			const results = [];
 			raw.exec('BEGIN');
 			try {
 				for (let index = 0; index < statements.length; index += BATCH_CHUNK) {
-					for (const statement of statements.slice(index, index + BATCH_CHUNK)) statement.run();
+					for (const statement of statements.slice(index, index + BATCH_CHUNK)) results.push(statement.batchResult());
 				}
 				raw.exec('COMMIT');
 			} catch (error) {
 				raw.exec('ROLLBACK');
 				throw error;
 			}
-			return [];
+			return results;
 		},
 	};
 }

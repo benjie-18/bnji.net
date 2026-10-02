@@ -40,7 +40,7 @@ const GUEST_C = 'cccccccccccccccccccccccccccccccc';
 
 /* ------------------------------------------------------------------ harness */
 
-type CapturedPresence = { url: string; headers: Record<string, string> };
+type CapturedPresence = { url: string; headers: Record<string, string>; body?: unknown };
 
 function database() {
 	const db = createTestD1();
@@ -58,10 +58,14 @@ function database() {
 				fetch: async (request: Request) => {
 					const headers: Record<string, string> = {};
 					request.headers.forEach((value, key) => { headers[key] = value; });
-					presenceCalls.push({ url: request.url, headers });
+					const body = request.method === 'POST' ? await request.clone().json().catch(() => null) : undefined;
+					presenceCalls.push({ url: request.url, headers, body });
 					// Node cannot mint a real 101 response; the route then
 					// answers 200 and the test asserts the minted headers.
-					return new Response('{}', { status: 200 });
+					const responseBody = request.url.endsWith('/admin/refresh')
+						? { refreshedHandles: (body as { handles?: string[] } | null)?.handles ?? [] }
+						: {};
+					return new Response(JSON.stringify(responseBody), { status: 200 });
 				},
 			}),
 		},
@@ -121,6 +125,7 @@ type ListsBody = {
 	outgoing: Array<{ handle: string }>;
 	blocked: Array<{ handle: string }>;
 	config?: { maxFriends: number; maxPendingOutgoing: number };
+	presenceSynced?: boolean;
 	error?: string;
 };
 
@@ -413,6 +418,25 @@ test('notifications: unread messages + incoming requests, one honest number', as
 	assert.equal(await countUnreadDmMessages(asD1(db), playerIdByName(db, 'Alice')), 0, 'her own send never unreads herself (the 66bc7f8 watermark contract)');
 });
 
+test('friendship changes refresh the counterpart presence socket, pending requests do not', async () => {
+	const { alice, bob, presenceCalls } = await pair();
+	const refreshes = (): CapturedPresence[] => presenceCalls.filter((call) => call.url.endsWith('/admin/refresh'));
+
+	assert.equal((await friend(alice, 'POST', 'request', 'bob')).status, 200);
+	assert.equal(refreshes().length, 0, 'pending requests do not alter presence visibility');
+
+	const mutual = await friend(bob, 'POST', 'request', 'alice');
+	assert.equal(mutual.status, 200, await mutual.clone().text());
+	const mutualBody = await body(mutual);
+	assert.equal(mutualBody.changed, 'friends');
+	assert.equal(mutualBody.presenceSynced, true, 'the caller can rely on the DO refresh instead of reconnecting twice');
+	assert.deepEqual(refreshes()[0]?.body, { handles: ['alice', 'bob'] }, 'both sides refresh after mutual auto-accept');
+
+	const removed = await friend(bob, 'DELETE', 'remove', 'alice');
+	assert.equal(removed.status, 200, await removed.clone().text());
+	assert.deepEqual(refreshes()[1]?.body, { handles: ['alice', 'bob'] }, 'unfriend invalidates both attachments');
+});
+
 test('presence route: origin/upgrade/account guards, then minted headers for the DO', async () => {
 	const { alice, bob, aliceId, presenceCalls } = await pair();
 	// Make the pair friends so the friend-handles header has content.
@@ -429,8 +453,9 @@ test('presence route: origin/upgrade/account guards, then minted headers for the
 	const upgraded = await presenceApi.GET(requestContext('/api/presence', { cookie: alice, upgrade: true }));
 	// The namespace stub answers 200 in node; the route then appends cookies.
 	assert.equal(upgraded.status, 200, await upgraded.clone().text());
-	assert.equal(presenceCalls.length, 1);
-	const call = presenceCalls[0]!;
+	const websocketCalls = presenceCalls.filter((entry) => entry.url.endsWith('/ws'));
+	assert.equal(websocketCalls.length, 1);
+	const call = websocketCalls[0]!;
 	assert.match(call.url, /\/ws$/);
 	assert.equal(call.headers['x-bnji-verified-principal'], `player:${aliceId}`);
 	assert.equal(call.headers['x-bnji-handle'], 'alice');
@@ -441,7 +466,8 @@ test('presence route: origin/upgrade/account guards, then minted headers for the
 	await claimHandle(carol, 'carol', '198.51.100.4');
 	await friend(alice, 'POST', 'request', 'carol');
 	await presenceApi.GET(requestContext('/api/presence', { cookie: alice, upgrade: true }));
-	assert.deepEqual(JSON.parse(presenceCalls[1]!.headers['x-bnji-friend-handles'] ?? '[]'), ['bob'], 'pending requests are not friends yet');
+	const refreshedWebsocketCalls = presenceCalls.filter((entry) => entry.url.endsWith('/ws'));
+	assert.deepEqual(JSON.parse(refreshedWebsocketCalls[1]!.headers['x-bnji-friend-handles'] ?? '[]'), ['bob'], 'pending requests are not friends yet');
 
 	// Kill switch and connect budget.
 	const flag = FRIENDS_CONFIG as unknown as { enabled: boolean };

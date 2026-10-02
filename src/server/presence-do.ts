@@ -85,6 +85,7 @@ export class Presence extends DurableObject<PresenceEnv> {
 		const url = new URL(request.url);
 		if (url.pathname === '/ws' && request.method === 'GET') return this.acceptConnection(request);
 		if (url.pathname === '/admin/stats' && request.method === 'GET') return this.adminStats(request);
+		if (url.pathname === '/admin/refresh' && request.method === 'POST') return this.adminRefresh(request);
 		return json({ error: 'not_found' }, 404);
 	}
 
@@ -94,7 +95,7 @@ export class Presence extends DurableObject<PresenceEnv> {
 	 * Aggregates only — a handle list never leaves the DO (§8.1 keeps friend
 	 * data private; presence adds only counts).
 	 */
-	private async adminStats(request: Request): Promise<Response> {
+	private async authorizeAdmin(request: Request): Promise<Response | null> {
 		const secret = this.env.ACCESS_SECRET;
 		if (!secret) return json({ error: 'service_unconfigured' }, 503);
 		const provided = request.headers.get(PRESENCE_ADMIN_HEADER) ?? '';
@@ -104,7 +105,12 @@ export class Presence extends DurableObject<PresenceEnv> {
 		if (provided.length !== expected.length) return json({ error: 'service_unauthorized' }, 401);
 		let diff = 0;
 		for (let i = 0; i < expected.length; i += 1) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
-		if (diff !== 0) return json({ error: 'service_unauthorized' }, 401);
+		return diff === 0 ? null : json({ error: 'service_unauthorized' }, 401);
+	}
+
+	private async adminStats(request: Request): Promise<Response> {
+		const denied = await this.authorizeAdmin(request);
+		if (denied) return denied;
 		const sockets = this.state.getWebSockets();
 		const handles = new Set<string>();
 		for (const socket of sockets) {
@@ -112,6 +118,46 @@ export class Presence extends DurableObject<PresenceEnv> {
 			if (attachment?.handle) handles.add(attachment.handle);
 		}
 		return json({ sockets: sockets.length, handles: handles.size });
+	}
+
+	/**
+	 * Friend-list changes invalidate the accepted-friend list carried by each
+	 * socket attachment. Tell only affected handles to reconnect; the ordinary
+	 * /api/presence route then re-mints each private list from current D1 state.
+	 */
+	private async adminRefresh(request: Request): Promise<Response> {
+		const denied = await this.authorizeAdmin(request);
+		if (denied) return denied;
+		let body: unknown;
+		try {
+			const text = await request.text();
+			if (text.length > 1_024) return json({ error: 'payload_too_large' }, 413);
+			body = JSON.parse(text || '{}');
+		} catch {
+			return json({ error: 'invalid_json' }, 400);
+		}
+		if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 ||
+			!Array.isArray((body as { handles?: unknown }).handles)) {
+			return json({ error: 'invalid_payload' }, 400);
+		}
+		const rawHandles = (body as { handles: unknown[] }).handles;
+		if (rawHandles.length < 1 || rawHandles.length > 2 || rawHandles.some((handle) => typeof handle !== 'string' || !HANDLE_PATTERN.test(handle))) {
+			return json({ error: 'invalid_payload' }, 400);
+		}
+		const handles = new Set(rawHandles as string[]);
+		const refreshedHandles = new Set<string>();
+		const encoded = JSON.stringify({ t: 'presence_refresh', v: PRESENCE_PROTOCOL_VERSION });
+		for (const socket of this.state.getWebSockets()) {
+			const attachment = socketAttachment(socket);
+			if (!attachment || !handles.has(attachment.handle)) continue;
+			try {
+				socket.send(encoded);
+				refreshedHandles.add(attachment.handle);
+			} catch {
+				try { socket.close(1011, 'presence refresh failed'); } catch { /* no-op */ }
+			}
+		}
+		return json({ refreshedHandles: [...refreshedHandles].sort() });
 	}
 
 	private acceptConnection(request: Request): Response {

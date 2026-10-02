@@ -7,18 +7,22 @@
  */
 import { CHAT_CONFIG } from '../config/chat.config';
 import { NAMES_CONFIG } from '../config/names.config';
+import { getGame } from '../data/games';
 interface Props {
 	/** Fixed room context for pages that host exactly one game. */
 	gameId: string;
 }
 const { gameId } = Astro.props;
+const gameTitle = getGame(gameId)?.title ?? 'game';
+const roomNoun = gameTitle.toLowerCase() === 'chess' ? 'chess' : gameTitle;
+const panelId = `room-${globalThis.crypto.randomUUID()}`;
 ---
 
-<section class="room-panel" data-room-tools aria-labelledby="room-panel-title">
+<section class="room-panel" data-room-tools aria-labelledby={`${panelId}-title`}>
 	<div class="room-panel__head">
 		<div>
 			<p class="eyebrow">MULTIPLAYER</p>
-			<h2 id="room-panel-title">Private room</h2>
+			<h2 id={`${panelId}-title`}>Private room</h2>
 		</div>
 		<p class="room-panel__intro">Rooms are temporary: up to 2 hours, then everything in them is deleted. Every room is listed below for anyone to join, and the host can kick — the code stays the thing you need to get in.</p>
 	</div>
@@ -26,13 +30,13 @@ const { gameId } = Astro.props;
 	<div class="room-panel__forms">
 		<form data-room-create>
 			<input type="hidden" name="gameId" value={gameId} />
-			<label for="room-create-submit">Start a chess room</label>
-			<button id="room-create-submit" class="room-panel__button room-panel__button--primary" type="submit">Create a room</button>
+			<label for={`${panelId}-create-submit`}>Start a {roomNoun} room</label>
+			<button id={`${panelId}-create-submit`} class="glass-button glass-button--primary" data-glass="" type="submit">Create a room</button>
 		</form>
 		<form data-room-join>
-			<label for="room-code-input">Join with a code</label>
-			<input id="room-code-input" name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" placeholder="22-character room code" required />
-			<button class="room-panel__button" type="submit">Join or reconnect</button>
+			<label for={`${panelId}-room-code`}>Join with a code</label>
+			<input id={`${panelId}-room-code`} name="roomCode" type="text" minlength="22" maxlength="22" autocomplete="off" spellcheck="false" placeholder="22-character room code" required />
+			<button class="glass-button" data-glass="" type="submit">Join or reconnect</button>
 		</form>
 	</div>
 
@@ -45,16 +49,16 @@ const { gameId } = Astro.props;
 	<div class="room-panel__lobbies glass-item">
 		<div class="room-panel__lobbies-head">
 			<h3 class="glass-label">Open rooms</h3>
-			<button class="room-panel__button room-panel__button--small" type="button" data-lobby-refresh>Refresh</button>
+			<button class="glass-button glass-button--sm" data-glass="" type="button" data-lobby-refresh>Refresh</button>
 		</div>
 		<ul class="room-panel__lobby-list" data-lobby-list></ul>
 		<p class="room-panel__note" data-lobby-status role="status" aria-live="polite">Loading open rooms…</p>
 	</div>
 
 	<form class="room-panel__name" data-profile-name>
-		<label for="chess-profile-display-name">Your display name</label>
-		<input id="chess-profile-display-name" name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required />
-		<button class="room-panel__button" type="submit">Save name</button>
+		<label for={`${panelId}-display-name`}>Your display name</label>
+		<input id={`${panelId}-display-name`} name="displayName" type="text" maxlength={NAMES_CONFIG.displayName.maxLength} autocomplete="nickname" required />
+		<button class="glass-button" data-glass="" type="submit">Save name</button>
 		<p class="room-panel__note">Signed in: saved to your account. As a guest: kept for {NAMES_CONFIG.guestProfiles.retentionDays} days, keyed by a digest of this browser's session cookie &mdash; not linked to an account.</p>
 		<p class="room-panel__note" data-profile-name-status role="status" aria-live="polite"></p>
 	</form>
@@ -66,9 +70,9 @@ const { gameId } = Astro.props;
 			<ol class="room-panel__chat-messages" data-chat-messages aria-live="polite" aria-label="Room chat messages"></ol>
 			<p class="room-panel__chat-status" data-chat-status role="status" aria-live="polite">Join or create a room to start chatting.</p>
 			<form class="room-panel__chat-form" data-chat-form>
-				<label for="chess-chat-input">Message</label>
-				<input id="chess-chat-input" name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
-				<button class="room-panel__button room-panel__button--primary" type="submit" disabled>Send</button>
+				<label for={`${panelId}-chat-input`}>Message</label>
+				<input id={`${panelId}-chat-input`} name="text" type="text" maxlength={CHAT_CONFIG.maxTextLength} autocomplete="off" spellcheck="true" disabled />
+				<button class="glass-button glass-button--primary" data-glass="" type="submit" disabled>Send</button>
 			</form>
 		</div>
 	)}
@@ -84,9 +88,9 @@ const { gameId } = Astro.props;
 		<p data-room-live role="status" aria-live="polite" aria-atomic="true">No room connected.</p>
 		<div data-room-code-panel hidden>
 			<span>Share this room code privately:</span>
-			<output data-room-code></output>
-			<button class="room-panel__button room-panel__button--small" type="button" data-room-copy>Copy code</button>
-			<button class="room-panel__button room-panel__button--small" type="button" data-room-leave disabled>Leave room</button>
+			<output data-room-code tabindex="-1"></output>
+			<button class="glass-button glass-button--sm" data-glass="" type="button" data-room-copy>Copy code</button>
+			<button class="glass-button glass-button--sm" data-glass="" type="button" data-room-leave disabled>Leave room</button>
 		</div>
 	</div>
 </section>
@@ -115,20 +119,8 @@ const { gameId } = Astro.props;
 		min-width: 15rem;
 		font: inherit;
 	}
-	.room-panel__button {
-		padding: 0.5rem 0.95rem;
-		border-radius: 999px;
-		border: 1px solid var(--glass-border, rgba(255 255 255 / 0.18));
-		background: transparent;
-		color: inherit;
-		font: inherit;
-		cursor: pointer;
-		justify-self: start;
-	}
-	.room-panel__button:hover:not(:disabled) { background: rgba(255 255 255 / 0.08); }
-	.room-panel__button:disabled { opacity: 0.5; cursor: not-allowed; }
-	.room-panel__button--primary { background: var(--accent, #6ea8fe); border-color: transparent; color: #0b1020; font-weight: 600; }
-	.room-panel__button--small { padding: 0.25rem 0.65rem; font-size: 0.82rem; }
+	.room-panel__forms button,
+	.room-panel__name > button { justify-self: start; }
 	.room-panel__note { font-size: 0.82rem; color: var(--text-muted, #9aa3b2); max-width: 64ch; }
 	.room-panel__name { display: grid; gap: 0.45rem; justify-items: start; }
 	.room-panel__lobbies { display: grid; gap: 0.55rem; padding: 0.9rem; }

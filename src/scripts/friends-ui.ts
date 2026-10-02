@@ -5,9 +5,9 @@
  * renders request/accept/decline/block/remove/unblock actions straight from
  * the returned lists (the API never exposes anyone else's data), and opens
  * the Presence socket for online dots — visible only to accepted friends,
- * because the server mints that visibility, not this script. The client's
- * only protocol messages are `ping` (keep-alive detection, no server
- * heartbeat) and `pong`.
+ * because the server mints that visibility, not this script. The client only
+ * sends `ping` (keep-alive detection, no server heartbeat); the DO sends
+ * snapshots, scoped changes, refresh notices, and `pong`.
  */
 import { mountGlassTabs } from './glass-tabs';
 import { DIRECTORY_CONFIG } from '../config/directory.config';
@@ -19,7 +19,9 @@ type Lists = {
 	incoming: Entry[];
 	outgoing: Entry[];
 	blocked: Entry[];
+	changed?: string;
 	config?: { maxFriends: number; maxPendingOutgoing: number };
+	presenceSynced?: boolean;
 };
 
 const FRIEND_ERROR_COPY: Record<string, string> = {
@@ -139,17 +141,22 @@ export function mountFriends(root: HTMLElement): void {
 		if (tone) status.dataset.tone = tone;
 		else delete status.dataset.tone;
 	};
+	let onlineHandles = new Set<string>();
 	const setOnline = (handle: string, online: boolean): void => {
+		if (online) onlineHandles.add(handle);
+		else onlineHandles.delete(handle);
 		for (const dot of root.querySelectorAll<HTMLElement>(`[data-friend-online="${CSS.escape(handle)}"]`)) {
 			dot.hidden = !online;
 			dot.setAttribute('aria-label', online ? `${handle} is online` : `${handle} is offline`);
 		}
 	};
 	const applySnapshot = (handles: string[]): void => {
-		const online = new Set(handles);
+		onlineHandles = new Set(handles);
 		for (const dot of root.querySelectorAll<HTMLElement>('[data-friend-online]')) {
 			const handle = dot.dataset.friendOnline ?? '';
-			setOnline(handle, online.has(handle));
+			const online = onlineHandles.has(handle);
+			dot.hidden = !online;
+			dot.setAttribute('aria-label', online ? `${handle} is online` : `${handle} is offline`);
 		}
 	};
 
@@ -200,20 +207,31 @@ export function mountFriends(root: HTMLElement): void {
 		// switching tabs.
 		const pending = (data.incoming ?? []).length;
 		if (pending > 0) showTab('incoming');
+		// Re-rendering a list after a mutation or remote refresh should not erase
+		// online dots that are still represented by the current Presence snapshot.
+		applySnapshot([...onlineHandles]);
 	};
 
-	const run = async (action: string, handle: string): Promise<void> => {
+	const refreshLists = async (): Promise<void> => {
+		try {
+			const outcome = await apiCall('GET');
+			if (outcome.ok) render(outcome.data);
+		} catch { /* a presence refresh is best-effort UI synchronisation */ }
+	};
+
+	const run = async (action: string, handle: string): Promise<{ changed: string | null; presenceSynced: boolean }> => {
 		const method = METHOD_BY_ACTION[action];
-		if (!method) return;
+		if (!method) return { changed: null, presenceSynced: false };
 		const outcome = await apiCall(method, { action, handle });
 		if (outcome.ok) {
 			render(outcome.data);
-			const changed = (outcome.data as { changed?: string }).changed;
+			const changed = outcome.data.changed;
 			const describe = changed ? CHANGED_COPY[changed] : undefined;
 			setStatus(describe ? describe(handle) : `Done — ${handle}.`);
-			return;
+			return { changed: changed ?? null, presenceSynced: outcome.data.presenceSynced === true };
 		}
 		setStatus(copyFor(outcome.error), 'error');
+		return { changed: null, presenceSynced: false };
 	};
 
 	let socket: WebSocket | null = null;
@@ -238,6 +256,22 @@ export function mountFriends(root: HTMLElement): void {
 		}
 	};
 
+	const schedulePresenceReconnect = (generation: number): void => {
+		if (generation !== presenceGeneration) return;
+		window.clearInterval(pingTimer);
+		pingTimer = undefined;
+		window.clearTimeout(reconnectTimer);
+		applySnapshot([]);
+		// Do not call stopPresence() here: it advances the generation and would
+		// make this timer stale before it can reconnect.
+		reconnectTimer = window.setTimeout(() => {
+			if (generation !== presenceGeneration) return;
+			reconnectTimer = undefined;
+			reconnectDelay = Math.min(30_000, reconnectDelay * 2);
+			startPresence();
+		}, reconnectDelay);
+	};
+
 	const startPresence = (): void => {
 		stopPresence();
 		const generation = presenceGeneration;
@@ -247,6 +281,7 @@ export function mountFriends(root: HTMLElement): void {
 		try {
 			ws = new WebSocket(`${protocol}//${window.location.host}/api/presence`);
 		} catch {
+			schedulePresenceReconnect(generation);
 			return;
 		}
 		socket = ws;
@@ -261,18 +296,30 @@ export function mountFriends(root: HTMLElement): void {
 			} else if (message?.t === 'presence_change') {
 				const change = frame as { handle?: unknown; online?: unknown };
 				if (typeof change.handle === 'string' && typeof change.online === 'boolean') setOnline(change.handle, change.online);
+			} else if (message?.t === 'presence_refresh') {
+				// Friend changes invalidate the server-minted socket attachment. A
+				// fresh socket obtains the latest D1 relationship before announcing.
+				applySnapshot([]);
+				startPresence();
+				void refreshLists();
 			} else if (message?.t === 'pong') {
 				pongSeen = true;
 			}
 		});
 		ws.addEventListener('close', () => {
 			if (stale()) return;
-			stopPresence();
+			if (socket === ws) socket = null;
 			// Client-side detection only — the DO keeps no heartbeat (§8.2);
 			// reconnect with backoff and take a fresh snapshot on open.
-			reconnectTimer = window.setTimeout(() => { if (stale()) return; reconnectDelay = Math.min(30_000, reconnectDelay * 2); startPresence(); }, reconnectDelay);
+			schedulePresenceReconnect(generation);
 		});
-		ws.addEventListener('error', () => { if (!stale()) { try { ws.close(); } catch { /* no-op */ } } });
+		ws.addEventListener('error', () => {
+			if (stale()) return;
+			try { ws.close(); } catch { /* no-op */ }
+			// Some failed handshakes do not yield a useful close event in every
+			// browser; scheduling here is idempotent with the eventual close.
+			schedulePresenceReconnect(generation);
+		});
 		// Keep-alive: ping and require a pong; silent socket → force reconnect.
 		pongSeen = true;
 		pingTimer = window.setInterval(() => {
@@ -301,7 +348,8 @@ export function mountFriends(root: HTMLElement): void {
 		if (!handle) return;
 		setStatus('Sending…');
 		withBusy(async () => {
-			await run('request', handle);
+			const result = await run('request', handle);
+			if (result.changed === 'friends' && !result.presenceSynced) startPresence();
 			if (handleInput) handleInput.value = '';
 		});
 	});
@@ -316,11 +364,10 @@ export function mountFriends(root: HTMLElement): void {
 		const handle = row.dataset.handle;
 		setStatus('Working…');
 		withBusy(async () => {
-			await run(action, handle);
-			// The Presence header carries my accepted-friend handles: any action
-			// that can change that set (accept, remove, block) gets a fresh
-			// socket so both the snapshot and my visibility to others stay honest.
-			if (action === 'accept' || action === 'remove' || action === 'block') startPresence();
+			const result = await run(action, handle);
+			// The service refresh normally reaches every caller tab. If the DO was
+			// unavailable (or this account has no handle), refresh this socket here.
+			if ((result.changed === 'friends' || result.changed === 'removed' || result.changed === 'blocked') && !result.presenceSynced) startPresence();
 		});
 	});
 
@@ -349,13 +396,13 @@ export function mountFriends(root: HTMLElement): void {
 		</li>`;
 	async function searchPeople(): Promise<void> {
 		if (!searchInput || !searchResults) return;
+		const seq = ++searchSeq;
 		const query = searchInput.value.trim().toLowerCase();
 		if (query.length < DIRECTORY_CONFIG.minQueryLength) {
 			searchResults.replaceChildren();
 			if (searchStatus) searchStatus.textContent = `Type at least ${DIRECTORY_CONFIG.minQueryLength} characters.`;
 			return;
 		}
-		const seq = ++searchSeq;
 		if (searchStatus) searchStatus.textContent = 'Searching…';
 		try {
 			const response = await fetch(`/api/people?query=${encodeURIComponent(query)}`, { credentials: 'same-origin', cache: 'no-store' });
@@ -380,7 +427,16 @@ export function mountFriends(root: HTMLElement): void {
 	}
 	searchForm?.addEventListener('submit', (event) => { event.preventDefault(); window.clearTimeout(searchTimer); void searchPeople(); });
 	searchInput?.addEventListener('input', () => {
+		// Invalidate an in-flight response immediately, not after the debounce.
+		// Otherwise results for the previous fragment can land while this query
+		// is waiting for its timer (or after it has been shortened below minimum).
+		searchSeq += 1;
 		window.clearTimeout(searchTimer);
+		if (searchInput.value.trim().length < DIRECTORY_CONFIG.minQueryLength) {
+			searchResults?.replaceChildren();
+			if (searchStatus) searchStatus.textContent = `Type at least ${DIRECTORY_CONFIG.minQueryLength} characters.`;
+			return;
+		}
 		searchTimer = window.setTimeout(() => void searchPeople(), DIRECTORY_CONFIG.searchDebounceMs);
 	});
 	// Buttons created by the search delegate through the same [data-friend-action]
@@ -394,8 +450,8 @@ export function mountFriends(root: HTMLElement): void {
 		const action = add ? 'request' : 'accept';
 		setStatus('Working…');
 		withBusy(async () => {
-			await run(action, handle);
-			if (action === 'accept') startPresence();
+			const result = await run(action, handle);
+			if (result.changed === 'friends' && !result.presenceSynced) startPresence();
 			await searchPeople();
 		});
 	});
