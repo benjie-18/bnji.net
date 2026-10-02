@@ -572,15 +572,21 @@ export function initNavDropdowns(): void {
 		}
 	};
 
-	/** Right-edge check. visibility:hidden panels still have layout, so the
-	 *  measurement works before the panel becomes visible. */
+	/** Edge check against the nav pill container and viewport boundary.
+	 *  visibility:hidden panels still have layout, so the measurement works
+	 *  before the panel becomes visible. */
 	const place = (group: DropdownGroup) => {
 		group.panel.classList.remove('nav-dropdown--flip');
 		if (!desktop.matches) return; // static accordion inside the sheet
 		const EDGE_MARGIN = 8;
 		const triggerRect = group.trigger.getBoundingClientRect();
 		const panelWidth = group.panel.offsetWidth || 208; // 13rem fallback
-		if (triggerRect.left + panelWidth > window.innerWidth - EDGE_MARGIN) {
+		const pill = group.root.closest<HTMLElement>('.nav-pill');
+		const limit = Math.min(
+			pill ? pill.getBoundingClientRect().right : Infinity,
+			window.innerWidth - EDGE_MARGIN,
+		);
+		if (triggerRect.left + panelWidth > limit) {
 			group.panel.classList.add('nav-dropdown--flip');
 		}
 	};
