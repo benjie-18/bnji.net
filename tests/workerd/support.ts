@@ -13,6 +13,7 @@ import { ROOM_CAPACITY } from '../../src/server/game-room-protocol';
 export const GAME = 'bnji.glass-minesweeper';
 export const PRINCIPAL_A = 'guest:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 export const PRINCIPAL_B = 'guest:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+export const PRINCIPAL_C = 'guest:cccccccccccccccccccccccccccccccc';
 export const HEADERS = (principal: string, extra: Record<string, string> = {}): Record<string, string> => ({
 	'x-bnji-verified-principal': principal,
 	...extra,
@@ -96,6 +97,14 @@ export async function createRoom(code: string, principal: string, now = Date.now
 	// instance, which a later evictDurableObject() refuses to break.
 	const text = await response.text();
 	return { status: response.status, body: (text ? JSON.parse(text) : {}) as Record<string, unknown> };
+}
+
+/** The raw upgrade response, for asserting a REFUSED upgrade (e.g. 403 room_kicked). */
+export function connectRaw(code: string, principal: string, extraHeaders: Record<string, string> = {}): Promise<Response> {
+	return stubFor(code).fetch(new Request('https://room.test/ws', {
+		method: 'GET',
+		headers: HEADERS(principal, { upgrade: 'websocket', ...extraHeaders }),
+	}));
 }
 
 export async function connect(code: string, principal: string, extraHeaders: Record<string, string> = {}): Promise<{ socket: WebSocket; box: SocketBox }> {
