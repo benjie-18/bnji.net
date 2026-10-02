@@ -690,8 +690,8 @@ export function initNavDropdowns(): void {
 	// Tap/click outside every group closes them all.
 	listen<PointerEvent>(document, 'pointerdown',
 		(event) => {
-			const target = event.target as Element | null;
-			if (target?.closest('[data-nav-group]')) return;
+			const target = (event.composedPath?.()?.[0] ?? event.target) as Element | null;
+			if (target?.closest?.('[data-nav-group]')) return;
 			closeAll();
 		},
 		{ passive: true },

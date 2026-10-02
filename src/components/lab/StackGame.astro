@@ -531,6 +531,16 @@
 		// Animation frame render loop
 		let animId = 0;
 		let lastTime = performance.now();
+		let onscreen = false;
+		let destroyed = false;
+
+		const startLoop = () => {
+			if (destroyed || !onscreen || document.hidden) return;
+			if (!animId) {
+				lastTime = performance.now();
+				animId = requestAnimationFrame(render);
+			}
+		};
 
 		const render = (now: number) => {
 			const dt = Math.min((now - lastTime) / 1000, 0.1);
@@ -631,7 +641,15 @@
 				ctx.restore();
 			});
 
-			animId = requestAnimationFrame(render);
+			const cameraDiff = Math.abs(targetCameraY - cameraY);
+			const isAnimating = (isPlaying && !isGameOver) || debris.length > 0 || sparks.length > 0 || cameraDiff > 0.05;
+
+			if (!isAnimating) {
+				cameraY = targetCameraY;
+				animId = 0;
+			} else {
+				animId = requestAnimationFrame(render);
+			}
 		};
 
 		// Event handlers
@@ -643,6 +661,7 @@
 			} else {
 				dropBlock();
 			}
+			startLoop();
 		};
 
 		canvas.addEventListener('pointerdown', (e) => {
@@ -662,6 +681,7 @@
 			overlay.setAttribute('hidden', '');
 			isPlaying = true;
 			initGame();
+			startLoop();
 		}, { signal });
 
 		restartBtn.addEventListener('click', () => {
@@ -671,6 +691,7 @@
 			startBtn.textContent = 'Start Game';
 			isPlaying = false;
 			initGame();
+			startLoop();
 		}, { signal });
 
 		audioBtn.addEventListener('click', () => {
@@ -683,22 +704,26 @@
 		themeIn?.addEventListener('input', () => {
 			themeIdx = Number(themeIn.value);
 			if (themeOut) themeOut.textContent = THEMES[themeIdx].name;
+			startLoop();
 		}, { signal });
 
 		thicknessIn?.addEventListener('input', () => {
 			layerHeight = Number(thicknessIn.value);
 			if (thicknessOut) thicknessOut.textContent = `${layerHeight}px (${layerHeight <= 14 ? 'Slim' : layerHeight >= 24 ? 'Thick' : 'Standard'})`;
+			startLoop();
 		}, { signal });
 
 		zoomIn?.addEventListener('input', () => {
 			viewZoom = Number(zoomIn.value);
 			if (zoomOut) zoomOut.textContent = `${viewZoom.toFixed(1)}×`;
+			startLoop();
 		}, { signal });
 
 		speedIn?.addEventListener('input', () => {
 			const val = Number(speedIn.value);
 			speedMultiplier = val === 1 ? 0.75 : val === 2 ? 1.0 : 1.5;
 			if (speedOut) speedOut.textContent = val === 1 ? 'Relaxed' : val === 2 ? 'Normal' : 'Hyper';
+			startLoop();
 		}, { signal });
 
 		// Intersection observer
@@ -708,15 +733,13 @@
 		// while its own tab is backgrounded or another tab is in front, which is
 		// exactly the case AGENTS.md §5 rules out. syncLoop owns both the start
 		// and the stop so the gates cannot disagree.
-		let onscreen = false;
-		let destroyed = false;
 
 		const syncLoop = () => {
 			cancelAnimationFrame(animId);
+			animId = 0;
 			if (destroyed || !onscreen || document.hidden) return;
 			fitCanvas();
-			lastTime = performance.now();
-			animId = requestAnimationFrame(render);
+			startLoop();
 		};
 
 		const obs = new IntersectionObserver((entries) => {

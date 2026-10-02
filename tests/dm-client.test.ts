@@ -613,3 +613,32 @@ test('deep link: /messages/?handle= opens that conversation once and cleans the 
 	assert.equal(dom.window.location.search, '', 'URL cleaned after consumption');
 	assert.equal(dom.window.location.pathname, '/messages/');
 });
+
+test('incoming WebSocket message does not snap thread.scrollTop to bottom if user is scrolled up', async () => {
+	const { db } = database();
+	const alice = await createAccount(GUEST_ONE, 'Scroll One', '203.0.113.81');
+	const bob = await createAccount(GUEST_TWO, 'Scroll Two', '203.0.113.82');
+	await claimHandle(alice, 'scroll_one', '203.0.113.81');
+	await claimHandle(bob, 'scroll_two', '203.0.113.82');
+	makeFriends(db, 'Scroll One', 'Scroll Two');
+	activeCookie = alice;
+
+	const dom = await mountFreshDom('?handle=scroll_two');
+	await tick(40);
+
+	const thread = byAttr(dom, 'dm-thread') as HTMLOListElement;
+	Object.defineProperty(thread, 'scrollHeight', { value: 1000, configurable: true });
+	Object.defineProperty(thread, 'clientHeight', { value: 300, configurable: true });
+	thread.scrollTop = 200;
+
+	sockets[0].onmessage?.({
+		data: JSON.stringify({
+			t: 'dm_new',
+			v: 1,
+			m: { n: 10, senderSide: 'hi', body: 'incoming while scrolled up', imageId: null, at: Date.now() },
+		}),
+	});
+	await tick(10);
+
+	assert.equal(thread.scrollTop, 200, 'scrollTop remains at 200 while reading history');
+});

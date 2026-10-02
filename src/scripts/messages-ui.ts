@@ -400,13 +400,13 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 		}
 		if (frame.t === 'dm_new' && active) {
 			const from = frame.m.senderSide === active.mySide ? 'me' : 'them';
-			const followTail = isNearThreadBottom();
-			appendMessage({ n: frame.m.n, from, body: frame.m.body, imageId: frame.m.imageId, at: frame.m.at });
-			if (followTail) scrollThreadToBottom();
-			if (from === 'them') {
-				await markRead();
-				await refreshConversations();
-			}
+      const followTail = isNearThreadBottom();
+      appendMessage({ n: frame.m.n, from, body: frame.m.body, imageId: frame.m.imageId, at: frame.m.at });
+      if (from === 'me' || followTail) scrollThreadToBottom();
+      if (from === 'them') {
+	      await markRead();
+	      await refreshConversations();
+      }
 			return;
 		}
 		if (frame.t === 'dm_hide') {

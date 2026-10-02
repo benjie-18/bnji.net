@@ -75,10 +75,12 @@ export function createTestD1() {
 			const results = [];
 			raw.exec('BEGIN');
 			try {
+				const results = [];
 				for (let index = 0; index < statements.length; index += BATCH_CHUNK) {
 					for (const statement of statements.slice(index, index + BATCH_CHUNK)) results.push(statement.batchResult());
 				}
 				raw.exec('COMMIT');
+				return results;
 			} catch (error) {
 				raw.exec('ROLLBACK');
 				throw error;
