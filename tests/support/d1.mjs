@@ -68,15 +68,22 @@ export function createTestD1() {
 		async batch(statements) {
 			raw.exec('BEGIN');
 			try {
+				const results = [];
 				for (let index = 0; index < statements.length; index += BATCH_CHUNK) {
-					for (const statement of statements.slice(index, index + BATCH_CHUNK)) statement.run();
+					for (const statement of statements.slice(index, index + BATCH_CHUNK)) {
+						if (statement.sql.trim().toUpperCase().startsWith('SELECT')) {
+							results.push(statement.all());
+						} else {
+							results.push(statement.run());
+						}
+					}
 				}
 				raw.exec('COMMIT');
+				return results;
 			} catch (error) {
 				raw.exec('ROLLBACK');
 				throw error;
 			}
-			return [];
 		},
 	};
 }

@@ -49,30 +49,46 @@ async function playerIdByHandle(db: D1Database, handle: string): Promise<{ id: s
 
 /** The four lists the /friends page renders, joined to display labels. */
 export async function listFriendState(db: D1Database, playerId: string): Promise<FriendListState> {
-	const [accepted, pending, blocks] = await Promise.all([
-		db.prepare(
-			`SELECT p.handle AS handle, p.display_name AS display_name, f.updated_at AS since
-			 FROM player_friends f
-			 JOIN game_players p ON p.id = CASE WHEN f.player_a = ?1 THEN f.player_b ELSE f.player_a END
-			 WHERE (f.player_a = ?1 OR f.player_b = ?1) AND f.state = 'accepted'
-			 ORDER BY p.handle LIMIT ?2`,
-		).bind(playerId, 501).all<{ handle: string | null; display_name: string; since: number }>(),
-		db.prepare(
-			`SELECT p.handle AS handle, p.display_name AS display_name, f.state AS state,
-			        f.requested_by AS requested_by, f.updated_at AS since
-			 FROM player_friends f
-			 JOIN game_players p ON p.id = CASE WHEN f.player_a = ?1 THEN f.player_b ELSE f.player_a END
-			 WHERE (f.player_a = ?1 OR f.player_b = ?1) AND f.state = 'pending'
-			 ORDER BY p.handle LIMIT ?2`,
-		).bind(playerId, 501).all<{ handle: string | null; display_name: string; state: string; requested_by: string; since: number }>(),
-		db.prepare(
-			`SELECT p.handle AS handle, p.display_name AS display_name, b.created_at AS since
-			 FROM player_blocks b
-			 JOIN game_players p ON p.id = b.blocked
-			 WHERE b.blocker = ?1
-			 ORDER BY p.handle LIMIT ?2`,
-		).bind(playerId, 501).all<{ handle: string | null; display_name: string; since: number }>(),
-	]);
+	const acceptedStmt = db.prepare(
+		`SELECT p.handle AS handle, p.display_name AS display_name, f.updated_at AS since
+		 FROM player_friends f
+		 JOIN game_players p ON p.id = CASE WHEN f.player_a = ?1 THEN f.player_b ELSE f.player_a END
+		 WHERE (f.player_a = ?1 OR f.player_b = ?1) AND f.state = 'accepted'
+		 ORDER BY p.handle LIMIT ?2`,
+	).bind(playerId, 501);
+	const pendingStmt = db.prepare(
+		`SELECT p.handle AS handle, p.display_name AS display_name, f.state AS state,
+		        f.requested_by AS requested_by, f.updated_at AS since
+		 FROM player_friends f
+		 JOIN game_players p ON p.id = CASE WHEN f.player_a = ?1 THEN f.player_b ELSE f.player_a END
+		 WHERE (f.player_a = ?1 OR f.player_b = ?1) AND f.state = 'pending'
+		 ORDER BY p.handle LIMIT ?2`,
+	).bind(playerId, 501);
+	const blocksStmt = db.prepare(
+		`SELECT p.handle AS handle, p.display_name AS display_name, b.created_at AS since
+		 FROM player_blocks b
+		 JOIN game_players p ON p.id = b.blocked
+		 WHERE b.blocker = ?1
+		 ORDER BY p.handle LIMIT ?2`,
+	).bind(playerId, 501);
+
+	let accepted: { results: Array<{ handle: string | null; display_name: string; since: number }> };
+	let pending: { results: Array<{ handle: string | null; display_name: string; state: string; requested_by: string; since: number }> };
+	let blocks: { results: Array<{ handle: string | null; display_name: string; since: number }> };
+
+	if (typeof db.batch === 'function') {
+		const results = await db.batch([acceptedStmt, pendingStmt, blocksStmt]);
+		accepted = results[0] as typeof accepted;
+		pending = results[1] as typeof pending;
+		blocks = results[2] as typeof blocks;
+	} else {
+		[accepted, pending, blocks] = await Promise.all([
+			acceptedStmt.all<{ handle: string | null; display_name: string; since: number }>(),
+			pendingStmt.all<{ handle: string | null; display_name: string; state: string; requested_by: string; since: number }>(),
+			blocksStmt.all<{ handle: string | null; display_name: string; since: number }>(),
+		]);
+	}
+
 	const entry = (row: { handle: string | null; display_name: string; since: number }): FriendEntry | null =>
 		row.handle === null ? null : { handle: String(row.handle), displayName: String(row.display_name), since: Number(row.since) };
 	return {

@@ -385,8 +385,11 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 		}
 		if (frame.t === 'dm_new' && active) {
 			const from = frame.m.senderSide === active.mySide ? 'me' : 'them';
+			const isAtBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight <= 50;
 			appendMessage({ n: frame.m.n, from, body: frame.m.body, imageId: frame.m.imageId, at: frame.m.at });
-			thread.scrollTop = thread.scrollHeight;
+			if (from === 'me' || isAtBottom) {
+				thread.scrollTop = thread.scrollHeight;
+			}
 			if (from === 'them') { void markRead(); void refreshConversations(); }
 			return;
 		}
