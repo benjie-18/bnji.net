@@ -145,6 +145,7 @@ async function normaliseImage(file: File, maxEdge: number): Promise<{ base64: st
 export async function mountMessages(root: HTMLElement): Promise<void> {
 	const byAttr = <T extends HTMLElement>(name: string): T => root.querySelector<T>(`[data-${name}]`)!;
 	const status = byAttr('dm-status');
+	const newStatus = byAttr('dm-new-status');
 	const signin = byAttr('dm-signin');
 	const signedIn = byAttr('dm-signed-in');
 	const disclosure = byAttr('dm-disclosure');
@@ -173,7 +174,10 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 	let earlierLoaded = false;
 	const mountedNs = new Set<number>();
 
+	// Keep composer feedback independent from the exact-handle/open flow: an
+	// unsuccessful open must not overwrite a send error (or vice versa).
 	const say = (message: string): void => { status.textContent = message; };
+	const newSay = (message: string): void => { newStatus.textContent = message; };
 	const connSay = (message: string): void => { conn.textContent = message; };
 
 	function renderDisclosure(): void {
@@ -183,8 +187,8 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 			'and this site does not use end-to-end encryption.';
 	}
 
-	function fail(error: unknown): void {
-		say(error instanceof ApiError ? copyFor(error.message) : copyFor(error));
+	function fail(error: unknown, target: HTMLElement = status): void {
+		target.textContent = error instanceof ApiError ? copyFor(error.message) : copyFor(error);
 	}
 
 	/* ------------------------------------------------------------- list */
@@ -291,6 +295,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 	}
 
 	function setThread(conversation: Conversation, messages: Message[], partnerReadSeq: number): void {
+		say('');
 		thread.textContent = '';
 		mountedNs.clear();
 		for (const message of messages) appendMessage(message);
@@ -306,11 +311,11 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 
 	async function openConversation(id: string): Promise<void> {
 		const conversation = conversations.find((item) => item.id === id);
-		if (!conversation) { say(copyFor('conversation_not_found')); return; }
+		if (!conversation) { newSay(copyFor('conversation_not_found')); return; }
 		active = conversation;
 		earlierLoaded = false;
 		renderList();
-		say('Opening conversation…');
+		newSay('Opening conversation…');
 		closeSocket();
 		try {
 			const data = await api<{ messages: Message[]; myReadSeq: number; partnerReadSeq: number; lastSeq: number }>(
@@ -323,9 +328,9 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 			renderList();
 			await markRead();
 			await connectSocket();
-			say(`Conversation with ${conversation.partner.displayName} open.`);
+			newSay(`Conversation with ${conversation.partner.displayName} open.`);
 		} catch (error) {
-			fail(error);
+			fail(error, newStatus);
 		}
 	}
 
@@ -502,6 +507,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 	/* ------------------------------------------------------------- wiring */
 
 	async function startConversation(handle: string): Promise<void> {
+		newSay('Opening conversation…');
 		try {
 			const data = await api<{ conversation: { id: string; mySide: 'lo' | 'hi'; partner: { handle: string | null; displayName: string }; exists: boolean } }>(
 				'/api/dm/conversations',
@@ -528,7 +534,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 			await openConversation(data.conversation.id);
 			newHandle.value = '';
 		} catch (error) {
-			fail(error);
+			fail(error, newStatus);
 		}
 	}
 
@@ -614,7 +620,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 
 		// Deep link from the Friends page (/messages/?handle=x): open that
 		// conversation once, then clean the URL so a refresh does not re-fire
-		// it. The D7 gate answers 403 not_friends with the composer's copy if
+		// it. The D7 gate answers 403 not_friends below the handle field if
 		// the pair stopped being friends meanwhile.
 		const requestedHandle = new URL(window.location.href).searchParams.get('handle');
 		if (requestedHandle && /^[a-z0-9_]{3,20}$/.test(requestedHandle)) {

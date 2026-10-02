@@ -15,7 +15,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import type { APIContext } from 'astro';
 import { createTestD1 } from './support/d1.mjs';
-import { isValidHandle, sanitizeDisplayName } from '../src/server/display-name';
+import { formatPublicLabel, isValidHandle, sanitizeDisplayName, sanitizePublicLabel } from '../src/server/display-name';
 import { NAMES_CONFIG } from '../src/config/names.config';
 import { purgeExpiredGuestProfiles, runRetentionSweep, type RetentionDb } from '../src/server/tracking-retention';
 
@@ -124,6 +124,65 @@ test('handles are lowercase, bounded, and share the reserved list', () => {
 	assert.equal(isValidHandle('sky-patel'), false);
 	assert.equal(isValidHandle(undefined), false);
 	assert.equal(isValidHandle(42), false);
+});
+
+// ---------------------------------------------------------- public labels
+
+test('public labels compose a valid handle first and fall back when either part is invalid', () => {
+	assert.equal(formatPublicLabel({ handle: 'sky_patel', displayName: 'Ada Lovelace' }), '@sky_patel · Ada Lovelace');
+	assert.equal(formatPublicLabel({ displayName: '  ﬁne\u202E artist  ' }), 'fine artist');
+	assert.equal(formatPublicLabel({ handle: 'sky_patel' }), '@sky_patel');
+	assert.equal(formatPublicLabel({}), null);
+
+	for (const handle of ['Sky', 'sky-patel', 'admin', 'ab', 'a'.repeat(NAMES_CONFIG.handle.maxLength + 1), null, undefined]) {
+		assert.equal(formatPublicLabel({ handle, displayName: '  Ada Lovelace  ' }), 'Ada Lovelace', `invalid handle ${handle} is discarded`);
+		assert.equal(formatPublicLabel({ handle }), null, `invalid handle ${handle} alone is not a label`);
+	}
+	for (const displayName of ['', '   ', 'admin', 'emoji😀', null, undefined]) {
+		assert.equal(formatPublicLabel({ handle: 'sky_patel', displayName }), '@sky_patel', `invalid name ${displayName} is discarded`);
+	}
+});
+
+test('public labels count code points and drop an over-long secondary name rather than truncate it', () => {
+	const handle = 'h'.repeat(NAMES_CONFIG.handle.maxLength);
+	const name = '𐀀'.repeat(NAMES_CONFIG.displayName.maxLength);
+	const label = `@${handle}${NAMES_CONFIG.publicLabel.separator}${name}`;
+	assert.equal([...label].length, NAMES_CONFIG.publicLabel.maxLength, 'both maximum-length parts fit exactly');
+	assert.equal(formatPublicLabel({ handle, displayName: name }), label, 'astral letters are not counted as two');
+	assert.equal(formatPublicLabel({ handle, displayName: name + '𐀀' }), `@${handle}`, 'an invalid over-long name is dropped whole');
+	assert.equal(formatPublicLabel({ displayName: name + '𐀀' }), null, 'a guest name is never truncated into a valid one');
+
+	// Exercise the composition cap separately from the display-name cap: a
+	// stricter public surface must keep the handle and drop the ENTIRE name.
+	const maxLength = NAMES_CONFIG.publicLabel.maxLength;
+	const shorterName = [...name].slice(0, -1).join('');
+	try {
+		NAMES_CONFIG.publicLabel.maxLength = maxLength - 1;
+		assert.equal(formatPublicLabel({ handle, displayName: name }), `@${handle}`);
+		assert.equal(formatPublicLabel({ handle, displayName: shorterName }), `@${handle}${NAMES_CONFIG.publicLabel.separator}${shorterName}`, 'the composition limit is inclusive');
+	} finally {
+		NAMES_CONFIG.publicLabel.maxLength = maxLength;
+	}
+});
+
+test('sanitizePublicLabel revalidates boundary labels without treating a composition as a display name', () => {
+	for (const parts of [
+		{ displayName: 'Guest Rider' },
+		{ handle: 'sky_patel' },
+		{ handle: 'sky_patel', displayName: 'Ada Lovelace' },
+		{ handle: 'h'.repeat(NAMES_CONFIG.handle.maxLength), displayName: '𐀀'.repeat(NAMES_CONFIG.displayName.maxLength) },
+	]) {
+		const label = formatPublicLabel(parts);
+		assert.ok(label);
+		assert.deepEqual(sanitizePublicLabel(label), { ok: true, label }, 'formatted labels survive the room-header boundary');
+	}
+	assert.deepEqual(sanitizePublicLabel('  @sky_patel · ﬁne\u202E artist  '), { ok: true, label: '@sky_patel · fine artist' });
+	assert.deepEqual(sanitizePublicLabel('@bad-handle · Ada Lovelace'), { ok: true, label: 'Ada Lovelace' }, 'an invalid handle is not carried across the boundary');
+	assert.deepEqual(sanitizePublicLabel('@sky_patel · Admin'), { ok: true, label: '@sky_patel' }, 'the display name is rechecked against the reserved list');
+	assert.deepEqual(sanitizePublicLabel(`@sky_patel · ${'x'.repeat(NAMES_CONFIG.displayName.maxLength + 1)}`), { ok: true, label: '@sky_patel' }, 'an over-long secondary name is dropped, not truncated');
+	for (const value of ['', null, 42, 'ａｄｍｉｎ', 'emoji😀', '@admin', '@Sky', '@bad-handle', '@bad-handle · Admin', 'x'.repeat(NAMES_CONFIG.publicLabel.maxLength + 1)]) {
+		assert.deepEqual(sanitizePublicLabel(value), { ok: false }, `invalid boundary label: ${value}`);
+	}
 });
 
 // ------------------------------------------------------------- guest names
