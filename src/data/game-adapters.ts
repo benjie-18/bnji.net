@@ -5,8 +5,10 @@
  * are server-only; browser copy must not import them. This list exists purely
  * so shared UI (game-room-ui, the leaderboard pages) can describe a game
  * honestly — "no adapter registered" is a true statement for most games but
- * false for chess. Keep it in sync when registering a new adapter; the adapter
- * tests fail loudly if a game reaches production without both halves.
+ * false for chess. Keep it in sync when registering a new adapter (import it
+ * from `src/server/game-adapters/register-all.ts`); `SCORE_VERIFIER_GAMES` is
+ * cross-checked against the route's actual registry by
+ * `tests/score-verifier-registry.test.ts`, so drift fails the suite.
  */
 import type { Game } from './games';
 
