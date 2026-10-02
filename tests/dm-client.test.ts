@@ -254,7 +254,9 @@ test('the full local flow: boot → start by handle → open → send → live f
 	const partnerSide = aliceSide === 'lo' ? 'hi' : 'lo';
 
 	const status = (): string => byAttr(dom, 'dm-status').textContent ?? '';
-	assert.match(status(), /Conversation with Test Two open\./, `thread did not open, status was: ${status()}`);
+	const openStatus = (): string => byAttr(dom, 'dm-new-status').textContent ?? '';
+	assert.match(openStatus(), /Conversation with Test Two open\./, `thread did not open, status was: ${openStatus()}`);
+	assert.equal(status(), '', 'opening a thread clears stale composer feedback');
 	assert.equal(byAttr(dom, 'dm-thread-head').hidden, false);
 	assert.equal(byAttr(dom, 'dm-composer').hidden, false);
 	assert.match(byAttr(dom, 'dm-partner').textContent ?? '', /Test Two @test2/);
@@ -326,6 +328,93 @@ test('the full local flow: boot → start by handle → open → send → live f
 	const bobView = await conversationsApi.GET(requestContext('/api/dm/conversations', { cookie: bob }));
 	const bobBody = await bobView.json() as { conversations: Array<{ unread: number }> };
 	assert.equal(bobBody.conversations[0].unread >= 1, true, 'partner has unread');
+});
+
+test('send failures stay below the composer while open failures stay below the handle field', async () => {
+	const { db } = database();
+	const alice = await createAccount(GUEST_ONE, 'Status One', '203.0.113.61');
+	const bob = await createAccount(GUEST_TWO, 'Status Two', '203.0.113.62');
+	await claimHandle(alice, 'status_one', '203.0.113.61');
+	await claimHandle(bob, 'status_two', '203.0.113.62');
+	makeFriends(db, 'Status One', 'Status Two');
+	activeCookie = alice;
+
+	const dom = await mountFreshDom();
+	const win = dom.window;
+	const sendStatus = byAttr(dom, 'dm-status');
+	const openStatus = byAttr(dom, 'dm-new-status');
+	const composer = byAttr(dom, 'dm-composer');
+	const newForm = byAttr(dom, 'dm-new-form');
+	const handle = byAttr(dom, 'dm-new-handle') as HTMLInputElement;
+	const text = byAttr(dom, 'dm-text') as HTMLTextAreaElement;
+	const submit = (form: HTMLElement) => form.dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+
+	assert.equal(sendStatus.previousElementSibling, composer, 'send status follows the composer in the real markup');
+	assert.equal(openStatus.parentElement, newForm, 'open status is in the exact-handle form');
+	assert.equal(handle.getAttribute('aria-describedby'), openStatus.id);
+	assert.equal(text.getAttribute('aria-describedby'), sendStatus.id);
+	for (const status of [sendStatus, openStatus]) {
+		assert.equal(status.getAttribute('role'), 'status');
+		assert.equal(status.getAttribute('aria-live'), 'polite');
+		assert.equal(status.getAttribute('aria-atomic'), 'true');
+	}
+
+	handle.value = 'status_two';
+	submit(newForm);
+	await tick(30);
+	assert.equal(openStatus.textContent, 'Conversation with Status Two open.');
+
+	text.value = 'x'.repeat(2_001);
+	submit(composer);
+	await tick(30);
+	assert.equal(sendStatus.textContent, 'That message is too long.');
+	assert.equal(openStatus.textContent, 'Conversation with Status Two open.', 'sending does not overwrite handle feedback');
+	assert.equal(text.value.length, 2_001, 'the failed send preserves the draft');
+	assert.equal((byAttr(dom, 'dm-send') as HTMLButtonElement).disabled, false, 'the composer is usable after a failed send');
+
+	handle.value = 'missing_handle';
+	submit(newForm);
+	await tick(30);
+	assert.equal(openStatus.textContent, 'No account uses that handle.');
+	assert.equal(sendStatus.textContent, 'That message is too long.', 'a failed new conversation does not overwrite send feedback');
+
+	// Opening from the list can fail at the history read, not just at the
+	// exact-handle POST. Both failures belong to the open-status line.
+	globalThis.fetch = async (input, init) => {
+		if (typeof input === 'string' && input.startsWith('/api/dm/messages?')) {
+			return new Response(JSON.stringify({ error: 'storage_unavailable' }), { status: 503 });
+		}
+		return fetchShim(input, init);
+	};
+	try {
+		const button = win.document.querySelector('[data-dm-open]') as HTMLButtonElement;
+		assert.ok(button);
+		button.click();
+		await tick(30);
+		assert.equal(openStatus.textContent, 'The server is unavailable right now.');
+		assert.equal(sendStatus.textContent, 'That message is too long.', 'history failure does not overwrite composer feedback');
+	} finally {
+		globalThis.fetch = fetchShim;
+	}
+
+	text.value = '';
+	submit(composer);
+	assert.equal(sendStatus.textContent, 'Write something first.', 'client-side send validation also uses composer feedback');
+	assert.equal(openStatus.textContent, 'The server is unavailable right now.');
+});
+
+test('a friends-only deep-link failure is reported below the handle, not the composer', async () => {
+	database();
+	const alice = await createAccount(GUEST_ONE, 'Unlinked One', '203.0.113.71');
+	const bob = await createAccount(GUEST_TWO, 'Unlinked Two', '203.0.113.72');
+	await claimHandle(bob, 'unlinked_two', '203.0.113.72');
+	activeCookie = alice;
+
+	const dom = await mountFreshDom('?handle=unlinked_two');
+	await tick(30);
+	assert.match(byAttr(dom, 'dm-new-status').textContent ?? '', /You can only message friends/);
+	assert.equal(byAttr(dom, 'dm-status').textContent, 'Signed in as Unlinked One. No conversations yet.');
+	assert.equal(byAttr(dom, 'dm-composer').hidden, true);
 });
 
 test('deep link: /messages/?handle= opens that conversation once and cleans the URL', async () => {

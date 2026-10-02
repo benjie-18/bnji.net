@@ -38,11 +38,10 @@ import PageHeader from '../components/PageHeader.astro';
 					<form class="dm-new" data-dm-new-form>
 						<label for="dm-new-handle">Start a conversation</label>
 						<div class="dm-new__row">
-							<input id="dm-new-handle" class="glass-field" name="handle" type="text" placeholder="exact handle" pattern="[a-z0-9_]{3,20}" minlength="3" maxlength="20" autocomplete="off" required data-dm-new-handle />
+							<input id="dm-new-handle" class="glass-field" name="handle" type="text" placeholder="exact handle" pattern="[a-z0-9_]{3,20}" minlength="3" maxlength="20" autocomplete="off" aria-describedby="dm-new-status" required data-dm-new-handle />
 							<button type="submit" class="glass-button glass-button--primary glass-button--sm" data-glass="">Open</button>
 						</div>
-						<!-- Feedback for the composer sits with the composer. -->
-						<p class="dm-status glass-status" data-dm-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
+						<p id="dm-new-status" class="dm-status glass-status" data-dm-new-status role="status" aria-live="polite" aria-atomic="true"></p>
 						<p class="dm-hint glass-note">Exact handles only.</p>
 					</form>
 
@@ -65,7 +64,7 @@ import PageHeader from '../components/PageHeader.astro';
 							<button type="button" class="glass-button glass-button--quiet glass-button--sm" data-glass="" data-dm-image-remove aria-label="Remove attached image">✕</button>
 						</div>
 						<div class="dm-composer__row">
-							<textarea class="glass-field" data-dm-text rows="2" placeholder="Write a message" aria-label="Message"></textarea>
+							<textarea class="glass-field" data-dm-text rows="2" placeholder="Write a message" aria-label="Message" aria-describedby="dm-status"></textarea>
 							<div class="dm-composer__buttons">
 								<label class="dm-attach" data-dm-attach>
 									<input type="file" accept="image/png,image/jpeg,image/webp" data-dm-image-input hidden />
@@ -76,6 +75,8 @@ import PageHeader from '../components/PageHeader.astro';
 							</div>
 						</div>
 					</form>
+					<!-- Send and attachment feedback stays below the composer. -->
+					<p id="dm-status" class="dm-status glass-status" data-dm-status role="status" aria-live="polite" aria-atomic="true">Loading…</p>
 				</div>
 			</div>
 		</section>
@@ -84,7 +85,7 @@ import PageHeader from '../components/PageHeader.astro';
 
 <style>
 	.dm-body { display: grid; gap: 1rem; padding-block: 1.5rem 4rem; }
-	.dm-status { min-height: 1.4em; }
+	.dm-status { margin: 0; min-height: 1.4em; }
 	/* Surface/border come from [data-glass] (glass.css) — the same asset every
 	   other panel on the site uses; only size and radius remain here. */
 	.dm-panel { border-radius: var(--glass-radius-lg, var(--radius-lg)); padding: clamp(1.1rem, 3vw, 1.5rem); }

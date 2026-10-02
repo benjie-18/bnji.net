@@ -6,7 +6,9 @@
  *
  * Features:
  * - 5 distinct theme palettes: Aero Sky, Aurora Neon, Sunset Quartz, Cyber Magenta, Monochrome Crystal
- * - Proper debris depth-sorting and unbounded falling physics to prevent clipping
+ * - CSS-sized, DPR-aware canvas with stable world-space movement
+ * - Sliced debris starts beside the kept overlap on either movement axis
+ * - Reserved combo slot (visibility + is-live) keeps the header from jumping
  * - Adjustable Layer Thickness and Camera Zoom controls
  * - Spark burst particle explosions on perfect placements
  * - Alternating X/Z movement axes with combo multiplier (≤3.5px snap): the
@@ -24,7 +26,7 @@
 			<span class="stack-score-val mono" data-sg-score>0</span>
 		</div>
 
-		<div class="stack-combo mono" data-sg-combo hidden>
+		<div class="stack-combo mono" data-sg-combo aria-hidden="true">
 			<span class="stack-combo-badge">COMBO ×<span data-sg-combo-count>1</span></span>
 		</div>
 
@@ -138,10 +140,16 @@
 	if (root) {
 		const canvas = root.querySelector<HTMLCanvasElement>('[data-sg-canvas]')!;
 		const ctx = canvas.getContext('2d')!;
+		const lifecycle = new AbortController();
+		const { signal } = lifecycle;
 		const scoreEl = root.querySelector<HTMLElement>('[data-sg-score]')!;
 		const bestEl = root.querySelector<HTMLElement>('[data-sg-best]')!;
 		const comboEl = root.querySelector<HTMLElement>('[data-sg-combo]')!;
 		const comboCountEl = root.querySelector<HTMLElement>('[data-sg-combo-count]')!;
+		const setComboLive = (live: boolean) => {
+			comboEl.classList.toggle('is-live', live);
+			comboEl.setAttribute('aria-hidden', String(!live));
+		};
 		const overlay = root.querySelector<HTMLElement>('[data-sg-overlay]')!;
 		const overlayTitle = root.querySelector<HTMLElement>('[data-sg-title]')!;
 		const overlayDesc = root.querySelector<HTMLElement>('[data-sg-desc]')!;
@@ -188,6 +196,24 @@
 			} catch {
 				// AudioContext unavailable
 			}
+		};
+
+		// Draw in CSS pixels, not backing-store pixels: changing DPR must make
+		// the image sharper without changing block sizes, travel or spark speed.
+		let canvasWidth = 640;
+		let canvasHeight = 520;
+		const fitCanvas = () => {
+			const rect = canvas.getBoundingClientRect();
+			canvasWidth = Math.max(1, rect.width || canvas.clientWidth || 640);
+			canvasHeight = Math.max(1, rect.height || canvasWidth * (520 / 640));
+			const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+			const width = Math.round(canvasWidth * dpr);
+			const height = Math.round(canvasHeight * dpr);
+			if (canvas.width !== width) canvas.width = width;
+			if (canvas.height !== height) canvas.height = height;
+			// Setting either dimension clears the transform. setTransform also
+			// avoids accumulating scale across repeated fits at the same size.
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		};
 
 		// Configs
@@ -264,7 +290,7 @@
 			cameraY = 0;
 			targetCameraY = 0;
 			scoreEl.textContent = '0';
-			comboEl.hidden = true;
+			setComboLive(false);
 			isGameOver = false;
 
 			spawnBlock();
@@ -306,8 +332,8 @@
 			let curZ = activeAxis === 'z' ? activePos : prev.z;
 			let diff = activeAxis === 'x' ? curX - prev.x : curZ - prev.z;
 
-			const ox = canvas.width / 2;
-			const oy = canvas.height * 0.74;
+			const ox = canvasWidth / 2;
+			const oy = canvasHeight * 0.74;
 
 			// Points for this placement: 1 for a normal drop, or the live combo
 			// for a perfect one (the n-th consecutive perfect drop is worth n).
@@ -322,7 +348,7 @@
 				if (combo > bestCombo) bestCombo = combo;
 				points = combo;
 				comboCountEl.textContent = String(combo);
-				comboEl.hidden = false;
+				setComboLive(true);
 				playTone(480 + combo * 55, 'triangle', 0.35);
 
 				// Trigger celebration sparks at top center of placed layer
@@ -330,7 +356,7 @@
 				spawnSparks(pt.x, pt.y);
 			} else {
 				combo = 0;
-				comboEl.hidden = true;
+				setComboLive(false);
 				playTone(300 + (stack.length % 8) * 28, 'sine', 0.18);
 			}
 
@@ -345,24 +371,25 @@
 				}
 
 				newW = prev.w - overhang;
-				const slicedW = overhang;
-				const slicedX = diff > 0 ? prev.x + newW + slicedW / 2 : prev.x - slicedW / 2;
+				if (overhang > 0) {
+					// Coordinates are CENTRES. The cut starts at the previous
+					// slab's edge, with its centre half an overhang beyond it.
+					const slicedX = prev.x + Math.sign(diff) * (prev.w + overhang) / 2;
+					debris.push({
+						x: slicedX,
+						z: curZ,
+						w: overhang,
+						d: prev.d,
+						y: activeY,
+						vy: 0,
+						vx: diff > 0 ? 1.4 : -1.4,
+						vz: 0,
+						opacity: 1,
+						colorIndex: stack.length,
+					});
+				}
 
-				// Spawn debris piece falling
-				debris.push({
-					x: slicedX,
-					z: curZ,
-					w: slicedW,
-					d: prev.d,
-					y: activeY,
-					vy: 0,
-					vx: diff > 0 ? 1.4 : -1.4,
-					vz: 0,
-					opacity: 1,
-					colorIndex: stack.length,
-				});
-
-				curX = diff > 0 ? prev.x + overhang / 2 : prev.x - overhang / 2;
+				curX = prev.x + diff / 2;
 			} else {
 				const overhang = Math.abs(diff);
 				if (overhang >= prev.d) {
@@ -371,23 +398,23 @@
 				}
 
 				newD = prev.d - overhang;
-				const slicedD = overhang;
-				const slicedZ = diff > 0 ? prev.z + newD + slicedD / 2 : prev.z - slicedD / 2;
+				if (overhang > 0) {
+					const slicedZ = prev.z + Math.sign(diff) * (prev.d + overhang) / 2;
+					debris.push({
+						x: curX,
+						z: slicedZ,
+						w: prev.w,
+						d: overhang,
+						y: activeY,
+						vy: 0,
+						vx: 0,
+						vz: diff > 0 ? 1.4 : -1.4,
+						opacity: 1,
+						colorIndex: stack.length,
+					});
+				}
 
-				debris.push({
-					x: curX,
-					z: slicedZ,
-					w: prev.w,
-					d: slicedD,
-					y: activeY,
-					vy: 0,
-					vx: 0,
-					vz: diff > 0 ? 1.4 : -1.4,
-					opacity: 1,
-					colorIndex: stack.length,
-				});
-
-				curZ = diff > 0 ? prev.z + overhang / 2 : prev.z - overhang / 2;
+				curZ = prev.z + diff / 2;
 			}
 
 			stack.push({
@@ -446,8 +473,8 @@
 			opacity = 1
 		) => {
 			if (w <= 0 || d <= 0) return;
-			const ox = canvas.width / 2;
-			const oy = canvas.height * 0.74;
+			const ox = canvasWidth / 2;
+			const oy = canvasHeight * 0.74;
 			const colors = getColors(colorIdx);
 
 			const p0 = projectIso(x - w / 2, y, z - d / 2, ox, oy);
@@ -551,11 +578,11 @@
 				s.vy += 2.5 * dt * 60;
 			}
 
-			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
 			// Draw ground contact shadow
-			const ox = canvas.width / 2;
-			const oy = canvas.height * 0.74;
+			const ox = canvasWidth / 2;
+			const oy = canvasHeight * 0.74;
 			const shadowCenter = projectIso(0, 0, 0, ox, oy);
 			ctx.save();
 			const shadowGrad = ctx.createRadialGradient(
@@ -621,7 +648,7 @@
 		canvas.addEventListener('pointerdown', (e) => {
 			e.preventDefault();
 			handleAction();
-		});
+		}, { signal });
 
 		window.addEventListener('keydown', (e) => {
 			if (!root.contains(document.activeElement) && e.target !== document.body) return;
@@ -629,13 +656,13 @@
 				e.preventDefault();
 				handleAction();
 			}
-		});
+		}, { signal });
 
 		startBtn.addEventListener('click', () => {
 			overlay.setAttribute('hidden', '');
 			isPlaying = true;
 			initGame();
-		});
+		}, { signal });
 
 		restartBtn.addEventListener('click', () => {
 			overlay.removeAttribute('hidden');
@@ -644,35 +671,35 @@
 			startBtn.textContent = 'Start Game';
 			isPlaying = false;
 			initGame();
-		});
+		}, { signal });
 
 		audioBtn.addEventListener('click', () => {
 			audioEnabled = !audioEnabled;
 			audioBtn.setAttribute('aria-pressed', String(audioEnabled));
 			audioDot.classList.toggle('dot--live', audioEnabled);
-		});
+		}, { signal });
 
 		// Controls
 		themeIn?.addEventListener('input', () => {
 			themeIdx = Number(themeIn.value);
 			if (themeOut) themeOut.textContent = THEMES[themeIdx].name;
-		});
+		}, { signal });
 
 		thicknessIn?.addEventListener('input', () => {
 			layerHeight = Number(thicknessIn.value);
 			if (thicknessOut) thicknessOut.textContent = `${layerHeight}px (${layerHeight <= 14 ? 'Slim' : layerHeight >= 24 ? 'Thick' : 'Standard'})`;
-		});
+		}, { signal });
 
 		zoomIn?.addEventListener('input', () => {
 			viewZoom = Number(zoomIn.value);
 			if (zoomOut) zoomOut.textContent = `${viewZoom.toFixed(1)}×`;
-		});
+		}, { signal });
 
 		speedIn?.addEventListener('input', () => {
 			const val = Number(speedIn.value);
 			speedMultiplier = val === 1 ? 0.75 : val === 2 ? 1.0 : 1.5;
 			if (speedOut) speedOut.textContent = val === 1 ? 'Relaxed' : val === 2 ? 'Normal' : 'Hyper';
-		});
+		}, { signal });
 
 		// Intersection observer
 		//
@@ -682,10 +709,12 @@
 		// exactly the case AGENTS.md §5 rules out. syncLoop owns both the start
 		// and the stop so the gates cannot disagree.
 		let onscreen = false;
+		let destroyed = false;
 
 		const syncLoop = () => {
 			cancelAnimationFrame(animId);
-			if (!onscreen || document.hidden) return;
+			if (destroyed || !onscreen || document.hidden) return;
+			fitCanvas();
 			lastTime = performance.now();
 			animId = requestAnimationFrame(render);
 		};
@@ -698,7 +727,24 @@
 		});
 		obs.observe(root);
 
-		document.addEventListener('visibilitychange', syncLoop);
+		window.addEventListener('resize', fitCanvas, { signal });
+		let resizeObserver: ResizeObserver | undefined;
+		if (typeof ResizeObserver !== 'undefined') {
+			resizeObserver = new ResizeObserver(fitCanvas);
+			resizeObserver.observe(canvas);
+		}
+
+		const destroy = () => {
+			destroyed = true;
+			cancelAnimationFrame(animId);
+			obs.disconnect();
+			resizeObserver?.disconnect();
+			lifecycle.abort();
+			if (audioCtx) { void audioCtx.close().catch(() => undefined); audioCtx = null; }
+		};
+		document.addEventListener('astro:before-swap', destroy, { once: true, signal });
+		document.addEventListener('visibilitychange', syncLoop, { signal });
+		fitCanvas();
 		initGame();
 	}
 </script>
@@ -738,6 +784,17 @@
 		color: var(--text-strong);
 	}
 
+	/* Keep the chip's footprint even without a streak; display:none/hidden
+	   would recenter SCORE and BEST on every imperfect drop. */
+	.stack-combo {
+		visibility: hidden;
+		white-space: nowrap;
+	}
+
+	.stack-combo.is-live {
+		visibility: visible;
+	}
+
 	.stack-combo-badge {
 		padding: 0.25rem 0.75rem;
 		border-radius: var(--radius-pill);
@@ -772,6 +829,8 @@
 	.stack-canvas {
 		width: 100%;
 		max-width: 640px;
+		/* CSS, not the DPR-sized backing store, owns the viewport height. */
+		aspect-ratio: 640 / 520;
 		height: auto;
 		display: block;
 		cursor: pointer;

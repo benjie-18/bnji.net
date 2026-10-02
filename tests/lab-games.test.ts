@@ -19,7 +19,10 @@
  *  an overhang, which resets the live combo to 0 first, so a final screen
  *  that reads the live combo can only ever print 0. The combo also has to
  *  multiply the score (the documented "combo multiplier") and an overhang
- *  as wide as the top layer ends the game.
+ *  as wide as the top layer ends the game. The combo's reserved slot uses
+ *  is-live + visibility, not hidden/display:none; DPR fitting must preserve
+ *  CSS-pixel geometry, and offcuts must meet the kept slab on both axes,
+ *  including negative offsets and already-shrunken, off-centre layers.
  *
  *  Minesweeper — clearing the last safe tile wins: the face, the mine
  *  counter and the auto-flags update, AND a win screen appears (title,
@@ -77,9 +80,11 @@ class FakeIntersectionObserver {
 
 	unobserve() {}
 
-	disconnect() {}
+	disconnected = false;
+	disconnect() { this.disconnected = true; }
 
 	fire(isIntersecting: boolean) {
+		if (this.disconnected) return;
 		this.callback(
 			this.observed.map((target) => ({ isIntersecting, target: target as Element })),
 			this,
@@ -87,15 +92,39 @@ class FakeIntersectionObserver {
 	}
 }
 
-/**
- * A 2D context that absorbs every draw call. The Stack game's rendering is
- * not under test — its state machine is — so the context only has to exist,
- * with the two methods whose return values the code reads.
- */
-function makeFakeCanvas2D(): RenderingContext {
+/** Resize without a window resize (e.g. when the lab panel changes width). */
+class FakeResizeObserver {
+	static instances: FakeResizeObserver[] = [];
+	observed: unknown[] = [];
+	disconnected = false;
+	readonly callback: () => void;
+	constructor(callback: () => void) {
+		this.callback = callback;
+		FakeResizeObserver.instances.push(this);
+	}
+	observe(target: unknown) { this.observed.push(target); }
+	disconnect() { this.disconnected = true; }
+	fire() { if (!this.disconnected) this.callback(); }
+}
+
+type CanvasPoint = { x: number; y: number };
+
+/** Record real painted polygons and canvas fits without needing a browser. */
+function makeFakeCanvas2D() {
+	const faces: CanvasPoint[][] = [];
+	const transforms: number[][] = [];
+	const clears: number[][] = [];
+	let path: CanvasPoint[] = [];
 	const gradient = { addColorStop() {} };
-	const store: Record<PropertyKey, unknown> = {};
-	return new Proxy(store, {
+	const store: Record<PropertyKey, unknown> = {
+		beginPath() { path = []; },
+		moveTo(x: number, y: number) { path.push({ x, y }); },
+		lineTo(x: number, y: number) { path.push({ x, y }); },
+		fill() { if (path.length === 4) faces.push([...path]); },
+		clearRect(...rect: number[]) { faces.length = 0; clears.push(rect); },
+		setTransform(...matrix: number[]) { transforms.push(matrix); },
+	};
+	const context = new Proxy(store, {
 		get(target, prop) {
 			if (prop === 'createRadialGradient' || prop === 'createLinearGradient') return () => gradient;
 			if (prop in target) return target[prop];
@@ -106,6 +135,7 @@ function makeFakeCanvas2D(): RenderingContext {
 			return true;
 		},
 	}) as unknown as RenderingContext;
+	return { context, faces, transforms, clears };
 }
 
 /**
@@ -151,14 +181,19 @@ function append(parent: Element, ...children: Element[]): Element {
 }
 
 function withGlobals<T>(fn: () => Promise<T> | T): Promise<T> {
-	// Node has no IntersectionObserver; the games gate their rAF loop on it.
-	const previous = (globalThis as Record<string, unknown>)['IntersectionObserver'];
-	(globalThis as Record<string, unknown>)['IntersectionObserver'] = FakeIntersectionObserver;
+	const globals = globalThis as Record<string, unknown>;
+	const replacements = { IntersectionObserver: FakeIntersectionObserver, ResizeObserver: FakeResizeObserver };
+	const previous = new Map(Object.keys(replacements).map((name) => [name, globals[name]]));
+	Object.assign(globals, replacements);
+	FakeIntersectionObserver.instances = [];
+	FakeResizeObserver.instances = [];
 	return Promise.resolve()
 		.then(fn)
 		.finally(() => {
-			if (previous === undefined) delete (globalThis as Record<string, unknown>)['IntersectionObserver'];
-			else (globalThis as Record<string, unknown>)['IntersectionObserver'] = previous;
+			for (const [name, value] of previous) {
+				if (value === undefined) delete globals[name];
+				else globals[name] = value;
+			}
 		});
 }
 
@@ -169,9 +204,7 @@ function buildStackFixture() {
 
 	const header = el('div', { class: 'stack-header' });
 	const score = el('span', { 'data-sg-score': '' }, '0');
-	const combo = el('div', { 'data-sg-combo': '', class: 'stack-combo' });
-	combo.hidden = true;
-	combo.setAttribute('hidden', '');
+	const combo = el('div', { 'data-sg-combo': '', class: 'stack-combo', 'aria-hidden': 'true' });
 	append(combo, append(el('span', { class: 'stack-combo-badge' }), el('span', { 'data-sg-combo-count': '' }, '1')));
 	append(header, score, combo, el('span', { 'data-sg-best': '' }, '0'));
 
@@ -179,9 +212,11 @@ function buildStackFixture() {
 	const canvas = el('canvas', { 'data-sg-canvas': '', width: '640', height: '520' }) as HTMLCanvasElement;
 	canvas.width = 640;
 	canvas.height = 520;
-	// The shim's canvas element is not a real HTMLCanvasElement; the game
-	// only needs getContext('2d') to hand back a drawable surface.
-	(canvas as unknown as { getContext: () => unknown }).getContext = () => makeFakeCanvas2D();
+	let cssWidth = 640;
+	let cssHeight = 520;
+	canvas.getBoundingClientRect = () => ({ width: cssWidth, height: cssHeight }) as DOMRect;
+	const drawing = makeFakeCanvas2D();
+	(canvas as unknown as { getContext: () => unknown }).getContext = () => drawing.context;
 	const overlay = el('div', { 'data-sg-overlay': '' });
 	overlay.setAttribute('hidden', '');
 	append(
@@ -212,7 +247,10 @@ function buildStackFixture() {
 
 	append(root, header, viewport, controls);
 	document.body.appendChild(root);
-	return { root, score, combo, comboCount: combo.querySelector('[data-sg-combo-count]') as Element, overlay, canvas };
+	return {
+		root, score, combo, comboCount: combo.querySelector('[data-sg-combo-count]') as Element, overlay, canvas, drawing,
+		resize(width: number, height: number) { cssWidth = width; cssHeight = height; },
+	};
 }
 
 /**
@@ -253,6 +291,28 @@ function createStackDriver(canvas: HTMLCanvasElement, clock: { advance(ms: numbe
 	}
 
 	return { frame, drop };
+}
+
+/** The combo keeps its slot in every state; only visibility and a11y change. */
+function assertComboLive(combo: HTMLElement, live: boolean, message: string): void {
+	assert.equal(combo.classList.contains('is-live'), live, message);
+	assert.equal(combo.getAttribute('aria-hidden'), String(!live), `${message}: aria-hidden`);
+	assert.equal(combo.hidden, false, `${message}: the slot is never hidden`);
+	assert.equal(combo.hasAttribute('hidden'), false, `${message}: no hidden attribute`);
+}
+
+function closeTo(actual: number, expected: number, message: string): void {
+	assert.ok(Math.abs(actual - expected) < 1e-7, `${message}: expected ${expected}, got ${actual}`);
+}
+
+/** Invert the horizontal projection; camera height cannot affect these values. */
+function topGeometry(points: CanvasPoint[], originX: number) {
+	assert.equal(points.length, 4);
+	return {
+		centerDiff: ((points[0].x + points[2].x) / 2 - originX) / 0.866025,
+		w: (points[1].x - points[0].x) / 0.866025,
+		d: (points[0].x - points[3].x) / 0.866025,
+	};
 }
 
 /* --- Minesweeper fixture & helpers ---------------------------------------- */
@@ -387,7 +447,6 @@ function simulateMines(rows: number, cols: number, mines: number, safeR: number,
 test('iso stack: perfect drops build the combo, the best combo survives to game over, and the combo multiplies the score', async () => {
 	await withGlobals(async () => {
 		const dom = installTestDom() as Shim;
-		FakeIntersectionObserver.instances = [];
 		try {
 			const { score, combo, comboCount, overlay, canvas } = buildStackFixture();
 			await runComponentScript('StackGame.astro');
@@ -405,11 +464,12 @@ test('iso stack: perfect drops build the combo, the best combo survives to game 
 			const startBtn = overlay.querySelector('[data-sg-start]') as Element;
 			dispatch(startBtn, 'click');
 			assert.equal(overlay.hasAttribute('hidden'), true, 'overlay hides when the game starts');
+			assertComboLive(combo, false, 'no live combo at the start');
 
-			// Three perfect drops (z, x, z) — the combo badge must climb.
+			// Three perfect drops on alternating axes — the combo badge must climb.
 			driver.drop(0);
 			assert.equal(score.textContent, '1', 'first perfect drop scores 1');
-			assert.equal(combo.hidden, false, 'combo badge shows after a perfect drop');
+			assertComboLive(combo, true, 'combo badge shows after a perfect drop');
 			assert.equal(comboCount.textContent, '1', 'combo counts 1');
 
 			driver.drop(0);
@@ -422,12 +482,12 @@ test('iso stack: perfect drops build the combo, the best combo survives to game 
 
 			// An overhang drop resets the combo but still places a layer.
 			driver.drop(40);
-			assert.equal(combo.hidden, true, 'overhang drop hides the combo badge');
+			assertComboLive(combo, false, 'overhang drop hides the combo badge without removing its slot');
 			assert.equal(score.textContent, '7', 'imperfect drop is worth 1');
 
 			// Perfect again — relative to the new (offset) top layer.
 			driver.drop(0);
-			assert.equal(combo.hidden, false, 'combo restarts after an overhang');
+			assertComboLive(combo, true, 'combo restarts after an overhang');
 			assert.equal(comboCount.textContent, '1', 'combo restarts at 1');
 			assert.equal(score.textContent, '8', 'fourth placed layer worth 1 more');
 
@@ -450,7 +510,7 @@ test('iso stack: perfect drops build the combo, the best combo survives to game 
 			dispatch(overlay.querySelector('[data-sg-start]') as Element, 'click');
 			assert.equal(overlay.hasAttribute('hidden'), true, 'overlay hides on restart');
 			assert.equal(score.textContent, '0', 'score resets');
-			assert.equal(combo.hidden, true, 'combo resets');
+			assertComboLive(combo, false, 'combo resets');
 			driver.drop(0);
 			assert.equal(score.textContent, '1', 'the restarted run plays normally');
 		} finally {
@@ -458,6 +518,144 @@ test('iso stack: perfect drops build the combo, the best combo survives to game 
 		}
 	});
 });
+
+test('iso stack: the real combo markup and CSS reserve the idle slot', () => {
+	const source = readFileSync(new URL('StackGame.astro', COMPONENTS_URL), 'utf8');
+	const markup = source.match(/<div\b[^>]*\bdata-sg-combo\b[^>]*>/)?.[0];
+	assert.ok(markup);
+	assert.doesNotMatch(markup, /\shidden(?:\s|=|>)/, 'hidden would remove the slot from layout');
+	assert.match(markup, /aria-hidden="true"/);
+	const style = source.slice(source.indexOf('<style>'));
+	assert.match(style, /\.stack-combo\s*\{[^}]*visibility:\s*hidden/);
+	assert.match(style, /\.stack-combo\.is-live\s*\{[^}]*visibility:\s*visible/);
+	assert.match(style, /\.stack-canvas\s*\{[^}]*aspect-ratio:\s*640\s*\/\s*520/, 'backing-store changes must not change the CSS height');
+});
+
+test('iso stack: canvas fits CSS size at capped DPR, responds to both resize paths, and tears down', async () => {
+	await withGlobals(async () => {
+		const dom = installTestDom() as Shim;
+		try {
+			const sg = buildStackFixture();
+			sg.resize(320, 260);
+			Object.defineProperty(window, 'devicePixelRatio', { value: 2, writable: true });
+			const initialListeners = dom.listenerCount();
+			await runComponentScript('StackGame.astro');
+			const observer = FakeIntersectionObserver.instances[0];
+			const resizeObserver = FakeResizeObserver.instances[0];
+			assert.ok(observer);
+			assert.ok(resizeObserver);
+			assert.ok(resizeObserver.observed.includes(sg.canvas));
+			observer.fire(true);
+			dom.clock.advance(16.67);
+
+			assert.equal(sg.canvas.width, 640);
+			assert.equal(sg.canvas.height, 520);
+			assert.deepEqual(sg.drawing.transforms.at(-1), [2, 0, 0, 2, 0, 0]);
+			assert.deepEqual(sg.drawing.clears.at(-1), [0, 0, 320, 260], 'drawing remains in CSS pixels');
+			const base = topGeometry(sg.drawing.faces[2], 160);
+			closeTo(base.centerDiff, 0, 'base is centred in the CSS box');
+			closeTo(base.w, 140, 'retina does not change world width');
+			closeTo(base.d, 140, 'retina does not change world depth');
+
+			sg.resize(480, 390);
+			resizeObserver.fire();
+			dom.clock.advance(16.67);
+			assert.equal(sg.canvas.width, 960);
+			assert.equal(sg.canvas.height, 780);
+			closeTo(topGeometry(sg.drawing.faces[2], 240).centerDiff, 0, 'element resize recentres the projection');
+
+			// DPR can change without the CSS box changing (moving between
+			// displays). A 1x fit must also undo the previous 2x transform.
+			Object.defineProperty(window, 'devicePixelRatio', { value: 1 });
+			window.dispatchEvent({ type: 'resize' } as Event);
+			assert.equal(sg.canvas.width, 480);
+			assert.equal(sg.canvas.height, 390);
+			assert.deepEqual(sg.drawing.transforms.at(-1), [1, 0, 0, 1, 0, 0]);
+			Object.defineProperty(window, 'devicePixelRatio', { value: 4 });
+			window.dispatchEvent({ type: 'resize' } as Event);
+			assert.equal(sg.canvas.width, 960, 'DPR is capped at 2 to bound canvas memory');
+			assert.equal(sg.canvas.height, 780);
+
+			const visibleFrames = sg.drawing.clears.length;
+			dom.document.visibilityState = 'hidden';
+			document.dispatchEvent({ type: 'visibilitychange' } as Event);
+			dom.clock.advance(1000);
+			assert.equal(sg.drawing.clears.length, visibleFrames, 'a hidden tab stays paused');
+			observer.fire(false);
+			dom.document.visibilityState = 'visible';
+			document.dispatchEvent({ type: 'visibilitychange' } as Event);
+			dom.clock.advance(16.67);
+			assert.equal(sg.drawing.clears.length, visibleFrames, 'an offscreen game stays paused when the tab resumes');
+			observer.fire(true);
+			dom.clock.advance(16.67);
+			assert.equal(sg.drawing.clears.length, visibleFrames + 1, 'both gates must be open to resume');
+
+			document.dispatchEvent({ type: 'astro:before-swap' } as Event);
+			assert.equal(observer.disconnected, true);
+			assert.equal(resizeObserver.disconnected, true);
+			assert.equal(dom.listenerCount(), initialListeners, 'destroy releases element and global listeners');
+			const frames = sg.drawing.clears.length;
+			dom.clock.advance(1000);
+			assert.equal(sg.drawing.clears.length, frames, 'destroy cancels the frame loop');
+		} finally {
+			dom.uninstall();
+		}
+	});
+});
+
+for (const axis of ['x', 'z'] as const) {
+	for (const sign of [-1, 1]) {
+		test(`iso stack: ${axis} offcut with ${sign < 0 ? 'negative' : 'positive'} offset adjoins the kept slab`, async () => {
+			await withGlobals(async () => {
+				const dom = installTestDom() as Shim;
+				try {
+					const sg = buildStackFixture();
+					await runComponentScript('StackGame.astro');
+					FakeIntersectionObserver.instances[0].fire(true);
+					const driver = createStackDriver(sg.canvas, dom.clock);
+					driver.frame();
+					dispatch(sg.overlay.querySelector('[data-sg-start]') as Element, 'click');
+
+					// Read the first axis from the moving block rather than
+					// coupling geometry tests to the controller's spawn order.
+					dom.clock.advance(0);
+					const firstAxis = topGeometry(sg.drawing.faces.at(-1)!, 320).centerDiff < 0 ? 'x' : 'z';
+					// Offset BOTH axes before the cut to catch formulas that
+					// mistake centres for edges on an already-shrunken layer.
+					driver.drop(20);
+					driver.drop(-30);
+					const prev = firstAxis === 'x' ? { x: 10, z: -15, w: 120, d: 110 } : { x: -15, z: 10, w: 110, d: 120 };
+					if (axis !== firstAxis) driver.drop(prev[firstAxis]); // perfect, next drop on the tested axis
+					const diff = sign * 40;
+					driver.drop(prev[axis] + diff);
+					driver.frame();
+
+					// Each box paints two side faces then its top; the last box
+					// is active and the one before it is the newest offcut.
+					const tops = sg.drawing.faces.filter((_, index) => index % 3 === 2);
+					const layers = axis === firstAxis ? 4 : 5;
+					const kept = topGeometry(tops[layers - 1], 320);
+					const sliced = topGeometry(tops.at(-2)!, 320);
+					const center = (box: ReturnType<typeof topGeometry>) => axis === 'x' ? box.centerDiff + prev.z : prev.x - box.centerDiff;
+					const width = axis === 'x' ? prev.w : prev.d;
+					const keptWidth = axis === 'x' ? kept.w : kept.d;
+					const slicedWidth = axis === 'x' ? sliced.w : sliced.d;
+					// Undo the debris's first-frame outward drift to compare its
+					// SPAWN geometry, before physics moves it away from the cut.
+					const slicedCenter = center(sliced) - sign * 1.4;
+					closeTo(center(kept), prev[axis] + diff / 2, 'kept slab is centred on the overlap');
+					closeTo(keptWidth, width - 40, 'kept dimension loses exactly the overhang');
+					closeTo(slicedWidth, 40, 'offcut has exactly the removed dimension');
+					closeTo(slicedCenter, prev[axis] + sign * (width + 40) / 2, 'offcut starts beyond the previous slab edge');
+					closeTo(slicedCenter - sign * slicedWidth / 2, center(kept) + sign * keptWidth / 2, 'the pieces share the cut edge without a gap or overlap');
+					closeTo(axis === 'x' ? sliced.d : sliced.w, axis === 'x' ? prev.d : prev.w, 'the other dimension is unchanged');
+				} finally {
+					dom.uninstall();
+				}
+			});
+		});
+	}
+}
 
 test('minesweeper: clearing the last safe tile wins and shows the win screen', async () => {
 	await withGlobals(async () => {
