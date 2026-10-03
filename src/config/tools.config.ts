@@ -197,4 +197,55 @@ export const SCREEN_PRESETS: readonly ScreenPreset[] = [
 export const TOOL_SCREEN_CONFIG = {
 	maxPixelDimension: 32_000,
 	maxDiagonalInches: 300,
+/** Common IANA time zones for the Time Zone Converter selector */
+export const COMMON_TIMEZONES = [
+	{ label: 'Coordinated Universal Time (UTC)', zone: 'UTC' },
+	{ label: 'London, Dublin (GMT / BST)', zone: 'Europe/London' },
+	{ label: 'Paris, Berlin, Rome (CET / CEST)', zone: 'Europe/Paris' },
+	{ label: 'Athens, Helsinki, Cairo (EET / EEST)', zone: 'Europe/Athens' },
+	{ label: 'Dubai, Abu Dhabi (GST)', zone: 'Asia/Dubai' },
+	{ label: 'Tokyo, Osaka (JST)', zone: 'Asia/Tokyo' },
+	{ label: 'Sydney, Melbourne (AEST / AEDT)', zone: 'Australia/Sydney' },
+	{ label: 'Auckland, Wellington (NZST / NZDT)', zone: 'Pacific/Auckland' },
+	{ label: 'Honolulu, Hawaii (HST)', zone: 'Pacific/Honolulu' },
+	{ label: 'Los Angeles, San Francisco (PST / PDT)', zone: 'America/Los_Angeles' },
+	{ label: 'Denver, Phoenix (MST / MDT)', zone: 'America/Denver' },
+	{ label: 'Chicago, Dallas (CST / CDT)', zone: 'America/Chicago' },
+	{ label: 'New York, Toronto (EST / EDT)', zone: 'America/New_York' },
+	{ label: 'São Paulo, Rio de Janeiro (BRT / BRST)', zone: 'America/Sao_Paulo' },
+] as const;
+
+export const TOOL_TIMEZONE_CONFIG = {
+	defaultSourceZone: 'UTC',
+	defaultTargetZone: 'America/New_York',
+} as const;
+
+export const TOOL_RANDOM_CONFIG = {
+	minNumber: -1_000_000_000,
+	maxNumber: 1_000_000_000,
+	maxCount: 1_000,
+	defaultMin: 1,
+	defaultMax: 100,
+	defaultCount: 1,
+	maxPickerItems: 5_000,
+} as const;
+
+export const TOOL_LIST_CONFIG = {
+	maxLines: 10_000,
+	maxChars: 1_000_000,
+} as const;
+
+export const TOOL_COUNTDOWN_CONFIG = {
+	maxHours: 99,
+	maxMinutes: 59,
+	maxSeconds: 59,
+	maxLaps: 100,
+	presets: [
+		{ label: '1m', seconds: 60 },
+		{ label: '5m', seconds: 300 },
+		{ label: '10m', seconds: 600 },
+		{ label: '15m', seconds: 900 },
+		{ label: '30m', seconds: 1800 },
+		{ label: '1h', seconds: 3600 },
+	],
 } as const;

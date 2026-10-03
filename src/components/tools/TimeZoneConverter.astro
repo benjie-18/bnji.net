@@ -1,0 +1,99 @@
+---
+/**
+ * Tools — Time Zone Converter.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { COMMON_TIMEZONES, TOOL_TIMEZONE_CONFIG } from '../../config/tools.config';
+---
+
+<section
+	class="tool tool--timezone"
+	id="timezone-converter"
+	aria-labelledby="timezone-converter-title"
+	data-timezone-converter
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>02</span><span>/ TIMEZONE</span></p>
+			<h2 class="tool__title" id="timezone-converter-title">Time Zone Converter</h2>
+			<p class="tool__lead">
+				Convert dates and times across global time zones locally in your browser.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__pane">
+				<div class="tool__field">
+					<label class="tool__label" for="timezone-date-input">Date & Time</label>
+					<input
+						class="tool__number tool__number--wide"
+						id="timezone-date-input"
+						type="datetime-local"
+						data-timezone-input
+					/>
+					<p class="tool__hint">
+						Select or enter the wall-clock time in your source time zone.
+					</p>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="timezone-source-select">Source Time Zone</label>
+					<select class="tool__select" id="timezone-source-select" data-timezone-source>
+						{
+							COMMON_TIMEZONES.map((tz) => (
+								<option value={tz.zone} selected={tz.zone === TOOL_TIMEZONE_CONFIG.defaultSourceZone}>
+									{tz.label}
+								</option>
+							))
+						}
+					</select>
+				</div>
+			</div>
+
+			<div class="tool__controls">
+				<div class="tool__field">
+					<label class="tool__label" for="timezone-target-select">Target Time Zone</label>
+					<select class="tool__select" id="timezone-target-select" data-timezone-target>
+						{
+							COMMON_TIMEZONES.map((tz) => (
+								<option value={tz.zone} selected={tz.zone === TOOL_TIMEZONE_CONFIG.defaultTargetZone}>
+									{tz.label}
+								</option>
+							))
+						}
+					</select>
+				</div>
+
+				<div class="tool__actions">
+					<button class="glass-button" type="button" data-glass="" data-timezone-swap>
+						Swap Zones
+					</button>
+					<button class="glass-button glass-button--quiet" type="button" data-glass="" data-timezone-now>
+						Reset to Now
+					</button>
+				</div>
+			</div>
+
+			<div class="tool__actions">
+				<button class="glass-button glass-button--primary" type="button" data-glass="" data-timezone-copy disabled>
+					Copy Converted Time
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-timezone-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-timezone-error hidden></p>
+
+			<div class="tool__results" data-timezone-results hidden>
+				<div class="tool__result-card">
+					<p class="tool__sub-label mono">Converted Result</p>
+					<p class="tool__result-value mono" data-timezone-target-output></p>
+					<p class="tool__hint mono" data-timezone-diff-output></p>
+				</div>
+			</div>
+
+			<p class="tool__note">
+				Time zone calculations use your browser's built-in Intl API. Daylight saving time changes are evaluated dynamically based on the selected date.
+			</p>
+		</div>
+	</GlassPanel>
+</section>

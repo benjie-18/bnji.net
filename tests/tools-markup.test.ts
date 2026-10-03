@@ -23,6 +23,10 @@ const PAIRS = [
 	['src/scripts/tools-date-difference.ts', 'src/components/tools/DateDifferenceCalculator.astro'],
 	['src/scripts/tools-cooking.ts', 'src/components/tools/CookingConverter.astro'],
 	['src/scripts/tools-screen-dpi.ts', 'src/components/tools/ScreenDpiCalculator.astro'],
+	['src/scripts/tools-timezone.ts', 'src/components/tools/TimeZoneConverter.astro'],
+	['src/scripts/tools-random.ts', 'src/components/tools/RandomPicker.astro'],
+	['src/scripts/tools-list.ts', 'src/components/tools/ListRandomizer.astro'],
+	['src/scripts/tools-countdown.ts', 'src/components/tools/CountdownStopwatch.astro'],
 ] as const;
 
 /**
