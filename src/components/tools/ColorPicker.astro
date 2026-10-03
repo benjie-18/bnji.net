@@ -48,14 +48,7 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>04</span><span>/ COLOR</span></p>
-			<h2 class="tool__title" id="color-picker-title">Color picker and converter</h2>
-			<p class="tool__lead">
-				Pick a color from the wheel, type one in, or take a single pixel out of an image you drop
-				here — then read it back in seven formats, check it against a background, and build a
-				palette from it. Every conversion is arithmetic in this tab; nothing is uploaded, and no
-				color service is called.
-			</p>
+			<h3 class="tool__title" id="color-picker-title">Color picker</h3>
 		</header>
 
 		<div class="tool__body">
@@ -84,10 +77,7 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 						aria-describedby="color-wheel-hint"
 						data-color-hue
 					/>
-					<p class="tool__hint" id="color-hue-hint">
-						The angle on the wheel, 0–360°. Red at 0°, yellow at 60°, green at 120°, cyan at
-						180°, blue at 240°, magenta at 300°.
-					</p>
+					<p class="tool__hint" id="color-hue-hint">The angle on the wheel, 0–360°.</p>
 				</div>
 
 				<div class="tool__field">
@@ -106,10 +96,7 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 						aria-describedby="color-saturation-hint"
 						data-color-saturation
 					/>
-					<p class="tool__hint" id="color-saturation-hint">
-						How much color there is. At 0% the hue no longer matters and the result is a grey,
-						so the wheel keeps the angle you left it at instead of snapping back to red.
-					</p>
+					<p class="tool__hint" id="color-saturation-hint">How much color there is. At 0% it is grey.</p>
 				</div>
 
 				<div class="tool__field">
@@ -128,10 +115,7 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 						aria-describedby="color-value-hint"
 						data-color-value
 					/>
-					<p class="tool__hint" id="color-value-hint">
-						Value in HSV: 100% is the brightest this color gets, and below that the whole wheel
-						darkens with it. This is not HSL's lightness, where 50% is the fullest color.
-					</p>
+					<p class="tool__hint" id="color-value-hint">HSV value, not HSL lightness.</p>
 				</div>
 			</div>
 
@@ -223,16 +207,13 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 						data-color-css
 					/>
 					<p class="tool__hint" id="color-css-hint">
-						Read by this browser's own CSS parser on Enter or blur, so anything CSS accepts —
-						a named color, rgb(), hsl(), hwb(), oklch(), color() — is read here too, and
-						converted rather than guessed at. An alpha channel is dropped, and the status line
-						says so.
+						Anything CSS accepts, on Enter or blur. An alpha channel is dropped.
 					</p>
 				</div>
 			</div>
 
 			<div class="tool__block tool__color-image-block">
-				<h3 class="tool__sub-title" id="color-image-title">Take a color from an image</h3>
+				<h4 class="tool__sub-title" id="color-image-title">Take a color from an image</h4>
 				{/* The label IS the drop target, as in the other tools: clicking it opens
 				    the picker natively, dragging a file onto it loads it, and Tab reaches
 				    the input inside. */}
@@ -250,7 +231,7 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 				<canvas class="tool__color-preview" aria-hidden="true" hidden data-color-image-preview></canvas>
 				<p class="tool__preview-meta mono" data-color-image-meta></p>
 				<p class="tool__hint" id="color-image-hint" data-color-image-hint>
-					Drop an image, or choose one, to take a color from any pixel of it.
+					Take a color from any pixel of it.
 				</p>
 				<div class="tool__color-image-actions">
 					<button
@@ -277,7 +258,7 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 
 			<div class="tool__block tool__color-formats-block">
 				<div class="tool__color-block-head">
-					<h3 class="tool__sub-title" id="color-formats-title">The color in every format</h3>
+					<h4 class="tool__sub-title" id="color-formats-title">The color in every format</h4>
 					<button
 						class="glass-button glass-button--quiet"
 						type="button"
@@ -297,7 +278,7 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 			</div>
 
 			<div class="tool__block tool__color-contrast-block">
-				<h3 class="tool__sub-title" id="color-contrast-title">Contrast against a background</h3>
+				<h4 class="tool__sub-title" id="color-contrast-title">Contrast against a background</h4>
 				<div class="tool__field">
 					<label class="tool__label" for="color-contrast-bg">Background</label>
 					<div class="tool__color-contrast-row">
@@ -322,11 +303,7 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 							Swap the pair
 						</button>
 					</div>
-					<p class="tool__hint" id="color-contrast-hint">
-						Any CSS color, on Enter or blur. Swap makes the current color the background and the
-						background the color, which is the faster way to check a pair you have the wrong way
-						round.
-					</p>
+					<p class="tool__hint" id="color-contrast-hint">Any CSS color, on Enter or blur.</p>
 				</div>
 				<p class="tool__color-ratio">
 					<span class="tool__color-ratio-value mono" data-color-contrast-ratio>—</span>
@@ -363,19 +340,14 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 					aria-labelledby="color-scheme-list-title"
 					data-color-scheme-list
 				></div>
-				<p class="tool__hint">
-					Every scheme keeps the saturation and brightness you chose, so the colors sit together
-					at the strength you are working in. Each swatch is a button: choose one to make it the
-					current color.
-				</p>
 			</div>
 
 			<div class="tool__block tool__color-palette-block">
 				<div class="tool__color-block-head">
-					<h3 class="tool__sub-title" id="color-palette-title">
+					<h4 class="tool__sub-title" id="color-palette-title">
 						Working palette
 						<span class="tool__value mono" data-color-palette-count>0 of {maxPaletteEntries}</span>
-					</h3>
+					</h4>
 					<div class="tool__color-palette-actions">
 						<button
 							class="glass-button glass-button--quiet"
@@ -400,13 +372,9 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 					</div>
 				</div>
 				<p class="tool__hint" id="color-palette-hint">
-					Held in memory for as long as this page is open: nothing is stored, and a reload starts
-					empty. Copy as CSS writes one custom property per color, named --color-1 upward, ready
-					to paste into a stylesheet.
+					Held in memory while this page is open. Copy as CSS writes --color-1 upward.
 				</p>
-				<p class="tool__color-empty" data-color-palette-empty>
-					The palette is empty. Set a color and choose Add to palette.
-				</p>
+				<p class="tool__color-empty" data-color-palette-empty>Empty — choose Add to palette.</p>
 				<div
 					class="tool__color-swatches tool__color-swatches--palette"
 					role="group"
@@ -438,24 +406,11 @@ const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
 			<p class="tool__error" role="alert" data-color-error hidden></p>
 
 			<p class="tool__note">
-				Everything is converted here, in this tab: the arithmetic is the published kind — sRGB's
-				transfer function and the WCAG 2.x luminance coefficients for contrast, Ottosson's matrices
-				for OKLCH, the standard definitions for HSL, HSV, HWB and CMYK — and no color library and
-				no web service is involved. Four things this tool will not pretend to. There is no alpha
-				channel: a hex with one, or a transparent pixel, is read and reported as dropped. CMYK is
-				derived from RGB, because an honest conversion needs a press profile nobody has told it
-				about. Contrast is WCAG 2.x relative luminance, not APCA, and the badges quote the
-				thresholds they were measured against. And a canvas reports sRGB, so a photo taken in
-				Display P3 is converted on the way in and can look a little duller here than it does in a
-				photo app. Images are read up to {megabytes} MB and{' '}
-				{maxSourcePixels.toLocaleString('en-US')} decoded pixels — the same budget the image
-				converter uses — and it reads {IMAGE_INPUT_LABELS}, not PDFs, documents, archives or video.
-				A color taken from an image is the exact pixel you clicked, at the file's own resolution,
-				never an average of its neighbours; the common colors beside it are counted from a copy
-				downscaled to {sample.scanMaxEdge}px on its long edge, and each one says what share of the
-				image it was. The wheel is drawn per pixel, at up to {wheel.maxBacking}px on its backing
-				store, because a conic gradient interpolates in premultiplied sRGB and would show hues
-				this tool does not mean.
+				No alpha channel · CMYK is derived from RGB, not a press profile · contrast is WCAG 2.x
+				relative luminance, not APCA · an image is read as sRGB. Images up to {megabytes} MB and{' '}
+				{maxSourcePixels.toLocaleString('en-US')} decoded pixels, from {IMAGE_INPUT_LABELS}; the common
+				colors come from a {sample.scanMaxEdge}px copy and the wheel is drawn at up to{' '}
+				{wheel.maxBacking}px.
 			</p>
 		</div>
 	</GlassPanel>

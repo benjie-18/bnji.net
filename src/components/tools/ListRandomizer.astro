@@ -3,6 +3,7 @@
  * Tools — List Randomizer & Shuffler.
  */
 import GlassPanel from '../GlassPanel.astro';
+import { TOOL_LIST_CONFIG } from '../../config/tools.config';
 ---
 
 <section
@@ -13,11 +14,7 @@ import GlassPanel from '../GlassPanel.astro';
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>04</span><span>/ LIST</span></p>
-			<h2 class="tool__title" id="list-randomizer-title">List Randomizer</h2>
-			<p class="tool__lead">
-				Shuffle, sort, reverse, clean, and number your text lists instantly and locally.
-			</p>
+			<h3 class="tool__title" id="list-randomizer-title">List randomizer</h3>
 		</header>
 
 		<div class="tool__body">
@@ -91,9 +88,7 @@ import GlassPanel from '../GlassPanel.astro';
 				</div>
 			</div>
 
-			<p class="tool__note">
-				Processes list data entirely on your device. Handles up to 10,000 lines per operation.
-			</p>
+			<p class="tool__note">Up to {TOOL_LIST_CONFIG.maxLines.toLocaleString('en-US')} lines.</p>
 		</div>
 	</GlassPanel>
 </section>

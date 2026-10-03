@@ -1,0 +1,89 @@
+---
+/**
+ * Tools — the repertory: every tool, grouped by category, one click away.
+ *
+ * Two jobs in one panel: it is the table of contents (each tool is a plain
+ * anchor, so the page is still navigable with JavaScript off) and it is the
+ * category switch (scripts/tools-index.ts reads these links and shows one
+ * category at a time, which is what keeps fourteen tools from being a scroll).
+ *
+ * Nothing here duplicates the tool list by hand: the categories, the names and
+ * the shortcut digits all come from src/data/tools.ts, the same list the page
+ * renders its sections from.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { TOOL_CATEGORIES, TOOL_COUNT } from '../../data/tools';
+---
+
+<section
+	class="tools-repertory"
+	id="tools-repertory"
+	aria-labelledby="tools-repertory-title"
+	data-tools-repertory
+>
+	<GlassPanel pad="md" reveal>
+		<header class="tools-repertory__head">
+			<p class="eyebrow"><span>00</span><span>/ INDEX</span></p>
+			<h2 class="tools-repertory__title" id="tools-repertory-title">Repertory</h2>
+			<p class="tools-repertory__hint">
+				{TOOL_COUNT} tools in {TOOL_CATEGORIES.length} categories — pick one, or press its key.
+			</p>
+		</header>
+
+		<nav class="tools-repertory__cats" aria-label="Tool categories">
+			<a class="tools-repertory__cat" href="#tools-list" data-tools-cat="all" aria-current="true">
+				<kbd class="tools-repertory__cat-key mono" aria-hidden="true">0</kbd>
+				<span class="tools-repertory__cat-name">All</span>
+				<span class="tools-repertory__cat-count mono">{TOOL_COUNT}</span>
+			</a>
+			{
+				TOOL_CATEGORIES.map((category) => (
+					<a
+						class="tools-repertory__cat"
+						href={`#cat-${category.id}`}
+						data-tools-cat={category.id}
+					>
+						<kbd class="tools-repertory__cat-key mono" aria-hidden="true">
+							{category.shortcut}
+						</kbd>
+						<span class="tools-repertory__cat-name">{category.title}</span>
+						<span class="tools-repertory__cat-count mono">{category.tools.length}</span>
+					</a>
+				))
+			}
+		</nav>
+
+		<div class="tools-repertory__grid">
+			{
+				TOOL_CATEGORIES.map((category) => (
+					<div class="tools-repertory__group" data-tools-group-links={category.id}>
+						<p class="tools-repertory__group-label">
+							<span>{category.index}</span>
+							<span class="tools-repertory__slash" aria-hidden="true">
+								/
+							</span>
+							<span>{category.label}</span>
+						</p>
+						<ul class="tools-repertory__list">
+							{category.tools.map((tool) => (
+								<li>
+									<a class="tools-repertory__link" href={`#${tool.id}`} data-tools-link={tool.id}>
+										{tool.name}
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+				))
+			}
+		</div>
+
+		{/*
+		  The one thing filtering hides from a screen reader: that the page just
+		  changed under it. The categories are links, so nothing is announced
+		  when one is chosen — this line is what says "three tools, Time & dates"
+		  instead of leaving the visitor to guess what is still on the page.
+		*/}
+		<p class="sr-only" role="status" data-tools-live>All {TOOL_COUNT} tools are listed.</p>
+	</GlassPanel>
+</section>

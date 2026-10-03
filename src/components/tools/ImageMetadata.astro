@@ -17,11 +17,7 @@ import { TOOL_METADATA_CONFIG } from '../../config/tools.config';
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>02</span><span>/ METADATA</span></p>
-			<h2 class="tool__title" id="image-metadata-title">Image metadata inspector and remover</h2>
-			<p class="tool__lead">
-				Inspect hidden camera settings, EXIF tags, author details, and location data in JPEG, PNG, WebP, or TIFF images. Strip them with one click before sharing.
-			</p>
+			<h3 class="tool__title" id="image-metadata-title">Image metadata</h3>
 		</header>
 
 		<div class="tool__body">
@@ -36,9 +32,7 @@ import { TOOL_METADATA_CONFIG } from '../../config/tools.config';
 					/>
 					<span class="tool-drop__prompt">Choose or Drop an image here</span>
 				</label>
-				<p class="tool__hint">
-					Inspects EXIF, IPTC, XMP, and text metadata. Nothing is ever uploaded to a server.
-				</p>
+				<p class="tool__hint">Reads EXIF, IPTC, XMP and PNG text chunks.</p>
 			</div>
 
 			<div class="tool__actions">
@@ -67,9 +61,7 @@ import { TOOL_METADATA_CONFIG } from '../../config/tools.config';
 				<p class="tool__hint mono" data-metadata-clean-info></p>
 			</div>
 
-			<p class="tool__note">
-				Removing metadata strips hidden EXIF headers (camera info, exposure time, GPS coordinates, device serial numbers) and embedded text chunks without modifying your image's pixel resolution.
-			</p>
+			<p class="tool__note">Strips camera, author, GPS and device tags. Pixels are untouched.</p>
 		</div>
 	</GlassPanel>
 </section>

@@ -64,7 +64,7 @@ tiny, the design coherent and the deployment boring.
 | `src/server/*.ts`        | Server-only modules: board stores (d1/rest), KV rate limiter, access primitives, env access. Never imported by client code. |
 | `src/middleware.ts`      | Route-guard enforcement for ACCESS_RULES (SSR routes only; honest about static limits). |
 | `src/pages/api/*`        | API boundaries: `/api/board`, `/api/dm`. `prerender = false`; validation, sanitization, rate limits live here. |
-| `src/data/*.ts`          | All site content as typed data (site, navigation, projects, interests, ai-stack, network, lab, blog helpers). Components and pages read from here. |
+| `src/data/*.ts`          | All site content as typed data (site, navigation, projects, interests, ai-stack, network, lab, blog helpers, the `/tools/` repertory). Components and pages read from here. |
 | `src/components/`        | Astro components. Primitives: `GlassPanel`, `GlassButton`, `SectionHeading`, `PageHeader`, `BrandMark`, `Icon`. Sections: `Hero`, `AboutPreview`, `ProjectsPreview`, … |
 | `src/components/lab/`    | Runnable experiments for `/lab/`. Each owns its DOM subtree + rAF loop, pauses via IntersectionObserver, has a `destroy()` path. |
 | `src/layouts/`           | `Layout.astro` (shell: head, starfield, header, footer, boot script — no board; the board lives only on `/board/`), `BlogPost.astro` (article chrome + pager). |

@@ -30,6 +30,7 @@ import { initSettings } from './settings';
 import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
+import { initToolsIndex } from './tools-index';
 import { initImageConverter } from './tools-image';
 import { initTextDiff } from './tools-diff';
 import { initWordCounter } from './tools-words';
@@ -83,6 +84,9 @@ export function boot(): void {
 	start('notifications-badge', initNotificationsBadge);
 	// The tools are no-ops on every other page: each init bails unless its own
 	// subtree is in the document, so it costs one querySelector elsewhere.
+	// The repertory goes first: it is what shows one category at a time, and it
+	// only hides sections, so the tools behind them bind either way.
+	start('tools-index', initToolsIndex);
 	start('image-converter', initImageConverter);
 	start('word-counter', initWordCounter);
 	start('text-diff', initTextDiff);

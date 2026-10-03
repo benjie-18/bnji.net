@@ -19,6 +19,213 @@
 	padding-block-end: clamp(3rem, 8vh, 6rem);
 }
 
+/* The four category sections, in the order the repertory lists them. */
+.tools-list {
+	display: grid;
+	gap: clamp(2rem, 5vw, 3.5rem);
+}
+
+/* --- repertory ----------------------------------------------------------- */
+
+.tools-repertory {
+	display: grid;
+	gap: var(--space-4);
+}
+
+.tools-repertory__head {
+	display: grid;
+	gap: var(--space-2);
+	justify-items: start;
+}
+
+.tools-repertory__title {
+	margin: 0;
+	font-size: var(--text-title);
+	font-weight: 250;
+	letter-spacing: var(--tracking-snug);
+	line-height: 1.1;
+	color: var(--text-strong);
+}
+
+.tools-repertory__hint {
+	margin: 0;
+	max-width: 68ch;
+	font-size: var(--text-small);
+	line-height: 1.55;
+	color: var(--text-muted);
+}
+
+/*
+ * The category shortcuts. Chips must not stack a blur layer (see the glass.css
+ * comment), so these are the flat border + wash the site's other chips use —
+ * and the active one is told by its wash and its text, never by colour alone.
+ */
+.tools-repertory__cats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+.tools-repertory__cat {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: 0.45em 0.9em 0.45em 0.55em;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-quiet);
+	color: var(--text-muted);
+	font-family: var(--font-body);
+	font-size: var(--text-small);
+	line-height: 1.2;
+	text-decoration: none;
+	transition:
+		color var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.tools-repertory__cat:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+	}
+}
+
+.tools-repertory__cat[aria-current='true'] {
+	border-color: var(--accent-line);
+	background: var(--accent-soft);
+	color: var(--text-strong);
+}
+
+.tools-repertory__cat-key {
+	display: inline-grid;
+	place-items: center;
+	inline-size: 1.6em;
+	block-size: 1.6em;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xs);
+	color: var(--text-dim);
+	font-size: var(--text-micro);
+	line-height: 1;
+}
+
+.tools-repertory__cat[aria-current='true'] .tools-repertory__cat-key {
+	border-color: var(--accent-line);
+	color: var(--accent-strong);
+}
+
+.tools-repertory__cat-count {
+	color: var(--text-dim);
+	font-size: var(--text-micro);
+}
+
+/* The index itself: as many category columns as the width allows. */
+.tools-repertory__grid {
+	display: grid;
+	gap: var(--space-4) var(--space-6);
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+	align-items: start;
+}
+
+.tools-repertory__group {
+	display: grid;
+	gap: var(--space-2);
+	align-content: start;
+}
+
+.tools-repertory__group-label {
+	display: flex;
+	align-items: center;
+	gap: 0.55em;
+	margin: 0;
+	color: var(--text-dim);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+}
+
+.tools-repertory__slash {
+	color: var(--text-faint);
+}
+
+.tools-repertory__list {
+	display: grid;
+	gap: 0.15rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.tools-repertory__link {
+	display: block;
+	padding-block: 0.15rem;
+	color: var(--text-muted);
+	font-size: var(--text-small);
+	line-height: 1.4;
+	text-decoration: none;
+	transition: color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.tools-repertory__link:hover {
+		color: var(--text-strong);
+	}
+}
+
+/* --- one category -------------------------------------------------------- */
+
+/*
+ * No scroll-margin here: html already carries scroll-padding-top, and the two
+ * would add up and land an anchor jump a nav-height too low.
+ */
+.tool-group {
+	display: grid;
+	gap: var(--space-5);
+}
+
+/* SectionHeading carries its own bottom margin for full-width sections; inside
+   the grid above the gap already separates them, and the two would add up. */
+.tool-group__head {
+	margin-bottom: 0;
+}
+
+.tool-group__tools {
+	display: grid;
+	gap: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.tool-group__back {
+	justify-self: start;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5em;
+	padding: 0.4em 0.85em;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-pill);
+	background: var(--glass-bg-quiet);
+	color: var(--text-dim);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-mono);
+	text-transform: uppercase;
+	text-decoration: none;
+	transition:
+		color var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out),
+		background-color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.tool-group__back:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+		background: var(--glass-bg);
+	}
+}
+
 /* --- one tool ------------------------------------------------------------ */
 
 .tool {

@@ -142,14 +142,21 @@ npm run deploy     # publish to Cloudflare Workers
   away and on `visibilitychange` when the tab is hidden; the rest are driven by
   user events and have no loop to pause.
 - **Games** (`/games/`, linked under Projects) — a typed catalog linking five existing Lab mini-games without copying them. The shared lifecycle/tracker, private admin view, fail-closed score verifier, optional global player identity, bounded cross-device versioned saves, and generic authenticated Durable Object room transport are implemented. Guest/local play remains available; no playable game or game-specific score/turn validation was added. Free-plan rollout/migrations are owner-operated; see `docs/GAMES-OPERATIONS.md`.
-- **Browser tools** (`/tools/`, linked from the Projects dropdown) — four tools
-  that never send anything anywhere, because there is no API route behind
-  any of them. *Image Converter & Optimizer* decodes, resizes and re-encodes
+- **Browser tools** (`/tools/`, linked from the Projects dropdown) — fourteen
+  tools that never send anything anywhere, because there is no API route behind
+  any of them. The page opens on a repertory: four categories — Images & color,
+  Text & lists, Convert & calculate, Time & dates — listed in
+  `src/data/tools.ts`, each one reachable by a link or by its digit (`1`–`4`,
+  and `0` for all). `src/scripts/tools-index.ts` shows one category at a time,
+  which is what keeps fourteen tools from being one long scroll; with JavaScript
+  off the same links jump and every tool is on the page. The copy is
+  deliberately spare — each tool keeps its labels, its limits and one line of
+  trade-offs where a limit would otherwise be invisible. The four with the most
+  behaviour behind them: *Image converter* decodes, resizes and re-encodes
   PNG, JPEG and WebP locally: aspect-ratio-preserving resize, a quality slider
   that is disabled (with the reason shown) for PNG, input/output previews with
   real byte deltas, and a clear error instead of a silent format substitution
-  when a browser cannot encode the requested format. *Word Counter & Text
-  Stats* counts words, characters, sentences, paragraphs, lines, keywords and
+  when a browser cannot encode the requested format. *Word counter* counts words, characters, sentences, paragraphs, lines, keywords and
   reading/speaking times as you type, from a textarea or a dropped text file:
   words are split with the browser's own `Intl.Segmenter`, so a script with no
   spaces (Chinese, Japanese, Thai) counts properly and “well-known” stays one
@@ -158,7 +165,7 @@ npm run deploy     # publish to Cloudflare Workers
   instead of being truncated by a `maxlength`, and the numbers on screen are
   cleared with it rather than left describing text that is no longer in the box;
   the clipboard summary is built from the same counts the panel shows, and
-  “copied” is only said when the write resolved. *Text Diff* compares two texts
+  “copied” is only said when the write resolved. *Text diff* compares two texts
   or two dropped text files line by line, in a unified or a side-by-side view
   with a context slider, marks the words that changed inside a changed line, and
   copies a real unified patch (`git apply` reads it). Line endings are folded
@@ -168,7 +175,7 @@ npm run deploy     # publish to Cloudflare Workers
   the tool can quote, so it refuses past a cell budget instead of wedging a
   phone, it stops auto-comparing past a size threshold and clears the panel
   rather than leaving a stale diff on screen, and it caps the rows it draws
-  while the copied patch still holds every line. *Color Picker & Converter*
+  while the copied patch still holds every line. *Color picker*
   holds one color as HSV and shows it as hex, RGB, HSL, HSV, CMYK, HWB and
   OKLCH, computed in the tab from the published formulas rather than a library.
   A per-pixel color wheel — the angle is the hue, the distance from the centre is

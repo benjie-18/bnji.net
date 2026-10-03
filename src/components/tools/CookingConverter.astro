@@ -17,11 +17,7 @@ const weightUnits = COOKING_UNITS.filter((u) => u.category === 'weight');
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>03</span><span>/ COOKING</span></p>
-			<h2 class="tool__title" id="cooking-converter-title">Cooking Unit Converter</h2>
-			<p class="tool__lead">
-				Convert kitchen volume and weight measurements with optional ingredient density scaling.
-			</p>
+			<h3 class="tool__title" id="cooking-converter-title">Cooking converter</h3>
 		</header>
 
 		<div class="tool__body">
@@ -72,9 +68,7 @@ const weightUnits = COOKING_UNITS.filter((u) => u.category === 'weight');
 					<select class="tool__select" id="cooking-ingredient" data-cooking-ingredient>
 						{INGREDIENT_DENSITIES.map((ing) => <option value={ing.id}>{ing.name}</option>)}
 					</select>
-					<p class="tool__hint">
-						Converting cups to grams requires density. Select the ingredient to adjust density automatically.
-					</p>
+					<p class="tool__hint">Volume to weight needs a density.</p>
 				</div>
 			</div>
 

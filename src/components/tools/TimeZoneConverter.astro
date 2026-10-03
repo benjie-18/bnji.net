@@ -14,11 +14,7 @@ import { COMMON_TIMEZONES, TOOL_TIMEZONE_CONFIG } from '../../config/tools.confi
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>02</span><span>/ TIMEZONE</span></p>
-			<h2 class="tool__title" id="timezone-converter-title">Time Zone Converter</h2>
-			<p class="tool__lead">
-				Convert dates and times across global time zones locally in your browser.
-			</p>
+			<h3 class="tool__title" id="timezone-converter-title">Time zone converter</h3>
 		</header>
 
 		<div class="tool__body">
@@ -31,9 +27,6 @@ import { COMMON_TIMEZONES, TOOL_TIMEZONE_CONFIG } from '../../config/tools.confi
 						type="datetime-local"
 						data-timezone-input
 					/>
-					<p class="tool__hint">
-						Select or enter the wall-clock time in your source time zone.
-					</p>
 				</div>
 
 				<div class="tool__field">
@@ -91,9 +84,7 @@ import { COMMON_TIMEZONES, TOOL_TIMEZONE_CONFIG } from '../../config/tools.confi
 				</div>
 			</div>
 
-			<p class="tool__note">
-				Time zone calculations use your browser's built-in Intl API. Daylight saving time changes are evaluated dynamically based on the selected date.
-			</p>
+			<p class="tool__note">Daylight saving is applied for the date you pick.</p>
 		</div>
 	</GlassPanel>
 </section>

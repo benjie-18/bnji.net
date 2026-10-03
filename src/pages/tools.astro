@@ -5,32 +5,59 @@
  * Each tool is its own component under src/components/tools/ and its behaviour is
  * a module under src/scripts/ started from boot().
  *
+ * The page is a repertory, not a list: src/data/tools.ts groups the tools into
+ * four categories, ToolsRepertory renders the index and the category shortcuts,
+ * and scripts/tools-index.ts shows one category at a time. The order below is
+ * not hand-written either — the sections come from the same list the index does.
+ *
  * Privacy is a structural property here, not a promise: there is no API route,
  * no fetch and no form post behind the tools, so "nothing is uploaded" is
  * checkable in the diff.
  */
-import GlassPanel from '../components/GlassPanel.astro';
 import PageHeader from '../components/PageHeader.astro';
-import SectionHeading from '../components/SectionHeading.astro';
+import ToolGroup from '../components/tools/ToolGroup.astro';
+import ToolsRepertory from '../components/tools/ToolsRepertory.astro';
 import ColorPicker from '../components/tools/ColorPicker.astro';
-import ImageConverter from '../components/tools/ImageConverter.astro';
-import TextDiff from '../components/tools/TextDiff.astro';
-import WordCounter from '../components/tools/WordCounter.astro';
-import ImageMetadata from '../components/tools/ImageMetadata.astro';
-import UnitConverter from '../components/tools/UnitConverter.astro';
-import PercentageCalculator from '../components/tools/PercentageCalculator.astro';
-import DateDifferenceCalculator from '../components/tools/DateDifferenceCalculator.astro';
 import CookingConverter from '../components/tools/CookingConverter.astro';
-import ScreenDpiCalculator from '../components/tools/ScreenDpiCalculator.astro';
-import TimeZoneConverter from '../components/tools/TimeZoneConverter.astro';
-import RandomPicker from '../components/tools/RandomPicker.astro';
-import ListRandomizer from '../components/tools/ListRandomizer.astro';
 import CountdownStopwatch from '../components/tools/CountdownStopwatch.astro';
-import { SITE } from '../data/site';
+import DateDifferenceCalculator from '../components/tools/DateDifferenceCalculator.astro';
+import ImageConverter from '../components/tools/ImageConverter.astro';
+import ImageMetadata from '../components/tools/ImageMetadata.astro';
+import ListRandomizer from '../components/tools/ListRandomizer.astro';
+import PercentageCalculator from '../components/tools/PercentageCalculator.astro';
+import RandomPicker from '../components/tools/RandomPicker.astro';
+import ScreenDpiCalculator from '../components/tools/ScreenDpiCalculator.astro';
+import TextDiff from '../components/tools/TextDiff.astro';
+import TimeZoneConverter from '../components/tools/TimeZoneConverter.astro';
+import UnitConverter from '../components/tools/UnitConverter.astro';
+import WordCounter from '../components/tools/WordCounter.astro';
+import { TOOL_CATEGORIES, TOOL_COUNT, type ToolId } from '../data/tools';
 import Layout from '../layouts/Layout.astro';
 import '../styles/tools.css';
 
-const description = 'Local browser tools for image conversion, date calculations, cooking measurements, and screen DPI calculations.';
+const description = `${TOOL_COUNT} local browser tools for images, text, conversion and time — grouped by category, nothing uploaded.`;
+
+/*
+ * Tool id -> component, checked against the repertory by `satisfies`: a tool
+ * listed in src/data/tools.ts with no component here is a type error, so the
+ * index can never link to a tool this page does not render.
+ */
+const TOOL_COMPONENTS = {
+	'image-converter': ImageConverter,
+	'image-metadata': ImageMetadata,
+	'color-picker': ColorPicker,
+	'word-counter': WordCounter,
+	'text-diff': TextDiff,
+	'list-randomizer': ListRandomizer,
+	'random-picker': RandomPicker,
+	'unit-converter': UnitConverter,
+	'cooking-converter': CookingConverter,
+	'percentage-calculator': PercentageCalculator,
+	'screen-calculator': ScreenDpiCalculator,
+	'date-calculator': DateDifferenceCalculator,
+	'timezone-converter': TimeZoneConverter,
+	'countdown-stopwatch': CountdownStopwatch,
+} satisfies Record<ToolId, typeof ImageConverter>;
 ---
 
 <Layout title="Tools" description={description}>
@@ -43,19 +70,19 @@ const description = 'Local browser tools for image conversion, date calculations
 	/>
 
 	<div class="container tools-body">
-		<ImageConverter />
-		<WordCounter />
-		<TextDiff />
-		<ColorPicker />
-		<ImageMetadata />
-		<UnitConverter />
-		<PercentageCalculator />
-		<DateDifferenceCalculator />
-		<CookingConverter />
-		<ScreenDpiCalculator />
-		<TimeZoneConverter />
-		<RandomPicker />
-		<ListRandomizer />
-		<CountdownStopwatch />
+		<ToolsRepertory />
+
+		<div class="tools-list" id="tools-list">
+			{
+				TOOL_CATEGORIES.map((category) => (
+					<ToolGroup cat={category.id}>
+						{category.tools.map((tool) => {
+							const Tool = TOOL_COMPONENTS[tool.id];
+							return <Tool />;
+						})}
+					</ToolGroup>
+				))
+			}
+		</div>
 	</div>
 </Layout>
