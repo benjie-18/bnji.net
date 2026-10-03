@@ -694,4 +694,3 @@ export const TOOL_COUNTDOWN_CONFIG = {
 		{ label: '1h', seconds: 3600 },
 	],
 } as const;
-} as const;
