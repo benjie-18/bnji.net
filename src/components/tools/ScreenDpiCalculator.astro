@@ -1,0 +1,95 @@
+---
+/**
+ * Tools — Screen / DPI Calculator.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { SCREEN_PRESETS } from '../../config/tools.config';
+---
+
+<section
+	class="tool tool--screen"
+	id="screen-calculator"
+	aria-labelledby="screen-calculator-title"
+	data-screen-calculator
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>04</span><span>/ SCREEN</span></p>
+			<h2 class="tool__title" id="screen-calculator-title">Screen / DPI Calculator</h2>
+			<p class="tool__lead">
+				Calculate pixel density (PPI/DPI), physical dimensions, aspect ratio, and dot pitch from resolution and diagonal screen size.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__controls">
+				<div class="tool__field">
+					<label class="tool__label" for="screen-preset">Display Presets</label>
+					<select class="tool__select" id="screen-preset" data-screen-preset>
+						{SCREEN_PRESETS.map((p, idx) => (
+							<option value={idx}>
+								{p.name} — {p.width}×{p.height}
+							</option>
+						))}
+					</select>
+				</div>
+
+				<div class="tool__resize">
+					<div class="tool__dimension">
+						<label class="tool__sub-label mono" for="screen-width">Width (px)</label>
+						<input
+							class="tool__number"
+							id="screen-width"
+							type="number"
+							min="1"
+							value="1920"
+							data-screen-width
+						/>
+					</div>
+
+					<div class="tool__dimension">
+						<label class="tool__sub-label mono" for="screen-height">Height (px)</label>
+						<input
+							class="tool__number"
+							id="screen-height"
+							type="number"
+							min="1"
+							value="1080"
+							data-screen-height
+						/>
+					</div>
+
+					<div class="tool__dimension">
+						<label class="tool__sub-label mono" for="screen-diagonal">Diagonal (inches)</label>
+						<input
+							class="tool__number"
+							id="screen-diagonal"
+							type="number"
+							min="0.1"
+							step="0.1"
+							value="24"
+							data-screen-diagonal
+						/>
+					</div>
+				</div>
+			</div>
+
+			<div class="tool__actions">
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-screen-reset>
+					Reset Presets
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-screen-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-screen-error hidden></p>
+
+			<div class="tool__results" data-screen-results hidden>
+				<div class="tool__note">
+					<p class="mono" data-screen-output-ppi></p>
+					<p class="tool__hint" data-screen-output-dims></p>
+					<p class="tool__hint" data-screen-output-meta></p>
+				</div>
+			</div>
+		</div>
+	</GlassPanel>
+</section>

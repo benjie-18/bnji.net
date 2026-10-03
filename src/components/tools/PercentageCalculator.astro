@@ -1,0 +1,88 @@
+---
+/**
+ * Tools — Percentage Calculator.
+ *
+ * Instant client-side percentage math: X% of Y, X as % of Y, percentage change, and increase/decrease.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { PERCENTAGE_MODES } from '../../config/tools.config';
+---
+
+<section
+	class="tool tool--percentage"
+	id="percentage-calculator"
+	aria-labelledby="percentage-calculator-title"
+	data-percentage-calculator
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>04</span><span>/ PERCENTAGE</span></p>
+			<h2 class="tool__title" id="percentage-calculator-title">Percentage calculator</h2>
+			<p class="tool__lead">
+				Calculate percentage shares, proportion percentages, percentage growth or decrease, and discounts instantly in your browser tab.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__field">
+				<label class="tool__label" for="percentage-mode">Calculation Type</label>
+				<select class="tool__select" id="percentage-mode" data-percentage-mode>
+					{PERCENTAGE_MODES.map((mode) => (
+						<option value={mode.id}>{mode.label} — {mode.description}</option>
+					))}
+				</select>
+			</div>
+
+			<div class="tool__resize">
+				<div class="tool__field tool__dimension">
+					<label class="tool__label" for="perc-x" data-percentage-x-label>Percentage (X %)</label>
+					<input
+						class="tool__number"
+						id="perc-x"
+						type="number"
+						step="any"
+						inputmode="decimal"
+						placeholder="15"
+						data-percentage-x
+					/>
+				</div>
+
+				<div class="tool__field tool__dimension">
+					<label class="tool__label" for="perc-y" data-percentage-y-label>Target Number (Y)</label>
+					<input
+						class="tool__number"
+						id="perc-y"
+						type="number"
+						step="any"
+						inputmode="decimal"
+						placeholder="100"
+						data-percentage-y
+					/>
+				</div>
+			</div>
+
+			<div class="tool__field">
+				<span class="tool__sub-label mono">Calculated Result</span>
+				<p class="tool__value mono" data-percentage-result style="font-size: var(--text-title); margin: 0;">—</p>
+			</div>
+
+			<div class="tool__actions">
+				<button
+					class="glass-button glass-button--primary"
+					type="button"
+					data-glass=""
+					data-percentage-copy
+					disabled
+				>
+					Copy Result
+				</button>
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-percentage-reset>
+					Reset
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-percentage-status aria-live="polite"></p>
+			<p class="tool__note mono" data-percentage-formula></p>
+		</div>
+	</GlassPanel>
+</section>

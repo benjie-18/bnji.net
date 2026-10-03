@@ -1,15 +1,12 @@
 ---
 /**
- * /tools/ — browser tools, fully local.
+ * /tools/ — fully local browser tools.
  *
  * Each tool is its own component under src/components/tools/ and its behaviour is
- * a module under src/scripts/ started from boot(). The page itself only
- * composes them, so another tool is one component plus one init line — no page
- * rewrite. The four here are an image converter, a word counter, a text diff and
- * a color picker.
+ * a module under src/scripts/ started from boot().
  *
  * Privacy is a structural property here, not a promise: there is no API route,
- * no fetch and no form post behind any of the tools, so "nothing is uploaded" is
+ * no fetch and no form post behind the tools, so "nothing is uploaded" is
  * checkable in the diff.
  */
 import GlassPanel from '../components/GlassPanel.astro';
@@ -19,11 +16,21 @@ import ColorPicker from '../components/tools/ColorPicker.astro';
 import ImageConverter from '../components/tools/ImageConverter.astro';
 import TextDiff from '../components/tools/TextDiff.astro';
 import WordCounter from '../components/tools/WordCounter.astro';
+import ImageMetadata from '../components/tools/ImageMetadata.astro';
+import UnitConverter from '../components/tools/UnitConverter.astro';
+import PercentageCalculator from '../components/tools/PercentageCalculator.astro';
+import DateDifferenceCalculator from '../components/tools/DateDifferenceCalculator.astro';
+import CookingConverter from '../components/tools/CookingConverter.astro';
+import ScreenDpiCalculator from '../components/tools/ScreenDpiCalculator.astro';
+import TimeZoneConverter from '../components/tools/TimeZoneConverter.astro';
+import RandomPicker from '../components/tools/RandomPicker.astro';
+import ListRandomizer from '../components/tools/ListRandomizer.astro';
+import CountdownStopwatch from '../components/tools/CountdownStopwatch.astro';
 import { SITE } from '../data/site';
 import Layout from '../layouts/Layout.astro';
 import '../styles/tools.css';
 
-const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
+const description = 'Local browser tools for image conversion, date calculations, cooking measurements, and screen DPI calculations.';
 ---
 
 <Layout title="Tools" description={description}>
@@ -40,5 +47,15 @@ const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
 		<WordCounter />
 		<TextDiff />
 		<ColorPicker />
+		<ImageMetadata />
+		<UnitConverter />
+		<PercentageCalculator />
+		<DateDifferenceCalculator />
+		<CookingConverter />
+		<ScreenDpiCalculator />
+		<TimeZoneConverter />
+		<RandomPicker />
+		<ListRandomizer />
+		<CountdownStopwatch />
 	</div>
 </Layout>
