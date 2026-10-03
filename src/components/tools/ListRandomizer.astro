@@ -1,0 +1,99 @@
+---
+/**
+ * Tools — List Randomizer & Shuffler.
+ */
+import GlassPanel from '../GlassPanel.astro';
+---
+
+<section
+	class="tool tool--list"
+	id="list-randomizer"
+	aria-labelledby="list-randomizer-title"
+	data-list-randomizer
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>04</span><span>/ LIST</span></p>
+			<h2 class="tool__title" id="list-randomizer-title">List Randomizer</h2>
+			<p class="tool__lead">
+				Shuffle, sort, reverse, clean, and number your text lists instantly and locally.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__pane">
+				<div class="tool__field">
+					<label class="tool__label" for="list-input-textarea">Input List (one item per line)</label>
+					<textarea
+						class="tool__select"
+						id="list-input-textarea"
+						rows="6"
+						placeholder="Apple&#10;Banana&#10;Cherry&#10;Date"
+						data-list-input></textarea>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__check">
+						<input type="checkbox" checked data-list-trim />
+						<span>Trim whitespace on each line</span>
+					</label>
+					<label class="tool__check">
+						<input type="checkbox" checked data-list-blank />
+						<span>Remove blank lines</span>
+					</label>
+					<label class="tool__check">
+						<input type="checkbox" data-list-dupe />
+						<span>Remove duplicate lines</span>
+					</label>
+					<label class="tool__check">
+						<input type="checkbox" data-list-numbers />
+						<span>Add line numbers to output</span>
+					</label>
+				</div>
+			</div>
+
+			<div class="tool__controls">
+				<div class="tool__actions">
+					<button class="glass-button glass-button--primary" type="button" data-glass="" data-list-shuffle>
+						Shuffle List
+					</button>
+					<button class="glass-button" type="button" data-glass="" data-list-reverse>
+						Reverse
+					</button>
+					<button class="glass-button" type="button" data-glass="" data-list-sort-az>
+						Sort (A → Z)
+					</button>
+					<button class="glass-button" type="button" data-glass="" data-list-sort-za>
+						Sort (Z → A)
+					</button>
+					<button class="glass-button glass-button--quiet" type="button" data-glass="" data-list-clear>
+						Clear
+					</button>
+				</div>
+			</div>
+
+			<p class="tool__status" role="status" data-list-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-list-error hidden></p>
+
+			<div class="tool__results" data-list-results hidden>
+				<div class="tool__field">
+					<div class="tool__actions">
+						<button class="glass-button glass-button--primary" type="button" data-glass="" data-list-copy disabled>
+							Copy Output
+						</button>
+					</div>
+					<textarea
+						class="tool__select"
+						id="list-output-textarea"
+						rows="6"
+						readonly
+						data-list-output></textarea>
+				</div>
+			</div>
+
+			<p class="tool__note">
+				Processes list data entirely on your device. Handles up to 10,000 lines per operation.
+			</p>
+		</div>
+	</GlassPanel>
+</section>

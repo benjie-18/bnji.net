@@ -18,7 +18,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 /** Controller -> the component whose markup it binds. */
-const PAIRS = [['src/scripts/tools-image.ts', 'src/components/tools/ImageConverter.astro']] as const;
+const PAIRS = [
+	['src/scripts/tools-image.ts', 'src/components/tools/ImageConverter.astro'],
+	['src/scripts/tools-timezone.ts', 'src/components/tools/TimeZoneConverter.astro'],
+	['src/scripts/tools-random.ts', 'src/components/tools/RandomPicker.astro'],
+	['src/scripts/tools-list.ts', 'src/components/tools/ListRandomizer.astro'],
+	['src/scripts/tools-countdown.ts', 'src/components/tools/CountdownStopwatch.astro'],
+] as const;
 
 /**
  * Every attribute selector a controller looks up. Matches

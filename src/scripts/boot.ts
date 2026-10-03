@@ -31,6 +31,10 @@ import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
+import { initTimeZoneConverter } from './tools-timezone';
+import { initRandomPicker } from './tools-random';
+import { initListRandomizer } from './tools-list';
+import { initCountdownStopwatch } from './tools-countdown';
 import { initTelemetry } from './telemetry';
 import { initVerityBalls } from './verity-balls';
 
@@ -68,9 +72,13 @@ export function boot(): void {
 	start('telemetry', initTelemetry);
 	// Phase E §8.3: header badge polls /api/notifications while pages are open.
 	start('notifications-badge', initNotificationsBadge);
-	// The tool is a no-op on every other page: the init bails unless its
+	// Tools are no-ops on every other page: each init bails unless its
 	// subtree is in the document, so it costs one querySelector elsewhere.
 	start('image-converter', initImageConverter);
+	start('timezone-converter', initTimeZoneConverter);
+	start('random-picker', initRandomPicker);
+	start('list-randomizer', initListRandomizer);
+	start('countdown-stopwatch', initCountdownStopwatch);
 	// Restore verity balls on navigation if active in sessionStorage
 	start('verity-balls', initVerityBalls);
 	// Keep game session tracking out of the shared client chunk and skip the

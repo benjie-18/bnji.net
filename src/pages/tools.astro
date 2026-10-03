@@ -15,6 +15,10 @@ import GlassPanel from '../components/GlassPanel.astro';
 import PageHeader from '../components/PageHeader.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import ImageConverter from '../components/tools/ImageConverter.astro';
+import TimeZoneConverter from '../components/tools/TimeZoneConverter.astro';
+import RandomPicker from '../components/tools/RandomPicker.astro';
+import ListRandomizer from '../components/tools/ListRandomizer.astro';
+import CountdownStopwatch from '../components/tools/CountdownStopwatch.astro';
 import { SITE } from '../data/site';
 import Layout from '../layouts/Layout.astro';
 import '../styles/tools.css';
@@ -33,5 +37,9 @@ const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
 
 	<div class="container tools-body">
 		<ImageConverter />
+		<TimeZoneConverter />
+		<RandomPicker />
+		<ListRandomizer />
+		<CountdownStopwatch />
 	</div>
 </Layout>
