@@ -31,6 +31,9 @@ import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
+import { initTextDiff } from './tools-diff';
+import { initWordCounter } from './tools-words';
+import { initColorPicker } from './tools-color';
 import { initImageMetadata } from './tools-metadata';
 import { initUnitConverter } from './tools-units';
 import { initPercentageCalculator } from './tools-percentage';
@@ -78,9 +81,12 @@ export function boot(): void {
 	start('telemetry', initTelemetry);
 	// Phase E §8.3: header badge polls /api/notifications while pages are open.
 	start('notifications-badge', initNotificationsBadge);
-	// Tools are no-ops on every other page: each init bails unless its
-	// subtree is in the document, costing one querySelector elsewhere.
+	// The tools are no-ops on every other page: each init bails unless its own
+	// subtree is in the document, so it costs one querySelector elsewhere.
 	start('image-converter', initImageConverter);
+	start('word-counter', initWordCounter);
+	start('text-diff', initTextDiff);
+	start('color-picker', initColorPicker);
 	start('image-metadata', initImageMetadata);
 	start('unit-converter', initUnitConverter);
 	start('percentage-calculator', initPercentageCalculator);

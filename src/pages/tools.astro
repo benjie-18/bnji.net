@@ -12,7 +12,10 @@
 import GlassPanel from '../components/GlassPanel.astro';
 import PageHeader from '../components/PageHeader.astro';
 import SectionHeading from '../components/SectionHeading.astro';
+import ColorPicker from '../components/tools/ColorPicker.astro';
 import ImageConverter from '../components/tools/ImageConverter.astro';
+import TextDiff from '../components/tools/TextDiff.astro';
+import WordCounter from '../components/tools/WordCounter.astro';
 import ImageMetadata from '../components/tools/ImageMetadata.astro';
 import UnitConverter from '../components/tools/UnitConverter.astro';
 import PercentageCalculator from '../components/tools/PercentageCalculator.astro';
@@ -41,6 +44,9 @@ const description = 'Local browser tools for image conversion, date calculations
 
 	<div class="container tools-body">
 		<ImageConverter />
+		<WordCounter />
+		<TextDiff />
+		<ColorPicker />
 		<ImageMetadata />
 		<UnitConverter />
 		<PercentageCalculator />

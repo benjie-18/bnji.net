@@ -31,13 +31,17 @@ import {
 	IMAGE_EXTENSION,
 	IMAGE_FORMAT_HINT,
 	IMAGE_FORMAT_NAME,
-	IMAGE_INPUT_LABELS,
-	IMAGE_INPUT_TYPES,
 	IMAGE_MIME,
 	IMAGE_QUALITY_FORMATS,
 	TOOL_IMAGE_CONFIG,
 	type ToolImageFormat,
 } from '../config/tools.config';
+import {
+	checkDecodedImage,
+	checkImageFile,
+	formatBytes,
+	type ImagePurpose,
+} from './tools-shared';
 
 /* ------------------------------------------------------------------------- *
  * Pure helpers. Exported because the interesting decisions — what to refuse,
@@ -47,45 +51,27 @@ import {
 
 export type FileCheck = { ok: true } | { ok: false; message: string };
 
+/** What this tool does with a file it accepts, phrased for the shared refusals. */
+const IMAGE_PURPOSE: ImagePurpose = { verb: 'converts', nothing: 'convert' };
+
 /**
  * Refuse a file before it is decoded, and say why in the visitor's terms.
  *
- * The type check is a whitelist on purpose: the alternative — accepting
- * anything the browser might decode — is how a tool ends up implying it
- * converts PDFs or videos. Anything not in IMAGE_INPUT_TYPES is rejected by
- * name here, before a single byte is read.
+ * The policy — whitelist, byte budget, and the sentences both live in
+ * ./tools-shared, because the colour picker reads images too and two tools must
+ * not disagree about what a browser may be asked to decode. This stays as the
+ * image tool's own name for it, so the tool's callers and its tests still import
+ * the tool.
  */
 export function checkInputFile(file: { name: string; type: string; size: number }): FileCheck {
-	if (!IMAGE_INPUT_TYPES.includes(file.type)) {
-		return {
-			ok: false,
-			message: `“${file.name}” is not a format this tool converts. It reads ${IMAGE_INPUT_LABELS} — not PDFs, documents, archives or video.`,
-		};
-	}
-	if (file.size === 0) {
-		return { ok: false, message: `“${file.name}” is empty, so there is nothing to convert.` };
-	}
-	if (file.size > TOOL_IMAGE_CONFIG.maxInputBytes) {
-		return {
-			ok: false,
-			message: `“${file.name}” is ${formatBytes(file.size)}. This tool reads files up to ${formatBytes(TOOL_IMAGE_CONFIG.maxInputBytes)} so decoding cannot exhaust a phone's memory.`,
-		};
-	}
-	return { ok: true };
+	return checkImageFile(file, IMAGE_PURPOSE);
 }
 
-/** 1536 -> "1.5 KB". Used for every byte count the page shows. */
-export function formatBytes(bytes: number): string {
-	if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-	const units = ['B', 'KB', 'MB', 'GB'];
-	let value = bytes;
-	let unit = 0;
-	while (value >= 1024 && unit < units.length - 1) {
-		value /= 1024;
-		unit += 1;
-	}
-	return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
+/* `formatBytes` moved to ./tools-shared, where the primitives the browser tools
+ * hold in common now live. Re-exported so this module stays the image tool's
+ * whole public surface: its callers, and its tests, import the tool's helpers
+ * from the tool. */
+export { formatBytes };
 
 export type SizeChange = { saved: boolean; percent: number; label: string };
 
@@ -588,13 +574,15 @@ export function initImageConverter(): void {
 			return;
 		}
 
-		const pixels = bitmap.width * bitmap.height;
-		if (pixels > TOOL_IMAGE_CONFIG.maxSourcePixels) {
+		const budget = checkDecodedImage({
+			name: file.name,
+			width: bitmap.width,
+			height: bitmap.height,
+		});
+		if (!budget.ok) {
 			bitmap.close();
 			setBusy(false);
-			showError(
-				`“${file.name}” decodes to ${bitmap.width}×${bitmap.height} (${pixels.toLocaleString()} pixels), over this tool's ${TOOL_IMAGE_CONFIG.maxSourcePixels.toLocaleString()}-pixel source budget.`,
-			);
+			showError(budget.message);
 			return;
 		}
 

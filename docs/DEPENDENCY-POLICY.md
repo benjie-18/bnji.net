@@ -34,7 +34,13 @@ These were the useful parts of the old rule and are unchanged:
    CI-like environment without committing the resulting `package-lock.json`.
 2. **`npm audit` stays clean for production dependencies.** Follow the standing
    process in `docs/DEPENDENCY-AUDIT.md`; re-run `npm audit` and
-   `npm audit --omit=dev` after any change.
+   `npm audit --omit=dev` after any change. `npm audit` is not the whole
+   picture: the registry endpoint can lag the GitHub Advisory Database that
+   Dependabot reads, so a clean audit does not close an open alert. When a push
+   reports an alert `npm audit` cannot see, cross-reference the locked versions
+   against the advisory database — the method and the one current example
+   (alert #62, `http-cache-semantics`, no patched version, not reachable from
+   the deployed Worker) are recorded in `docs/DEPENDENCY-AUDIT.md`.
 3. **No secrets in `package.json`, code, docs or commit messages.** Secrets
    remain environment-only (`src/server/env.ts`, `astro.config.mjs` schema).
 4. **A dependency is not a licence to skip the design work.** A library that

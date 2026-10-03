@@ -611,6 +611,114 @@ const PANEL_CHILDREN = [
 	['span', 'data-music-state-announcement'],
 ];
 
+/**
+ * A recording 2D canvas context, and the reason this shim grew one.
+ *
+ * The color picker's wheel and its image sampling are canvas work. Without a
+ * canvas the shim could only show the tool refusing to draw, never whether it
+ * draws at the size it should, repaints when brightness changes, or reads back
+ * the pixel it was pointed at — and those are the decisions worth testing.
+ *
+ * This is deliberately not an implementation of canvas. It records the calls in
+ * order and hands back what the test put there:
+ *
+ *   - `getImageData` fills its buffer from `context.__pixels`, so a test decides
+ *     what the sampled pixel is and can then assert what the tool did with it;
+ *   - `createImageData` returns a real Uint8ClampedArray of the right length, so
+ *     the wheel's per-pixel paint runs for real and its bytes can be inspected;
+ *   - `fillStyle` and friends store whatever is assigned and report it back,
+ *     which is what makes the canvas-as-CSS-parser path testable in shape (the
+ *     shim does not parse colors; jsdom does, and the jsdom test covers that).
+ *
+ * Pass `canvas2d: false` to installTestDom to leave canvases without a context,
+ * which is how a browser without canvas looks — and how the tool's "the sliders
+ * do the same job" degradation is tested.
+ */
+function installCanvas2d(element) {
+	const calls = [];
+	const state = {
+		fillStyle: '#000000',
+		strokeStyle: '#000000',
+		lineWidth: 1,
+		globalAlpha: 1,
+		imageSmoothingEnabled: true,
+	};
+	const context = {
+		canvas: element,
+		__calls: calls,
+		/** What getImageData reports. One RGBA pixel by default; a test overwrites it. */
+		__pixels: [0, 0, 0, 0],
+		createImageData(width, height) {
+			calls.push(['createImageData', width, height]);
+			return { width, height, data: new Uint8ClampedArray(width * height * 4) };
+		},
+		putImageData(image, x, y) {
+			calls.push(['putImageData', image.width, image.height, x, y]);
+			context.__lastPut = image;
+		},
+		getImageData(x, y, width, height) {
+			calls.push(['getImageData', x, y, width, height]);
+			const data = new Uint8ClampedArray(width * height * 4);
+			for (let index = 0; index < data.length; index += 4) {
+				data[index] = context.__pixels[0];
+				data[index + 1] = context.__pixels[1];
+				data[index + 2] = context.__pixels[2];
+				data[index + 3] = context.__pixels[3];
+			}
+			return { width, height, data };
+		},
+		drawImage(...args) {
+			// Only the numbers are recorded: the first argument is a bitmap the shim
+			// has no opinion about, and the geometry is what a test asserts on.
+			calls.push(['drawImage', ...args.filter((value) => typeof value === 'number')]);
+		},
+		clearRect(...args) {
+			calls.push(['clearRect', ...args]);
+		},
+		fillRect(...args) {
+			calls.push(['fillRect', ...args]);
+		},
+		beginPath() {
+			calls.push(['beginPath']);
+		},
+		closePath() {
+			calls.push(['closePath']);
+		},
+		arc(...args) {
+			calls.push(['arc', ...args]);
+		},
+		fill() {
+			calls.push(['fill', state.fillStyle]);
+		},
+		stroke() {
+			calls.push(['stroke', state.strokeStyle, state.lineWidth]);
+		},
+		save() {
+			calls.push(['save']);
+		},
+		restore() {
+			calls.push(['restore']);
+		},
+		clip() {},
+		translate() {},
+		scale() {},
+		setTransform() {},
+	};
+	for (const key of Object.keys(state)) {
+		Object.defineProperty(context, key, {
+			configurable: true,
+			get: () => state[key],
+			set: (value) => {
+				state[key] = value;
+				calls.push([`set:${key}`, value]);
+			},
+		});
+	}
+	element.getContext = (kind) => (kind === '2d' ? context : null);
+	element.__context = context;
+	return context;
+}
+
 export function installTestDom(options = {}) {
 	const clock = new VirtualClock();
 	// Everything this fixture creates checks this before firing an event, so a
@@ -696,6 +804,9 @@ export function installTestDom(options = {}) {
 		createElement: (tag) => {
 			const element = new TestElement(tag);
 			element.ownerDocument = document;
+			// Every canvas in a fixture is built here, so this is the one place the
+			// shim decides whether the document has a canvas implementation at all.
+			if (tag === 'canvas' && options.canvas2d !== false) installCanvas2d(element);
 			return element;
 		},
 		querySelector: (selector) => documentElement.querySelector(selector) ?? body.querySelector(selector),
@@ -757,6 +868,9 @@ export function installTestDom(options = {}) {
 		document,
 		location: { pathname: options.pathname ?? '/', href: 'https://bnji.net/' },
 		visibilityState: 'visible',
+		// Read by anything that sizes a canvas backing store; a shim without it
+		// would leave those tests asserting a fallback rather than a decision.
+		devicePixelRatio: options.devicePixelRatio ?? 1,
 		setTimeout: (fn, ms) => clock.setTimeout(fn, ms),
 		clearTimeout: (id) => clock.clearTimeout(id),
 		setInterval: (fn, ms) => clock.setInterval(fn, ms),
