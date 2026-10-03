@@ -31,6 +31,9 @@ import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
+import { initDateDifferenceCalculator } from './tools-date-difference';
+import { initCookingConverter } from './tools-cooking';
+import { initScreenDpiCalculator } from './tools-screen-dpi';
 import { initTimeZoneConverter } from './tools-timezone';
 import { initRandomPicker } from './tools-random';
 import { initListRandomizer } from './tools-list';
@@ -72,6 +75,11 @@ export function boot(): void {
 	start('telemetry', initTelemetry);
 	// Phase E §8.3: header badge polls /api/notifications while pages are open.
 	start('notifications-badge', initNotificationsBadge);
+	// Tools: no-op on every other page as each init bails unless its subtree is in the document.
+	start('image-converter', initImageConverter);
+	start('date-calculator', initDateDifferenceCalculator);
+	start('cooking-converter', initCookingConverter);
+	start('screen-calculator', initScreenDpiCalculator);
 	// Tools are no-ops on every other page: each init bails unless its
 	// subtree is in the document, so it costs one querySelector elsewhere.
 	start('image-converter', initImageConverter);

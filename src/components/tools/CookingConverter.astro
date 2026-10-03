@@ -1,0 +1,101 @@
+---
+/**
+ * Tools — Cooking Unit Converter.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { COOKING_UNITS, INGREDIENT_DENSITIES } from '../../config/tools.config';
+
+const volumeUnits = COOKING_UNITS.filter((u) => u.category === 'volume');
+const weightUnits = COOKING_UNITS.filter((u) => u.category === 'weight');
+---
+
+<section
+	class="tool tool--cooking"
+	id="cooking-converter"
+	aria-labelledby="cooking-converter-title"
+	data-cooking-converter
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>03</span><span>/ COOKING</span></p>
+			<h2 class="tool__title" id="cooking-converter-title">Cooking Unit Converter</h2>
+			<p class="tool__lead">
+				Convert kitchen volume and weight measurements with optional ingredient density scaling.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__controls">
+				<div class="tool__field">
+					<label class="tool__label" for="cooking-amount">Amount</label>
+					<input
+						class="tool__number"
+						id="cooking-amount"
+						type="number"
+						min="0"
+						step="any"
+						value="1"
+						data-cooking-amount
+					/>
+				</div>
+
+				<div class="tool__resize">
+					<div class="tool__dimension">
+						<label class="tool__sub-label mono" for="cooking-from">From Unit</label>
+						<select class="tool__select" id="cooking-from" data-cooking-from>
+							<optgroup label="Volume">
+								{volumeUnits.map((u) => <option value={u.id}>{u.name}</option>)}
+							</optgroup>
+							<optgroup label="Weight">
+								{weightUnits.map((u) => <option value={u.id}>{u.name}</option>)}
+							</optgroup>
+						</select>
+					</div>
+
+					<div class="tool__dimension">
+						<label class="tool__sub-label mono" for="cooking-to">To Unit</label>
+						<select class="tool__select" id="cooking-to" data-cooking-to>
+							<optgroup label="Weight">
+								{weightUnits.map((u) => <option value={u.id}>{u.name}</option>)}
+							</optgroup>
+							<optgroup label="Volume">
+								{volumeUnits.map((u) => <option value={u.id}>{u.name}</option>)}
+							</optgroup>
+						</select>
+					</div>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="cooking-ingredient">
+						Ingredient Density (for volume ↔ weight conversion)
+					</label>
+					<select class="tool__select" id="cooking-ingredient" data-cooking-ingredient>
+						{INGREDIENT_DENSITIES.map((ing) => <option value={ing.id}>{ing.name}</option>)}
+					</select>
+					<p class="tool__hint">
+						Converting cups to grams requires density. Select the ingredient to adjust density automatically.
+					</p>
+				</div>
+			</div>
+
+			<div class="tool__actions">
+				<button class="glass-button" type="button" data-glass="" data-cooking-swap>
+					Swap Units
+				</button>
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-cooking-reset>
+					Reset
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-cooking-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-cooking-error hidden></p>
+
+			<div class="tool__results" data-cooking-results hidden>
+				<div class="tool__note">
+					<p class="mono" data-cooking-output-value></p>
+					<p class="tool__hint" data-cooking-output-meta></p>
+				</div>
+			</div>
+		</div>
+	</GlassPanel>
+</section>
