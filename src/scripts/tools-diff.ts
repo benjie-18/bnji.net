@@ -46,6 +46,9 @@ import {
 import {
 	checkTextFile,
 	codePointLength,
+	COPY_REFUSED,
+	COPY_UNAVAILABLE,
+	copyText,
 	formatBytes,
 	formatCount,
 	looksLikeMojibake,
@@ -1189,23 +1192,20 @@ export function initTextDiff(): void {
 			leftLabel: names.left ?? 'left',
 			rightLabel: names.right ?? 'right',
 		});
-		const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
-		if (!clipboard?.writeText) {
-			// No clipboard API is not a failed copy, it is no copy: say so, and
-			// point at the table instead of pretending.
-			setStatus(
-				'This browser has no clipboard API (it needs a secure context), so nothing was copied. The table above is the comparison.',
-			);
+		// No clipboard API is not a failed copy, it is no copy: say so, and
+		// point at the table instead of pretending.
+		const outcome = await copyText(patch);
+		if (outcome === 'unavailable') {
+			setStatus(`${COPY_UNAVAILABLE} The table above is the comparison.`);
 			return;
 		}
-		try {
-			await clipboard.writeText(patch);
-			setStatus(
-				`Patch copied — ${formatCount(next.removed)} removed, ${formatCount(next.added)} added, ${formatCount(next.sections)} ${next.sections === 1 ? 'hunk' : 'hunks'}.`,
-			);
-		} catch {
-			setStatus('The clipboard refused the copy, so nothing was copied.');
+		if (outcome === 'refused') {
+			setStatus(COPY_REFUSED);
+			return;
 		}
+		setStatus(
+			`Patch copied — ${formatCount(next.removed)} removed, ${formatCount(next.added)} added, ${formatCount(next.sections)} ${next.sections === 1 ? 'hunk' : 'hunks'}.`,
+		);
 	};
 
 	const reset = () => {

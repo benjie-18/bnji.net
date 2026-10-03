@@ -142,7 +142,7 @@ npm run deploy     # publish to Cloudflare Workers
   away and on `visibilitychange` when the tab is hidden; the rest are driven by
   user events and have no loop to pause.
 - **Games** (`/games/`, linked under Projects) — a typed catalog linking five existing Lab mini-games without copying them. The shared lifecycle/tracker, private admin view, fail-closed score verifier, optional global player identity, bounded cross-device versioned saves, and generic authenticated Durable Object room transport are implemented. Guest/local play remains available; no playable game or game-specific score/turn validation was added. Free-plan rollout/migrations are owner-operated; see `docs/GAMES-OPERATIONS.md`.
-- **Browser tools** (`/tools/`, linked from the Projects dropdown) — three tools
+- **Browser tools** (`/tools/`, linked from the Projects dropdown) — four tools
   that never send anything anywhere, because there is no API route behind
   any of them. *Image Converter & Optimizer* decodes, resizes and re-encodes
   PNG, JPEG and WebP locally: aspect-ratio-preserving resize, a quality slider
@@ -168,9 +168,31 @@ npm run deploy     # publish to Cloudflare Workers
   the tool can quote, so it refuses past a cell budget instead of wedging a
   phone, it stops auto-comparing past a size threshold and clears the panel
   rather than leaving a stale diff on screen, and it caps the rows it draws
-  while the copied patch still holds every line. Limits, pace domains, the
-  common-words list, the diff budgets and the view copy live in
-  `src/config/tools.config.ts`.
+  while the copied patch still holds every line. *Color Picker & Converter*
+  holds one color as HSV and shows it as hex, RGB, HSL, HSV, CMYK, HWB and
+  OKLCH, computed in the tab from the published formulas rather than a library.
+  A per-pixel color wheel — the angle is the hue, the distance from the centre is
+  how much color there is — sits beside hue, saturation and brightness sliders
+  that set exactly the same values; the sliders are the accessible path, because
+  both canvases are `aria-hidden` and pointer-only and every value the pointer
+  can reach a labelled control reaches too. It reads any CSS color the browser
+  can read (a name, `hsl()`, `oklch()`, through the CSSOM and a canvas
+  `fillStyle` rather than a second guess at the spec), checks a color against a
+  background with four WCAG badges that quote the thresholds they were measured
+  against, builds six harmony schemes, keeps a working palette that copies out
+  as CSS custom properties, and takes a color from an uploaded image: the pixel
+  you click is that exact pixel at the file's own resolution, never an average
+  of its neighbors, and up to eight common colors are counted from a copy
+  downscaled to 160px on its long edge with the share each one had printed
+  beside it. Four things it will not pretend to: there is no alpha channel (a
+  hex or a pixel with one is read and reported as dropped), CMYK is derived from
+  RGB because an honest conversion needs a press profile nobody has told it
+  about, contrast is WCAG 2.x relative luminance and not APCA, and a canvas
+  reports sRGB, so a photo taken in Display P3 is converted on the way in. A
+  browser with no canvas gets the wheel hidden with the reason shown and the
+  image half refused before it is read, with everything else still working.
+  Limits, pace domains, the common-words list, the diff budgets, the color
+  formats and schemes, and the view copy live in `src/config/tools.config.ts`.
 - **Admin panel** (`/admin`, gated) — one shared access token stored as a
   SHA-256 hash in D1 and rotated from the panel itself; a site-wide statistics
   dashboard built only from data the app already records; board moderation;

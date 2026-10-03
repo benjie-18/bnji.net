@@ -1,0 +1,462 @@
+---
+/**
+ * Tools — Color picker and converter.
+ *
+ * Same split as the image converter, the word counter and the text diff: the
+ * whole interface is markup plus CSS, and every behaviour lives in
+ * src/scripts/tools-color.ts, reached through boot(). With JavaScript blocked,
+ * late or broken, the fields, the labels and the note still describe what the
+ * tool converts between and what it refuses — the wheel is a canvas and the
+ * read-outs are empty rather than wrong, and nothing on the page depends on the
+ * script to make sense.
+ *
+ * THE TWO CANVASES ARE aria-hidden ON PURPOSE. A screen reader cannot use a
+ * picture of a colour space, and the alternative — a focusable canvas with custom
+ * key handling — would be a second, worse-described copy of controls that already
+ * exist: the three sliders set exactly what the wheel sets, and the common colors
+ * found in an image are buttons with the hex and the share they represent in
+ * their names. Every value the pointer can reach, the keyboard can reach too, so
+ * the canvases are decoration that happens to be interactive.
+ *
+ * Limits, labels and the sentences that explain a trade-off come from
+ * src/config/tools.config.ts: the component never hard-codes a limit, a format
+ * list or a hint.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import {
+	COLOR_FORMAT_HINT,
+	COLOR_SCHEMES,
+	COLOR_SCHEME_LABEL,
+	IMAGE_FILE_CONFIG,
+	IMAGE_INPUT_ACCEPT,
+	IMAGE_INPUT_LABELS,
+	TOOL_COLOR_CONFIG,
+} from '../../config/tools.config';
+
+const { defaultColor, defaultBackground, maxPaletteEntries, wheel, sample, contrast } =
+	TOOL_COLOR_CONFIG;
+/* The image limits are the shared image-file policy, not a color-tool setting. */
+const { maxBytes: maxImageBytes, maxSourcePixels } = IMAGE_FILE_CONFIG;
+const megabytes = (maxImageBytes / (1024 * 1024)).toLocaleString('en-US');
+---
+
+<section
+	class="tool tool--color"
+	id="color-picker"
+	aria-labelledby="color-picker-title"
+	data-color-picker
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>04</span><span>/ COLOR</span></p>
+			<h2 class="tool__title" id="color-picker-title">Color picker and converter</h2>
+			<p class="tool__lead">
+				Pick a color from the wheel, type one in, or take a single pixel out of an image you drop
+				here — then read it back in seven formats, check it against a background, and build a
+				palette from it. Every conversion is arithmetic in this tab; nothing is uploaded, and no
+				color service is called.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__pane">
+				<div class="tool__field">
+					<p class="tool__label" id="color-wheel-label">Color wheel</p>
+					<div class="tool__color-wheel">
+						<canvas class="tool__color-wheel-canvas" aria-hidden="true" data-color-wheel></canvas>
+					</div>
+					<p class="tool__hint" id="color-wheel-hint" data-color-wheel-hint></p>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="color-hue">
+						Hue
+						<span class="tool__value mono" data-color-hue-value>—</span>
+					</label>
+					<input
+						class="tool__range"
+						id="color-hue"
+						type="range"
+						min="0"
+						max="360"
+						step="1"
+						value="0"
+						aria-describedby="color-wheel-hint"
+						data-color-hue
+					/>
+					<p class="tool__hint" id="color-hue-hint">
+						The angle on the wheel, 0–360°. Red at 0°, yellow at 60°, green at 120°, cyan at
+						180°, blue at 240°, magenta at 300°.
+					</p>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="color-saturation">
+						Saturation
+						<span class="tool__value mono" data-color-saturation-value>—</span>
+					</label>
+					<input
+						class="tool__range"
+						id="color-saturation"
+						type="range"
+						min="0"
+						max="100"
+						step="1"
+						value="0"
+						aria-describedby="color-saturation-hint"
+						data-color-saturation
+					/>
+					<p class="tool__hint" id="color-saturation-hint">
+						How much color there is. At 0% the hue no longer matters and the result is a grey,
+						so the wheel keeps the angle you left it at instead of snapping back to red.
+					</p>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="color-value">
+						Brightness
+						<span class="tool__value mono" data-color-value-value>—</span>
+					</label>
+					<input
+						class="tool__range"
+						id="color-value"
+						type="range"
+						min="0"
+						max="100"
+						step="1"
+						value="0"
+						aria-describedby="color-value-hint"
+						data-color-value
+					/>
+					<p class="tool__hint" id="color-value-hint">
+						Value in HSV: 100% is the brightest this color gets, and below that the whole wheel
+						darkens with it. This is not HSL's lightness, where 50% is the fullest color.
+					</p>
+				</div>
+			</div>
+
+			<div class="tool__controls">
+				<div class="tool__color-current">
+					{/*
+					  The swatch is the one place a color is shown without a hex beside
+					  it, so it is aria-hidden: the field and the sentence below already
+					  say what it is, in words a screen reader can read.
+					*/}
+					<div class="tool__color-swatch-large" aria-hidden="true" data-color-swatch></div>
+					<p class="tool__color-name" data-color-name>—</p>
+				</div>
+
+				<div class="tool__field">
+					<label class="tool__label" for="color-hex">Hex</label>
+					<input
+						class="tool__color-input mono"
+						id="color-hex"
+						type="text"
+						spellcheck="false"
+						autocomplete="off"
+						autocapitalize="off"
+						placeholder={defaultColor}
+						aria-describedby="color-hex-hint"
+						data-color-hex
+					/>
+					<p class="tool__hint" id="color-hex-hint">{COLOR_FORMAT_HINT.hex}</p>
+				</div>
+
+				<fieldset class="tool__field tool__color-channels">
+					<legend class="tool__label">RGB channels</legend>
+					<div class="tool__color-channel">
+						<label class="tool__sub-label" for="color-red">Red</label>
+						<input
+							class="tool__color-input mono"
+							id="color-red"
+							type="number"
+							min="0"
+							max="255"
+							step="1"
+							inputmode="numeric"
+							aria-describedby="color-rgb-hint"
+							data-color-red
+						/>
+					</div>
+					<div class="tool__color-channel">
+						<label class="tool__sub-label" for="color-green">Green</label>
+						<input
+							class="tool__color-input mono"
+							id="color-green"
+							type="number"
+							min="0"
+							max="255"
+							step="1"
+							inputmode="numeric"
+							aria-describedby="color-rgb-hint"
+							data-color-green
+						/>
+					</div>
+					<div class="tool__color-channel">
+						<label class="tool__sub-label" for="color-blue">Blue</label>
+						<input
+							class="tool__color-input mono"
+							id="color-blue"
+							type="number"
+							min="0"
+							max="255"
+							step="1"
+							inputmode="numeric"
+							aria-describedby="color-rgb-hint"
+							data-color-blue
+						/>
+					</div>
+					<p class="tool__hint" id="color-rgb-hint">{COLOR_FORMAT_HINT.rgb}</p>
+				</fieldset>
+
+				<div class="tool__field">
+					<label class="tool__label" for="color-css">Any CSS color</label>
+					<input
+						class="tool__color-input mono"
+						id="color-css"
+						type="text"
+						spellcheck="false"
+						autocomplete="off"
+						autocapitalize="off"
+						placeholder="rebeccapurple, hsl(200 60% 40%), oklch(70% 0.1 200)"
+						aria-describedby="color-css-hint"
+						data-color-css
+					/>
+					<p class="tool__hint" id="color-css-hint">
+						Read by this browser's own CSS parser on Enter or blur, so anything CSS accepts —
+						a named color, rgb(), hsl(), hwb(), oklch(), color() — is read here too, and
+						converted rather than guessed at. An alpha channel is dropped, and the status line
+						says so.
+					</p>
+				</div>
+			</div>
+
+			<div class="tool__block tool__color-image-block">
+				<h3 class="tool__sub-title" id="color-image-title">Take a color from an image</h3>
+				{/* The label IS the drop target, as in the other tools: clicking it opens
+				    the picker natively, dragging a file onto it loads it, and Tab reaches
+				    the input inside. */}
+				<label class="tool-drop" data-color-image-drop>
+					<span class="sr-only">Choose an image to take colors from</span>
+					<input
+						class="tool-drop__input"
+						type="file"
+						accept={IMAGE_INPUT_ACCEPT}
+						aria-describedby="color-image-hint"
+						data-color-image-input
+					/>
+					<span class="tool-drop__prompt">Choose / drop an image</span>
+				</label>
+				<canvas class="tool__color-preview" aria-hidden="true" hidden data-color-image-preview></canvas>
+				<p class="tool__preview-meta mono" data-color-image-meta></p>
+				<p class="tool__hint" id="color-image-hint" data-color-image-hint>
+					Drop an image, or choose one, to take a color from any pixel of it.
+				</p>
+				<div class="tool__color-image-actions">
+					<button
+						class="glass-button glass-button--quiet"
+						type="button"
+						data-glass=""
+						hidden
+						data-color-image-clear
+					>
+						Remove image
+					</button>
+				</div>
+				<div class="tool__color-common">
+					<p class="tool__sub-label" id="color-common-title">Common colors in this image</p>
+					<div
+						class="tool__color-swatches"
+						role="group"
+						aria-labelledby="color-common-title"
+						hidden
+						data-color-common-list
+					></div>
+				</div>
+			</div>
+
+			<div class="tool__block tool__color-formats-block">
+				<div class="tool__color-block-head">
+					<h3 class="tool__sub-title" id="color-formats-title">The color in every format</h3>
+					<button
+						class="glass-button glass-button--quiet"
+						type="button"
+						data-glass=""
+						aria-describedby="color-formats-title"
+						data-color-formats-copy
+					>
+						Copy every format
+					</button>
+				</div>
+				<div
+					class="tool__color-formats"
+					role="group"
+					aria-labelledby="color-formats-title"
+					data-color-formats
+				></div>
+			</div>
+
+			<div class="tool__block tool__color-contrast-block">
+				<h3 class="tool__sub-title" id="color-contrast-title">Contrast against a background</h3>
+				<div class="tool__field">
+					<label class="tool__label" for="color-contrast-bg">Background</label>
+					<div class="tool__color-contrast-row">
+						<input
+							class="tool__color-input mono"
+							id="color-contrast-bg"
+							type="text"
+							spellcheck="false"
+							autocomplete="off"
+							autocapitalize="off"
+							placeholder={defaultBackground}
+							aria-describedby="color-contrast-hint"
+							data-color-contrast-bg
+						/>
+						<button
+							class="glass-button glass-button--quiet"
+							type="button"
+							data-glass=""
+							aria-describedby="color-contrast-hint"
+							data-color-contrast-swap
+						>
+							Swap the pair
+						</button>
+					</div>
+					<p class="tool__hint" id="color-contrast-hint">
+						Any CSS color, on Enter or blur. Swap makes the current color the background and the
+						background the color, which is the faster way to check a pair you have the wrong way
+						round.
+					</p>
+				</div>
+				<p class="tool__color-ratio">
+					<span class="tool__color-ratio-value mono" data-color-contrast-ratio>—</span>
+					<span class="tool__color-ratio-sentence" data-color-contrast-sentence></span>
+				</p>
+				<div
+					class="tool__color-badges"
+					role="group"
+					aria-labelledby="color-contrast-title"
+					data-color-contrast-verdicts
+				></div>
+				<div class="tool__color-sample" data-color-contrast-sample>
+					{/* The size comes from config: this span is the text the "large
+					    text" verdict is about, so it has to actually be that size. */}
+					<span class="tool__color-sample-large" style={`font-size: ${contrast.largeTextPx}px`}>
+						Large text, {contrast.largeTextPx}px and up
+					</span>
+					<span class="tool__color-sample-normal">Body text at 16px, the size most copy is set in.</span>
+				</div>
+			</div>
+
+			<div class="tool__block tool__color-scheme-block">
+				<div class="tool__field">
+					<label class="tool__label" for="color-scheme">Harmony scheme</label>
+					<select class="tool__select" id="color-scheme" aria-describedby="color-scheme-hint" data-color-scheme>
+						{COLOR_SCHEMES.map((name) => <option value={name}>{COLOR_SCHEME_LABEL[name]}</option>)}
+					</select>
+					<p class="tool__hint" id="color-scheme-hint" data-color-scheme-hint></p>
+				</div>
+				<p class="tool__sub-label" id="color-scheme-list-title">The colors in this scheme</p>
+				<div
+					class="tool__color-swatches"
+					role="group"
+					aria-labelledby="color-scheme-list-title"
+					data-color-scheme-list
+				></div>
+				<p class="tool__hint">
+					Every scheme keeps the saturation and brightness you chose, so the colors sit together
+					at the strength you are working in. Each swatch is a button: choose one to make it the
+					current color.
+				</p>
+			</div>
+
+			<div class="tool__block tool__color-palette-block">
+				<div class="tool__color-block-head">
+					<h3 class="tool__sub-title" id="color-palette-title">
+						Working palette
+						<span class="tool__value mono" data-color-palette-count>0 of {maxPaletteEntries}</span>
+					</h3>
+					<div class="tool__color-palette-actions">
+						<button
+							class="glass-button glass-button--quiet"
+							type="button"
+							data-glass=""
+							disabled
+							aria-describedby="color-palette-hint"
+							data-color-palette-copy
+						>
+							Copy as CSS
+						</button>
+						<button
+							class="glass-button glass-button--quiet"
+							type="button"
+							data-glass=""
+							disabled
+							aria-describedby="color-palette-hint"
+							data-color-palette-clear
+						>
+							Clear
+						</button>
+					</div>
+				</div>
+				<p class="tool__hint" id="color-palette-hint">
+					Held in memory for as long as this page is open: nothing is stored, and a reload starts
+					empty. Copy as CSS writes one custom property per color, named --color-1 upward, ready
+					to paste into a stylesheet.
+				</p>
+				<p class="tool__color-empty" data-color-palette-empty>
+					The palette is empty. Set a color and choose Add to palette.
+				</p>
+				<div
+					class="tool__color-swatches tool__color-swatches--palette"
+					role="group"
+					aria-labelledby="color-palette-title"
+					data-color-palette-list
+				></div>
+			</div>
+
+			{/*
+			  Plain <button class="glass-button"> rather than the GlassButton
+			  component: GlassButton only forwards the props it declares, so a
+			  data-* hook passed to it is dropped and the script would find
+			  nothing to bind. The other three tools use this markup for the same
+			  reason, and tests/tools-markup.test.ts guards it.
+			*/}
+			<div class="tool__actions">
+				<button class="glass-button glass-button--primary" type="button" data-glass="" data-color-copy>
+					Copy hex
+				</button>
+				<button class="glass-button" type="button" data-glass="" data-color-palette-add>
+					Add to palette
+				</button>
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-color-reset>
+					Reset
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-color-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-color-error hidden></p>
+
+			<p class="tool__note">
+				Everything is converted here, in this tab: the arithmetic is the published kind — sRGB's
+				transfer function and the WCAG 2.x luminance coefficients for contrast, Ottosson's matrices
+				for OKLCH, the standard definitions for HSL, HSV, HWB and CMYK — and no color library and
+				no web service is involved. Four things this tool will not pretend to. There is no alpha
+				channel: a hex with one, or a transparent pixel, is read and reported as dropped. CMYK is
+				derived from RGB, because an honest conversion needs a press profile nobody has told it
+				about. Contrast is WCAG 2.x relative luminance, not APCA, and the badges quote the
+				thresholds they were measured against. And a canvas reports sRGB, so a photo taken in
+				Display P3 is converted on the way in and can look a little duller here than it does in a
+				photo app. Images are read up to {megabytes} MB and{' '}
+				{maxSourcePixels.toLocaleString('en-US')} decoded pixels — the same budget the image
+				converter uses — and it reads {IMAGE_INPUT_LABELS}, not PDFs, documents, archives or video.
+				A color taken from an image is the exact pixel you clicked, at the file's own resolution,
+				never an average of its neighbours; the common colors beside it are counted from a copy
+				downscaled to {sample.scanMaxEdge}px on its long edge, and each one says what share of the
+				image it was. The wheel is drawn per pixel, at up to {wheel.maxBacking}px on its backing
+				store, because a conic gradient interpolates in premultiplied sRGB and would show hues
+				this tool does not mean.
+			</p>
+		</div>
+	</GlassPanel>
+</section>

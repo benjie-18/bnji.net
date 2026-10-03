@@ -347,7 +347,7 @@ A “coming soon” entry does not create a page. To make a new destination live
 
 ### The browser tools on `/tools/`
 
-`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries three
+`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries four
 tools, and all of them run entirely in the visitor's browser: there is no API route, no
 upload and no storage behind any of them, so "nothing is uploaded" is a property
 of the code rather than a promise.
@@ -393,13 +393,38 @@ of the code rather than a promise.
   re-comparing as you type and clears the panel instead of leaving a diff that
   describes text no longer in the box.
 
+- **Color Picker & Converter** — holds one color and shows it in seven formats
+  (hex, RGB, HSL, HSV, CMYK, HWB, OKLCH), each with its own copy button, beside a
+  color wheel, three sliders, six harmony schemes, a contrast checker against any
+  background, a working palette, and colors taken from an image the visitor drops
+  or chooses. It reads any color a browser can read — a hex, `rgb()`, `hsl()`,
+  `oklch()`, a CSS color name — by asking the browser's own CSS parser instead of
+  guessing at the specification, and a color taken from an image is the exact
+  pixel the visitor clicked at the file's own resolution, never an average of its
+  neighbours. It does **not** keep the palette (a reload starts from the default
+  color), does **not** convert to a print profile, does **not** do transparency,
+  and does **not** edit or re-save the image: the file is decoded, drawn into a
+  canvas, sampled, and dropped. Four limits are worth knowing before you are
+  asked about them: CMYK is derived from RGB, because an honest conversion needs
+  a press profile nobody has told it about; contrast is WCAG 2.x relative
+  luminance, not APCA; a canvas reports sRGB, so a photo taken in Display P3 is
+  converted on the way in and can look a little duller here than it does in a
+  photo app; and the image budget is the image converter's (25 MB and 40 million
+  decoded pixels), with the common-colors list counted from a copy downscaled to
+  160px on its long edge. In a browser with no canvas the wheel hides itself and
+  says why, the image half is refused before it is read, and the sliders, the
+  fields, the schemes, the contrast checker and the palette all still work — the
+  wheel was never the only way to reach a color.
+
 Formats, accepted input types, pace ranges, the common-words list, the diff
-budgets and every limit live in **`src/config/tools.config.ts`**; behaviour lives
-in `src/scripts/tools-image.ts`, `src/scripts/tools-words.ts` and
-`src/scripts/tools-diff.ts`, all started from `src/scripts/boot.ts`. The three
+budgets, the color formats and harmony schemes, and every limit live in
+**`src/config/tools.config.ts`**; behaviour lives in `src/scripts/tools-image.ts`,
+`src/scripts/tools-words.ts`, `src/scripts/tools-diff.ts` and
+`src/scripts/tools-color.ts`, all started from `src/scripts/boot.ts`. The four
 share `src/scripts/tools-shared.ts` — byte and number formatting, the text-file
-whitelist and its byte limit, and the shape of a refusal — so two tools cannot
-disagree about what a text file is or how a size is written. To add another tool, add a component under
+whitelist and its byte limit, the image-file policy both image-reading tools
+enforce, the clipboard, and the shape of a refusal — so two tools cannot disagree
+about what a text file is, how a size is written, or what "copied" means. To add another tool, add a component under
 `src/components/tools/` plus one init module and one line in `boot.ts` — the page
 itself only composes them. `tests/tools-markup.test.ts` lists every
 controller/component pair, so a new tool needs one line there too.

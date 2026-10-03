@@ -33,6 +33,7 @@ import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
 import { initTextDiff } from './tools-diff';
 import { initWordCounter } from './tools-words';
+import { initColorPicker } from './tools-color';
 import { initTelemetry } from './telemetry';
 import { initVerityBalls } from './verity-balls';
 
@@ -75,6 +76,7 @@ export function boot(): void {
 	start('image-converter', initImageConverter);
 	start('word-counter', initWordCounter);
 	start('text-diff', initTextDiff);
+	start('color-picker', initColorPicker);
 	// Restore verity balls on navigation if active in sessionStorage
 	start('verity-balls', initVerityBalls);
 	// Keep game session tracking out of the shared client chunk and skip the

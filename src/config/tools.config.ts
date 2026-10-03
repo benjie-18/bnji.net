@@ -83,11 +83,24 @@ export const IMAGE_INPUT_ACCEPT = IMAGE_INPUT_TYPES.join(',');
 /** Human list used in the error copy, so the two can never disagree. */
 export const IMAGE_INPUT_LABELS = 'PNG, JPEG, WebP, GIF, BMP or AVIF';
 
-export const TOOL_IMAGE_CONFIG = {
+/* ------------------------------------------------------------------------- *
+ * Image files — shared by every tool that reads one (/tools/#image-converter
+ * and /tools/#color-picker).
+ *
+ * Same reasoning as TEXT_FILE_CONFIG below: the whitelist, the byte budget and
+ * the decoded-pixel budget are one policy. Two tools carrying their own copy
+ * would eventually disagree about what a browser may be asked to decode, and
+ * the disagreement would show up as one tool accepting a file the other
+ * refuses.
+ * ------------------------------------------------------------------------- */
+export const IMAGE_FILE_CONFIG = {
 	/** Refuse before decoding. 25 MB is already far past "a photo". */
-	maxInputBytes: 25 * 1024 * 1024,
-	/** Source pixel budget: a 40 MP decode is ~160 MB of bitmap. */
+	maxBytes: 25 * 1024 * 1024,
+	/** Decoded pixel budget: a 40 MP image is ~160 MB of bitmap. */
 	maxSourcePixels: 40_000_000,
+} as const;
+
+export const TOOL_IMAGE_CONFIG = {
 	/** Output budget, so an upscale cannot be used to allocate a huge canvas. */
 	maxOutputPixels: 40_000_000,
 	/** Quality slider domain, in percent (canvas wants 0..1). */
@@ -263,4 +276,148 @@ export const TOOL_DIFF_CONFIG = {
 	maxRenderedRows: 1_500,
 	/** Unchanged lines kept around a change, as in `diff -U<n>`. 0 shows changes only. */
 	context: { min: 0, max: 12, step: 1, default: 3 },
+} as const;
+
+/* ------------------------------------------------------------------------- *
+ * Color picker (/tools/#color-picker)
+ *
+ * Every number here is a limit a visitor could hit, and every label is copy they
+ * read. Nothing about colour is hard-coded in the module: the picker's job is to
+ * show its own arithmetic, so the formats it converts between and the schemes it
+ * offers are both listed here, in the order they appear.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * The formats the converter reads out.
+ *
+ * `hex`, `rgb` and `hsv` are editable (a hex field, three channel fields, and
+ * the wheel plus its sliders); the rest are derived, because a format that
+ * cannot round-trip exactly — CMYK has no RGB inverse without a press profile —
+ * would only invite a value the tool then has to refuse.
+ */
+export type ColorFormat = 'hex' | 'rgb' | 'hsl' | 'hsv' | 'cmyk' | 'hwb' | 'oklch';
+
+export const COLOR_FORMATS: readonly ColorFormat[] = [
+	'hex',
+	'rgb',
+	'hsl',
+	'hsv',
+	'cmyk',
+	'hwb',
+	'oklch',
+];
+
+export const COLOR_FORMAT_LABEL: Record<ColorFormat, string> = {
+	hex: 'HEX',
+	rgb: 'RGB',
+	hsl: 'HSL',
+	hsv: 'HSV',
+	cmyk: 'CMYK',
+	hwb: 'HWB',
+	oklch: 'OKLCH',
+};
+
+export const COLOR_FORMAT_HINT: Record<ColorFormat, string> = {
+	hex: 'CSS and design tools. Type a hex here — 3, 4, 6 or 8 digits.',
+	rgb: 'The three channels everything else is derived from. Type 0–255.',
+	hsl: 'CSS hsl(). Lightness is not the wheel’s brightness: 50% is the fullest colour.',
+	hsv: 'What the wheel and its three sliders drive. Value 100% is the brightest the colour gets.',
+	cmyk: 'Print. Derived from RGB, so it is an approximation — not a press profile.',
+	hwb: 'CSS hwb(): hue, then how much white and black is mixed in.',
+	oklch: 'CSS oklch(). Perceptually even, so equal steps look equal to the eye.',
+};
+
+/**
+ * Harmony schemes, each a set of hue rotations around the current colour.
+ * Monochrome is the exception: it holds the hue and walks the brightness, which
+ * is why it is generated separately rather than as a list of angles.
+ */
+export type ColorScheme =
+	| 'complement'
+	| 'analogous'
+	| 'triadic'
+	| 'square'
+	| 'split'
+	| 'monochrome';
+
+export const COLOR_SCHEMES: readonly ColorScheme[] = [
+	'complement',
+	'analogous',
+	'triadic',
+	'square',
+	'split',
+	'monochrome',
+];
+
+export const COLOR_SCHEME_LABEL: Record<ColorScheme, string> = {
+	complement: 'Complementary — opposite on the wheel',
+	analogous: 'Analogous — neighbours on the wheel',
+	triadic: 'Triadic — three equal steps',
+	square: 'Square — four equal steps',
+	split: 'Split complementary — either side of the opposite',
+	monochrome: 'Monochrome — one hue, tints and shades',
+};
+
+export const COLOR_SCHEME_HINT: Record<ColorScheme, string> = {
+	complement: 'Two colors 180° apart. Maximum contrast of hue, so it is loud by nature.',
+	analogous: 'Three colors 30° apart. Quiet and cohesive; pick one to lead and mute the rest.',
+	triadic: 'Three colors 120° apart. Balanced and vivid even at full saturation.',
+	square: 'Four colors 90° apart. Two warm, two cool; hardest of the four to keep calm.',
+	split: 'The color plus the two beside its opposite. Contrast without the tension of a straight complement.',
+	monochrome:
+		'One hue at five values: two tints toward white, the color itself, two shades toward black. The safe way to build depth without adding color.',
+};
+
+export const TOOL_COLOR_CONFIG = {
+	/**
+	 * The colour the tool opens on. A hex here is data — the picker's starting
+	 * value — not part of the design system, whose colours stay in tokens.css.
+	 * Chosen so that every format row has a different thing to say (a hue that is
+	 * not on a primary axis, saturation and brightness both middling-high), and so
+	 * that every scheme starts from a colour with room to rotate into.
+	 */
+	defaultColor: '#e07a3f',
+	/** What the current colour is contrasted against until the visitor changes it. */
+	defaultBackground: '#ffffff',
+	wheel: {
+		/**
+		 * The wheel is drawn per pixel into an ImageData, so its cost is the
+		 * backing store's area: 640² is ~1.6 MB and draws in a few milliseconds,
+		 * while an uncapped 3× phone would ask for a million pixels per resize.
+		 */
+		maxBacking: 640,
+		/** Used when the element has no layout yet (or no canvas to measure). */
+		fallbackCssSize: 240,
+		/** Past 3× a backing store costs pixels and buys nothing an eye can see. */
+		maxPixelRatio: 3,
+		/** Redrawing the wheel is a per-pixel loop, so a resize is settled first. */
+		resizeDebounceMs: 150,
+	},
+	/** Working palette. Memory only: like every other tool here, a reload starts empty. */
+	maxPaletteEntries: 24,
+	sample: {
+		/** Longest edge of the on-screen preview, in CSS pixels. */
+		previewMaxEdge: 560,
+		/**
+		 * The pick itself is taken from the file's own pixels — a 1×1 draw of the
+		 * decoded image — so downscaling the preview cannot cost accuracy. Only
+		 * the "common colors" scan uses this edge, and 160² is 25,600 pixels to
+		 * count, which is instant.
+		 */
+		scanMaxEdge: 160,
+		maxCommonColors: 8,
+		/** 4 bits per channel: 4,096 buckets, enough to group without flattening. */
+		bucketShift: 4,
+		/** Two reported colors closer than this per channel are the same color twice. */
+		minColorDistance: 24,
+	},
+	/** WCAG 2.x thresholds, so the verdicts quote a real standard instead of a hunch. */
+	contrast: {
+		aaNormal: 4.5,
+		aaLarge: 3,
+		aaaNormal: 7,
+		aaaLarge: 4.5,
+		/** CSS pixels at which WCAG counts text as large (18.66px bold rounds here). */
+		largeTextPx: 24,
+	},
 } as const;

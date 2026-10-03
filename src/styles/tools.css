@@ -808,6 +808,390 @@
 	color: var(--text-muted);
 }
 
+/* --- color picker -------------------------------------------------------- */
+
+/*
+ * Two columns of inputs at the top — the wheel and its sliders on the left, the
+ * values you can type on the right — then one full-width block per thing the tool
+ * does with the color. Full width is not a stylistic choice for the read-out and
+ * the image: half a column cannot hold `oklch(68.3% 0.1460 48.5)` or a photograph.
+ */
+@media (min-width: 64rem) {
+	.tool--color .tool__block {
+		grid-column: 1 / -1;
+	}
+
+	/* …except the two short lists, which sit beside each other: a scheme and the
+	   palette you build from it are one step of the work, not two blocks to scroll
+	   past. Equal specificity, so this has to come second to win. */
+	.tool--color .tool__color-scheme-block,
+	.tool--color .tool__color-palette-block {
+		grid-column: span 1;
+	}
+}
+
+.tool__block {
+	display: grid;
+	gap: var(--space-3);
+	min-inline-size: 0;
+}
+
+.tool__color-block-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-2) var(--space-4);
+}
+
+.tool__color-block-head .tool__sub-title {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-2);
+}
+
+/* --- the wheel ----------------------------------------------------------- */
+
+.tool__color-wheel {
+	display: grid;
+	place-items: center;
+	/* Square, and no wider than its column. The wheel is a circle inside a square
+	   canvas, so the aspect ratio is what stops it becoming an ellipse when the
+	   panel is narrow — and an elliptical wheel would put the marker somewhere
+	   other than the color under it. */
+	inline-size: min(100%, 20rem);
+	aspect-ratio: 1;
+	margin-inline: auto;
+}
+
+.tool__color-wheel-canvas {
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+	border-radius: 50%;
+	cursor: crosshair;
+	/* Without this a drag on the wheel scrolls the page on a phone instead of
+	   moving the color, because the browser cannot tell which one was meant. */
+	touch-action: none;
+}
+
+/* --- the current color --------------------------------------------------- */
+
+.tool__color-current {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.tool__color-swatch-large {
+	block-size: 6rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	/* Its background is set inline by the script: the color is the visitor's data,
+	   not part of the theme, so no token holds it and no rule here could. */
+}
+
+.tool__color-name {
+	margin: 0;
+	font-size: var(--text-small);
+	color: var(--text-muted);
+}
+
+/* --- typed values -------------------------------------------------------- */
+
+.tool__color-input {
+	inline-size: 100%;
+	min-inline-size: 0;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	background: var(--glass-bg-clear);
+	color: var(--text-strong);
+	font-family: var(--font-mono);
+	font-size: var(--text-small);
+	padding: var(--space-3);
+	transition: border-color var(--dur-fast) var(--ease-soft);
+}
+
+.tool__color-input:hover {
+	border-color: var(--accent-line);
+}
+
+.tool__color-input:focus-visible {
+	border-color: var(--accent-line);
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+.tool__color-channels {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--space-3);
+}
+
+.tool__color-channel {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.tool__color-contrast-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.tool__color-contrast-row .tool__color-input {
+	flex: 1 1 12rem;
+}
+
+/* --- swatches ------------------------------------------------------------ */
+
+.tool__color-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+}
+
+.tool__color-swatch {
+	display: grid;
+	gap: var(--space-1);
+	justify-items: center;
+	padding: 0;
+	border: 0;
+	background: none;
+	cursor: pointer;
+}
+
+.tool__color-swatch-chip {
+	inline-size: 4.5rem;
+	block-size: 3.5rem;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
+	transition:
+		transform var(--dur-fast) var(--ease-soft),
+		border-color var(--dur-fast) var(--ease-soft);
+}
+
+.tool__color-swatch:hover .tool__color-swatch-chip {
+	border-color: var(--accent-line);
+	transform: translateY(-2px);
+}
+
+.tool__color-swatch:focus-visible {
+	border-radius: var(--radius-sm);
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 3px;
+}
+
+.tool__color-swatch-hex {
+	font-size: var(--text-micro);
+	letter-spacing: 0.04em;
+	color: var(--text-dim);
+}
+
+.tool__color-palette-entry {
+	display: grid;
+	gap: var(--space-1);
+	justify-items: center;
+}
+
+.tool__color-mini {
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xs);
+	background: var(--glass-bg-clear);
+	color: var(--text-muted);
+	font-family: var(--font-body);
+	font-size: var(--text-micro);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	padding: var(--space-1) var(--space-2);
+	cursor: pointer;
+	transition:
+		border-color var(--dur-fast) var(--ease-soft),
+		color var(--dur-fast) var(--ease-soft);
+}
+
+.tool__color-mini:hover {
+	border-color: var(--accent-line);
+	color: var(--text-strong);
+}
+
+.tool__color-mini:focus-visible {
+	outline: 2px solid var(--accent-strong);
+	outline-offset: 2px;
+}
+
+/* --- the read-out -------------------------------------------------------- */
+
+.tool__color-formats {
+	display: grid;
+}
+
+.tool__color-format {
+	display: grid;
+	grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr) auto;
+	gap: var(--space-1) var(--space-3);
+	align-items: baseline;
+	padding-block: var(--space-2);
+	/* --text-faint is the token the palette reserves for hairlines. The glass
+	   border token is near-white in the light theme, where a rule drawn with it
+	   would be invisible rather than subtle. */
+	border-block-end: 1px solid var(--text-faint);
+}
+
+.tool__color-format:last-child {
+	border-block-end: 0;
+}
+
+@media (min-width: 48rem) {
+	/* Room for the trade-off beside the value instead of under it, so seven rows
+	   stay on one screen. */
+	.tool__color-format {
+		grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+	}
+
+	.tool__color-format-hint {
+		grid-column: auto;
+	}
+}
+
+.tool__color-format-label {
+	font-size: var(--text-micro);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.tool__color-format-value {
+	font-size: var(--text-small);
+	color: var(--text-strong);
+	overflow-wrap: anywhere;
+}
+
+.tool__color-format-hint {
+	grid-column: 1 / -1;
+	font-size: var(--text-micro);
+	line-height: 1.5;
+	color: var(--text-muted);
+}
+
+/* --- contrast ------------------------------------------------------------ */
+
+.tool__color-ratio {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-2) var(--space-3);
+	margin: 0;
+}
+
+.tool__color-ratio-value {
+	font-size: var(--text-title);
+	color: var(--text-strong);
+}
+
+.tool__color-ratio-sentence {
+	font-size: var(--text-small);
+	color: var(--text-muted);
+}
+
+.tool__color-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+.tool__color-badge {
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-pill);
+	padding: var(--space-1) var(--space-3);
+	font-size: var(--text-micro);
+	letter-spacing: 0.04em;
+	color: var(--text-muted);
+}
+
+/* The word "pass" or "fail" is in the badge's text as well, so the color is a
+   second signal and not the only one. */
+.tool__color-badge[data-pass='true'] {
+	border-color: var(--signal-live);
+	color: var(--signal-live);
+}
+
+.tool__color-badge[data-pass='false'] {
+	border-color: var(--danger);
+	color: var(--danger);
+}
+
+.tool__color-sample {
+	display: grid;
+	gap: var(--space-1);
+	padding: var(--space-4);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	/* Both paints are set inline: the pair being checked is the whole point of
+	   the block, and neither color belongs to the theme. */
+}
+
+.tool__color-sample-large {
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.tool__color-sample-normal {
+	font-size: var(--text-body);
+	line-height: 1.5;
+}
+
+/* --- the image ----------------------------------------------------------- */
+
+.tool__color-preview {
+	display: block;
+	/* Sized by its own bitmap and scaled down proportionally, never letterboxed:
+	   the pointer is mapped through this element's box, so a box the image does not
+	   exactly fill would put the pick on the wrong pixel. */
+	max-inline-size: 100%;
+	block-size: auto;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	cursor: crosshair;
+	touch-action: none;
+	/* A checkerboard behind the image, as in the image converter: a transparent
+	   PNG has to show that it is transparent, or a pixel with no color looks like a
+	   bug in the picker instead of a fact about the file. */
+	background-color: var(--glass-bg-clear);
+	background-image: repeating-conic-gradient(var(--glass-border) 0% 25%, transparent 0% 50%);
+	background-size: 16px 16px;
+}
+
+.tool__color-image-actions,
+.tool__color-palette-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+.tool__color-common {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.tool__color-empty {
+	margin: 0;
+	font-size: var(--text-small);
+	color: var(--text-muted);
+}
+
+/*
+ * `display: block` and `display: flex` above beat the user agent's
+ * `[hidden] { display: none }`, and a hidden canvas that is still laid out is an
+ * empty square the script believes it removed. Every element this tool hides by
+ * script is listed here so hiding it really hides it.
+ */
+.tool__color-wheel-canvas[hidden],
+.tool__color-preview[hidden],
+.tool__color-swatches[hidden] {
+	display: none;
+}
+
 /* --- environments ------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -815,8 +1199,17 @@
 	   colour change; a visitor who asked for less motion gets the state change,
 	   not the fade. */
 	.tool-drop,
-	.tool__textarea {
+	.tool__textarea,
+	.tool__color-input,
+	.tool__color-mini,
+	.tool__color-swatch-chip {
 		transition: none;
+	}
+
+	.tool__color-swatch:hover .tool__color-swatch-chip {
+		/* The lift is the only motion this tool has, and it is the only thing the
+		   hover state would lose: the border still changes. */
+		transform: none;
 	}
 }
 
@@ -830,9 +1223,33 @@
 	.tool__preview-img,
 	.tool__stat,
 	.tool__diff,
-	.tool__error {
+	.tool__error,
+	.tool__color-input,
+	.tool__color-mini,
+	.tool__color-badge,
+	.tool__color-format,
+	.tool__color-sample,
+	.tool__color-preview,
+	.tool__color-swatch-large,
+	.tool__color-swatch-chip {
 		border: 1px solid CanvasText;
 		background: Canvas;
+	}
+
+	.tool__color-swatch-large,
+	.tool__color-swatch-chip {
+		/* These two carry their whole meaning as a color, which the system palette
+		   has just replaced. What survives is the hex printed beside them — the
+		   reason the swatches were built with visible text and not color alone. */
+		background-image: none;
+	}
+
+	.tool__color-badge[data-pass='true'],
+	.tool__color-badge[data-pass='false'] {
+		/* Pass and fail are one color here, so the word in the badge is what says
+		   which happened. */
+		border-color: CanvasText;
+		color: CanvasText;
 	}
 
 	.tool__diff-row--add,
@@ -876,7 +1293,15 @@
 	.tool__diff-num,
 	.tool__diff-sign,
 	.tool__diff-text,
-	.tool__diff-head {
+	.tool__diff-head,
+	.tool__color-name,
+	.tool__color-empty,
+	.tool__color-swatch-hex,
+	.tool__color-format-label,
+	.tool__color-format-value,
+	.tool__color-format-hint,
+	.tool__color-ratio-value,
+	.tool__color-ratio-sentence {
 		color: CanvasText;
 	}
 }

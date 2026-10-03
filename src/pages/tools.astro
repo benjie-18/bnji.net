@@ -5,7 +5,8 @@
  * Each tool is its own component under src/components/tools/ and its behaviour is
  * a module under src/scripts/ started from boot(). The page itself only
  * composes them, so another tool is one component plus one init line — no page
- * rewrite.
+ * rewrite. The four here are an image converter, a word counter, a text diff and
+ * a color picker.
  *
  * Privacy is a structural property here, not a promise: there is no API route,
  * no fetch and no form post behind any of the tools, so "nothing is uploaded" is
@@ -14,6 +15,7 @@
 import GlassPanel from '../components/GlassPanel.astro';
 import PageHeader from '../components/PageHeader.astro';
 import SectionHeading from '../components/SectionHeading.astro';
+import ColorPicker from '../components/tools/ColorPicker.astro';
 import ImageConverter from '../components/tools/ImageConverter.astro';
 import TextDiff from '../components/tools/TextDiff.astro';
 import WordCounter from '../components/tools/WordCounter.astro';
@@ -37,5 +39,6 @@ const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
 		<ImageConverter />
 		<WordCounter />
 		<TextDiff />
+		<ColorPicker />
 	</div>
 </Layout>

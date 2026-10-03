@@ -52,6 +52,9 @@ import {
 import {
 	checkTextFile,
 	codePointLength,
+	COPY_REFUSED,
+	COPY_UNAVAILABLE,
+	copyText,
 	formatBytes,
 	formatCount,
 	isTextFile,
@@ -853,23 +856,20 @@ export function initWordCounter(): void {
 			keywords,
 			sourceName,
 		});
-		const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
-		if (!clipboard?.writeText) {
-			// No clipboard API is not a failed copy, it is no copy: say so, and
-			// point at the panel instead of pretending.
-			setStatus(
-				'This browser has no clipboard API (it needs a secure context), so nothing was copied. The numbers above are the summary.',
-			);
+		// No clipboard API is not a failed copy, it is no copy: say so, and
+		// point at the panel instead of pretending.
+		const outcome = await copyText(summary);
+		if (outcome === 'unavailable') {
+			setStatus(`${COPY_UNAVAILABLE} The numbers above are the summary.`);
 			return;
 		}
-		try {
-			await clipboard.writeText(summary);
-			setStatus(
-				`Summary copied — ${formatCount(stats.words)} words, ${formatCount(stats.characters)} characters.`,
-			);
-		} catch {
-			setStatus('The clipboard refused the copy, so nothing was copied. Read the numbers from the panel above.');
+		if (outcome === 'refused') {
+			setStatus(`${COPY_REFUSED} Read the numbers from the panel above.`);
+			return;
 		}
+		setStatus(
+			`Summary copied — ${formatCount(stats.words)} words, ${formatCount(stats.characters)} characters.`,
+		);
 	};
 
 	/* --- events ---------------------------------------------------------- */
