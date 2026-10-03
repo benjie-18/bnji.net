@@ -1,0 +1,142 @@
+---
+/**
+ * Tools — Random Number & Item Picker.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { TOOL_RANDOM_CONFIG } from '../../config/tools.config';
+---
+
+<section
+	class="tool tool--random"
+	id="random-picker"
+	aria-labelledby="random-picker-title"
+	data-random-picker
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>03</span><span>/ RANDOM</span></p>
+			<h2 class="tool__title" id="random-picker-title">Random Number / Picker</h2>
+			<p class="tool__lead">
+				Generate random numbers in custom ranges or pick random items from a list using secure random generation.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__pane">
+				<div class="tool__field">
+					<label class="tool__label" for="random-mode-select">Picker Mode</label>
+					<select class="tool__select" id="random-mode-select" data-random-mode>
+						<option value="number">Random Number Generator</option>
+						<option value="item">Random Item Picker</option>
+					</select>
+				</div>
+
+				<div class="tool__number-section" data-random-number-section>
+					<div class="tool__resize">
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="random-min-input">Min Value</label>
+							<input
+								class="tool__number"
+								id="random-min-input"
+								type="number"
+								value={TOOL_RANDOM_CONFIG.defaultMin}
+								data-random-min
+							/>
+						</div>
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="random-max-input">Max Value</label>
+							<input
+								class="tool__number"
+								id="random-max-input"
+								type="number"
+								value={TOOL_RANDOM_CONFIG.defaultMax}
+								data-random-max
+							/>
+						</div>
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="random-num-count-input">Quantity</label>
+							<input
+								class="tool__number"
+								id="random-num-count-input"
+								type="number"
+								min="1"
+								max={TOOL_RANDOM_CONFIG.maxCount}
+								value={TOOL_RANDOM_CONFIG.defaultCount}
+								data-random-num-count
+							/>
+						</div>
+					</div>
+
+					<div class="tool__field" style="margin-block-start: 1rem;">
+						<label class="tool__check">
+							<input type="checkbox" checked data-random-num-dupes />
+							<span>Allow duplicates</span>
+						</label>
+						<label class="tool__check">
+							<input type="checkbox" data-random-num-sort />
+							<span>Sort results ascending</span>
+						</label>
+					</div>
+				</div>
+
+				<div class="tool__item-section" data-random-item-section hidden>
+					<div class="tool__field">
+						<label class="tool__label" for="random-items-textarea">Items (one per line or comma-separated)</label>
+						<textarea
+							class="tool__select"
+							id="random-items-textarea"
+							rows="5"
+							placeholder="Option 1&#10;Option 2&#10;Option 3"
+							data-random-items></textarea>
+					</div>
+
+					<div class="tool__resize">
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="random-item-count-input">Items to Pick</label>
+							<input
+								class="tool__number"
+								id="random-item-count-input"
+								type="number"
+								min="1"
+								value="1"
+								data-random-item-count
+							/>
+						</div>
+					</div>
+
+					<div class="tool__field" style="margin-block-start: 0.5rem;">
+						<label class="tool__check">
+							<input type="checkbox" data-random-item-dupes />
+							<span>Allow duplicate picks</span>
+						</label>
+					</div>
+				</div>
+			</div>
+
+			<div class="tool__controls">
+				<div class="tool__actions">
+					<button class="glass-button glass-button--primary" type="button" data-glass="" data-random-generate>
+						Generate / Pick
+					</button>
+					<button class="glass-button glass-button--quiet" type="button" data-glass="" data-random-reset>
+						Reset
+					</button>
+				</div>
+			</div>
+
+			<p class="tool__status" role="status" data-random-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-random-error hidden></p>
+
+			<div class="tool__results" data-random-results hidden>
+				<div class="tool__result-card">
+					<p class="tool__sub-label mono">Picked Result(s)</p>
+					<div class="tool__chip-grid" data-random-output-list></div>
+				</div>
+			</div>
+
+			<p class="tool__note">
+				Uses Web Crypto (crypto.getRandomValues) when supported by your browser to ensure cryptographically unbiased selection.
+			</p>
+		</div>
+	</GlassPanel>
+</section>

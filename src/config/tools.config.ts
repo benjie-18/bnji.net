@@ -208,3 +208,160 @@ export const PERCENTAGE_MODES: readonly PercentageModeOption[] = [
 		description: 'Apply a percentage markup or discount to a base value.',
 	},
 ];
+/* ========================================================================= *
+ * Date Difference Calculator Configuration
+ * ========================================================================= */
+
+export type DateCalcMode = 'diff' | 'add_subtract';
+export type DateAddUnit = 'days' | 'weeks' | 'months' | 'years';
+
+export const DATE_CALC_CONFIG = {
+	maxYearSpan: 1000,
+} as const;
+
+/* ========================================================================= *
+ * Cooking Unit Converter Configuration
+ * ========================================================================= */
+
+export type CookingUnitCategory = 'volume' | 'weight';
+
+export type CookingUnit =
+	| 'tsp'
+	| 'tbsp'
+	| 'fl_oz'
+	| 'cup'
+	| 'pt'
+	| 'qt'
+	| 'gal'
+	| 'ml'
+	| 'l'
+	| 'g'
+	| 'kg'
+	| 'oz'
+	| 'lb';
+
+export interface CookingUnitInfo {
+	id: CookingUnit;
+	name: string;
+	category: CookingUnitCategory;
+	/** Conversion ratio relative to base unit (ml for volume, g for weight) */
+	baseRatio: number;
+}
+
+export const COOKING_UNITS: readonly CookingUnitInfo[] = [
+	// Volume (Base: ml)
+	{ id: 'tsp', name: 'Teaspoon (tsp)', category: 'volume', baseRatio: 4.92892 },
+	{ id: 'tbsp', name: 'Tablespoon (tbsp)', category: 'volume', baseRatio: 14.7868 },
+	{ id: 'fl_oz', name: 'Fluid Ounce (fl oz)', category: 'volume', baseRatio: 29.5735 },
+	{ id: 'cup', name: 'Cup (US)', category: 'volume', baseRatio: 236.588 },
+	{ id: 'pt', name: 'Pint (US pt)', category: 'volume', baseRatio: 473.176 },
+	{ id: 'qt', name: 'Quart (US qt)', category: 'volume', baseRatio: 946.353 },
+	{ id: 'gal', name: 'Gallon (US gal)', category: 'volume', baseRatio: 3785.41 },
+	{ id: 'ml', name: 'Milliliter (ml)', category: 'volume', baseRatio: 1 },
+	{ id: 'l', name: 'Liter (l)', category: 'volume', baseRatio: 1000 },
+	// Weight (Base: g)
+	{ id: 'g', name: 'Gram (g)', category: 'weight', baseRatio: 1 },
+	{ id: 'kg', name: 'Kilogram (kg)', category: 'weight', baseRatio: 1000 },
+	{ id: 'oz', name: 'Ounce (oz)', category: 'weight', baseRatio: 28.3495 },
+	{ id: 'lb', name: 'Pound (lb)', category: 'weight', baseRatio: 453.592 },
+];
+
+export interface IngredientDensity {
+	id: string;
+	name: string;
+	/** Density in grams per milliliter (g/ml) */
+	densityGml: number;
+}
+
+export const INGREDIENT_DENSITIES: readonly IngredientDensity[] = [
+	{ id: 'water', name: 'Water / Liquid (1.00 g/ml)', densityGml: 1.0 },
+	{ id: 'flour_ap', name: 'Flour (All-Purpose) (~0.53 g/ml)', densityGml: 0.53 },
+	{ id: 'sugar_granulated', name: 'Sugar (Granulated) (~0.85 g/ml)', densityGml: 0.85 },
+	{ id: 'sugar_powdered', name: 'Sugar (Powdered) (~0.56 g/ml)', densityGml: 0.56 },
+	{ id: 'sugar_brown', name: 'Sugar (Brown, Packed) (~0.93 g/ml)', densityGml: 0.93 },
+	{ id: 'butter', name: 'Butter (~0.96 g/ml)', densityGml: 0.96 },
+	{ id: 'milk', name: 'Milk (~1.03 g/ml)', densityGml: 1.03 },
+	{ id: 'oil', name: 'Vegetable / Olive Oil (~0.92 g/ml)', densityGml: 0.92 },
+	{ id: 'honey', name: 'Honey / Syrup (~1.42 g/ml)', densityGml: 1.42 },
+	{ id: 'salt', name: 'Table Salt (~1.22 g/ml)', densityGml: 1.22 },
+	{ id: 'rice', name: 'Rice (Uncooked) (~0.85 g/ml)', densityGml: 0.85 },
+	{ id: 'oats', name: 'Rolled Oats (~0.41 g/ml)', densityGml: 0.41 },
+];
+
+/* ========================================================================= *
+ * Screen / DPI Calculator Configuration
+ * ========================================================================= */
+
+export interface ScreenPreset {
+	name: string;
+	width: number;
+	height: number;
+	diagonal: number;
+}
+
+export const SCREEN_PRESETS: readonly ScreenPreset[] = [
+	{ name: '1080p Full HD (24")', width: 1920, height: 1080, diagonal: 24 },
+	{ name: '1080p Full HD (27")', width: 1920, height: 1080, diagonal: 27 },
+	{ name: '1440p QHD (27")', width: 2560, height: 1440, diagonal: 27 },
+	{ name: '4K UHD (27")', width: 3840, height: 2160, diagonal: 27 },
+	{ name: '4K UHD (32")', width: 3840, height: 2160, diagonal: 32 },
+	{ name: 'MacBook Air/Pro 13.3"', width: 2560, height: 1600, diagonal: 13.3 },
+	{ name: 'MacBook Pro 16"', width: 3456, height: 2234, diagonal: 16.2 },
+	{ name: 'iPhone Standard 6.1"', width: 1170, height: 2532, diagonal: 6.1 },
+];
+
+export const TOOL_SCREEN_CONFIG = {
+	maxPixelDimension: 32_000,
+	maxDiagonalInches: 300,
+/** Common IANA time zones for the Time Zone Converter selector */
+export const COMMON_TIMEZONES = [
+	{ label: 'Coordinated Universal Time (UTC)', zone: 'UTC' },
+	{ label: 'London, Dublin (GMT / BST)', zone: 'Europe/London' },
+	{ label: 'Paris, Berlin, Rome (CET / CEST)', zone: 'Europe/Paris' },
+	{ label: 'Athens, Helsinki, Cairo (EET / EEST)', zone: 'Europe/Athens' },
+	{ label: 'Dubai, Abu Dhabi (GST)', zone: 'Asia/Dubai' },
+	{ label: 'Tokyo, Osaka (JST)', zone: 'Asia/Tokyo' },
+	{ label: 'Sydney, Melbourne (AEST / AEDT)', zone: 'Australia/Sydney' },
+	{ label: 'Auckland, Wellington (NZST / NZDT)', zone: 'Pacific/Auckland' },
+	{ label: 'Honolulu, Hawaii (HST)', zone: 'Pacific/Honolulu' },
+	{ label: 'Los Angeles, San Francisco (PST / PDT)', zone: 'America/Los_Angeles' },
+	{ label: 'Denver, Phoenix (MST / MDT)', zone: 'America/Denver' },
+	{ label: 'Chicago, Dallas (CST / CDT)', zone: 'America/Chicago' },
+	{ label: 'New York, Toronto (EST / EDT)', zone: 'America/New_York' },
+	{ label: 'São Paulo, Rio de Janeiro (BRT / BRST)', zone: 'America/Sao_Paulo' },
+] as const;
+
+export const TOOL_TIMEZONE_CONFIG = {
+	defaultSourceZone: 'UTC',
+	defaultTargetZone: 'America/New_York',
+} as const;
+
+export const TOOL_RANDOM_CONFIG = {
+	minNumber: -1_000_000_000,
+	maxNumber: 1_000_000_000,
+	maxCount: 1_000,
+	defaultMin: 1,
+	defaultMax: 100,
+	defaultCount: 1,
+	maxPickerItems: 5_000,
+} as const;
+
+export const TOOL_LIST_CONFIG = {
+	maxLines: 10_000,
+	maxChars: 1_000_000,
+} as const;
+
+export const TOOL_COUNTDOWN_CONFIG = {
+	maxHours: 99,
+	maxMinutes: 59,
+	maxSeconds: 59,
+	maxLaps: 100,
+	presets: [
+		{ label: '1m', seconds: 60 },
+		{ label: '5m', seconds: 300 },
+		{ label: '10m', seconds: 600 },
+		{ label: '15m', seconds: 900 },
+		{ label: '30m', seconds: 1800 },
+		{ label: '1h', seconds: 3600 },
+	],
+} as const;
