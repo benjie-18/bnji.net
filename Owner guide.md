@@ -347,9 +347,9 @@ A “coming soon” entry does not create a page. To make a new destination live
 
 ### The browser tools on `/tools/`
 
-`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries one
-tool, and it runs entirely in the visitor's browser: there is no API route, no
-upload and no storage behind it, so "nothing is uploaded" is a property
+`/tools/` sits in the **Projects** dropdown next to Projects and Lab. It carries four
+tools, and all of them run entirely in the visitor's browser: there is no API route, no
+upload and no storage behind any of them, so "nothing is uploaded" is a property
 of the code rather than a promise.
 
 - **Image Converter & Optimizer** — converts between PNG, JPEG and WebP, resizes
@@ -361,11 +361,73 @@ of the code rather than a promise.
   metadata into the new file. Quality applies to JPEG and WebP only; the PNG
   slider is disabled with the reason shown rather than hidden.
 
-Formats, accepted input types and limits live in **`src/config/tools.config.ts`**;
-behaviour lives in `src/scripts/tools-image.ts`,
-started from `src/scripts/boot.ts`. To add a second tool, add a component under
+- **Word Counter & Text Stats** — counts words, characters (with and without
+  spaces), sentences, paragraphs, lines, unique words, the longest word, the two
+  averages, a most-frequent-words list, and a reading and a speaking time, all
+  while the visitor types or after they drop a text file. It reads only text
+  (`.txt`, `.md`, `.csv`, `.tsv`, `.json`, `.log`) and refuses PDFs, documents,
+  spreadsheets, images, archives and video by name. Words are split with the
+  browser's own segmenter, so a language that does not use spaces is counted
+  properly; a browser that has no segmenter is told so, and its choice is
+  disabled rather than quietly downgraded. It does **not** check grammar or
+  spelling, does **not** rewrite anything, and does **not** keep the text: the
+  reading times are the word count divided by the pace the visitor set, not a
+  measurement, and a paste over the character limit is refused instead of being
+  cut short. Nothing is stored, so a reload starts from an empty box.
+
+- **Text Diff** — compares two texts, or two text files the visitor drops, and
+  shows what changed: line by line in a unified column or side by side in two
+  aligned ones, with a slider for how many unchanged lines stay visible around
+  each change and an optional mark on the words that changed inside a changed
+  line. "Copy patch" puts a real unified diff on the clipboard, the format
+  `git apply` reads, labelled with the two file names when they came from files.
+  It reads only the same text types the word counter reads, and it does **not**
+  merge, does **not** edit either text, does **not** do three-way comparisons
+  and does **not** keep anything: a reload starts from two empty boxes. Line
+  endings are folded first, so a Windows-saved file does not show every line as
+  changed, and a difference that is only a trailing line break is reported
+  rather than swallowed. Three limits are worth knowing before you are asked
+  about them: each side is capped in characters, a comparison whose table would
+  be enormous is refused with both sizes quoted, and the table on screen is
+  capped in rows (the copied patch is not). Past a size threshold the tool stops
+  re-comparing as you type and clears the panel instead of leaving a diff that
+  describes text no longer in the box.
+
+- **Color Picker & Converter** — holds one color and shows it in seven formats
+  (hex, RGB, HSL, HSV, CMYK, HWB, OKLCH), each with its own copy button, beside a
+  color wheel, three sliders, six harmony schemes, a contrast checker against any
+  background, a working palette, and colors taken from an image the visitor drops
+  or chooses. It reads any color a browser can read — a hex, `rgb()`, `hsl()`,
+  `oklch()`, a CSS color name — by asking the browser's own CSS parser instead of
+  guessing at the specification, and a color taken from an image is the exact
+  pixel the visitor clicked at the file's own resolution, never an average of its
+  neighbours. It does **not** keep the palette (a reload starts from the default
+  color), does **not** convert to a print profile, does **not** do transparency,
+  and does **not** edit or re-save the image: the file is decoded, drawn into a
+  canvas, sampled, and dropped. Four limits are worth knowing before you are
+  asked about them: CMYK is derived from RGB, because an honest conversion needs
+  a press profile nobody has told it about; contrast is WCAG 2.x relative
+  luminance, not APCA; a canvas reports sRGB, so a photo taken in Display P3 is
+  converted on the way in and can look a little duller here than it does in a
+  photo app; and the image budget is the image converter's (25 MB and 40 million
+  decoded pixels), with the common-colors list counted from a copy downscaled to
+  160px on its long edge. In a browser with no canvas the wheel hides itself and
+  says why, the image half is refused before it is read, and the sliders, the
+  fields, the schemes, the contrast checker and the palette all still work — the
+  wheel was never the only way to reach a color.
+
+Formats, accepted input types, pace ranges, the common-words list, the diff
+budgets, the color formats and harmony schemes, and every limit live in
+**`src/config/tools.config.ts`**; behaviour lives in `src/scripts/tools-image.ts`,
+`src/scripts/tools-words.ts`, `src/scripts/tools-diff.ts` and
+`src/scripts/tools-color.ts`, all started from `src/scripts/boot.ts`. The four
+share `src/scripts/tools-shared.ts` — byte and number formatting, the text-file
+whitelist and its byte limit, the image-file policy both image-reading tools
+enforce, the clipboard, and the shape of a refusal — so two tools cannot disagree
+about what a text file is, how a size is written, or what "copied" means. To add another tool, add a component under
 `src/components/tools/` plus one init module and one line in `boot.ts` — the page
-itself only composes them.
+itself only composes them. `tests/tools-markup.test.ts` lists every
+controller/component pair, so a new tool needs one line there too.
 
 ## 9. Change the site’s appearance and visitor settings
 

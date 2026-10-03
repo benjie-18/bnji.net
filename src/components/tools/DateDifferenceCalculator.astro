@@ -1,0 +1,132 @@
+---
+/**
+ * Tools — Date Difference Calculator.
+ */
+import GlassPanel from '../GlassPanel.astro';
+---
+
+<section
+	class="tool tool--date"
+	id="date-calculator"
+	aria-labelledby="date-calculator-title"
+	data-date-calculator
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>02</span><span>/ DATE</span></p>
+			<h2 class="tool__title" id="date-calculator-title">Date Difference Calculator</h2>
+			<p class="tool__lead">
+				Calculate duration, total days, and business days between dates, or add/subtract time from a base date.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__controls">
+				<div class="tool__field">
+					<label class="tool__label" for="date-mode">Calculation Mode</label>
+					<select class="tool__select" id="date-mode" data-date-mode>
+						<option value="diff">Difference between two dates</option>
+						<option value="add_subtract">Add or subtract time from date</option>
+					</select>
+				</div>
+
+				<div class="tool__pane" data-date-diff-section>
+					<div class="tool__field">
+						<label class="tool__label" for="date-start">
+							Start Date
+							<button class="glass-button glass-button--quiet" type="button" data-glass="" data-date-today-start>
+								Set Today
+							</button>
+						</label>
+						<input class="tool__select" id="date-start" type="date" data-date-start />
+					</div>
+
+					<div class="tool__field">
+						<label class="tool__label" for="date-end">
+							End Date
+							<button class="glass-button glass-button--quiet" type="button" data-glass="" data-date-today-end>
+								Set Today
+							</button>
+						</label>
+						<input class="tool__select" id="date-end" type="date" data-date-end />
+					</div>
+
+					<label class="tool__check">
+						<input type="checkbox" data-date-include-end />
+						<span>Include end date in calculation (+1 day)</span>
+					</label>
+				</div>
+
+				<div class="tool__pane" data-date-add-section hidden>
+					<div class="tool__field">
+						<label class="tool__label" for="date-base">
+							Base Date
+							<button class="glass-button glass-button--quiet" type="button" data-glass="" data-date-today-base>
+								Set Today
+							</button>
+						</label>
+						<input class="tool__select" id="date-base" type="date" data-date-base />
+					</div>
+
+					<div class="tool__resize">
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="date-op">Operation</label>
+							<select class="tool__select" id="date-op" data-date-op>
+								<option value="add">Add (+)</option>
+								<option value="subtract">Subtract (-)</option>
+							</select>
+						</div>
+
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="date-amount">Amount</label>
+							<input
+								class="tool__number"
+								id="date-amount"
+								type="number"
+								min="1"
+								step="1"
+								value="7"
+								data-date-amount
+							/>
+						</div>
+
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="date-unit">Unit</label>
+							<select class="tool__select" id="date-unit" data-date-unit>
+								<option value="days">Days</option>
+								<option value="weeks">Weeks</option>
+								<option value="months">Months</option>
+								<option value="years">Years</option>
+							</select>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="tool__actions">
+				<button
+					class="glass-button glass-button--primary"
+					type="button"
+					data-glass=""
+					data-date-calculate
+				>
+					Calculate
+				</button>
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-date-reset>
+					Reset
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-date-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-date-error hidden></p>
+
+			<div class="tool__results" data-date-results hidden>
+				<div class="tool__note">
+					<p class="mono" data-date-output-ymd></p>
+					<p class="tool__hint" data-date-output-totals></p>
+					<p class="mono" data-date-output-add hidden></p>
+				</div>
+			</div>
+		</div>
+	</GlassPanel>
+</section>

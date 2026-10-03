@@ -31,6 +31,19 @@ import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
+import { initTextDiff } from './tools-diff';
+import { initWordCounter } from './tools-words';
+import { initColorPicker } from './tools-color';
+import { initImageMetadata } from './tools-metadata';
+import { initUnitConverter } from './tools-units';
+import { initPercentageCalculator } from './tools-percentage';
+import { initDateDifferenceCalculator } from './tools-date-difference';
+import { initCookingConverter } from './tools-cooking';
+import { initScreenDpiCalculator } from './tools-screen-dpi';
+import { initTimeZoneConverter } from './tools-timezone';
+import { initRandomPicker } from './tools-random';
+import { initListRandomizer } from './tools-list';
+import { initCountdownStopwatch } from './tools-countdown';
 import { initTelemetry } from './telemetry';
 import { initVerityBalls } from './verity-balls';
 
@@ -68,9 +81,25 @@ export function boot(): void {
 	start('telemetry', initTelemetry);
 	// Phase E §8.3: header badge polls /api/notifications while pages are open.
 	start('notifications-badge', initNotificationsBadge);
-	// The tool is a no-op on every other page: the init bails unless its
+	// The tools are no-ops on every other page: each init bails unless its own
 	// subtree is in the document, so it costs one querySelector elsewhere.
 	start('image-converter', initImageConverter);
+	start('word-counter', initWordCounter);
+	start('text-diff', initTextDiff);
+	start('color-picker', initColorPicker);
+	start('image-metadata', initImageMetadata);
+	start('unit-converter', initUnitConverter);
+	start('percentage-calculator', initPercentageCalculator);
+	// Tools: no-op on every other page as each init bails unless its subtree is in the document.
+	start('date-calculator', initDateDifferenceCalculator);
+	start('cooking-converter', initCookingConverter);
+	start('screen-calculator', initScreenDpiCalculator);
+	// Tools are no-ops on every other page: each init bails unless its
+	// subtree is in the document, so it costs one querySelector elsewhere.
+	start('timezone-converter', initTimeZoneConverter);
+	start('random-picker', initRandomPicker);
+	start('list-randomizer', initListRandomizer);
+	start('countdown-stopwatch', initCountdownStopwatch);
 	// Restore verity balls on navigation if active in sessionStorage
 	start('verity-balls', initVerityBalls);
 	// Keep game session tracking out of the shared client chunk and skip the
