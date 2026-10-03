@@ -1,0 +1,75 @@
+---
+/**
+ * Tools — Image Metadata Inspector & Remover.
+ *
+ * Inspects EXIF, IPTC, XMP, and PNG text chunks in raster images.
+ * Allows stripping metadata locally before saving clean files.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { TOOL_METADATA_CONFIG } from '../../config/tools.config';
+---
+
+<section
+	class="tool tool--metadata"
+	id="image-metadata"
+	aria-labelledby="image-metadata-title"
+	data-image-metadata
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>02</span><span>/ METADATA</span></p>
+			<h2 class="tool__title" id="image-metadata-title">Image metadata inspector and remover</h2>
+			<p class="tool__lead">
+				Inspect hidden camera settings, EXIF tags, author details, and location data in JPEG, PNG, WebP, or TIFF images. Strip them with one click before sharing.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__pane">
+				<label class="tool-drop" data-metadata-drop>
+					<span class="sr-only">Choose an image to inspect metadata</span>
+					<input
+						class="tool-drop__input"
+						type="file"
+						accept={TOOL_METADATA_CONFIG.supportedTypes.join(',')}
+						data-metadata-source
+					/>
+					<span class="tool-drop__prompt">Choose or Drop an image here</span>
+				</label>
+				<p class="tool__hint">
+					Inspects EXIF, IPTC, XMP, and text metadata. Nothing is ever uploaded to a server.
+				</p>
+			</div>
+
+			<div class="tool__actions">
+				<button
+					class="glass-button glass-button--primary"
+					type="button"
+					data-glass=""
+					data-metadata-strip
+					disabled
+				>
+					Strip Metadata
+				</button>
+				<button class="glass-button" type="button" data-glass="" data-metadata-download disabled>
+					Download Clean Image
+				</button>
+				<button class="glass-button glass-button--quiet" type="button" data-glass="" data-metadata-reset>
+					Reset
+				</button>
+			</div>
+
+			<p class="tool__status" role="status" data-metadata-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-metadata-error hidden></p>
+
+			<div class="tool__results" data-metadata-results hidden>
+				<div class="tool__meta-container" data-metadata-list></div>
+				<p class="tool__hint mono" data-metadata-clean-info></p>
+			</div>
+
+			<p class="tool__note">
+				Removing metadata strips hidden EXIF headers (camera info, exposure time, GPS coordinates, device serial numbers) and embedded text chunks without modifying your image's pixel resolution.
+			</p>
+		</div>
+	</GlassPanel>
+</section>
