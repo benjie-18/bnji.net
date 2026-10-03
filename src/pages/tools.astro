@@ -1,6 +1,6 @@
 ---
 /**
- * /tools/ — browser tools, fully local.
+ * /tools/ — fully local browser tools.
  *
  * Each tool is its own component under src/components/tools/ and its behaviour is
  * a module under src/scripts/ started from boot().
@@ -13,6 +13,9 @@ import GlassPanel from '../components/GlassPanel.astro';
 import PageHeader from '../components/PageHeader.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import ImageConverter from '../components/tools/ImageConverter.astro';
+import ImageMetadata from '../components/tools/ImageMetadata.astro';
+import UnitConverter from '../components/tools/UnitConverter.astro';
+import PercentageCalculator from '../components/tools/PercentageCalculator.astro';
 import DateDifferenceCalculator from '../components/tools/DateDifferenceCalculator.astro';
 import CookingConverter from '../components/tools/CookingConverter.astro';
 import ScreenDpiCalculator from '../components/tools/ScreenDpiCalculator.astro';
@@ -38,6 +41,9 @@ const description = 'Local browser tools for image conversion, date calculations
 
 	<div class="container tools-body">
 		<ImageConverter />
+		<ImageMetadata />
+		<UnitConverter />
+		<PercentageCalculator />
 		<DateDifferenceCalculator />
 		<CookingConverter />
 		<ScreenDpiCalculator />

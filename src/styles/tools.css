@@ -39,8 +39,6 @@
 	letter-spacing: var(--tracking-snug);
 	line-height: 1.1;
 	color: var(--text-strong);
-	/* Long compound names ("Image Converter & Optimizer") must wrap rather than
-	   overflow a narrow phone. */
 	overflow-wrap: anywhere;
 }
 
@@ -124,8 +122,6 @@
 	font-size: var(--text-small);
 	line-height: 1.55;
 	color: var(--text-muted);
-	/* The hint text carries the "what this does not support" copy, so it has
-	   to stay readable at phone widths. */
 	overflow-wrap: anywhere;
 }
 
@@ -168,11 +164,6 @@
 
 /* --- drop target --------------------------------------------------------- */
 
-/*
- * The label is the drop zone, mirroring the board's attachment control: the
- * <input> covers it transparently, so pointer, keyboard and drag all reach the
- * same element and there is exactly one control to label.
- */
 .tool-drop {
 	position: relative;
 	display: grid;
@@ -242,8 +233,6 @@
 }
 
 .tool__select {
-	/* The long option labels carry the format trade-off, so they must not be
-	   clipped by the field. */
 	min-inline-size: 0;
 	text-overflow: ellipsis;
 }
@@ -358,7 +347,7 @@
 	accent-color: var(--accent-strong);
 }
 
-/* Range: same construction as the Lab's sliders so the two pages feel alike. */
+/* Range */
 .tool__range {
 	-webkit-appearance: none;
 	appearance: none;
@@ -418,9 +407,6 @@
 }
 
 @media (max-width: 30rem) {
-	/* Three buttons side by side do not fit a small phone; stack them at full
-	   width so the hit targets stay large. This file is a plain stylesheet, so
-	   the selector needs no :global() wrapper. */
 	.tool__actions {
 		display: grid;
 		grid-template-columns: 1fr;
@@ -451,8 +437,6 @@
 	object-fit: contain;
 	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-md);
-	/* A checkerboard, not a solid fill: a converted PNG's transparency has to
-	   be visible for "JPEG turns it black" to mean anything. */
 	background-color: var(--glass-bg-clear);
 	background-image: repeating-conic-gradient(
 		var(--glass-border) 0% 25%,
@@ -470,52 +454,46 @@
 	overflow-wrap: anywhere;
 }
 
-/* --- trailing limits section -------------------------------------------- */
+/* --- metadata inspection table ------------------------------------------- */
 
-.tools-notes {
-	display: grid;
-	gap: var(--space-5);
+.tool__meta-container {
+	margin-block: var(--space-3);
+	overflow-x: auto;
 }
 
-.tools-notes__grid {
-	display: grid;
-	gap: var(--grid-gap);
-}
-
-@media (min-width: 48rem) {
-	.tools-notes__grid {
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-	}
-}
-
-.tools-notes__title {
-	margin: 0 0 var(--space-2);
-	font-size: var(--text-body);
-	font-weight: 600;
-	letter-spacing: var(--tracking-snug);
-	color: var(--text-strong);
-}
-
-.tools-notes__text {
-	margin: 0;
+.tool-meta-table {
+	width: 100%;
+	border-collapse: collapse;
 	font-size: var(--text-small);
-	line-height: 1.6;
+}
+
+.tool-meta-table td {
+	padding: var(--space-2) var(--space-3);
+	border-bottom: 1px solid var(--glass-border);
+}
+
+.tool-meta-table__label {
 	color: var(--text-muted);
+	font-size: var(--text-micro);
+	white-space: nowrap;
+	width: 35%;
+}
+
+.tool-meta-table__value {
+	color: var(--text-strong);
+	font-size: var(--text-micro);
+	word-break: break-word;
 }
 
 /* --- environments ------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-	/* The only transition on this page is the drop zone's colour change; a
-	   visitor who asked for less motion gets the state change, not the fade. */
 	.tool-drop {
 		transition: none;
 	}
 }
 
 @media (forced-colors: active) {
-	/* Glass, checkerboards and tinted error panels all collapse to the system
-	   palette, so the structure has to come from borders instead. */
 	.tool-drop,
 	.tool__select,
 	.tool__number,
