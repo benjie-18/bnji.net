@@ -16,6 +16,7 @@ import {
 	IMAGE_FORMATS,
 	IMAGE_FORMAT_LABEL,
 	IMAGE_INPUT_ACCEPT,
+	IMAGE_INPUT_LABELS,
 	TOOL_IMAGE_CONFIG,
 } from '../../config/tools.config';
 
@@ -30,11 +31,7 @@ const { quality } = TOOL_IMAGE_CONFIG;
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>01</span><span>/ IMAGE</span></p>
-			<h2 class="tool__title" id="image-converter-title">Image converter and optimizer</h2>
-			<p class="tool__lead">
-				Convert between PNG, JPEG and WebP, resize while keeping the aspect ratio, and see the real file-size change before you save.
-			</p>
+			<h3 class="tool__title" id="image-converter-title">Image converter</h3>
 		</header>
 
 		<div class="tool__body">
@@ -52,7 +49,7 @@ const { quality } = TOOL_IMAGE_CONFIG;
 					<span class="tool-drop__prompt">Choose or Drop an image here</span>
 				</label>
 				<p class="tool__hint" id="image-source-hint">
-					Reads raster images your browser can decode: PNG, JPEG, WebP, GIF, BMP or AVIF.
+					Reads {IMAGE_INPUT_LABELS}.
 				</p>
 
 				<figure class="tool__preview">
@@ -68,7 +65,7 @@ const { quality } = TOOL_IMAGE_CONFIG;
 						{IMAGE_FORMATS.map((format) => <option value={format}>{IMAGE_FORMAT_LABEL[format]}</option>)}
 					</select>
 					<p class="tool__hint" id="image-format-hint" data-image-format-hint>
-						Lossless. Quality does not apply, so the slider is off.
+						Lossless. Quality does not apply.
 					</p>
 				</div>
 
@@ -89,7 +86,7 @@ const { quality } = TOOL_IMAGE_CONFIG;
 						data-image-quality
 					/>
 					<p class="tool__hint" id="image-quality-hint" data-image-quality-hint>
-						Quality does not apply to PNG — the browser ignores it, so the slider is off.
+						PNG ignores quality, so the slider is off.
 					</p>
 				</div>
 
@@ -127,10 +124,7 @@ const { quality } = TOOL_IMAGE_CONFIG;
 						<input type="checkbox" checked data-image-lock />
 						<span>Keep aspect ratio</span>
 					</label>
-					<p class="tool__hint">
-						Leave both blank to keep the original size. One value scales the other to match; two values
-						fit the image inside that box.
-					</p>
+					<p class="tool__hint">Blank keeps the original size. One value scales the other to match.</p>
 				</fieldset>
 			</div>
 
@@ -168,10 +162,7 @@ const { quality } = TOOL_IMAGE_CONFIG;
 				</figure>
 			</div>
 
-			<p class="tool__note">
-				JPEG has no transparency, so transparent pixels come out black. Canvas conversion also drops the
-				original metadata — EXIF, colour profiles and captions are not carried into the new file.
-			</p>
+			<p class="tool__note">JPEG has no transparency. EXIF and colour profiles are dropped.</p>
 		</div>
 	</GlassPanel>
 </section>

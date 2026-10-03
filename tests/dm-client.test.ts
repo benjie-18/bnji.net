@@ -539,8 +539,18 @@ test('send failures stay below the composer while open failures stay below the h
 
 	handle.value = 'status_two';
 	submit(newForm);
-	await tick(30);
-	assert.equal(openStatus.textContent, 'Conversation with Status Two open.');
+	/*
+	 * `until`, not a fixed tick: opening a conversation is an async round trip,
+	 * and a 30ms budget made this assertion fail whenever the suite ran under
+	 * load (it flaked once the tools suite grew by a file). The claim being made
+	 * here is WHICH line the message lands on, not how fast the open is — the
+	 * same reason the rest of this file uses until() for opens.
+	 */
+	assert.equal(
+		await until(() => openStatus.textContent === 'Conversation with Status Two open.'),
+		true,
+		`the open did not report below the handle field: ${openStatus.textContent}`,
+	);
 
 	text.value = 'x'.repeat(2_001);
 	submit(composer);
@@ -552,8 +562,11 @@ test('send failures stay below the composer while open failures stay below the h
 
 	handle.value = 'missing_handle';
 	submit(newForm);
-	await tick(30);
-	assert.equal(openStatus.textContent, 'No account uses that handle.');
+	assert.equal(
+		await until(() => openStatus.textContent === 'No account uses that handle.'),
+		true,
+		`the failed open did not report below the handle field: ${openStatus.textContent}`,
+	);
 	assert.equal(sendStatus.textContent, 'That message is too long.', 'a failed new conversation does not overwrite send feedback');
 
 	// Opening from the list can fail at the history read, not just at the

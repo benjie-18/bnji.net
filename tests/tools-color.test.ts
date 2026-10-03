@@ -25,6 +25,7 @@ import {
 	COLOR_FORMATS,
 	COLOR_FORMAT_LABEL,
 	COLOR_SCHEMES,
+	COLOR_SCHEME_HINT,
 	IMAGE_FILE_CONFIG,
 	TOOL_COLOR_CONFIG,
 } from '../src/config/tools.config.ts';
@@ -1031,7 +1032,7 @@ test('the tool opens on the configured color, with every surface already agreein
 		assert.equal(schemeSwatches(dom).length, 2, 'the default scheme is the complement: two colors');
 		assert.equal(
 			node(dom, '[data-color-scheme-hint]').textContent,
-			'Two colors 180° apart. Maximum contrast of hue, so it is loud by nature.',
+			COLOR_SCHEME_HINT.complement,
 			'the hint is the config copy for the scheme that is selected',
 		);
 		assert.match(status(dom), /^Pick a color: drag the wheel, type a hex, or drop an image/);
@@ -1465,7 +1466,7 @@ test('changing the scheme rebuilds its swatches, and choosing one makes it the c
 		// trusted: it falls back to the first scheme rather than drawing nothing.
 		type(dom, '[data-color-scheme]', 'nonsense', 'change');
 		assert.equal(schemeSwatches(dom).length, 2);
-		assert.equal(node(dom, '[data-color-scheme-hint]').textContent, 'Two colors 180° apart. Maximum contrast of hue, so it is loud by nature.');
+		assert.equal(node(dom, '[data-color-scheme-hint]').textContent, COLOR_SCHEME_HINT.complement);
 	});
 });
 

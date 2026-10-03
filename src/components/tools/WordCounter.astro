@@ -38,13 +38,7 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>02</span><span>/ WORDS</span></p>
-			<h2 class="tool__title" id="word-counter-title">Word counter and text stats</h2>
-			<p class="tool__lead">
-				Type or paste text — or drop a text file — and watch the words, characters, sentences,
-				paragraphs and reading time update as you go. The counting happens in this tab, so nothing
-				you write is sent anywhere.
-			</p>
+			<h3 class="tool__title" id="word-counter-title">Word counter</h3>
 		</header>
 
 		<div class="tool__body">
@@ -75,17 +69,12 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 						autocapitalize="off"
 						autocomplete="off"
 						placeholder="Type or paste your text here…"
-						aria-describedby="word-text-hint"
 						data-word-text></textarea>
 					{/*
 					  No maxlength: it would truncate a paste silently, and a tool
 					  whose whole posture is "never a quiet surprise" refuses over
 					  the limit out loud instead — see checkInputText().
 					*/}
-					<p class="tool__hint" id="word-text-hint">
-						The counts update as you type. Characters are counted as you read them, so an emoji
-						is one character and a line break is one character.
-					</p>
 				</div>
 
 				{/* The label IS the drop target, exactly as in the image tool: clicking it
@@ -104,7 +93,6 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 				</label>
 				<p class="tool__hint" id="word-source-hint">
 					Reads {TEXT_INPUT_LABELS} as UTF-8, up to {(maxFileBytes / (1024 * 1024)).toLocaleString('en-US')} MB.
-					The file's text replaces whatever is in the box, so you can edit it before counting.
 				</p>
 				<p class="tool__preview-meta mono" data-word-source-meta></p>
 			</div>
@@ -133,12 +121,8 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 						max={reading.max}
 						step={reading.step}
 						value={reading.default}
-						aria-describedby="word-reading-hint"
 						data-word-reading
 					/>
-					<p class="tool__hint" id="word-reading-hint">
-						An estimate, not a measurement: reading time is the word count divided by this pace.
-					</p>
 				</div>
 
 				<div class="tool__field">
@@ -154,13 +138,8 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 						max={speaking.max}
 						step={speaking.step}
 						value={speaking.default}
-						aria-describedby="word-speaking-hint"
 						data-word-speaking
 					/>
-					<p class="tool__hint" id="word-speaking-hint">
-						Reading aloud runs slower than reading silently, so it gets its own pace and its own
-						time.
-					</p>
 				</div>
 
 				<fieldset class="tool__field tool__field--keywords">
@@ -183,11 +162,6 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 						<input type="checkbox" checked data-word-stopwords />
 						<span>Ignore {WORD_STOPWORDS.length} common English words</span>
 					</label>
-					<p class="tool__hint">
-						The list is the most frequent words in your text. Ignoring common words is on by
-						default because otherwise the top of every English list is “the”, “of” and “and”. Set
-						the count to 0 to switch the list off.
-					</p>
 				</fieldset>
 			</div>
 
@@ -266,7 +240,7 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 				</dl>
 
 				<div class="tool__keyword-block">
-					<h3 class="tool__sub-title" id="word-keywords-title">Most frequent words</h3>
+					<h4 class="tool__sub-title" id="word-keywords-title">Most frequent words</h4>
 					<ol
 						class="tool__keywords"
 						aria-labelledby="word-keywords-title"
@@ -277,13 +251,8 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 			</div>
 
 			<p class="tool__note">
-				Counts are estimates wherever language is: a sentence ends at a full stop, a question mark,
-				an exclamation mark or a line break — so “Mr.” ends one, exactly as your browser's own
-				segmenter says it does — and a paragraph is a block separated by a blank line, not by a
-				single line break. Reading and speaking times are the word count divided by the pace you
-				set. Text files are decoded as UTF-8, so a file saved in another encoding arrives as
-				mojibake and the tool says so. Nothing is uploaded, stored or logged: the text lives in the
-				box until you clear it.
+				Estimates: a sentence ends at . ? ! or a line break, a paragraph at a blank line. Files are
+				decoded as UTF-8.
 			</p>
 		</div>
 	</GlassPanel>

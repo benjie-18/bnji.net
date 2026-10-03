@@ -1,0 +1,45 @@
+---
+/**
+ * Tools — one category: its heading, its tools, and the way back to the index.
+ *
+ * The heading and the anchor come from src/data/tools.ts, so the section the
+ * repertory points at (`#cat-text`) and the section the page renders are the
+ * same section by construction rather than by matching two strings by hand.
+ * scripts/tools-index.ts shows one of these at a time via the hidden attribute.
+ */
+import SectionHeading from '../SectionHeading.astro';
+import { TOOL_CATEGORIES, type ToolCategoryId } from '../../data/tools';
+
+interface Props {
+	/** Which category this section is. */
+	cat: ToolCategoryId;
+}
+
+const { cat } = Astro.props;
+const category = TOOL_CATEGORIES.find((entry) => entry.id === cat);
+if (!category) throw new Error(`Unknown tool category: ${cat}`);
+---
+
+<section
+	class="tool-group"
+	id={`cat-${category.id}`}
+	data-tool-group={category.id}
+	aria-labelledby={`cat-${category.id}-title`}
+>
+	<SectionHeading
+		index={category.index}
+		label={category.label}
+		title={category.title}
+		titleId={`cat-${category.id}-title`}
+		class="tool-group__head"
+	/>
+
+	<div class="tool-group__tools">
+		<slot />
+	</div>
+
+	<a class="tool-group__back" href="#tools-repertory">
+		<span aria-hidden="true">&uarr;</span>
+		Repertory
+	</a>
+</section>

@@ -64,6 +64,8 @@ function diffMarkup(): string {
 		'{TEXT_INPUT_ACCEPT}': TEXT_INPUT_ACCEPT,
 		'{TEXT_INPUT_LABELS}': TEXT_INPUT_LABELS,
 		'{DIFF_VIEW_HINT.unified}': DIFF_VIEW_HINT.unified,
+		// Astro needs an explicit space expression between two inline elements.
+		"{' '}": ' ',
 		'{context.min}': String(context.min),
 		'{context.max}': String(context.max),
 		'{context.step}': String(context.step),
@@ -179,8 +181,9 @@ test('labels, descriptions and headings all point at something real', () => {
 	const section = q(dom, '[data-text-diff]');
 	const headingId = section.getAttribute('aria-labelledby');
 	assert.ok(headingId && document.getElementById(headingId), 'the section is not labelled by its heading');
-	assert.equal(document.getElementById(headingId!)!.tagName, 'H2');
-	assert.equal(section.querySelectorAll('h2').length, 1, 'one tool, one heading');
+	// An h3 under the category's h2; still exactly one heading per tool.
+	assert.equal(document.getElementById(headingId!)!.tagName, 'H3');
+	assert.equal(section.querySelectorAll('h3.tool__title').length, 1, 'one tool, one heading');
 
 	// The table is a group with a name, and the paragraph that explains how to
 	// read a row is reachable from the tool's own heading level.
@@ -188,7 +191,7 @@ test('labels, descriptions and headings all point at something real', () => {
 	assert.equal(view.getAttribute('role'), 'group');
 	const viewLabel = view.getAttribute('aria-labelledby');
 	assert.ok(viewLabel && document.getElementById(viewLabel), 'the table has no accessible name');
-	assert.equal(document.getElementById(viewLabel!)!.tagName, 'H3');
+	assert.equal(document.getElementById(viewLabel!)!.tagName, 'H4');
 
 	// Both drop targets: a screen-reader name, and the file input inside them.
 	for (const side of ['left', 'right']) {
@@ -204,12 +207,18 @@ test('the markup explains the markers, so colour is never the only signal', () =
 	const dom = diffDom();
 	// Collapsed: the component wraps its own copy at the editor's width, and a
 	// phrase split across two lines is still the phrase a visitor reads.
+	/*
+	 * The legend was cut to one line with the rest of the page's prose; what it
+	 * must still do is name every marker in words, because the rows carry colour
+	 * as well and colour alone is not a signal a screen reader or a monochrome
+	 * printout can use.
+	 */
 	const how = text(dom, '#text-diff-view-how').replace(/\s+/g, ' ');
-	assert.match(how, /left line number/, 'a row is described in words');
-	assert.match(how, /- for a line only the left text has/);
-	assert.match(how, /\+ for a line only the right text has/);
-	assert.match(how, /~ for a line that matches only because whitespace/, 'even the fold is explained');
-	assert.match(how, /never carries it alone/i);
+	assert.match(how, /left line, right line/i, 'a row is described in words');
+	assert.match(how, /- removed/);
+	assert.match(how, /\+ added/);
+	assert.match(how, /~ matched with whitespace ignored/, 'even the fold is explained');
+	assert.match(how, /no sign for a line both have/, 'and so is the unmarked case');
 	// The table scrolls, so a keyboard has to be able to reach it.
 	assert.equal(q(dom, '[data-diff-view]').getAttribute('tabindex'), '0');
 	// The column captions are visual only: every row says both of its numbers.

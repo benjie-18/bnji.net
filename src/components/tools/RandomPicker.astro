@@ -14,11 +14,7 @@ import { TOOL_RANDOM_CONFIG } from '../../config/tools.config';
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>03</span><span>/ RANDOM</span></p>
-			<h2 class="tool__title" id="random-picker-title">Random Number / Picker</h2>
-			<p class="tool__lead">
-				Generate random numbers in custom ranges or pick random items from a list using secure random generation.
-			</p>
+			<h3 class="tool__title" id="random-picker-title">Random picker</h3>
 		</header>
 
 		<div class="tool__body">
@@ -134,9 +130,7 @@ import { TOOL_RANDOM_CONFIG } from '../../config/tools.config';
 				</div>
 			</div>
 
-			<p class="tool__note">
-				Uses Web Crypto (crypto.getRandomValues) when supported by your browser to ensure cryptographically unbiased selection.
-			</p>
+			<p class="tool__note">Uses crypto.getRandomValues where the browser has it.</p>
 		</div>
 	</GlassPanel>
 </section>

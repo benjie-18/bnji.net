@@ -16,20 +16,14 @@ import { PERCENTAGE_MODES } from '../../config/tools.config';
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>04</span><span>/ PERCENTAGE</span></p>
-			<h2 class="tool__title" id="percentage-calculator-title">Percentage calculator</h2>
-			<p class="tool__lead">
-				Calculate percentage shares, proportion percentages, percentage growth or decrease, and discounts instantly in your browser tab.
-			</p>
+			<h3 class="tool__title" id="percentage-calculator-title">Percentage calculator</h3>
 		</header>
 
 		<div class="tool__body">
 			<div class="tool__field">
 				<label class="tool__label" for="percentage-mode">Calculation Type</label>
 				<select class="tool__select" id="percentage-mode" data-percentage-mode>
-					{PERCENTAGE_MODES.map((mode) => (
-						<option value={mode.id}>{mode.label} — {mode.description}</option>
-					))}
+					{PERCENTAGE_MODES.map((mode) => <option value={mode.id}>{mode.label}</option>)}
 				</select>
 			</div>
 

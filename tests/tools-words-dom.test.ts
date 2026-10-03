@@ -175,8 +175,13 @@ test('labels, descriptions and headings all point at something real', () => {
 	const section = q(dom, '[data-word-counter]');
 	const headingId = section.getAttribute('aria-labelledby');
 	assert.ok(headingId && document.getElementById(headingId), 'the section is not labelled by its heading');
-	assert.equal(document.getElementById(headingId!)!.tagName, 'H2');
-	assert.equal(section.querySelectorAll('h2').length, 1, 'one tool, one heading');
+	/*
+	 * An h3, not an h2: the page's h1 is the page, the category heading above it
+	 * is an h2, so a tool is a third level. What must not change is that the
+	 * section is named by exactly one heading.
+	 */
+	assert.equal(document.getElementById(headingId!)!.tagName, 'H3');
+	assert.equal(section.querySelectorAll('h3.tool__title').length, 1, 'one tool, one heading');
 	// The screen-reader-only name on the drop target, and the file input inside it.
 	assert.match(q(dom, '[data-word-drop] .sr-only').textContent ?? '', /text file/i);
 	assert.equal(q(dom, '[data-word-drop]').querySelectorAll('input[type="file"]').length, 1);

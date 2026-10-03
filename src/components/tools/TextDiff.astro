@@ -38,13 +38,7 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 >
 	<GlassPanel pad="lg" reveal>
 		<header class="tool__head">
-			<p class="eyebrow"><span>03</span><span>/ DIFF</span></p>
-			<h2 class="tool__title" id="text-diff-title">Text diff</h2>
-			<p class="tool__lead">
-				Paste two versions of a text — or drop two files — and see what changed: line by line, and
-				inside a line, word by word. The comparison runs in this tab, so nothing you paste is sent
-				anywhere.
-			</p>
+			<h3 class="tool__title" id="text-diff-title">Text diff</h3>
 		</header>
 
 		<div class="tool__body">
@@ -117,9 +111,8 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 			</div>
 
 			<p class="tool__hint" id="diff-source-hint">
-				Reads {TEXT_INPUT_LABELS} as UTF-8, up to {(maxFileBytes / (1024 * 1024)).toLocaleString('en-US')} MB
-				each, and up to {maxInputCharacters.toLocaleString('en-US')} characters per side. A loaded file
-				replaces whatever is in its own box, so you can edit it before comparing.
+				Reads {TEXT_INPUT_LABELS} as UTF-8 — up to {(maxFileBytes / (1024 * 1024)).toLocaleString('en-US')} MB
+				and {maxInputCharacters.toLocaleString('en-US')} characters per side.
 			</p>
 
 			<div class="tool__controls">
@@ -150,8 +143,7 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 						data-diff-context
 					/>
 					<p class="tool__hint" id="diff-context-hint">
-						How many unchanged lines stay visible around each change — the same setting a unified
-						patch's context is. {context.min} shows the changed lines only.
+						Unchanged lines kept around each change. {context.min} shows the changed lines only.
 					</p>
 				</div>
 
@@ -165,11 +157,6 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 						<input type="checkbox" checked data-diff-inline-words />
 						<span>Mark the words that changed inside a line</span>
 					</label>
-					<p class="tool__hint">
-						Ignoring whitespace folds a run of spaces to one and trims the ends before comparing, but
-						shows what you typed — and the summary counts the lines that matched only that way.
-						Word marking is skipped for a line too long to be worth it, and the line is shown whole.
-					</p>
 				</fieldset>
 			</div>
 
@@ -216,13 +203,11 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 				</dl>
 
 				<div class="tool__diff-block">
-					<h3 class="tool__sub-title" id="text-diff-view-title">The difference</h3>
+					<h4 class="tool__sub-title" id="text-diff-view-title">The difference</h4>
 					<p class="tool__hint" id="text-diff-view-how">
-						Each row is the left line number, the right line number, then <span class="mono">-</span>
-						for a line only the left text has, <span class="mono">+</span> for a line only the right
-						text has, <span class="mono">~</span> for a line that matches only because whitespace
-						differences are being ignored, and no sign for a line both have. Colour repeats that; it
-						never carries it alone.
+						Left line, right line, then <span class="mono">-</span> removed,{' '}
+						<span class="mono">+</span> added, <span class="mono">~</span> matched with whitespace
+						ignored, no sign for a line both have.
 					</p>
 					{/*
 					  Column captions are visual only: a screen reader meets the rows in
@@ -248,14 +233,9 @@ const { maxBytes: maxFileBytes } = TEXT_FILE_CONFIG;
 			</div>
 
 			<p class="tool__note">
-				Comparisons run as you type until either side passes
-				{autoCompareMaxCharacters.toLocaleString('en-US')} characters, after which Compare runs it when
-				you ask: a diff costs the two sides multiplied together, where a word count costs one. Line
-				endings are folded first, so a file saved on Windows does not show every line as changed, and a
-				line break at the very end of one text is reported rather than swallowed. The table shows at
-				most {maxRenderedRows.toLocaleString('en-US')} rows and says how many it withheld; the copied
-				patch always has every line, in the unified format <span class="mono">git apply</span> reads.
-				Both texts stay in this tab — nothing is uploaded, stored or logged.
+				Auto-compares up to {autoCompareMaxCharacters.toLocaleString('en-US')} characters; the table
+				shows {maxRenderedRows.toLocaleString('en-US')} rows, the copied patch is always complete and
+				unified, the format <span class="mono">git apply</span> reads.
 			</p>
 		</div>
 	</GlassPanel>

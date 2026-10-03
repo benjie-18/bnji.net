@@ -53,9 +53,9 @@ export const IMAGE_FORMAT_NAME: Record<ToolImageFormat, string> = {
 
 /** One-line trade-off shown under the format select as it changes. */
 export const IMAGE_FORMAT_HINT: Record<ToolImageFormat, string> = {
-	png: 'Lossless. Quality does not apply, so the slider is off.',
-	jpeg: 'No transparency: transparent pixels become black.',
-	webp: 'Supports transparency and usually beats JPEG at the same quality.',
+	png: 'Lossless. Quality does not apply.',
+	jpeg: 'No transparency: transparent pixels turn black.',
+	webp: 'Keeps transparency, usually smaller than JPEG at equal quality.',
 };
 
 /**
@@ -141,10 +141,8 @@ export const WORD_MODE_LABEL: Record<ToolWordMode, string> = {
 
 /** One-line trade-off shown under the mode select as it changes. */
 export const WORD_MODE_HINT: Record<ToolWordMode, string> = {
-	segmenter:
-		'Your browser splits the text into words, so Chinese, Japanese and Thai count properly and “well-known” stays one word.',
-	whitespace:
-		'Counts the runs between spaces. Text with no spaces — Chinese, Japanese, Thai — reads as one long word.',
+	segmenter: 'Your browser splits the text, so scripts with no spaces count properly.',
+	whitespace: 'Counts the runs between spaces. Text with no spaces reads as one word.',
 };
 
 /**
@@ -155,7 +153,7 @@ export const WORD_MODE_HINT: Record<ToolWordMode, string> = {
  * encode.
  */
 export const WORD_MODE_UNAVAILABLE_HINT =
-	'This browser has no text segmenter (Intl.Segmenter), so words are counted by spaces and the choice is off. Text with no spaces — Chinese, Japanese, Thai — will read as one long word.';
+	'This browser has no text segmenter (Intl.Segmenter), so words are counted by spaces and the choice is off.';
 
 /**
  * Text inputs a browser can decode with `file.text()`. This is the honest list:
@@ -239,9 +237,8 @@ export const DIFF_VIEW_LABEL: Record<ToolDiffView, string> = {
 
 /** One-line trade-off shown under the view select as it changes. */
 export const DIFF_VIEW_HINT: Record<ToolDiffView, string> = {
-	unified:
-		'One column, so it stays readable on a phone. A removed line comes before the line that replaced it.',
-	split: 'Two columns, aligned line by line. Below about 48rem the columns stack, and unified is the easier read.',
+	unified: 'One column, readable on a phone. A removed line comes before its replacement.',
+	split: 'Two columns, aligned line by line. They stack below about 48rem.',
 };
 
 export const TOOL_DIFF_CONFIG = {
@@ -311,13 +308,13 @@ export const COLOR_FORMAT_LABEL: Record<ColorFormat, string> = {
 };
 
 export const COLOR_FORMAT_HINT: Record<ColorFormat, string> = {
-	hex: 'CSS and design tools. Type a hex here — 3, 4, 6 or 8 digits.',
-	rgb: 'The three channels everything else is derived from. Type 0–255.',
-	hsl: 'CSS hsl(). Lightness is not the wheel’s brightness: 50% is the fullest colour.',
-	hsv: 'What the wheel and its three sliders drive. Value 100% is the brightest the colour gets.',
-	cmyk: 'Print. Derived from RGB, so it is an approximation — not a press profile.',
-	hwb: 'CSS hwb(): hue, then how much white and black is mixed in.',
-	oklch: 'CSS oklch(). Perceptually even, so equal steps look equal to the eye.',
+	hex: 'CSS hex — 3, 4, 6 or 8 digits.',
+	rgb: 'The three channels, 0–255.',
+	hsl: 'CSS hsl(). Lightness is not the wheel’s brightness.',
+	hsv: 'What the wheel drives. Value 100% is the brightest it gets.',
+	cmyk: 'Print. Derived from RGB — an approximation, not a press profile.',
+	hwb: 'CSS hwb(): hue, then white and black mixed in.',
+	oklch: 'CSS oklch(). Perceptually even.',
 };
 
 /**
@@ -352,13 +349,12 @@ export const COLOR_SCHEME_LABEL: Record<ColorScheme, string> = {
 };
 
 export const COLOR_SCHEME_HINT: Record<ColorScheme, string> = {
-	complement: 'Two colors 180° apart. Maximum contrast of hue, so it is loud by nature.',
-	analogous: 'Three colors 30° apart. Quiet and cohesive; pick one to lead and mute the rest.',
-	triadic: 'Three colors 120° apart. Balanced and vivid even at full saturation.',
-	square: 'Four colors 90° apart. Two warm, two cool; hardest of the four to keep calm.',
-	split: 'The color plus the two beside its opposite. Contrast without the tension of a straight complement.',
-	monochrome:
-		'One hue at five values: two tints toward white, the color itself, two shades toward black. The safe way to build depth without adding color.',
+	complement: 'Two colors 180° apart. Maximum contrast of hue.',
+	analogous: 'Three colors 30° apart. Quiet and cohesive.',
+	triadic: 'Three colors 120° apart. Balanced and vivid.',
+	square: 'Four colors 90° apart. Two warm, two cool.',
+	split: 'The color plus the two beside its opposite.',
+	monochrome: 'One hue at five values: two tints, the color, two shades.',
 };
 
 export const TOOL_COLOR_CONFIG = {

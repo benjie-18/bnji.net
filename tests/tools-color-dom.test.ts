@@ -328,7 +328,7 @@ test('every control has a name a screen reader can read, and the drop zone is a 
 	assert.ok(drop.querySelector('input[type="file"]'), 'and the input is inside the drop target');
 });
 
-test('each labelled section has exactly one heading, and each group one h3', (t) => {
+test('each labelled section has exactly one heading, and each group one sub-heading', (t) => {
 	const dom = colorDom();
 	mount(t, dom);
 	const document = dom.window.document;
@@ -340,11 +340,16 @@ test('each labelled section has exactly one heading, and each group one h3', (t)
 		const label = section.getAttribute('aria-labelledby') as string;
 		const heading = document.getElementById(label);
 		assert.ok(heading, `${label} points at nothing`);
-		assert.equal(heading?.tagName, 'H2', 'the section is introduced by an h2');
+		/*
+		 * An h3, not an h2: the page owns the h1 and the category the tool sits in
+		 * owns the h2. What must hold is that the section has exactly one heading
+		 * naming it.
+		 */
+		assert.equal(heading?.tagName, 'H3', 'the section is introduced by its tool heading');
 		assert.equal(
-			section.querySelectorAll(':scope > * h2, :scope > h2').length,
+			section.querySelectorAll(':scope > * h3.tool__title, :scope > h3.tool__title').length,
 			1,
-			'one h2 in the section, so the landmark has one name',
+			'one tool heading in the section, so the landmark has one name',
 		);
 	}
 
@@ -356,7 +361,7 @@ test('each labelled section has exactly one heading, and each group one h3', (t)
 		assert.ok(heading?.textContent?.trim().length, `${label} names the group`);
 		assert.match(
 			heading?.tagName ?? '',
-			/^H3$|^P$/,
+			/^H4$|^P$/,
 			'the group is named by a sub-heading or a sub-label, both of which are real text',
 		);
 	}
@@ -965,19 +970,20 @@ test('teardown stops everything, and a second init binds a fresh subtree', (t) =
 	dom.window.close();
 });
 
-test('the note under the tool states the limits from config and the four things it will not pretend to', (t) => {
+test('the one note left under the tool states the limits from config and what it will not pretend to', (t) => {
 	const dom = colorDom();
 	mount(t, dom);
 	const notes = qs(dom, '.tool__note');
 	assert.equal(notes.length, 1, 'one note, at the end of the tool');
 	const note = (notes[0]?.textContent ?? '').replace(/\s+/g, ' ').trim();
-	assert.ok(note.length > 400, 'the note is a paragraph, not a slogan');
-
 	/*
-	 * The limits are substituted from config in the fixture above, so this asserts
-	 * that the page a visitor reads quotes the numbers the code enforces — a limit
-	 * changed in tools.config.ts and not in this sentence fails here.
+	 * The page was deliberately stripped of prose, so the note is a line rather
+	 * than a paragraph — but it is still the one place the trade-offs are stated,
+	 * and it still quotes the numbers the code enforces (they are substituted
+	 * from config in the fixture above, so a limit changed in tools.config.ts and
+	 * not in this sentence fails here).
 	 */
+	assert.ok(note.length < 400, `the note stays short, and this one is ${note.length} characters`);
 	for (const expected of [
 		megabytes,
 		maxSourcePixels.toLocaleString('en-US'),
@@ -988,11 +994,10 @@ test('the note under the tool states the limits from config and the four things 
 		assert.ok(note.includes(expected), `the note should state ${expected}`);
 	}
 	for (const honest of [
-		/no alpha channel/,
+		/No alpha channel/,
 		/CMYK is derived from RGB/,
 		/WCAG 2\.x relative luminance, not APCA/,
-		/Display P3/,
-		/converted here, in this tab/,
+		/read as sRGB/,
 	]) {
 		assert.match(note, honest, 'the trade-off is stated rather than left for the visitor to find');
 	}
