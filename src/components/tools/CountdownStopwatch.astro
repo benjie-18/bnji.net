@@ -1,0 +1,103 @@
+---
+/**
+ * Tools — Countdown & Stopwatch.
+ */
+import GlassPanel from '../GlassPanel.astro';
+import { TOOL_COUNTDOWN_CONFIG } from '../../config/tools.config';
+---
+
+<section
+	class="tool tool--timer"
+	id="countdown-stopwatch"
+	aria-labelledby="countdown-stopwatch-title"
+	data-countdown-stopwatch
+>
+	<GlassPanel pad="lg" reveal>
+		<header class="tool__head">
+			<p class="eyebrow"><span>05</span><span>/ TIMER</span></p>
+			<h2 class="tool__title" id="countdown-stopwatch-title">Countdown / Stopwatch</h2>
+			<p class="tool__lead">
+				High-precision stopwatch with lap recording and customizable countdown timers.
+			</p>
+		</header>
+
+		<div class="tool__body">
+			<div class="tool__pane">
+				<div class="tool__field">
+					<label class="tool__label" for="timer-mode-select">Mode</label>
+					<select class="tool__select" id="timer-mode-select" data-timer-mode>
+						<option value="stopwatch">Stopwatch</option>
+						<option value="countdown">Countdown Timer</option>
+					</select>
+				</div>
+
+				<div class="tool__stopwatch-section" data-stopwatch-section>
+					<div class="tool__timer-display mono" data-stopwatch-display>00:00.00</div>
+					<div class="tool__actions">
+						<button class="glass-button glass-button--primary" type="button" data-glass="" data-stopwatch-start>
+							Start
+						</button>
+						<button class="glass-button" type="button" data-glass="" data-stopwatch-pause disabled>
+							Pause
+						</button>
+						<button class="glass-button" type="button" data-glass="" data-stopwatch-lap disabled>
+							Lap
+						</button>
+						<button class="glass-button glass-button--quiet" type="button" data-glass="" data-stopwatch-reset>
+							Reset
+						</button>
+					</div>
+					<div class="tool__lap-list" data-stopwatch-laps></div>
+				</div>
+
+				<div class="tool__countdown-section" data-countdown-section hidden>
+					<div class="tool__timer-display mono" data-countdown-display>05:00.00</div>
+
+					<div class="tool__resize">
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="countdown-hours-input">Hours</label>
+							<input class="tool__number" id="countdown-hours-input" type="number" min="0" max="99" value="0" data-countdown-hours />
+						</div>
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="countdown-mins-input">Minutes</label>
+							<input class="tool__number" id="countdown-mins-input" type="number" min="0" max="59" value="5" data-countdown-mins />
+						</div>
+						<div class="tool__dimension">
+							<label class="tool__sub-label mono" for="countdown-secs-input">Seconds</label>
+							<input class="tool__number" id="countdown-secs-input" type="number" min="0" max="59" value="0" data-countdown-secs />
+						</div>
+					</div>
+
+					<div class="tool__actions">
+						{
+							TOOL_COUNTDOWN_CONFIG.presets.map((p) => (
+								<button class="glass-button glass-button--quiet" type="button" data-glass="" data-countdown-preset={p.seconds}>
+									{p.label}
+								</button>
+							))
+						}
+					</div>
+
+					<div class="tool__actions">
+						<button class="glass-button glass-button--primary" type="button" data-glass="" data-countdown-start>
+							Start Countdown
+						</button>
+						<button class="glass-button" type="button" data-glass="" data-countdown-pause disabled>
+							Pause
+						</button>
+						<button class="glass-button glass-button--quiet" type="button" data-glass="" data-countdown-reset>
+							Reset
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<p class="tool__status" role="status" data-timer-status aria-live="polite"></p>
+			<p class="tool__error" role="alert" data-timer-error hidden></p>
+
+			<p class="tool__note">
+				Timers measure elapsed time using high-precision performance.now() counters in your tab.
+			</p>
+		</div>
+	</GlassPanel>
+</section>
