@@ -31,6 +31,9 @@ import { initSettingsOverlay } from './settings-overlay';
 import { initTheme } from './theme';
 import { initLiquidGlass } from './liquid-glass';
 import { initImageConverter } from './tools-image';
+import { initDateDifferenceCalculator } from './tools-date-difference';
+import { initCookingConverter } from './tools-cooking';
+import { initScreenDpiCalculator } from './tools-screen-dpi';
 import { initTelemetry } from './telemetry';
 import { initVerityBalls } from './verity-balls';
 
@@ -68,9 +71,11 @@ export function boot(): void {
 	start('telemetry', initTelemetry);
 	// Phase E §8.3: header badge polls /api/notifications while pages are open.
 	start('notifications-badge', initNotificationsBadge);
-	// The tool is a no-op on every other page: the init bails unless its
-	// subtree is in the document, so it costs one querySelector elsewhere.
+	// Tools: no-op on every other page as each init bails unless its subtree is in the document.
 	start('image-converter', initImageConverter);
+	start('date-calculator', initDateDifferenceCalculator);
+	start('cooking-converter', initCookingConverter);
+	start('screen-calculator', initScreenDpiCalculator);
 	// Restore verity balls on navigation if active in sessionStorage
 	start('verity-balls', initVerityBalls);
 	// Keep game session tracking out of the shared client chunk and skip the
