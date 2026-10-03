@@ -147,3 +147,73 @@ clean npm ci → npm run check → npm test                     all green (49 te
 npm audit                                                   0 vulnerabilities
 npm audit --omit=dev                                        0 vulnerabilities
 ```
+
+## Open Dependabot alert #62: `http-cache-semantics@4.2.0` (2026-10-02)
+
+**Checked:** 2026-10-02 (America/Toronto), Node 22 / npm 11.21.0.
+
+`git push` reported one open high-severity Dependabot alert on the default
+branch (`security/dependabot/62`). The alert is not readable with the agent
+token — `GET /repos/{owner}/{repo}/dependabot/alerts` answers `403 Resource not
+accessible by integration`, which needs the `dependabot_alerts` permission — so it
+was identified from the other side instead: every version in
+`package-lock.json` was cross-referenced against the public GitHub Advisory
+Database (`gh api '/advisories?type=reviewed&ecosystem=npm&severity=high'`, and
+the same for `critical`: 600 most-recently-published advisories, each
+`vulnerable_version_range` matched against the locked versions). Exactly one
+match, which is the alert:
+
+| Advisory | Package/version | Dependency path and reachability |
+| --- | --- | --- |
+| [GHSA-ch52-4w7c-c8xp](https://github.com/advisories/GHSA-ch52-4w7c-c8xp) / CVE-2026-93748, published 2026-09-18, CVSS 3.1 **7.5 high** (`AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N`), CWE-524 "use of cache containing sensitive information", vulnerable range `<= 4.2.0`, **no patched version recorded** | `http-cache-semantics@4.2.0` | Declared by `astro@7.3.2` as `^4.2.0`, and the only module in Astro that imports it is `astro/dist/assets/build/remote.js` — the remote image service. This project does not use `astro:assets`: there is no `astro:assets` import in `src/`, and no `imageService` or `remotePatterns` in `astro.config.mjs`. The package name and its distinctive `satisfiesWithoutRevalidation` function appear nowhere in the built output (`dist/server/entry.mjs`, its chunks, or `dist/client`), so it is not in the deployed Worker. |
+
+`miniflare` also uses the package — its `cache.worker.js` is a local simulation
+of the Cloudflare `caches` API, which is exactly the shared-cache pattern the
+advisory describes — but miniflare declares it in its own `devDependencies` and
+bundles it, so no second copy is installed here, and it runs only under
+`wrangler dev` and the `@cloudflare/vitest-pool-workers` test pool. In
+production a `max-stale` request is answered by Cloudflare's cache, which does
+not use this package.
+
+The exploit the advisory describes needs a shared HTTP cache that stores
+per-user authenticated responses and consults this library for freshness, so
+that one visitor can request a URL with a large `max-stale` and be served
+another visitor's `Set-Cookie` from an entry that was zeroed for security. This
+app has no such cache: sessions are HttpOnly cookies, and per-user data is read
+from D1, KV and Durable Objects on each request rather than from an HTTP cache.
+
+### Why nothing was changed
+
+- **There is no version to move to.** `4.2.0` (published 2025-05-09) is the
+  latest release of the package and the advisory records no
+  `first_patched_version`. An `overrides` entry — the tool this repository used
+  for the vitest-pool subtree above — can only pin a version that exists, and
+  pinning `4.1.1` would be a downgrade into a release that has its own advisory.
+- **No framework bump removes it.** `astro@7.3.3`, `7.3.4`, `7.3.5` and
+  `7.4.0-beta.1` all still declare `^4.2.0`.
+- **The one reachable path is already unused here**, and the deployed bundle
+  does not contain the code, so there is nothing to remove short of removing
+  Astro.
+
+`package.json` and `package-lock.json` were not touched by this review:
+
+```text
+npm ci (npm 11.21.0)   exit 0, lockfile md5 a265e5eebbaa6dcfe7e286700822eada
+npm audit              0 vulnerabilities
+npm audit --omit=dev   0 vulnerabilities
+npm run check          clean (build + verify-access + tsc + wrangler --dry-run)
+```
+
+**For the next audit:** `npm audit` reports **0** for this advisory, including
+inside `npm ci`, because the registry's audit endpoint does not carry it — so
+the standing instruction above ("re-run `npm audit` after every dependency
+change") would not have surfaced it. Dependabot and the advisory database do.
+When the two disagree, the lockfile-versus-advisory cross-reference is the check
+that finds it, and it is worth running when a push reports an alert that
+`npm audit` cannot see.
+
+**Owner action** (needs a token with `dependabot_alerts`): dismiss alert #62 as
+*not used* or *no fix available*, or leave it open until `http-cache-semantics`
+publishes a fix — then, if Astro still declares the range, `npm install
+--package-lock-only` under npm 11 picks it up with no manifest change, and the
+gate above is the check.
