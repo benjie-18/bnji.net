@@ -243,7 +243,7 @@ export function initMusicPlayer(): void {
 	// config array itself: reassigning `tracks` must not mutate shared module
 	// state that another player instance or a test might read.
 	let tracks: MusicTrack[] = [...MUSIC_SOURCE.tracks];
-	const isBoard = window.location.pathname.startsWith('/board');
+	const isBoard = window.location.pathname.startsWith('/community/board');
 	// Autoplay lives on /gizlyy only. Everywhere else the player boots ready
 	// but silent — the visitor presses play. The trailing slash is stripped so
 	// /gizlyy and /gizlyy/ agree.

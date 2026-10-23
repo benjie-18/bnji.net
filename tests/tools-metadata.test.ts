@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Image Metadata Inspector & Remover tests.
+ * BNJI.NET — /projects/tools/ Image Metadata Inspector & Remover tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

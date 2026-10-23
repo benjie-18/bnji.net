@@ -1,12 +1,12 @@
 /**
- * BNJI.NET — the /tools/ repertory: categories, their tools, and the key that
+ * BNJI.NET — the /projects/tools/ repertory: categories, their tools, and the key that
  * jumps to each category.
  *
  * WHY THIS FILE EXISTS
  * --------------------
  * Fourteen tools on one page is a scroll, not a catalogue. The page renders the
  * repertory, the category headings AND the tool order from this one list, so
- * "what is on /tools/" has a single answer: a tool added here appears in the
+ * "what is on /projects/tools/" has a single answer: a tool added here appears in the
  * index, in a category and on the page — and a tool missing from the map in
  * src/pages/tools.astro is a type error rather than a silently unlisted tool.
  *

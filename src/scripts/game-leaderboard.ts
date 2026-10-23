@@ -1,5 +1,5 @@
 /**
- * `/games/<game>/leaderboard/` client: mode tabs, one board at a time, paged.
+ * `/projects/games/<game>/leaderboard/` client: mode tabs, one board at a time, paged.
  *
  * The page is static (mode and page are query parameters), so this module owns
  * every piece of state the board has: which mode is showing, which page is

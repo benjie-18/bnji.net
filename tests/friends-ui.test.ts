@@ -1,5 +1,5 @@
 /**
- * /friends/ browser surface: the REAL markup from `src/pages/friends.astro`
+ * /community/friends/ browser surface: the REAL markup from `src/pages/community/friends.astro`
  * driven by the REAL `mountFriends`, with the API answered by canned JSON.
  *
  * The API's own rules (who may request whom, blocks, limits) are covered by
@@ -31,7 +31,7 @@ function emptyLists(): Lists {
 }
 
 function friendsDom(): JSDOM {
-	const source = readFileSync(new URL('../src/pages/friends.astro', import.meta.url), 'utf8');
+	const source = readFileSync(new URL('../src/pages/community/friends.astro', import.meta.url), 'utf8');
 	const parts = source.split('---');
 	let markup = parts.length >= 3 ? parts[2]! : source;
 	markup = markup.split('<style>')[0]!;
@@ -39,7 +39,7 @@ function friendsDom(): JSDOM {
 	// Render the directory gate the way Astro would with the feature on.
 	markup = markup.replace('{directoryOn && (', '').replace(/\n\t+\)\}\n/, '\n');
 	markup = markup.replaceAll('{DIRECTORY_CONFIG.minQueryLength}', '3').replaceAll('{DIRECTORY_CONFIG.maxQueryLength}', '20');
-	return new JSDOM(`<!doctype html><html><body>${markup}</body></html>`, { url: `${ORIGIN}/friends/` });
+	return new JSDOM(`<!doctype html><html><body>${markup}</body></html>`, { url: `${ORIGIN}/community/friends/` });
 }
 
 type Call = { url: string; method: string; body: unknown; headers: Headers };

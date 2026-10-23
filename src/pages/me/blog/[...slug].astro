@@ -1,6 +1,6 @@
 ---
 /**
- * /blog/<slug>/ — one prerendered page per entry in the blog collection.
+ * /me/blog/<slug>/ — one prerendered page per entry in the blog collection.
  *
  * Astro's content layer does the work: getStaticPaths() enumerates the posts,
  * render() turns Markdown/MDX into components, and BlogPost.astro supplies the
@@ -8,8 +8,8 @@
  * index uses (newest first), so the pager always matches the index.
  */
 import { render } from 'astro:content';
-import BlogPost from '../../layouts/BlogPost.astro';
-import { getBlogPosts } from '../../data/blog';
+import BlogPost from '../../../layouts/BlogPost.astro';
+import { getBlogPosts } from '../../../data/blog';
 
 export async function getStaticPaths() {
 	const posts = await getBlogPosts();

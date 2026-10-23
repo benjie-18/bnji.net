@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ List Randomizer & Shuffler.
+ * BNJI.NET — /projects/tools/ List Randomizer & Shuffler.
  *
  * Local list parsing, deduplication, Fisher-Yates shuffling, and line numbering.
  */

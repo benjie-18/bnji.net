@@ -14,11 +14,11 @@ const expectNoAxeViolations = async (page: import('@playwright/test').Page) => {
 };
 
 test('Games catalog renders at this project viewport without horizontal overflow and passes axe', async ({ page }) => {
-	const response = await page.goto('/games/');
+	const response = await page.goto('/projects/games/');
 	expect(response?.status()).toBe(200);
 	await expect(page.getByRole('heading', { level: 1, name: 'Games' })).toBeVisible();
 	// The catalog section is an h2 "Games" under an eyebrow label; the lab lives
-	// on /lab/, not on this page.
+	// on /projects/lab/, not on this page.
 	await expect(page.getByRole('heading', { level: 2, name: 'Games' })).toBeVisible();
 	await expect(page.getByRole('heading', { level: 2, name: 'Leaderboards' })).toBeVisible();
 	await expect(page.getByRole('heading', { level: 2, name: 'Private room' })).toBeVisible();
@@ -97,7 +97,7 @@ test('Games and shell retain useful static content when JavaScript is disabled',
 	const context = await browser.newContext({ javaScriptEnabled: false, viewport });
 	try {
 		const page = await context.newPage();
-		await page.goto('/games/');
+		await page.goto('/projects/games/');
 		await expect(page.getByRole('heading', { level: 1, name: 'Games' })).toBeVisible();
 		await expect(page.getByRole('heading', { level: 2, name: 'Games' })).toBeVisible();
 		await expect(page.getByRole('heading', { level: 2, name: 'Private room' })).toBeVisible();
@@ -130,7 +130,7 @@ test('account creation sends the display name typed before the submit handler di
 		});
 	});
 
-	await page.goto('/games/');
+	await page.goto('/projects/games/');
 	// loadStatus() runs after the submit listeners attach, so this greeting proves the form is live.
 	await expect(page.locator('[data-player-greeting]')).toContainText('No account or network save is required');
 	const createForm = page.locator('[data-player-create]');
@@ -164,13 +164,13 @@ test('Bubble Pop cancels its animation frame while the tab is hidden and resumes
 			return context;
 		} as typeof HTMLCanvasElement.prototype.getContext;
 	});
-	await page.goto('/lab/');
+	await page.goto('/projects/lab/');
 	const bubblePop = page.locator('[data-bubble-pop]');
 	await bubblePop.scrollIntoViewIfNeeded();
 	await expect.poll(() => page.evaluate(() => (window as Window & { __bubblePopDraws?: number }).__bubblePopDraws ?? 0), { timeout: 10_000 }).toBeGreaterThan(1);
 
 	const background = await context.newPage();
-	await background.goto('/games/');
+	await background.goto('/projects/games/');
 	await background.bringToFront();
 	// Capability probe: some headless environments never demote a background
 	// page's visibilityState (bringToFront is a no-op there). Where it isn't

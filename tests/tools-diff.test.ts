@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — the /tools/ text diff's decisions.
+ * BNJI.NET — the /projects/tools/ text diff's decisions.
  *
  * No browser can be started here, so this file covers everything pure — how a
  * text becomes lines, what the comparison says about two texts, how much of it

@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ image converter & optimizer.
+ * BNJI.NET — /projects/tools/ image converter & optimizer.
  *
  * The whole tool is a pipeline over four browser primitives: File (the picker),
  * createImageBitmap (decode), a canvas (resize + re-encode) and

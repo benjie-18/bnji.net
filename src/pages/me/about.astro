@@ -1,6 +1,6 @@
 ---
 /**
- * /about/ — profile overview and a link to the full social profile.
+ * /me/about/ — profile overview and a link to the full social profile.
  *
  * HIDDEN FOR NOW: redundant with the /gizlyy/ profile. It is out of the
  * navigation (src/data/navigation.ts) and out of the sitemap + noindexed,
@@ -10,11 +10,11 @@
  * Copy lives here rather than in data/ because it is prose specific to one page;
  * anything reused (name, location, tagline, socials) comes from data/site.ts.
  */
-import ProfileCard from '../components/ProfileCard.astro';
-import PageHeader from '../components/PageHeader.astro';
-import Icon from '../components/Icon.astro';
-import { SITE } from '../data/site';
-import Layout from '../layouts/Layout.astro';
+import ProfileCard from '../../components/ProfileCard.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import Icon from '../../components/Icon.astro';
+import { SITE } from '../../data/site';
+import Layout from '../../layouts/Layout.astro';
 
 const title = `About ${SITE.author.name}`;
 const description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';

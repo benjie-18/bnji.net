@@ -1,5 +1,5 @@
 /**
- * /tools/ repertory: the categories the data promises, the hooks the script
+ * /projects/tools/ repertory: the categories the data promises, the hooks the script
  * binds, and the filtering that keeps fourteen tools off one scroll.
  *
  * WHY THIS FILE EXISTS
@@ -31,7 +31,7 @@ const read = (path: string): string => readFileSync(new URL(`../${path}`, import
 
 const REPERTORY = 'src/components/tools/ToolsRepertory.astro';
 const GROUP = 'src/components/tools/ToolGroup.astro';
-const PAGE = 'src/pages/tools.astro';
+const PAGE = 'src/pages/projects/tools.astro';
 const SCRIPT = 'src/scripts/tools-index.ts';
 
 /* --- 1. the data, the components and the page agree ----------------------- */
@@ -179,7 +179,7 @@ let scrolled: Element[] = [];
 function indexDom(hash = ''): JSDOM {
 	if (!shared) {
 		shared = new JSDOM(`<!doctype html><html><body>${FIXTURE}</body></html>`, {
-			url: 'http://localhost:4321/tools/',
+			url: 'http://localhost:4321/projects/tools/',
 		});
 		/*
 		 * jsdom implements no scrolling and says so by not defining the method at
@@ -195,7 +195,7 @@ function indexDom(hash = ''): JSDOM {
 
 	const dom = shared;
 	dom.window.document.body.innerHTML = FIXTURE;
-	dom.window.history.replaceState(null, '', `/tools/${hash}`);
+	dom.window.history.replaceState(null, '', `/projects/tools/${hash}`);
 	scrolled.length = 0;
 
 	const g = globalThis as Record<string, unknown>;

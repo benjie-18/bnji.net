@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — the /tools/ image converter's decisions.
+ * BNJI.NET — the /projects/tools/ image converter's decisions.
  *
  * The canvas half of this tool cannot run here (no browser in this sandbox), so
  * this file covers everything that is pure: what gets refused before decoding,

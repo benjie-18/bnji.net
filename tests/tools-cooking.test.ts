@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ cooking unit converter tests.
+ * BNJI.NET — /projects/tools/ cooking unit converter tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

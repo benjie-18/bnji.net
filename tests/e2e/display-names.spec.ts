@@ -54,7 +54,7 @@ function mockProfileName(page: import('@playwright/test').Page, options: {
 
 test('guest name control loads the current label, discloses what is stored, and posts the typed name', async ({ page }) => {
 	const requests = mockProfileName(page, { current: { displayName: 'Ghost Rider', scope: 'guest' } });
-	await page.goto('/games/');
+	await page.goto('/projects/games/');
 	const form = page.locator('[data-profile-name]');
 	await expect(form.getByLabel('Your display name')).toHaveValue('Ghost Rider');
 	await expect(page.locator('[data-profile-name-status]')).toContainText('Current name: Ghost Rider · guest name');
@@ -71,7 +71,7 @@ test('guest name control loads the current label, discloses what is stored, and 
 
 test('a refused name shows the plain-language error, never raw markup', async ({ page }) => {
 	mockProfileName(page, { postStatus: 422, postBody: { error: 'display_name_reserved' } });
-	await page.goto('/games/');
+	await page.goto('/projects/games/');
 	const form = page.locator('[data-profile-name]');
 	await form.getByLabel('Your display name').fill('admin');
 	await form.getByRole('button', { name: 'Save name' }).click();
@@ -92,7 +92,7 @@ test('the handle control is account-only, enforces the format client-side, and p
 		await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ handle: 'sky_patel' }) });
 	});
 	mockProfileName(page, { current: { displayName: null, scope: 'account' } });
-	await page.goto('/games/');
+	await page.goto('/projects/games/');
 	await expect(page.locator('[data-player-greeting]')).toContainText('Signed in as Player One');
 	const handleForm = page.locator('[data-player-handle]');
 	await expect(handleForm).toBeVisible();
@@ -126,7 +126,7 @@ test('guests never see the handle control', async ({ page }) => {
 		}
 		await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ displayName: 'Rider', scope: 'guest' }) });
 	});
-	await page.goto('/games/');
+	await page.goto('/projects/games/');
 	await expect(page.locator('[data-player-greeting]')).toContainText('No account or network save is required');
 	await expect(page.locator('[data-player-handle]')).toBeHidden();
 	await expectNoAxeViolations(page);

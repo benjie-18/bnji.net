@@ -1,5 +1,5 @@
 /**
- * Chat plan Phase D — /messages/ (browser surface).
+ * Chat plan Phase D — /community/messages/ (browser surface).
  *
  * Mocked APIs with `page.route` and the live socket with `page.routeWebSocket`,
  * exactly like the account specs and tests/e2e/game-room-chat.spec.ts: these
@@ -148,7 +148,7 @@ test('the messages page discloses, lists, threads, sends, and handles live frame
 		socket = ws;
 	});
 
-	await page.goto('/messages/');
+	await page.goto('/community/messages/');
 	await expect(page.locator('[data-dm-status]')).toContainText('Signed in as Player One. 1 conversation(s).');
 
 	// The retention window is config-driven, and the participants are named plainly.
@@ -232,7 +232,7 @@ test('the messages page discloses, lists, threads, sends, and handles live frame
 
 test('signed-out visitors get the account gate and no conversation surface', async ({ page }) => {
 	mockDmApi(page, { authenticated: false });
-	await page.goto('/messages/');
+	await page.goto('/community/messages/');
 	await expect(page.locator('[data-dm-status]')).toContainText('Sign in to see your messages.');
 	await expect(page.locator('[data-dm-signin]')).toBeVisible();
 	await expect(page.locator('[data-dm-signin]')).toContainText('Create one on the Games page');

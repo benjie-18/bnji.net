@@ -1,7 +1,7 @@
 /**
  * Private direct-message integration — CONFIGURATION (public part).
  *
- * Visitors can send a private message to the site owner from /contact/.
+ * Visitors can send a private message to the site owner from /me/contact/.
  * The message is delivered server-side by `src/pages/api/dm.ts`, which reads
  * ALL credentials from environment variables. Nothing secret lives here.
  *

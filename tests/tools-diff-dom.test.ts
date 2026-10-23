@@ -1,5 +1,5 @@
 /**
- * /tools/ text diff: the REAL markup from TextDiff.astro driven by the REAL
+ * /projects/tools/ text diff: the REAL markup from TextDiff.astro driven by the REAL
  * controller in a REAL DOM.
  *
  * WHY THIS FILE EXISTS BESIDE tests/tools-diff.test.ts
@@ -88,7 +88,7 @@ function diffMarkup(): string {
 
 function diffDom(): JSDOM {
 	const dom = new JSDOM(`<!doctype html><html><body>${diffMarkup()}</body></html>`, {
-		url: 'http://localhost:4321/tools/',
+		url: 'http://localhost:4321/projects/tools/',
 	});
 	const g = globalThis as Record<string, unknown>;
 	g.window = dom.window;

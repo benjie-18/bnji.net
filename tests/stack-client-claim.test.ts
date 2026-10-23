@@ -49,7 +49,7 @@ function installFetch(handler: (call: Call) => FakeResponse): Call[] {
 	return calls;
 }
 
-/** The `[data-stack-*]` fixture, mirroring src/pages/games/stack.astro. */
+/** The `[data-stack-*]` fixture, mirroring src/pages/projects/games/stack.astro. */
 function buildStackFixture(shim: Shim) {
 	const document = shim.document;
 	const make = (selector: string, tag = 'p') => {

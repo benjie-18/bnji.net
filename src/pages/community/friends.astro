@@ -11,10 +11,10 @@
  * The short note identifies the account data saved by this surface; the
  * presence socket itself is transient and stores no durable location history.
  */
-import Layout from '../layouts/Layout.astro';
-import PageHeader from '../components/PageHeader.astro';
-import GlassButton from '../components/GlassButton.astro';
-import { DIRECTORY_CONFIG } from '../config/directory.config';
+import Layout from '../../layouts/Layout.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import GlassButton from '../../components/GlassButton.astro';
+import { DIRECTORY_CONFIG } from '../../config/directory.config';
 
 const directoryOn = DIRECTORY_CONFIG.enabled;
 ---
@@ -32,7 +32,7 @@ const directoryOn = DIRECTORY_CONFIG.enabled;
 		<section class="friends-panel" data-friends-signin data-glass="raised" hidden>
 			<h2>Friends are for accounts</h2>
 			<p>
-				<a href="/games/">Create one on the Games page</a> (or sign in with your recovery
+				<a href="/projects/games/">Create one on the Games page</a> (or sign in with your recovery
 				code), then come back.
 			</p>
 		</section>
@@ -121,7 +121,7 @@ const directoryOn = DIRECTORY_CONFIG.enabled;
 </Layout>
 
 <script>
-	import { mountFriends } from '../scripts/friends-ui';
+	import { mountFriends } from '../../scripts/friends-ui';
 	const root = document.querySelector<HTMLElement>('[data-friends-root]');
 	if (root) void mountFriends(root);
 </script>

@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Random Number & Item Picker tests.
+ * BNJI.NET — /projects/tools/ Random Number & Item Picker tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

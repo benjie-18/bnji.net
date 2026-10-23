@@ -18,7 +18,7 @@
  *
  * Rollback (same shape as every other surface here): set `enabled: false` and
  * redeploy. `GET /api/people` answers `503 directory_disabled`, the panel hides
- * itself, and exact-handle requests on /friends/ keep working unchanged.
+ * itself, and exact-handle requests on /community/friends/ keep working unchanged.
  */
 export type DirectoryConfig = {
 	/** Master switch for the index. false = endpoint refuses, panel hidden. */

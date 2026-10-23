@@ -1,13 +1,13 @@
 ---
-/** /games/ is the public catalog. Lab experiments are linked to their existing owners, never imported here. */
-import GlassPanel from '../components/GlassPanel.astro';
-import GameCard from '../components/GameCard.astro';
-import PageHeader from '../components/PageHeader.astro';
-import { getStandaloneGames } from '../data/games';
-import { hasLeaderboard, leaderboardHref, MODE_LABEL } from '../data/game-adapters';
-import { NAMES_CONFIG } from '../config/names.config';
-import { CHAT_CONFIG } from '../config/chat.config';
-import Layout from '../layouts/Layout.astro';
+/** /projects/games/ is the public catalog. Lab experiments are linked to their existing owners, never imported here. */
+import GlassPanel from '../../components/GlassPanel.astro';
+import GameCard from '../../components/GameCard.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import { getStandaloneGames } from '../../data/games';
+import { hasLeaderboard, leaderboardHref, MODE_LABEL } from '../../data/game-adapters';
+import { NAMES_CONFIG } from '../../config/names.config';
+import { CHAT_CONFIG } from '../../config/chat.config';
+import Layout from '../../layouts/Layout.astro';
 
 /**
  * `getStandaloneGames()` — everything with its own route. Deliberately NOT
@@ -208,8 +208,8 @@ const handlePattern = `[a-z0-9_]{${NAMES_CONFIG.handle.minLength},${NAMES_CONFIG
 </Layout>
 
 <script>
-	import { mountPlayerTools } from '../scripts/game-player-ui';
-	import { mountGameRooms } from '../scripts/game-room-ui';
+	import { mountPlayerTools } from '../../scripts/game-player-ui';
+	import { mountGameRooms } from '../../scripts/game-room-ui';
 	const tools = document.querySelector<HTMLElement>('[data-player-tools]');
 	if (tools) void mountPlayerTools(tools);
 	const rooms = document.querySelector<HTMLElement>('[data-room-tools]');

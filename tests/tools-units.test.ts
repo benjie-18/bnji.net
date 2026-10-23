@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Unit Converter tests.
+ * BNJI.NET — /projects/tools/ Unit Converter tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

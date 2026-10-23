@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — Text diff (/tools/#text-diff).
+ * BNJI.NET — Text diff (/projects/tools/#text-diff).
  *
  * WHY THIS FILE EXISTS
  * --------------------

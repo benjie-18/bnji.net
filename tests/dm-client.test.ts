@@ -1,9 +1,9 @@
 /**
- * Chat plan Phase D — /messages/ browser-surface integration (user report
+ * Chat plan Phase D — /community/messages/ browser-surface integration (user report
  * 2026-10-01: "tried locally… it didn't work although I could sign in").
  *
  * The e2e spec needs Playwright; this file closes the gap in between: the
- * REAL markup parsed from src/pages/messages.astro, the REAL client module
+ * REAL markup parsed from src/pages/community/messages.astro, the REAL client module
  * (mountMessages), and the REAL route handlers over the real migration SQL —
  * driven through the same event sequence a browser performs (form submits,
  * clicks, WebSocket frames). jsdom is a dev-only dependency (Tier A,
@@ -96,10 +96,10 @@ function makeFriends(db: { raw: ReturnType<typeof createTestD1>['raw'] }, nameA:
 
 /** Parsed from the real page source — the wiring contract is the markup itself. */
 function realMessagesDom(query = ''): JSDOM {
-	const source = readFileSync(new URL('../src/pages/messages.astro', import.meta.url), 'utf8');
+	const source = readFileSync(new URL('../src/pages/community/messages.astro', import.meta.url), 'utf8');
 	const parts = source.split('---');
 	const markup = parts.length >= 3 ? parts[2] : source;
-	return new JSDOM(`<!doctype html><html><body>${markup}</body></html>`, { url: `${ORIGIN}/messages/${query}` });
+	return new JSDOM(`<!doctype html><html><body>${markup}</body></html>`, { url: `${ORIGIN}/community/messages/${query}` });
 }
 
 type FakeSocket = {
@@ -608,7 +608,7 @@ test('a friends-only deep-link failure is reported below the handle, not the com
 	assert.equal(byAttr(dom, 'dm-composer').hidden, true);
 });
 
-test('deep link: /messages/?handle= opens that conversation once and cleans the URL', async () => {
+test('deep link: /community/messages/?handle= opens that conversation once and cleans the URL', async () => {
 	const { db } = database();
 	const alice = await createAccount(GUEST_ONE, 'Deep One', '203.0.113.51');
 	const bob = await createAccount(GUEST_TWO, 'Deep Two', '203.0.113.52');
@@ -625,7 +625,7 @@ test('deep link: /messages/?handle= opens that conversation once and cleans the 
 	assert.match(byAttr(dom, 'dm-partner').textContent ?? '', /Deep Two @deep_two/);
 	// …and the parameter is removed so a refresh does not re-fire it.
 	assert.equal(dom.window.location.search, '', 'URL cleaned after consumption');
-	assert.equal(dom.window.location.pathname, '/messages/');
+	assert.equal(dom.window.location.pathname, '/community/messages/');
 });
 
 test('incoming WebSocket message does not snap thread.scrollTop to bottom if user is scrolled up', async () => {

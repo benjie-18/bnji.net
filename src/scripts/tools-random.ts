@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Random Number & Item Picker.
+ * BNJI.NET — /projects/tools/ Random Number & Item Picker.
  *
  * Uses crypto.getRandomValues when available for cryptographically sound random values.
  * Local only, no network calls.

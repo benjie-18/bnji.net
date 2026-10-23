@@ -6,7 +6,7 @@
  * that needs a backend, a spam filter and a mailbox nobody checks. When a form
  * becomes worth it, it belongs here and nowhere else.
  *
- * Shared by the homepage and /contact/, so the message cannot drift between the
+ * Shared by the homepage and /me/contact/, so the message cannot drift between the
  * two.
  */
 import { SITE, SOCIAL_LINKS } from '../data/site';
@@ -14,7 +14,7 @@ import GlassButton from './GlassButton.astro';
 import GlassPanel from './GlassPanel.astro';
 
 interface Props {
-	/** Show the full panel with meta rows (used on /contact/). */
+	/** Show the full panel with meta rows (used on /me/contact/). */
 	detailed?: boolean;
 	/** Section index for the eyebrow; hidden when omitted. */
 	index?: string;

@@ -1,18 +1,18 @@
 ---
 /**
- * /contact/ — the full version of the homepage contact section.
+ * /me/contact/ — the full version of the homepage contact section.
  *
  * Still form-free on purpose: a contact form needs a backend, a spam filter and
  * a mailbox that gets checked, and none of those improve on two direct links.
  * If that ever changes, ContactSection.astro is the only file that should grow.
  */
-import ContactSection from '../components/ContactSection.astro';
-import DirectMessage from '../components/DirectMessage.astro';
-import GlassPanel from '../components/GlassPanel.astro';
-import Icon from '../components/Icon.astro';
-import PageHeader from '../components/PageHeader.astro';
-import { SOCIAL_LINKS } from '../data/site';
-import Layout from '../layouts/Layout.astro';
+import ContactSection from '../../components/ContactSection.astro';
+import DirectMessage from '../../components/DirectMessage.astro';
+import GlassPanel from '../../components/GlassPanel.astro';
+import Icon from '../../components/Icon.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import { SOCIAL_LINKS } from '../../data/site';
+import Layout from '../../layouts/Layout.astro';
 
 const CHANNELS = [
 	{

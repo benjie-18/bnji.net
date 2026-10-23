@@ -33,7 +33,7 @@ export function initNotificationsBadge(): void {
 			if (total > 0) {
 				const count = badge.querySelector<HTMLElement>('[data-notif-count]');
 				if (count) count.textContent = total > 99 ? '99+' : String(total);
-				badge.href = pending > 0 ? '/friends/' : '/messages/';
+				badge.href = pending > 0 ? '/community/friends/' : '/community/messages/';
 				const parts: string[] = [];
 				if (unread > 0) parts.push(`${unread} unread message${unread === 1 ? '' : 's'}`);
 				if (pending > 0) parts.push(`${pending} pending friend request${pending === 1 ? '' : 's'}`);

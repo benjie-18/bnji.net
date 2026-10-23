@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Percentage Calculator tests.
+ * BNJI.NET — /projects/tools/ Percentage Calculator tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

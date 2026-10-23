@@ -1,5 +1,5 @@
 /**
- * /tools/ color picker: the arithmetic, and the controller's decisions.
+ * /projects/tools/ color picker: the arithmetic, and the controller's decisions.
  *
  * WHY THE NUMBERS IN HERE LOOK BORING
  * -----------------------------------

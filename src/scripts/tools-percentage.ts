@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Percentage Calculator script.
+ * BNJI.NET — /projects/tools/ Percentage Calculator script.
  *
  * Runs locally in browser tab memory. Computes X% of Y, X as % of Y,
  * percentage change, and percentage increase/decrease.

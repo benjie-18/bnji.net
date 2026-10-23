@@ -21,7 +21,7 @@ export default defineConfig({
 	],
 	webServer: {
 		command: 'node scripts/playwright-dev-server.mjs',
-		url: 'http://127.0.0.1:4321/games/',
+		url: 'http://127.0.0.1:4321/projects/games/',
 		reuseExistingServer: false,
 		timeout: 120_000,
 		stdout: 'pipe',

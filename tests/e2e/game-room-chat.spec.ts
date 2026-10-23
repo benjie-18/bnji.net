@@ -46,7 +46,7 @@ test('room chat joins, renders history with dedupe and tombstones, sends frames,
 		});
 	});
 
-	await page.goto('/games/');
+	await page.goto('/projects/games/');
 	const note = page.locator('.room-tools__chat-note');
 	await expect(note).toContainText('visible to room members');
 	await expect(note).toContainText('up to 2 hours');
@@ -155,7 +155,7 @@ test('closing the room socket disables chat and explains how to resume', async (
 		socket = ws;
 	});
 
-	await page.goto('/games/');
+	await page.goto('/projects/games/');
 	await page.locator('[data-room-create]').getByRole('button', { name: 'Create a room' }).click();
 	await expect.poll(() => socket !== null).toBe(true);
 	socket!.send(JSON.stringify(snapshotFrame));

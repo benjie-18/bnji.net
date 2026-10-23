@@ -13,7 +13,7 @@
  * room content (state, chat) is readable through this surface.
  *
  * Rollback: set `enabled: false` and redeploy. The listing endpoint answers
- * `503 lobby_disabled`, the `/games/` lobby panel hides itself, and rooms keep
+ * `503 lobby_disabled`, the `/projects/games/` lobby panel hides itself, and rooms keep
  * working exactly as they did for their code-holders.
  */
 export type LobbyConfig = {

@@ -3,7 +3,7 @@
  * HeaderLink — a navigation link that knows whether it is the current page.
  *
  * Active detection is prefix-based (except for the home route, which must match
- * exactly) so a blog post such as /blog/first-post/ keeps "Blog" highlighted.
+ * exactly) so a blog post such as /me/blog/first-post/ keeps "Blog" highlighted.
  * The active state is exposed to assistive tech with aria-current="page", not
  * just with colour.
  */
@@ -11,14 +11,23 @@ interface Props {
 	href: string;
 	/** Defaults to the current request path; pass it explicitly in tests. */
 	currentPath?: string;
+	/**
+	 * Overrides the computed active state when provided. Header.astro passes
+	 * it so that exactly one nav item is ever current: the prefix rule below
+	 * alone would ALSO light up an ancestor route ('/projects/') on nested
+	 * pages like '/projects/lab/', leaving two links with
+	 * aria-current="page". The longest matching href must win, and a single
+	 * link cannot see its siblings — the header, which can, decides.
+	 */
+	active?: boolean;
 	class?: string;
 }
 
-const { href, currentPath = Astro.url.pathname, class: className = '' } = Astro.props;
+const { href, currentPath = Astro.url.pathname, active, class: className = '' } = Astro.props;
 
 const path = currentPath.replace(/index\.html$/, '');
 const isRoot = href === '/';
-const isActive = isRoot ? path === '/' : path === href || path.startsWith(href);
+const isActive = active ?? (isRoot ? path === '/' : path === href || path.startsWith(href));
 ---
 
 <a

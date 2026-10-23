@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Time Zone Converter tests.
+ * BNJI.NET — /projects/tools/ Time Zone Converter tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

@@ -1,7 +1,7 @@
 /**
  * BNJI.NET — Lab experiment registry.
  *
- * /lab/ is the playground: interactive prototypes that are allowed to be
+ * /projects/lab/ is the playground: interactive prototypes that are allowed to be
  * strange, but are not allowed to destabilize the rest of the site.
  */
 

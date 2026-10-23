@@ -44,7 +44,7 @@ export function hasLeaderboard(game: Game): boolean {
 	return game.status === 'available' && !game.labHref && Boolean(game.href) && hasScoreVerifier(game.id);
 }
 
-/** `/games/stack/` → `/games/stack/leaderboard/`; null for anything without a route of its own. */
+/** `/projects/games/stack/` → `/projects/games/stack/leaderboard/`; null for anything without a route of its own. */
 export function leaderboardHref(game: Game): string | null {
 	if (!game.href || !hasLeaderboard(game)) return null;
 	return `${game.href.replace(/\/$/, '')}/leaderboard/`;

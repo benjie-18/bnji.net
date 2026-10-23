@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ List Randomizer tests.
+ * BNJI.NET — /projects/tools/ List Randomizer tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

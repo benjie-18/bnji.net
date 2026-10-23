@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — primitives shared by the browser tools on /tools/.
+ * BNJI.NET — primitives shared by the browser tools on /projects/tools/.
  *
  * WHY THIS FILE EXISTS
  * --------------------

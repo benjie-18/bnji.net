@@ -4,7 +4,7 @@
  *
  * Takes the whole collection entry (not just its frontmatter) so it can derive
  * the URL, reading time and article metadata itself. Rendering the post body is
- * still the route's job: src/pages/blog/[...slug].astro passes <Content /> into
+ * still the route's job: src/pages/me/blog/[...slug].astro passes <Content /> into
  * the default slot.
  */
 import FormattedDate from '../components/FormattedDate.astro';
@@ -37,7 +37,7 @@ const permalink = postUrl(post);
 >
 	<article class="entry">
 		<header class="entry__header container container--narrow">
-			<a class="entry__back" href="/blog/">
+			<a class="entry__back" href="/me/blog/">
 				<Icon name="arrow-right" size={14} class="entry__back-icon" />
 				All posts
 			</a>
@@ -107,7 +107,7 @@ const permalink = postUrl(post);
 			</nav>
 
 			<div class="entry__actions actions-stack">
-				<GlassButton href="/blog/" icon="arrow-right">Back to the blog</GlassButton>
+				<GlassButton href="/me/blog/" icon="arrow-right">Back to the blog</GlassButton>
 				<GlassButton href={permalink} variant="quiet" icon="arrow-up-right">
 					Permalink
 				</GlassButton>

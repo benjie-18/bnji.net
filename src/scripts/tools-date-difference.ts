@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ date difference & date addition/subtraction calculator.
+ * BNJI.NET — /projects/tools/ date difference & date addition/subtraction calculator.
  *
  * Runs completely locally in the tab with no external API calls or network requests.
  */
