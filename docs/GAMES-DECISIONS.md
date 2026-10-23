@@ -10,7 +10,7 @@
 - **Retention:** the current source had a fixed 60-day constant and lazy purge after a row threshold; it did not actually expose the retention control claimed by older owner notes. Add a persisted, admin-editable `trackingRetentionDays` setting (default 60, bounded 1–365), extend lazy cleanup, and add an hourly Cloudflare Cron Trigger for idle periods. Deletion uses indexed time cutoffs and a 50-row primary + 10-row catch-up cap/table/hour, deliberately lowered from part one to reserve D1 Free writes for identity/save traffic. Admin reads also perform one bounded recovery batch, but public responses filter at the configured cutoff immediately. Under a backlog larger than one batch, physical deletion takes multiple hourly sweeps plus scheduler jitter; there is no hard one-hour deletion guarantee. Tracking ingest itself remains best-effort and never runs a full-table purge. Cron is selected over perpetual request polling or an external scheduler.
 - **Worker runtime:** retain Astro's Cloudflare adapter and bindings. Add a small custom Worker entrypoint only to forward HTTP to Astro and run the scheduled retention sweep. **Amended 2026-09-30:** the original "no new npm dependencies" rule is superseded by the tiered policy in [`DEPENDENCY-POLICY.md`](./DEPENDENCY-POLICY.md); dependencies are permitted per tier, and runtime or visitor-facing ones need justification or a decision record respectively.
 - **Game modules:** central typed catalog in `src/data/games.ts`; stable IDs are lowercase, namespaced slugs (`bnji.<slug>`), immutable after public score history exists. Lab experiments remain where they are and are linked, never copied. Shared lifecycle is a compact browser module, not an engine.
-- **PvP Minesweeper + Stack (2026-10-01, owner answers):** the PvP Minesweeper leaderboard is a **wins count per difficulty**, made server-trustworthy by asking the round's room DO to attest the win and having the scores route increment the stored best — never accepting a client total. A mine hit is **instant elimination** (the denying `hit_mine` reveals which cell was fatal; the racer self-reports `ms_die`, so whoever designed the minefield scores the kill). Stack ships as a port of the Lab isometric StackGame with **one locked Normal speed**, and the Lab card (`bnji.isometric-stack`) is repointed to the standalone `/games/stack/` page instead of copying the component.
+- **PvP Minesweeper + Stack (2026-10-01, owner answers):** the PvP Minesweeper leaderboard is a **wins count per difficulty**, made server-trustworthy by asking the round's room DO to attest the win and having the scores route increment the stored best — never accepting a client total. A mine hit is **instant elimination** (the denying `hit_mine` reveals which cell was fatal; the racer self-reports `ms_die`, so whoever designed the minefield scores the kill). Stack ships as a port of the Lab isometric StackGame with **one locked Normal speed**, and the Lab card (`bnji.isometric-stack`) is repointed to the standalone `/projects/games/stack/` page instead of copying the component.
 
 ## Free-plan fit and tradeoffs
 
@@ -25,7 +25,7 @@ D1 exhaustion is surfaced as an API storage error for account/save and score ope
 ## Leaderboards, discovery and presentation (2026-10-01, owner requests)
 
 - **Per-game leaderboard pages.** Scored games get a static sibling route
-  `/games/<slug>/leaderboard/` (prerendered from `getStandaloneGames().filter(hasLeaderboard)`)
+  `/projects/games/<slug>/leaderboard/` (prerendered from `getStandaloneGames().filter(hasLeaderboard)`)
   and a link from the catalog card and the game shell. The page is static and the
   rows are fetched from `GET /api/games/leaderboard`; mode and page live in the
   query string via `replaceState`, so a link can point at one board without a
@@ -67,7 +67,7 @@ D1 exhaustion is surfaced as an API storage error for account/save and score ope
   blocks in **both** directions in SQL, and never says whether a given name has an
   account. It is account-only, rate-limited per account, and off with
   `DIRECTORY_CONFIG.enabled` (or `FRIENDS_CONFIG.enabled`).
-- **Lab experiments stay out of the room menu.** The room `<select>` on `/games/`
+- **Lab experiments stay out of the room menu.** The room `<select>` on `/projects/games/`
   is built from `getStandaloneGames()`, so `bnji.glass-minesweeper` (and the other
   Lab cards) can no longer be picked for a room. `POST /api/games/rooms` stays
   permissive — the menu is the product decision, and the API keeps accepting any
@@ -84,7 +84,7 @@ D1 exhaustion is surfaced as an API storage error for account/save and score ope
   auto-scrolls while it is already at the tail. Both games' canvas/board tokens
   moved into `src/styles/tokens.css` (`--game-*`) and the shared glass primitives
   (`.glass-tabs`, `.glass-row`, `.glass-field`, `.glass-status`, `.glass-note`)
-  were promoted so the admin nav, `/friends/`, `/messages/` and the leaderboards
+  were promoted so the admin nav, `/community/friends/`, `/community/messages/` and the leaderboards
   all use one implementation.
 - **Fullscreen for every game.** `GameShell` + `src/scripts/game-shell.ts` add one
   toggle: the button ships hidden and is revealed only when the Fullscreen API

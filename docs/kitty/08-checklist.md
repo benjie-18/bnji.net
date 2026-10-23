@@ -6,12 +6,12 @@
 - [ ] `tsc --noEmit` 0 errors
 - [ ] `SCORE_VERIFIER_GAMES` in `src/data/game-adapters.ts` includes `bnji.kitty-factory`
 - [ ] `src/server/game-adapters/register-all.ts` imports `./kitty-factory`
-- [ ] `src/data/games.ts` entry description ≤12 words, ID `bnji.kitty-factory`, href `/games/kitty-factory/`, capabilities includes webgl
+- [ ] `src/data/games.ts` entry description ≤12 words, ID `bnji.kitty-factory`, href `/projects/games/kitty-factory/`, capabilities includes webgl
 - [ ] Save size <16KiB for 100 machines (unit test)
 - [ ] D1 write math: 50 DAU saving every 2 min = 42.5k/day <100k
 - [ ] WebGL context lost handled (listen `webglcontextlost`, pause, fallback)
 - [ ] Mobile touch tested (orbit one finger rotate, two finger zoom/pan, long press place)
-- [ ] Leaderboard page `/games/kitty-factory/leaderboard/` prerenders (from hasLeaderboard)
+- [ ] Leaderboard page `/projects/games/kitty-factory/leaderboard/` prerenders (from hasLeaderboard)
 - [ ] No new secrets, no paid deps, Three.js MIT justified in GAMES-DECISIONS.md
 - [ ] GameShell lifecycle pause/resume stops RAF
 - [ ] Manual save debounced 5s, auto 2min throttled, local 10s
@@ -30,7 +30,7 @@
 
 **E2E (Playwright):**
 - `npm run test:e2e` — 390px mobile, 768px tablet, 1440px desktop, axe scans, keyboard-only, reduced motion, JS disabled
-- Add test for `/games/kitty-factory/` loads, canvas exists, build button clickable, save button works, leaderboard link exists
+- Add test for `/projects/games/kitty-factory/` loads, canvas exists, build button clickable, save button works, leaderboard link exists
 
 **Manual:**
 - `npm run preview` → `wrangler d1 migrations apply bnji-board --local` → `wrangler dev`
@@ -51,7 +51,7 @@
 5. `npx wrangler d1 migrations list bnji-board --local` — no new migration
 6. `npm run preview` manual test
 7. `git push origin arena/01a0fe13-bnji-net` → PR → merge to main → Cloudflare Workers Builds auto deploys
-8. Verify `/games/kitty-factory/` loads, `/api/games/saves` works, leaderboard page exists
+8. Verify `/projects/games/kitty-factory/` loads, `/api/games/saves` works, leaderboard page exists
 9. Set status to `available` when ready
 10. Optional: add Cloudflare Route `kitty.bnji.net/*` → same Worker for vanity URL
 

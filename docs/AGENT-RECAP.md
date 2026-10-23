@@ -28,10 +28,10 @@ remain readable with JS blocked (`html.js` guards in `animations.css`).
 | Route | Kind | Notes |
 |---|---|---|
 | `/` | prerendered | Home: Hero + preview sections + ProfileCard |
-| `/about`, `/projects`, `/contact`, `/lab` | prerendered | Lab hosts runnable experiments |
-| `/tools` | prerendered | One local browser tool (image converter); no API route behind it |
-| `/blog`, `/blog/[...slug]` | prerendered | Uses `BlogPost.astro` layout for posts |
-| `/board/` | **SSR** (`prerender = false`) | Message board UI; note trailing slash in links. SSR because it reads the store for the first paint |
+| `/me/about`, `/projects`, `/me/contact`, `/projects/lab` | prerendered | Lab hosts runnable experiments |
+| `/projects/tools` | prerendered | One local browser tool (image converter); no API route behind it |
+| `/me/blog`, `/me/blog/[...slug]` | prerendered | Uses `BlogPost.astro` layout for posts |
+| `/community/board/` | **SSR** (`prerender = false`) | Message board UI; note trailing slash in links. SSR because it reads the store for the first paint |
 | `/gizlyy/` | **SSR** (`prerender = false`) | Profile page; view stats and reactions come from D1. A failed read renders an em dash, never a zero |
 | `/admin` | **SSR** | Admin panel; redirects to `/admin/login` without a session |
 | `/admin/login` | **SSR** | Token sign-in; login attempts are throttled per IP |
@@ -126,7 +126,7 @@ The opening sequence is the exception to "everything goes through `boot()`":
 `IntroSequence.astro` calls `initIntro()` itself, so it only ever initialises on
 the page that has one.
 
-The `/tools/` init (`tools-image.ts`) is a no-op on every
+The `/projects/tools/` init (`tools-image.ts`) is a no-op on every
 other page — it bails unless its `[data-…]` subtree is in the document.
 Modules: `starfield.ts` (canvas engine), `interactions.ts` (cursor glow, background
 parallax, glass tracking, magnetic buttons, nav), `scroll.ts` (reveals/parallax),
@@ -165,7 +165,7 @@ starts the next song, wraps to the beginning at the end, and restarts a single-t
   tokens. Light-theme contrast fixes exist for `.text-luminous`, `.footer-word`, Header surfaces.
 - `glass.css` (panels/buttons; advanced vs flat per `data-advanced-glass`), `animations.css`
   (all motion; respects prefers-reduced-motion), `board.css`, `lab.css` (imported only by
-  /lab), `settings.css`, `tools.css` (imported only by /tools), `global.css`.
+  /projects/lab), `settings.css`, `tools.css` (imported only by /projects/tools), `global.css`.
 - `Icon.astro` is the single icon component (globe/rss added this session).
   `manifest.webmanifest` must stay valid JSON (was previously broken).
 
@@ -235,7 +235,7 @@ npm run dev       astro dev only - does NOT run middleware/API/Worker runtime
 
 ## 10. Gotchas learned the hard way
 
-- Links to the board must use `/board/` (trailing slash) or asset-relative URLs 404.
+- Links to the board must use `/community/board/` (trailing slash) or asset-relative URLs 404.
 - Astro **scoped styles don't reach dynamically created DOM** - use `:global()` or a plain
   CSS file for anything JS builds.
 - Adapter v14: `platformProxy` option is invalid - `prerenderEnvironment: "node"` only.

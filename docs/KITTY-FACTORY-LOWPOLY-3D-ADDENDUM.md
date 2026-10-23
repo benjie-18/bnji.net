@@ -1,6 +1,6 @@
 # Kitty Factory — Low-Poly 3D First/Third Person Addendum
 
-**Question:** Can it run as low-poly 3D first/third person integrated in existing `/games/` infra? Playable at target scale? Saves often (manual + every couple minutes) with low player count.
+**Question:** Can it run as low-poly 3D first/third person integrated in existing `/projects/games/` infra? Playable at target scale? Saves often (manual + every couple minutes) with low player count.
 
 **Short answer: Yes, fully feasible integrated. Low player count makes frequent saves viable. Recommend third-person orbit + optional first-person inspection, not pure FPS.**
 
@@ -15,9 +15,9 @@ Yes.
 - Precedent: `FluidSandbox` is WebGL2 metaballs with Canvas2D fallback, `VoxelMap` is 3D isometric with raycasting, orbit, depth sorting, brush. So 3D in Lab already ships.
 - `GameShell.astro` supports fullscreen toggle (button hidden until Fullscreen API exists). Works for Three.js canvas. `data-game-field` token in `tokens.css` gives you `--game-field` background.
 - Capabilities you need: `['keyboard','pointer','touch','webgl','audio']` — all already defined.
-- Bundle: Astro code-splits per page, Three.js only loaded on `/games/kitty-factory/` route via dynamic import, does not bloat main site.
+- Bundle: Astro code-splits per page, Three.js only loaded on `/projects/games/kitty-factory/` route via dynamic import, does not bloat main site.
 
-So integration is: `bnji.kitty-factory` with `href: '/games/kitty-factory/'`, `capabilities: ['keyboard','pointer','webgl']`, `GameShell` + `mountGameLifecycle` + `mountGameSession` same as Stack/Chess.
+So integration is: `bnji.kitty-factory` with `href: '/projects/games/kitty-factory/'`, `capabilities: ['keyboard','pointer','webgl']`, `GameShell` + `mountGameLifecycle` + `mountGameSession` same as Stack/Chess.
 
 ## 2. Low-Poly 3D is the right 3D subset for this scale
 
@@ -89,7 +89,7 @@ So yes, playable. Roblox tycoons handle similar scale in 3D with low-poly and th
 
 **Current save system:**
 - `game_saves` table: `player_id, game_id, slot_id, schema_version, revision, data_json (≤16384 bytes), updated_at`, PK `(player_id, game_id, slot_id)`, max 25 slots/player.
-- API `POST /api/games/saves` uses CAS revision, returns 409 with current data on conflict. Browser has IndexedDB pending queue, 3 retries, offline support, conflict prompt UI on `/games/` page.
+- API `POST /api/games/saves` uses CAS revision, returns 409 with current data on conflict. Browser has IndexedDB pending queue, 3 retries, offline support, conflict prompt UI on `/projects/games/` page.
 - D1 Free: 100k rows written/day shared account-wide. KV not used for saves.
 
 **Math for your case (low player count):**
@@ -127,9 +127,9 @@ Examples:
 ## 6. Integration sketch (free, no new bindings)
 
 ```
-src/data/games.ts: add bnji.kitty-factory, href /games/kitty-factory/, capabilities ['keyboard','pointer','touch','webgl','audio'], status 'in-development'
+src/data/games.ts: add bnji.kitty-factory, href /projects/games/kitty-factory/, capabilities ['keyboard','pointer','touch','webgl','audio'], status 'in-development'
 src/game/kitty-rules.ts: pure logic — machine definitions, cost scaling 1.15^owned, production, pollution E=e^(-k*p^2), synergies, prestige formulas, tick(dt)
-src/pages/games/kitty-factory.astro: GameShell with instructions, boardHref from leaderboardHref(), <canvas data-kitty-canvas> + UI overlay (money, kitties/s, efficiency)
+src/pages/projects/games/kitty-factory.astro: GameShell with instructions, boardHref from leaderboardHref(), <canvas data-kitty-canvas> + UI overlay (money, kitties/s, efficiency)
 src/scripts/games/kitty-factory.ts: Three.js dynamic import, create scene, OrbitControls + PointerLockControls toggle, InstancedMesh for machines, instanced kitties, conveyor shader, mountGameLifecycle (pause/resume stops RAF), mountGameSession
 src/server/game-adapters/kitty-factory.ts: registerScoreVerifier — verify best kitty value plausible from save proof (like Stack replays drops). Return {score, tieBreak}. Add to register-all.ts + SCORE_VERIFIER_GAMES.
 src/styles/games.css: add .kitty-* tokens
@@ -153,6 +153,6 @@ No new Worker, no new D1, no R2 needed (assets in /public served as static, not 
 - **Can it run integrated?** Yes. Existing infra already supports WebGL, GameShell fullscreen, lifecycle pause, saves, leaderboards. No new bindings.
 - **Playable at your scale?** Yes if low-poly + instanced + hybrid camera (orbit default, top-down build, optional FP inspect) + chunked parcels + minimap/teleport. Pure FP would be unplayable at industrial-complex scale; hybrid solves it.
 - **Frequent saves?** Yes, with low player count (<50 DAU) saving every 2 min + manual is well within Free 100k writes/day (≈37k total). Use local-first IndexedDB every 10s, cloud every 2 min, compact encoding <16KiB, offline calc via lastSeenAt.
-- **Recommendation:** Start with third-person orbit low-poly MVP (5 machines, 1 prestige, pollution, 1 parcel expansion), ship integrated as `/games/kitty-factory/`. Validate loop, then add more machines/prestige. Keep vanity `kitty.bnji.net` route as future option, not separate Worker.
+- **Recommendation:** Start with third-person orbit low-poly MVP (5 machines, 1 prestige, pollution, 1 parcel expansion), ship integrated as `/projects/games/kitty-factory/`. Validate loop, then add more machines/prestige. Keep vanity `kitty.bnji.net` route as future option, not separate Worker.
 
 If you want, I can draft the compact save schema and Three.js instancing setup next.

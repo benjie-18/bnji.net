@@ -8,7 +8,7 @@
  * repertory, the category headings AND the tool order from this one list, so
  * "what is on /projects/tools/" has a single answer: a tool added here appears in the
  * index, in a category and on the page — and a tool missing from the map in
- * src/pages/tools.astro is a type error rather than a silently unlisted tool.
+ * src/pages/projects/tools.astro is a type error rather than a silently unlisted tool.
  *
  * Content only: ids, names and grouping. The behaviour (filtering, deep links,
  * shortcut keys) lives in src/scripts/tools-index.ts and reads the DOM, so this

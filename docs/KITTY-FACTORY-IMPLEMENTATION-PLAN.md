@@ -3,7 +3,7 @@
 **Version:** 1.0 — 2026-10-02  
 **Status:** Plan only, no code yet  
 **Base repo:** `benjie-18/bnji.net` branch `arena/01a0fe13-bnji-net` — Astro 7 + Cloudflare Workers Free + D1 `bnji-board` + KV `BOARD_KV` + DOs `GAME_ROOMS`, `DM_CONVERSATIONS`, `PRESENCE`  
-**Goal:** Build low-poly 3D first/third-person hybrid tycoon idle game **integrated** as `bnji.kitty-factory` at `/games/kitty-factory/`, playable at target scale, easy to update (more machines, kitties, levels, expansions), free-only, frequent saves (manual + auto every 2 min) with low DAU.
+**Goal:** Build low-poly 3D first/third-person hybrid tycoon idle game **integrated** as `bnji.kitty-factory` at `/projects/games/kitty-factory/`, playable at target scale, easy to update (more machines, kitties, levels, expansions), free-only, frequent saves (manual + auto every 2 min) with low DAU.
 
 This plan is written so a competent developer can build the entire game from this document alone, without asking follow-ups.
 
@@ -177,7 +177,7 @@ src/data/kitty-content.ts          // All content tables, single source of truth
 src/game/kitty-rules.ts            // Pure logic, no Three.js, no DOM
 src/game/kitty-formulas.ts         // Cost, value, pollution, prestige formulas
 src/game/kitty-save.ts             // Save schema, migrate, compact encode/decode
-src/pages/games/kitty-factory.astro // GameShell page
+src/pages/projects/games/kitty-factory.astro // GameShell page
 src/scripts/games/kitty-factory.ts // Three.js client, lifecycle, UI, save handling
 src/server/game-adapters/kitty-factory.ts // Score verifier
 public/games/kitty/                // GLB models, icons, audio
@@ -343,7 +343,7 @@ All constants extracted to config for admin override via `site_settings` if need
 - Tracking: `mountGameSession` already sends heartbeats, no extra code.
 - Save handling: import `kitty-save.ts`, local IndexedDB via `game-saves.ts` API, cloud sync throttled.
 
-**File: `src/pages/games/kitty-factory.astro`**
+**File: `src/pages/projects/games/kitty-factory.astro`**
 
 - Import `GameShell`, `PageHeader`, `Layout`, `getGame`, `leaderboardHref`
 - Instructions: "Build kitty factory, optimize layout, manage pollution, prestige..."
@@ -372,7 +372,7 @@ Add:
   title: 'Kitty Factory',
   description: 'Build kitties, optimize factory, prestige endlessly.',
   status: 'in-development', // or 'available' when ready
-  href: '/games/kitty-factory/',
+  href: '/projects/games/kitty-factory/',
   capabilities: ['keyboard','pointer','touch','webgl','audio'],
   modes: ['default'],
 }
@@ -473,7 +473,7 @@ export function offlineProgress(save:KittySave, now=Date.now()): { moneyGain:num
 **Save handling in client:**
 - Local: `saveLocalProgress('bnji.kitty-factory','main', SAVE_VERSION, compactEncode(save))` every 10s
 - Cloud: same but via `game-saves.ts` `put` with `expectedRevision`, throttled to every 2 min + manual button + prestige events
-- On load: read local, then cloud, compare `updatedAt`, prompt conflict if needed (existing UI on `/games/` page handles it)
+- On load: read local, then cloud, compare `updatedAt`, prompt conflict if needed (existing UI on `/projects/games/` page handles it)
 - Manual save button: `data-kitty-save` → calls cloud save immediately, debounce 5s, show status in `data-player-live`
 
 **Size check:** 100 machines × ~30B = 3KB, currencies ~200B, parcels ~500B, total <5KB JSON, well under 16KiB.
@@ -563,7 +563,7 @@ Mobile:
 
 **E2E (Playwright):**
 - `npm run test:e2e` already checks 390px mobile, 768px tablet, 1440px desktop, axe scans, keyboard-only, reduced motion, JS disabled
-- Add test for `/games/kitty-factory/` page loads, canvas exists, build button clickable, save button works
+- Add test for `/projects/games/kitty-factory/` page loads, canvas exists, build button clickable, save button works
 
 **Manual:**
 - Local: `npm run preview` → `wrangler d1 migrations apply bnji-board --local` → `wrangler dev`
@@ -585,7 +585,7 @@ Mobile:
 5. `npx wrangler d1 migrations list bnji-board --local` — no new migration needed (save uses existing table)
 6. `npm run preview` manual test
 7. `git push origin arena/01a0fe13-bnji-net` → PR → merge to main → Cloudflare Workers Builds auto deploys
-8. Verify `/games/kitty-factory/` loads, `/api/games/saves` works, leaderboard page `/games/kitty-factory/leaderboard/` exists (prerendered from `hasLeaderboard`)
+8. Verify `/projects/games/kitty-factory/` loads, `/api/games/saves` works, leaderboard page `/projects/games/kitty-factory/leaderboard/` exists (prerendered from `hasLeaderboard`)
 9. Set status to `available` when ready
 
 No new secrets, no new D1, no new KV, no new DO.
@@ -628,7 +628,7 @@ All without D1 migration, without new Worker.
 | Cheating leaderboard | Verifier recomputes max plausible value from proof, not trust client. |
 | Pointer lock permission | Require user gesture, fallback to orbit. |
 | Accessibility | Top-down build mode with buttons, keyboard controls, respect `prefers-reduced-motion`, semantic DOM UI. |
-| Save conflict multi-tab | Existing CAS + conflict UI on `/games/` page handles it. |
+| Save conflict multi-tab | Existing CAS + conflict UI on `/projects/games/` page handles it. |
 
 ---
 
@@ -663,7 +663,7 @@ Total ~3 weeks for full game with AI, 2D fallback.
   title: 'Kitty Factory',
   description: 'Build kitties, optimize factory, prestige endlessly.',
   status: 'in-development',
-  href: '/games/kitty-factory/',
+  href: '/projects/games/kitty-factory/',
   capabilities: ['keyboard','pointer','touch','webgl','audio'],
   modes: ['default'],
 }

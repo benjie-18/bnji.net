@@ -1,7 +1,7 @@
 /* ==========================================================================
    BNJI.NET — Lab primitives
    --------------------------------------------------------------------------
-   Imported by src/pages/lab.astro ONLY, so none of this ships to the rest of
+   Imported by src/pages/projects/lab.astro ONLY, so none of this ships to the rest of
    the site. Experiments share these classes for their stage, controls and
    readouts, which is what keeps three very different prototypes looking like
    they belong to the same place.

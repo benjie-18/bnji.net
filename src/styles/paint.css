@@ -1,4 +1,4 @@
-/* Shared whiteboard, loaded only on /board/. */
+/* Shared whiteboard, loaded only on /community/board/. */
 .board-paint {
 	--parent-radius: var(--radius-xl);
 	--parent-pad: var(--space-5);

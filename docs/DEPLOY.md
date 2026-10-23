@@ -79,7 +79,7 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `security_events` | Abuse detection | IP, user agent, referrer, coarse geo, device data. **Admin-only; shared configurable tracking retention, never public** |
 | `board_reports` | Board report flow | `(message_id, reporter_key)` primary key, so one visitor cannot inflate a report count |
 | `admin_credentials` | `/admin` sign-in | Exactly one row, `id = 1`. Stores only `hex(sha256(token))` |
-| `board_paint_state` | `/board/` shared Paint canvas | One bounded drawing PNG, revision and editable sticker list |
+| `board_paint_state` | `/community/board/` shared Paint canvas | One bounded drawing PNG, revision and editable sticker list |
 | `board_paint_commits` | Paint publish retries | At most 128 recent request IDs for idempotency |
 | `board_paint_activity` | Admin security/activity surface | Accepted publish summaries only; admin-only, shared configurable tracking retention, capped at 5,000 rows |
 | `site_settings` | Dynamic site configuration | Dynamic key-value store for `/admin` → Configuration hot-swapping, including game/security raw tracking retention |
@@ -89,10 +89,10 @@ Anything under "Migrations to be applied" is what the next command will run.
 | `game_player_sessions` | Player authentication | Random session-token digests, expiry/revocation; FK cascade on delete |
 | `game_auth_attempts` | Recovery-code sign-in throttling | Hashed IP only; bounded age cleanup |
 | `game_saves` | Cross-device progress | Versioned JSON, ≤16 KiB/save, max 25 slots/player, revision CAS |
-| `guest_profiles` | `/games/` guest display names (chat plan Phase A) | One row per visitor session, keyed by `sha256(session id)`; display name only; swept hourly on a fixed 30-day window; no raw session values |
-| `dm_conversations` | `/messages/` (chat plan Phase D) | One row per pair, id = `sha256([a,b].sort().join(':'))` over player IDs, canonical members + per-side read watermark; account lifetime |
-| `dm_messages` | `/messages/` (chat plan Phase D) | Plain text + optional attachment id, monotone per-conversation sequence, `hidden_for` delete-for-me bits; swept hourly at `DM_CONFIG.retentionDays` (default 60 days) |
-| `dm_attachments` | `/messages/` images (chat plan Phase D) | Base64 image bytes (≤1.4 MB decoded, sniffed PNG/JPEG/WebP), claimed by exactly one message; purged with the message or when an upload is never claimed |
+| `guest_profiles` | `/projects/games/` guest display names (chat plan Phase A) | One row per visitor session, keyed by `sha256(session id)`; display name only; swept hourly on a fixed 30-day window; no raw session values |
+| `dm_conversations` | `/community/messages/` (chat plan Phase D) | One row per pair, id = `sha256([a,b].sort().join(':'))` over player IDs, canonical members + per-side read watermark; account lifetime |
+| `dm_messages` | `/community/messages/` (chat plan Phase D) | Plain text + optional attachment id, monotone per-conversation sequence, `hidden_for` delete-for-me bits; swept hourly at `DM_CONFIG.retentionDays` (default 60 days) |
+| `dm_attachments` | `/community/messages/` images (chat plan Phase D) | Base64 image bytes (≤1.4 MB decoded, sniffed PNG/JPEG/WebP), claimed by exactly one message; purged with the message or when an upload is never claimed |
 | `dm_reports` | DM report flow (chat plan Phase D, plan §12.5) | Content snapshot at report time, hashed author/reporter, status open/resolved/dismissed; shared retention sweep |
 | `dm_reporters` | DM report de-duplication | Distinct-report counting per conversation message, hashed reporter; with its report |
 
@@ -179,7 +179,7 @@ is not a no-op for an existing site.
 ```bash
 # pages
 curl -s -o /dev/null -w '%{http_code}\n' https://bnji.net/
-curl -s -o /dev/null -w '%{http_code}\n' https://bnji.net/board/
+curl -s -o /dev/null -w '%{http_code}\n' https://bnji.net/community/board/
 curl -s -o /dev/null -w '%{http_code}\n' https://bnji.net/gizlyy/
 
 # admin redirects an anonymous visitor to the login page
@@ -193,7 +193,7 @@ Then, in a browser:
 
 - `/gizlyy/` shows a **view count**, not a dash. If you see `—` and
   "Counts are unavailable", the migration did not apply — go back to step 2.
-- `/board/` loads, and you can still read existing messages.
+- `/community/board/` loads, and you can still read existing messages.
 - `/admin` signs in, and the dashboard loads stats.
 - Deleting a board message removes it from the public feed; restoring brings
   it back. It is still delete-only, by design.

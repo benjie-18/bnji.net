@@ -277,10 +277,10 @@ for the data inventory, quotas, local testing, and rollback guidance.
 | --- | --- | --- |
 | Posts | `src/content/blog/*.md` | Drop-in workflow; schema in `src/content.config.ts` (markdown only — MDX was removed with its workflow). |
 | Post helpers | `src/data/blog.ts` | The only read path for collections. |
-| Lab experiments | `src/data/lab.ts` + `src/components/lab/*` + the static map in `src/pages/lab.astro` | Add a game = component + data entry + one map line. |
+| Lab experiments | `src/data/lab.ts` + `src/components/lab/*` + the static map in `src/pages/projects/lab.astro` | Add a game = component + data entry + one map line. |
 | Fluid Sandbox tuning | `src/components/lab/fluid/config.ts` | Defaults, slider ranges, tools, scenes list, palette, quality tiers, solver + render constants. The UI is generated from it. Scenes live in `fluid/scenes.ts`. |
 | Shared board paint | `src/config/paint.config.ts` | Logical canvas size, PNG/request caps, polling and publish limits. The current D1 snapshot is independent from message rows; see [`DATA.md`](./DATA.md) §10. |
-| Browser tools (`/tools/`) | `src/config/tools.config.ts` | Image tool: output formats (PNG/JPEG/WebP), which of them honour a quality slider, the accepted input types, and the client-side size/pixel limits. Word tool: word-splitting modes and their hints, the common-words list behind the keyword filter, the reading/speaking pace domains, the keyword-list bounds, the debounce, and the character limit. Diff tool: the two views and their labels/hints, the context-slider domain, the per-side character limit, the auto-compare threshold and debounce, the cell budgets behind both refusals, and the row cap on the drawn table. Color tool: the seven output formats with their labels and hints, the six harmony schemes with theirs, the default color and the default contrast background, the wheel's backing-store cap, CSS fallback size, pixel-ratio cap and resize debounce, the palette limit, the image-sample bounds (preview edge, scan edge, most common colors, the 4-bit bucket shift and the minimum distance between two reported colors), and the four WCAG thresholds with the large-text size they are named by. Shared by the two image-reading tools: the accepted image types and the byte/decoded-pixel limits (`IMAGE_FILE_CONFIG`). Shared by both text tools: the accepted text types/extensions and the file byte limit (`TEXT_FILE_CONFIG`). PUBLIC. All four tools run in the visitor's browser, so these are guards against an enormous file, paste or comparison, not upload quotas — nothing is uploaded, and no tool stores anything. |
+| Browser tools (`/projects/tools/`) | `src/config/tools.config.ts` | Image tool: output formats (PNG/JPEG/WebP), which of them honour a quality slider, the accepted input types, and the client-side size/pixel limits. Word tool: word-splitting modes and their hints, the common-words list behind the keyword filter, the reading/speaking pace domains, the keyword-list bounds, the debounce, and the character limit. Diff tool: the two views and their labels/hints, the context-slider domain, the per-side character limit, the auto-compare threshold and debounce, the cell budgets behind both refusals, and the row cap on the drawn table. Color tool: the seven output formats with their labels and hints, the six harmony schemes with theirs, the default color and the default contrast background, the wheel's backing-store cap, CSS fallback size, pixel-ratio cap and resize debounce, the palette limit, the image-sample bounds (preview edge, scan edge, most common colors, the 4-bit bucket shift and the minimum distance between two reported colors), and the four WCAG thresholds with the large-text size they are named by. Shared by the two image-reading tools: the accepted image types and the byte/decoded-pixel limits (`IMAGE_FILE_CONFIG`). Shared by both text tools: the accepted text types/extensions and the file byte limit (`TEXT_FILE_CONFIG`). PUBLIC. All four tools run in the visitor's browser, so these are guards against an enormous file, paste or comparison, not upload quotas — nothing is uploaded, and no tool stores anything. |
 
 ## 8a. Display names & handles — PUBLIC (chat plan Phase A)
 
@@ -327,7 +327,7 @@ enforcement, and it is the plan §14 kill switch.
 ## 8c. Direct messages — PUBLIC (chat plan Phase D)
 
 `src/config/dm.config.ts` (`DM_CONFIG`, exported from `src/config/index.ts`)
-holds the complete private-messaging policy. The /messages/ page reads it for
+holds the complete private-messaging policy. The /community/messages/ page reads it for
 input bounds and the disclosure line, the `/api/dm/*` routes read it for
 enforcement, and it is the plan §14 rollback switch — independent of room
 chat. The `DMConversation` class binding (`DM_CONVERSATIONS`, Wrangler
@@ -389,7 +389,7 @@ Two owner-requested discovery surfaces, each with its own config file:
   members. Decision record: [`GAMES-DECISIONS.md`](./GAMES-DECISIONS.md).
 - `src/config/directory.config.ts` (`DIRECTORY_CONFIG`) — **the people index**:
   handle-fragment search (`GET /api/people`) that feeds friend requests on
-  `/friends/`. Rows are two public labels plus the caller's own relationship;
+  `/community/friends/`. Rows are two public labels plus the caller's own relationship;
   blocked pairs are filtered in SQL so the endpoint cannot be used to discover a
   block. Account-only; the panel hides itself when the switch is off.
 

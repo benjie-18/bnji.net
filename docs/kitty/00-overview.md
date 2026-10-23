@@ -15,7 +15,7 @@ Prestige layers (like Sell Lemons):
 
 **Goals:**
 - Low-poly 3D hybrid: third-person orbit default, top-down build mode, optional first-person inspect. Playable at scale (12 machine types, 10x10 parcels, 100 machines, 200 kitties on belts).
-- Integrated in existing `bnji.net` games infra: `/games/kitty-factory/` as `bnji.kitty-factory`, uses GameShell, mountGameLifecycle, mountGameSession, game_saves (25×16KiB), leaderboard verifier, tracking, admin.
+- Integrated in existing `bnji.net` games infra: `/projects/games/kitty-factory/` as `bnji.kitty-factory`, uses GameShell, mountGameLifecycle, mountGameSession, game_saves (25×16KiB), leaderboard verifier, tracking, admin.
 - Data-driven: adding machine/kitty/trait/race/factory type/location/accessory = 1 config entry + 1 GLB.
 - Frequent saves: manual + auto every 2 min, local IndexedDB every 10s, cloud throttled, viable for low DAU (<50) within D1 Free 100k writes/day (~37k/day for 20 DAU).
 - Free-only: Three.js MIT, Kenney CC0, Quaternius CC0, no paid services.
@@ -43,7 +43,7 @@ Prestige layers (like Sell Lemons):
 
 **Update Ease:** Data-driven config, save migration via `schema_version`, no D1 migration needed.
 
-**Hosting Decision:** Integrated `/games/kitty-factory/` recommended for MVP. Vanity `kitty.bnji.net` route to same Worker can be added later, same codebase, no separate Worker needed. See `01-research-hosting-2d-vs-3d.md`.
+**Hosting Decision:** Integrated `/projects/games/kitty-factory/` recommended for MVP. Vanity `kitty.bnji.net` route to same Worker can be added later, same codebase, no separate Worker needed. See `01-research-hosting-2d-vs-3d.md`.
 
 **Camera Decision:** Hybrid, not pure FP. Orbit default, top-down build, optional FP inspect. See `02-lowpoly-3d-first-third-person.md`.
 

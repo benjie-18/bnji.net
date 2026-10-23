@@ -30,7 +30,7 @@ Phase 0 — Scaffolding + Data Foundation, best compatibility:
    - No textures, vertexColors false for MVP, flatShading true for low-poly faceted look
    - Export as const MATERIALS
 
-6. Create src/pages/games/kitty-factory.astro per 05-architecture.md:
+6. Create src/pages/projects/games/kitty-factory.astro per 05-architecture.md:
    - GameShell gameId bnji.kitty-factory title "Kitty Factory" description "Build kitties, optimize factory, prestige endlessly." (6 words OK ≤12)
    - capabilities handled via catalog, not here
    - Slot: <canvas data-kitty-canvas style="width:100%;aspect-ratio:16/9;display:block"> + <div data-kitty-ui> HUD placeholders + minimap <canvas data-kitty-minimap width=200 height=200> + build toolbar + manual save button data-kitty-save + status data-player-live
@@ -60,7 +60,7 @@ Phase 0 — Scaffolding + Data Foundation, best compatibility:
   title:'Kitty Factory',
   description:'Build kitties, optimize factory, prestige endlessly.',
   status:'in-development',
-  href:'/games/kitty-factory/',
+  href:'/projects/games/kitty-factory/',
   capabilities:['keyboard','pointer','touch','webgl','audio'],
   modes:['default'],
 }
@@ -77,7 +77,7 @@ registerScoreVerifier('bnji.kitty-factory', async (claim) => {
   return { score: proof.bestValue, tieBreak: proof.totalKitties ?? 0 };
 });
 
-12. Verify: npm run build passes, tsc --noEmit 0 errors, dist contains /games/kitty-factory/index.html, save size <16KiB test, canvas exists.
+12. Verify: npm run build passes, tsc --noEmit 0 errors, dist contains /projects/games/kitty-factory/index.html, save size <16KiB test, canvas exists.
 
 Do NOT implement full game, only scaffolding + data foundation. Stop after verification.
 ```
@@ -258,7 +258,7 @@ Finalize Kitty Factory per docs/kitty/08-checklist.md:
    - src/game/kitty-save.test.ts: migrate v1->v2, compact size <16KiB, offlineProgress
    - src/server/game-adapters/kitty-factory.test.ts: verifier plausible and cheat rejection
 
-2. E2E: add test for /games/kitty-factory/ loads, canvas exists, build button clickable, save button works, leaderboard link
+2. E2E: add test for /projects/games/kitty-factory/ loads, canvas exists, build button clickable, save button works, leaderboard link
 
 3. Manual test checklist per 08-checklist.md
 
@@ -270,7 +270,7 @@ Finalize Kitty Factory per docs/kitty/08-checklist.md:
 
 7. Verify: npm run build, tsc, test, test:do, test:e2e, grep dist for example.com/localhost
 
-8. Deploy: git push, Cloudflare Workers Builds auto, verify /games/kitty-factory/ and /games/kitty-factory/leaderboard/ and /api/games/saves
+8. Deploy: git push, Cloudflare Workers Builds auto, verify /projects/games/kitty-factory/ and /projects/games/kitty-factory/leaderboard/ and /api/games/saves
 
 9. Document update process per 07-update-guide.md in README
 

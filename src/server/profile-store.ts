@@ -171,9 +171,22 @@ function createD1ProfileStore(db: D1Database): ProfileStore {
 			if (scope === 'homepage') {
 				whereClause = "WHERE (profile_slug = '/' OR profile_slug = '' OR profile_slug = 'homepage')";
 			} else if (scope === 'projects') {
-				whereClause = "WHERE (profile_slug LIKE '/projects%' OR profile_slug LIKE '/tools%' OR profile_slug LIKE '/lab%')";
+				// The legacy '/tools%' + '/lab%' patterns stay on purpose: rows
+				// stored before the 2026-10-23 URL reorganization carry the old
+				// flat paths, and dropping the patterns would erase that history
+				// from the chart. '/projects/games%' is excluded explicitly:
+				// games were never in this bucket before the move ('/games%'
+				// matched nothing here) and must not join it just because the
+				// '/projects%' prefix now covers them.
+				whereClause =
+					"WHERE (profile_slug LIKE '/projects%' OR profile_slug LIKE '/tools%' OR profile_slug LIKE '/lab%') AND profile_slug NOT LIKE '/projects/games%'";
 			} else if (scope === 'me') {
-				whereClause = "WHERE (profile_slug LIKE '%gizlyy%' OR profile_slug LIKE '%me%' OR profile_slug LIKE '%profile%')";
+				// Same reasoning for '%me%': it now also matches every
+				// '/me/blog%' path, and the blog was never part of this profile
+				// bucket before the move, so blog paths are excluded explicitly.
+				// Pre-move rows are unaffected.
+				whereClause =
+					"WHERE (profile_slug LIKE '%gizlyy%' OR profile_slug LIKE '%me%' OR profile_slug LIKE '%profile%') AND profile_slug NOT LIKE '/me/blog%'";
 			}
 
 			// Time range cutoff

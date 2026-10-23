@@ -27,10 +27,10 @@ are the rules this plan is allowed to spend.
 | # | Feature | Surface | Persistence | Phase |
 | --- | --- | --- | --- | --- |
 | 1 | Display names for registered accounts and guests | Rooms, chat, DMs, Paint | Account: permanent. Guest: session-scoped | A |
-| 2 | Room chat | `/games/` private rooms | **Ephemeral: lives and dies with the room (≤2 h), survives reconnects** | B |
+| 2 | Room chat | `/projects/games/` private rooms | **Ephemeral: lives and dies with the room (≤2 h), survives reconnects** | B |
 | 3 | Moderation tooling + admin-visible chat | `/admin` | Room-lifetime; reports bounded by the shared retention sweep | C |
-| 4 | Live private messaging, account↔account, with images | New `/messages/` | Bounded retention window (default 60 days, owner answer 2026-09-30), not permanent | D |
-| 5 | Friends system | New `/friends/` | Permanent while both accounts exist; cascades on deletion | E |
+| 4 | Live private messaging, account↔account, with images | New `/community/messages/` | Bounded retention window (default 60 days, owner answer 2026-09-30), not permanent | D |
+| 5 | Friends system | New `/community/friends/` | Permanent while both accounts exist; cascades on deletion | E |
 | 6 | Presence + unread notifications | Header badge | Ephemeral | E |
 
 Out of scope, deliberately: group conversations (>2 people), voice/video,
@@ -274,7 +274,7 @@ same-origin check, and explicit errors: `not_member` (403), `message_not_found`
 
 ### 7.1 Product
 
-- `/messages/` lists conversations with unread counts; opening one connects a
+- `/community/messages/` lists conversations with unread counts; opening one connects a
   hibernating WebSocket for live delivery.
 - Messages persist in D1 for the retention window (default 60 days — owner answer 2026-09-30), so an
   offline recipient sees them on next sign-in; "session-based" in the sense
@@ -341,7 +341,7 @@ browser rather than in a Worker-side image library.
 ## 8. Phase E — friends, presence, notifications
 
 Phase E is implemented as of 2026-10-01: `migrations/0016_friends.sql`,
-`/friends/` + `GET/POST/DELETE /api/friends`, the `Presence` DO behind
+`/community/friends/` + `GET/POST/DELETE /api/friends`, the `Presence` DO behind
 `GET /api/presence`, the in-app badge via `GET /api/notifications`, and the
 D7 friends-only gate on DM open/send/attachments — with tests at the node,
 workerd and (locally-run) Playwright tiers.
@@ -616,7 +616,7 @@ locally before any deploy.
 | B — room chat | Protocol, DO, client panel, a11y, tests | 2–3 days |
 | C — moderation + admin | Registry, DO read endpoint, reports, admin tab, tests | 2–3 days |
 | D — private messaging | Conversations, messages, images, media route, UI, tests | 4–6 days |
-| E — friends + presence + badge | Schema, APIs, `/friends/`, presence DO, UI, tests | 3–4 days |
+| E — friends + presence + badge | Schema, APIs, `/community/friends/`, presence DO, UI, tests | 3–4 days |
 | Cross-cutting | DATA.md register, `/privacy/`, export/deletion, deploy docs | 1–1.5 days |
 | **Total** | | **≈ 14–19 focused days** |
 

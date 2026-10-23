@@ -23,7 +23,7 @@ Kitty Factory maps 1:1:
 - Factory reset → factory type (garage → industrial complex) = factory credits
 - Move out → location (village → different planets)
 
-**Verdict:** Existing infra **can fully host it** as `bnji.kitty-factory` under `/games/kitty-factory/` with zero paid services. Subdomain `kitty.bnji.net` is technically possible free, but adds operational overhead and only justified if you want isolation for bundle size / separate tech stack / marketing.
+**Verdict:** Existing infra **can fully host it** as `bnji.kitty-factory` under `/projects/games/kitty-factory/` with zero paid services. Subdomain `kitty.bnji.net` is technically possible free, but adds operational overhead and only justified if you want isolation for bundle size / separate tech stack / marketing.
 
 2D indie style is **~3-4x easier** to ship with AI than 3D Roblox style on free stack.
 
@@ -47,7 +47,7 @@ From `src/data/games.ts`, `wrangler.json`, `GAMES-DECISIONS.md`, `GAMES-OPERATIO
 - `mountGameLifecycle(root, module)` + `mountGameSession(root, gameId)`: visibility pause, heartbeat 1/min, idle stop after 2min, 45s min heartbeat interval server-side, 65s clamp
 - Saves: `game_saves` table, per player max 25 slots × 16 KiB JSON each, revision CAS, IndexedDB pending queue with 3 retries, offline support, conflict prompt
 - Scores: `game_scores`, one best per session/game/mode, top 500/mode retained, server verifier required (`registerScoreVerifier`). `SCORE_VERIFIER_GAMES` list controls leaderboard pages. Fail-closed `503 verifier_unavailable` if missing. Verifiers in `src/server/game-adapters/*` imported via `register-all.ts`
-- Leaderboards: `/games/<slug>/leaderboard/` static prerendered, 25 rows/page, 20 pages, label composed at read time from `handle · Display Name` (no migration)
+- Leaderboards: `/projects/games/<slug>/leaderboard/` static prerendered, 25 rows/page, 20 pages, label composed at read time from `handle · Display Name` (no migration)
 - Rooms: generic `GameRoom` DO per 128-bit code, 8 members, 4 KiB msg, 3 KiB state, 1 state write/5s/room, 8 frames/s abuse ceiling, 2h expiry. Optional authority + action handler + redactor. Chat lives in DO SQLite, 200 rows cap.
 - Player identity: optional global account, 160-bit recovery code shown once, SHA-256 stored, 256-bit session token in HttpOnly cookie, `bnji_ps` guest cookie. Guest display names in `guest_profiles` (30d). Handles `[a-z0-9_]{3,20}` unique, cooldown.
 - Admin: `/admin` with Games & play totals, tracking retention config (default 60d, 1-365), chat moderation tab, player blocks, etc.
@@ -133,18 +133,18 @@ speedMult = 1.8 ^ evolutionLevel  // or 42 in Sell Lemons is huge, but okay for 
 
 ---
 
-## 4. Hosting Option A: Integrated `/games/kitty-factory/`
+## 4. Hosting Option A: Integrated `/projects/games/kitty-factory/`
 
-**How:** Add `bnji.kitty-factory` to `src/data/games.ts`, create `src/pages/games/kitty-factory.astro` using `GameShell`, client `src/scripts/games/kitty-factory.ts`, rules `src/game/kitty-rules.ts`, adapter `src/server/game-adapters/kitty-factory.ts` for leaderboard verifier.
+**How:** Add `bnji.kitty-factory` to `src/data/games.ts`, create `src/pages/projects/games/kitty-factory.astro` using `GameShell`, client `src/scripts/games/kitty-factory.ts`, rules `src/game/kitty-rules.ts`, adapter `src/server/game-adapters/kitty-factory.ts` for leaderboard verifier.
 
 **Pros:**
 - Zero infra change. Reuses `BOARD_DB`, `BOARD_KV`, `GAME_ROOMS` (if you ever add co-op), player identity, saves, tracking, admin panel, leaderboard pattern, `GameShell` fullscreen, glass UI tokens.
 - Auth: cookies work same-origin, no CORS, guest + account + handle labels automatically on leaderboard.
-- Save system: 25 slots ×16KiB already built, IndexedDB offline queue, conflict resolution UI already exists on `/games/` page.
+- Save system: 25 slots ×16KiB already built, IndexedDB offline queue, conflict resolution UI already exists on `/projects/games/` page.
 - Tracking: active/idle/game time automatically measured by `mountGameSession`.
 - Deployment: single `wrangler deploy`, single build, sitemap includes game, no DNS.
 - Free tier: stays within 100k Worker req/day, D1 writes are main constraint but idle games can throttle saves to 1/min (like heartbeat) → 100 DAU × 1440 min = 144k writes if every minute → too high. Must throttle to 1 save per 2-5 min or on important events only. Existing Stack/Chess do not autosave constantly; idle will need smarter throttling.
-- SEO & discovery: appears in `/games/` catalog, linked from `GameCard`, existing nav.
+- SEO & discovery: appears in `/projects/games/` catalog, linked from `GameCard`, existing nav.
 
 **Cons:**
 - Bundle size: idle tycoon with many sprites/UI could bloat main Astro build (currently 18 static pages). But Astro code-splits per page, client JS for kitty only loaded on its route (dynamic import via GameShell), so impact minimal.
@@ -191,13 +191,13 @@ speedMult = 1.8 ^ evolutionLevel  // or 42 in Sell Lemons is huge, but okay for 
 - You want to stay within single codebase and single deploy.
 - Free tier headroom is sufficient with throttled saves.
 
-**Hybrid recommendation:** Start integrated as `bnji.kitty-factory` (`/games/kitty-factory/`). If it grows beyond free budget or needs its own identity, you can later add a Cloudflare Route `kitty.bnji.net/*` → same Worker and make `https://kitty.bnji.net` 301 or serve same content with canonical override. That way you get both: integrated code, but vanity subdomain. Zero extra Worker.
+**Hybrid recommendation:** Start integrated as `bnji.kitty-factory` (`/projects/games/kitty-factory/`). If it grows beyond free budget or needs its own identity, you can later add a Cloudflare Route `kitty.bnji.net/*` → same Worker and make `https://kitty.bnji.net` 301 or serve same content with canonical override. That way you get both: integrated code, but vanity subdomain. Zero extra Worker.
 
 ---
 
 ## 6. Comparison Matrix
 
-| Criteria | Integrated `/games/kitty-factory/` | Subdomain `kitty.bnji.net` same Worker | Subdomain separate Worker |
+| Criteria | Integrated `/projects/games/kitty-factory/` | Subdomain `kitty.bnji.net` same Worker | Subdomain separate Worker |
 |---|---|---|---|
 | Free cost | $0 | $0 + DNS config | $0 + DNS + extra project |
 | Auth reuse | Native, same cookie | Possible with `.bnji.net` domain | Needs cross-domain or shared D1 |
@@ -402,7 +402,7 @@ speedMult = 1.9 ^ evolutionLevel   // vs Sell Lemons x42 per evo, tune down
 **Path:**
 1. Add `bnji.kitty-factory` to catalog, status `in-development`
 2. Create `src/game/kitty-rules.ts` with formulas above (pure, testable)
-3. Create `src/pages/games/kitty-factory.astro` + `src/scripts/games/kitty-factory.ts` using Canvas 2D, GameShell, glass UI
+3. Create `src/pages/projects/games/kitty-factory.astro` + `src/scripts/games/kitty-factory.ts` using Canvas 2D, GameShell, glass UI
 4. Implement save in one slot, compact, with IndexedDB queue (reuse `game-saves.ts`)
 5. Implement leaderboard verifier in `src/server/game-adapters/kitty-factory.ts` (check plausible money/s or best value)
 6. Throttle saves: local every 10s, cloud every 3 min or on prestige

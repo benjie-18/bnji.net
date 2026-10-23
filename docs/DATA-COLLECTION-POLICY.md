@@ -152,7 +152,7 @@ part of Phase D for the owner's review; it binds the owner, not the code:
    content from the site, bans or deletes the account, and evaluates whether
    the matter must be reported to authorities under Canadian law — this site
    performs no pre-publication screening and cannot promise moderation speed.
-5. **No promises the code does not keep.** The /messages/ disclosure states
+5. **No promises the code does not keep.** The /community/messages/ disclosure states
    exactly what exists today (stored for the retention window; moderators
    read content only via reports; no end-to-end encryption). Nothing in the
    UI may claim stronger safety properties than those sentences.

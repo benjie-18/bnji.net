@@ -12,7 +12,7 @@
 - mountGameLifecycle(root, module) + mountGameSession(root, gameId): visibility pause, heartbeat 1/min, 45s min interval server, 65s clamp, 2min idle stop
 - Saves: game_saves table, 25 slots×16KiB, revision CAS, IndexedDB queue 3 retries, conflict UI
 - Scores: game_scores, one best per session/game/mode, top 500/mode, verifier required, fail-closed 503 verifier_unavailable
-- Leaderboards: /games/<slug>/leaderboard/ prerendered, 25 rows/page, label composed at read time handle·DisplayName
+- Leaderboards: /projects/games/<slug>/leaderboard/ prerendered, 25 rows/page, label composed at read time handle·DisplayName
 - Player identity: recovery code 160-bit shown once SHA256 stored, session token 256-bit HttpOnly cookie, guest bnji_ps cookie, handle [a-z0-9_]{3,20}
 
 ## 5.2 New File Structure
@@ -22,7 +22,7 @@ src/data/kitty-content.ts          // content tables
 src/game/kitty-rules.ts            // pure logic tick, production chain
 src/game/kitty-formulas.ts         // formulas
 src/game/kitty-save.ts             // save schema, migrate, compact, offline
-src/pages/games/kitty-factory.astro // GameShell page
+src/pages/projects/games/kitty-factory.astro // GameShell page
 src/scripts/games/kitty-factory.ts // Three.js client
 src/server/game-adapters/kitty-factory.ts // verifier
 public/games/kitty/
@@ -81,7 +81,7 @@ Modified:
 
 ## 5.6 Leaderboard
 
-- /games/kitty-factory/leaderboard/ prerendered from hasLeaderboard (needs verifier)
+- /projects/games/kitty-factory/leaderboard/ prerendered from hasLeaderboard (needs verifier)
 - 25 rows/page, label handle·DisplayName composed at read time
 - Score = bestValue, tieBreak = totalKitties
 

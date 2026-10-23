@@ -491,8 +491,8 @@ html[data-theme='light'] .glass-button {
 
 /* --- Fields: the input half of the same language -------------------------- */
 /* The admin panel's fields and these are one recipe: quiet glass, hairline
-   boundary, accent focus ring. Promoted here so /friends/, /messages/ and
-   /games/ stop each carrying a private copy that can drift. */
+   boundary, accent focus ring. Promoted here so /community/friends/, /community/messages/ and
+   /projects/games/ stop each carrying a private copy that can drift. */
 .glass-label {
 	display: block;
 	margin-block-end: var(--space-2);

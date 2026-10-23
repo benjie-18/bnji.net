@@ -64,10 +64,10 @@ tiny, the design coherent and the deployment boring.
 | `src/server/*.ts`        | Server-only modules: board stores (d1/rest), KV rate limiter, access primitives, env access. Never imported by client code. |
 | `src/middleware.ts`      | Route-guard enforcement for ACCESS_RULES (SSR routes only; honest about static limits). |
 | `src/pages/api/*`        | API boundaries: `/api/board`, `/api/dm`. `prerender = false`; validation, sanitization, rate limits live here. |
-| `src/data/*.ts`          | All site content as typed data (site, navigation, projects, interests, ai-stack, network, lab, blog helpers, the `/tools/` repertory). Components and pages read from here. |
+| `src/data/*.ts`          | All site content as typed data (site, navigation, projects, interests, ai-stack, network, lab, blog helpers, the `/projects/tools/` repertory). Components and pages read from here. |
 | `src/components/`        | Astro components. Primitives: `GlassPanel`, `GlassButton`, `SectionHeading`, `PageHeader`, `BrandMark`, `Icon`. Sections: `Hero`, `AboutPreview`, `ProjectsPreview`, … |
-| `src/components/lab/`    | Runnable experiments for `/lab/`. Each owns its DOM subtree + rAF loop, pauses via IntersectionObserver, has a `destroy()` path. |
-| `src/layouts/`           | `Layout.astro` (shell: head, starfield, header, footer, boot script — no board; the board lives only on `/board/`), `BlogPost.astro` (article chrome + pager). |
+| `src/components/lab/`    | Runnable experiments for `/projects/lab/`. Each owns its DOM subtree + rAF loop, pauses via IntersectionObserver, has a `destroy()` path. |
+| `src/layouts/`           | `Layout.astro` (shell: head, starfield, header, footer, boot script — no board; the board lives only on `/community/board/`), `BlogPost.astro` (article chrome + pager). |
 | `src/pages/`             | Routes. `rss.xml.ts` is the typed RSS endpoint. |
 | `src/scripts/`           | Client runtime. `starfield.ts` (canvas engine), `interactions.ts` (cursor glow, glass tracking, magnetic buttons, nav), `scroll.ts` (reveals, parallax), `boot.ts` (single entry, started by `Layout.astro`). |
 | `src/styles/`            | `tokens.css` (every design value), `glass.css`, `animations.css`, `global.css`, `lab.css` (imported only by the lab page). |
@@ -98,7 +98,7 @@ Chat tab can store anything.
   `src/data/blog.ts` (`getBlogPosts()`, `postUrl()`); never call
   `getCollection()` directly in a page.
 - Posts must contain real writing, not lorem ipsum. Placeholders get deleted.
-- Internal links use trailing slashes (`/projects/`, `/blog/<slug>/`).
+- Internal links use trailing slashes (`/projects/`, `/me/blog/<slug>/`).
 
 ## 4. Styling rules
 

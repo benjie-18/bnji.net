@@ -104,7 +104,7 @@ npm run deploy     # publish to Cloudflare Workers
   Skip still works.
 - **Profile card** — link-in-bio card (avatar orb, badges, bio, chips, link
   rows, copy-handle block) modelled on ayo.so profile cards, placeholder copy.
-- **Public message board** (`/board/`, linked from the nav — no longer a
+- **Public message board** (`/community/board/`, linked from the nav — no longer a
   global overlay) — floating bubbles (light) / star orbs (dark) with buoyancy,
   collisions and drag; mobile-safe composer (dvh/svh, safe-area insets,
   visual-viewport keyboard tracking); visible-count slider that walks older
@@ -120,7 +120,7 @@ npm run deploy     # publish to Cloudflare Workers
 - **Private messages** — contact form delivered server-side through a Discord
   webhook or ntfy push; credentials live only in Worker secrets.
 - **Display names, handles & room chat (implemented) + planned: private
-  messaging and friends** — you can set a display name from the `/games/`
+  messaging and friends** — you can set a display name from the `/projects/games/`
   rooms panel (guests: kept 30 days keyed by a digest of the session cookie;
   signed-in: your account name) and claim one public handle per account
   (unique, exact-match lookup, changeable once every 30 days). Rooms also have
@@ -141,8 +141,8 @@ npm run deploy     # publish to Cloudflare Workers
   `requestAnimationFrame` loop pause via `IntersectionObserver` when scrolled
   away and on `visibilitychange` when the tab is hidden; the rest are driven by
   user events and have no loop to pause.
-- **Games** (`/games/`, linked under Projects) — a typed catalog linking five existing Lab mini-games without copying them. The shared lifecycle/tracker, private admin view, fail-closed score verifier, optional global player identity, bounded cross-device versioned saves, and generic authenticated Durable Object room transport are implemented. Guest/local play remains available; no playable game or game-specific score/turn validation was added. Free-plan rollout/migrations are owner-operated; see `docs/GAMES-OPERATIONS.md`.
-- **Browser tools** (`/tools/`, linked from the Projects dropdown) — fourteen
+- **Games** (`/projects/games/`, linked under Projects) — a typed catalog linking five existing Lab mini-games without copying them. The shared lifecycle/tracker, private admin view, fail-closed score verifier, optional global player identity, bounded cross-device versioned saves, and generic authenticated Durable Object room transport are implemented. Guest/local play remains available; no playable game or game-specific score/turn validation was added. Free-plan rollout/migrations are owner-operated; see `docs/GAMES-OPERATIONS.md`.
+- **Browser tools** (`/projects/tools/`, linked from the Projects dropdown) — fourteen
   tools that never send anything anywhere, because there is no API route behind
   any of them. The page opens on a repertory: four categories — Images & color,
   Text & lists, Convert & calculate, Time & dates — listed in

@@ -72,7 +72,7 @@
 	--danger-soft: rgba(255, 154, 139, 0.08);
 	--danger-line: rgba(255, 154, 139, 0.35);
 
-	/* Diff tool (/tools/). An added line and a removed line are status colours of
+	/* Diff tool (/projects/tools/). An added line and a removed line are status colours of
 	   the same kind as the signals above, so they take the same hues and the same
 	   -soft/-line/-word shape. Colour is never the only signal: every row also
 	   carries a +/− marker and both line numbers, which is what a forced-colours

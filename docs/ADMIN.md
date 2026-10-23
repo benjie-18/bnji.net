@@ -63,7 +63,7 @@ single source of truth, and it is applied uniformly:
 - **Middleware** delegates any `sessionPattern === '/admin'` rule to it, so a
   protected page and its API cannot disagree.
 - **Every API route** calls it directly.
-- **`/board`** reuses it to decide whether to render moderation controls.
+- **`/community/board`** reuses it to decide whether to render moderation controls.
 
 ### The credential
 
@@ -148,8 +148,8 @@ BNJI views start from zero"* are **gone**. The pill now shows the live total.
 - The explanatory note line under the stats was removed; a note only appears
   when the counts are unavailable.
 
-**Location note:** this content was on **`/gizlyy/`**, not `/about/`.
-`/about/` never contained it.
+**Location note:** this content was on **`/gizlyy/`**, not `/me/about/`.
+`/me/about/` never contained it.
 
 **Views are recorded by a client-side beacon** (`POST /api/profile/view`), not
 during SSR — so `curl`ing the page does not increment anything. Exercise it by

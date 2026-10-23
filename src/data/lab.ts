@@ -13,7 +13,7 @@ export const LAB_STATUS_LABEL: Record<LabStatus, string> = {
 	idea: 'Idea',
 };
 
-/** Keys of the static component map in src/pages/lab.astro. */
+/** Keys of the static component map in src/pages/projects/lab.astro. */
 export type LabComponentKey =
 	| 'StarfieldTuner'
 	| 'GlassBench'

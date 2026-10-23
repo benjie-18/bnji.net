@@ -10,7 +10,7 @@ You are building Kitty Factory for bnji.net, an Astro 7 + Cloudflare Workers Fre
 
 Constraints (non-negotiable):
 - Free-only: Three.js 0.160.0 MIT + Kenney CC0 + Quaternius CC0, no paid services, no R2, no PlayFab
-- Integrated: bnji.kitty-factory at /games/kitty-factory/, uses existing GameShell, mountGameLifecycle, mountGameSession, game_saves (25 slots ×16KiB, revision CAS, IndexedDB queue), leaderboard verifier pattern
+- Integrated: bnji.kitty-factory at /projects/games/kitty-factory/, uses existing GameShell, mountGameLifecycle, mountGameSession, game_saves (25 slots ×16KiB, revision CAS, IndexedDB queue), leaderboard verifier pattern
 - Saves: local IndexedDB every 10s, cloud every 2 min throttled + manual debounced 5s + prestige events, compact <16KiB for 100 machines, offline progress capped 2h via lastSeenAt
 - D1 Free 100k writes/day shared — low DAU <50 makes frequent saves viable (~37k/day for 20 DAU). Must NOT use KV for saves
 - Data-driven: all content in src/data/kitty-content.ts, adding machine = 1 config entry + 1 GLB in public/games/kitty/
@@ -26,7 +26,7 @@ Phase 0 tasks:
 2. Create src/data/kitty-content.ts with MACHINES (5 MVP: mom, hatchery, artist, printer, adoption), KITTY_COLORS, TRAITS, RACES, FACTORY_TYPES, LOCATIONS, ACCESSORIES, PARCEL_COST, PRESTIGE per 04-data-schema.md
 3. Create src/game/kitty-formulas.ts with all formulas
 4. Create src/game/kitty-save.ts with SAVE_VERSION=1, createNewSave(), migrate(), compactEncode/Decode, offlineProgress()
-5. Create src/pages/games/kitty-factory.astro with GameShell, canvas data-kitty-canvas, UI overlay, minimap, manual save button, leaderboardHref
+5. Create src/pages/projects/games/kitty-factory.astro with GameShell, canvas data-kitty-canvas, UI overlay, minimap, manual save button, leaderboardHref
 6. Create src/scripts/games/kitty-factory.ts with Three.js dynamic import, scene ground + orbit, fitCanvas DPR handling, mountGameLifecycle pause/resume, mountGameSession, local save every 10s, cloud throttled 2min, manual save, offline calc
 7. Create src/server/game-adapters/kitty-factory.ts verifier skeleton returning score=bestValue if plausible
 8. Update src/data/games.ts add bnji.kitty-factory entry status in-development, description ≤12 words

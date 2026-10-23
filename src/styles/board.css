@@ -13,7 +13,7 @@
    The composer is anchored bottom-centre at ALL times (the brief's anchor),
    and the full list is a modal layer above everything.
 
-   Mounting: the board lives on its own route (/board/) — this file is
+   Mounting: the board lives on its own route (/community/board/) — this file is
    imported only by components/MessageBoard.astro, so no other page pays
    for it.
 

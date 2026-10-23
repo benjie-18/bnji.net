@@ -151,6 +151,40 @@ test('admin stats: site group — top paths, live window, referrer hosts without
 	assert.ok(!hosts.includes('old.example.org'), 'outside the 30-day window');
 });
 
+test('admin stats: time-series scopes keep pre-move membership after the URL reorganization', async () => {
+	const { db } = database();
+	const now = Date.now();
+	const hash = await hashAdminToken(ADMIN_TOKEN);
+	db.raw.prepare('UPDATE admin_credentials SET token_hash = ? WHERE id = 1').run(hash);
+
+	// One fresh view per path. Projects bucket = the projects index, Lab and
+	// Tools, in BOTH their post-move paths and their stored pre-move paths;
+	// games are not part of it in either era. Me bucket = the profile page;
+	// blog posts are not part of it in either era.
+	const view = db.raw.prepare('INSERT INTO profile_views (profile_slug, session_key, day_key, created_at) VALUES (?, ?, ?, ?)');
+	const paths = [
+		'/projects/', '/projects/lab/', '/lab/', '/projects/tools/', '/tools/',
+		'/projects/games/', '/projects/games/chess/', '/games/',
+		'/gizlyy/', '/me/blog/', '/me/blog/first-post/', '/',
+	];
+	paths.forEach((path, i) => view.run(path, `sess-${i}`, 'd1', now - 1_000));
+
+	const seriesTotal = async (scope: string): Promise<number> => {
+		const res = await statsApi.GET(requestContext(`/api/admin/stats?scope=${scope}&timeRange=day`, { bearer: ADMIN_TOKEN }));
+		assert.equal(res.status, 200, await res.clone().text());
+		const data = (await res.json()) as { timeSeries: { count: number }[] };
+		return data.timeSeries.reduce((sum, bucket) => sum + bucket.count, 0);
+	};
+
+	assert.equal(await seriesTotal('projects'), 5, 'projects = index + lab + tools, old and new paths, never games');
+	// me = the profile page (1) plus the three games paths the legacy '%me%'
+	// substring has always caught ('games' contains 'me' — true before the
+	// move and deliberately preserved); the blog contributes 0 now that
+	// '/me/blog%' is excluded, where the two seeded blog rows would
+	// otherwise have made this 6.
+	assert.equal(await seriesTotal('me'), 4, 'me = profile + legacy %me% substring matches, never blog posts');
+});
+
 test('admin chat: dmMeta metadata (D10) + aggregate health, never bodies or player IDs', async () => {
 	const { db } = database();
 	await seed(db);

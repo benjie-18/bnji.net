@@ -9,7 +9,7 @@
 
 **Files:**
 - `00-overview.md` — Goals, constraints, free-only, low DAU, frequent saves, easy updates. Start here.
-- `01-research-hosting-2d-vs-3d.md` — Hosting analysis: integrated `/games/kitty-factory/` vs `kitty.bnji.net` subdomain, 2D indie vs 3D Roblox-style difficulty with AI, free options only. (from KITTY-FACTORY-RESEARCH.md)
+- `01-research-hosting-2d-vs-3d.md` — Hosting analysis: integrated `/projects/games/kitty-factory/` vs `kitty.bnji.net` subdomain, 2D indie vs 3D Roblox-style difficulty with AI, free options only. (from KITTY-FACTORY-RESEARCH.md)
 - `02-lowpoly-3d-first-third-person.md` — Can low-poly 3D first/third-person run integrated? Playability at scale? Save frequency math. (from LOWPOLY-3D-ADDENDUM.md)
 - `03-implementation-plan.md` — Complete implementation plan, file structure, client/server split, save schema, verifier, UI, performance, testing, deployment, phases. (from IMPLEMENTATION-PLAN.md)
 - `04-data-schema.md` — Detailed data-driven content tables, formulas, save schema, migration, example configs. Extracted and expanded for implementation.
