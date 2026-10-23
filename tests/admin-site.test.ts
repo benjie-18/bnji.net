@@ -159,13 +159,15 @@ test('admin stats: time-series scopes keep pre-move membership after the URL reo
 
 	// One fresh view per path. Projects bucket = the projects index, Lab and
 	// Tools, in BOTH their post-move paths and their stored pre-move paths;
-	// games are not part of it in either era. Me bucket = the profile page;
-	// blog posts are not part of it in either era.
+	// games are not part of it in either era. Me bucket = registered profile
+	// pages only — not the blog, not /me/contact/, not anything the old
+	// '%me%' substring used to sweep in.
 	const view = db.raw.prepare('INSERT INTO profile_views (profile_slug, session_key, day_key, created_at) VALUES (?, ?, ?, ?)');
 	const paths = [
 		'/projects/', '/projects/lab/', '/lab/', '/projects/tools/', '/tools/',
 		'/projects/games/', '/projects/games/chess/', '/games/',
-		'/gizlyy/', '/me/blog/', '/me/blog/first-post/', '/',
+		'/gizlyy/', 'gizlyy', '/me/blog/', '/me/blog/first-post/', '/me/contact/',
+		'/messages/', '/',
 	];
 	paths.forEach((path, i) => view.run(path, `sess-${i}`, 'd1', now - 1_000));
 
@@ -177,12 +179,11 @@ test('admin stats: time-series scopes keep pre-move membership after the URL reo
 	};
 
 	assert.equal(await seriesTotal('projects'), 5, 'projects = index + lab + tools, old and new paths, never games');
-	// me = the profile page (1) plus the three games paths the legacy '%me%'
-	// substring has always caught ('games' contains 'me' — true before the
-	// move and deliberately preserved); the blog contributes 0 now that
-	// '/me/blog%' is excluded, where the two seeded blog rows would
-	// otherwise have made this 6.
-	assert.equal(await seriesTotal('me'), 4, 'me = profile + legacy %me% substring matches, never blog posts');
+	// me = profile pages only: '/gizlyy/' (tracked pathname) + 'gizlyy'
+	// (bare slug from the profile view endpoint) = 2. The old '%me%'
+	// substring would also have counted the games rows, '/messages/',
+	// '/me/contact/' and the blog rows seeded above.
+	assert.equal(await seriesTotal('me'), 2, 'me = registered profile pages only, in both stored forms');
 });
 
 test('admin chat: dmMeta metadata (D10) + aggregate health, never bodies or player IDs', async () => {

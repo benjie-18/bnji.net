@@ -14,6 +14,8 @@
  * and continue rendering the profile page regardless of storage state.
  */
 
+import { allProfileSlugs } from '../data/profiles/index';
+
 /* --- structural D1 types (same pattern as board-store) -------------------- */
 
 type D1PreparedStatement = {
@@ -181,12 +183,19 @@ function createD1ProfileStore(db: D1Database): ProfileStore {
 				whereClause =
 					"WHERE (profile_slug LIKE '/projects%' OR profile_slug LIKE '/tools%' OR profile_slug LIKE '/lab%') AND profile_slug NOT LIKE '/projects/games%'";
 			} else if (scope === 'me') {
-				// Same reasoning for '%me%': it now also matches every
-				// '/me/blog%' path, and the blog was never part of this profile
-				// bucket before the move, so blog paths are excluded explicitly.
-				// Pre-move rows are unaffected.
-				whereClause =
-					"WHERE (profile_slug LIKE '%gizlyy%' OR profile_slug LIKE '%me%' OR profile_slug LIKE '%profile%') AND profile_slug NOT LIKE '/me/blog%'";
+				// Profile pages only: the registered profiles from
+				// src/data/profiles (today just gizlyy; future profiles join
+				// automatically), in every stored form — the pathname
+				// '/gizlyy/' recorded by /api/track and the bare slug
+				// 'gizlyy' recorded by /api/profile/view. The previous
+				// substring match ('%me%') also caught '/games/',
+				// '/messages/' and, after the URL move, every '/me/blog%'
+				// post — none of which are profiles — and as a
+				// leading-wildcard LIKE it could never use the
+				// (profile_slug, created_at) index. Exact matches fix both.
+				const forms = allProfileSlugs().flatMap((slug) => [slug, `/${slug}`, `/${slug}/`]);
+				whereClause = `WHERE profile_slug IN (${forms.map(() => '?').join(', ')})`;
+				values.push(...forms);
 			}
 
 			// Time range cutoff
