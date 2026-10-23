@@ -1,5 +1,5 @@
 /**
- * /tools/ word counter: the REAL markup from WordCounter.astro driven by the
+ * /projects/tools/ word counter: the REAL markup from WordCounter.astro driven by the
  * REAL controller in a REAL DOM.
  *
  * WHY THIS FILE EXISTS BESIDE tests/tools-words.test.ts
@@ -91,7 +91,7 @@ function counterMarkup(): string {
 
 function counterDom(): JSDOM {
 	const dom = new JSDOM(`<!doctype html><html><body>${counterMarkup()}</body></html>`, {
-		url: 'http://localhost:4321/tools/',
+		url: 'http://localhost:4321/projects/tools/',
 	});
 	const g = globalThis as Record<string, unknown>;
 	g.window = dom.window;

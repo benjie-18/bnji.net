@@ -186,7 +186,7 @@ export async function adminConfigured(): Promise<boolean> {
  * gate an API route (where Astro hands the handler an APIContext), a
  * server-rendered page (an AstroContext), and the middleware (a plain
  * request). Those all share these two properties and nothing else this gate
- * needs, so a structural type here is what lets /board decide whether to
+ * needs, so a structural type here is what lets /community/board decide whether to
  * render moderation controls without a cast.
  */
 export type AdminGateContext = {

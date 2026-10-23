@@ -3,7 +3,7 @@
  * BlogPreview — recent writing on the homepage ("05 / WRITING").
  *
  * Posts come from the Astro content collection through src/data/blog.ts, so the
- * ordering, draft filtering and URLs are identical here, on /blog/ and in the
+ * ordering, draft filtering and URLs are identical here, on /me/blog/ and in the
  * RSS feed. Adding a post is still "drop a markdown file in src/content/blog/".
  */
 import { getRecentBlogPosts } from '../data/blog';
@@ -22,7 +22,7 @@ const posts = await getRecentBlogPosts(PREVIEW_COUNT);
 			titleId="writing-title"
 			title="From the blog"
 			description="omg this is so 2013 core internet buzzword buzzword.. ok anyways im gonna yap here (or not idk maybe thisll be revolutionary). 💞"
-			actionHref="/blog/"
+			actionHref="/me/blog/"
 			actionLabel="All posts"
 		/>
 

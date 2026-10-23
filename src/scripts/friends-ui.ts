@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — chat plan Phase E: /friends/ client (plan §8.1, §8.2, §8.3).
+ * BNJI.NET — chat plan Phase E: /community/friends/ client (plan §8.1, §8.2, §8.3).
  *
  * One mount per page: loads the account's own lists from GET /api/friends,
  * renders request/accept/decline/block/remove/unblock actions straight from
@@ -180,7 +180,7 @@ export function mountFriends(root: HTMLElement): void {
 			].join('');
 		} else if (kind === 'friends') {
 			actions = [
-				`<a class="glass-button glass-button--quiet glass-button--sm" data-glass="" href="/messages/?handle=${encodeURIComponent(entry.handle)}" data-friend-message aria-label="Message ${escapeHtml(handle)}">Message</a>`,
+				`<a class="glass-button glass-button--quiet glass-button--sm" data-glass="" href="/community/messages/?handle=${encodeURIComponent(entry.handle)}" data-friend-message aria-label="Message ${escapeHtml(handle)}">Message</a>`,
 				btn('remove', 'Remove', `Remove ${handle} from your friends`, 'friends-btn--muted'),
 				btn('block', 'Block', `Block ${handle}`, 'friends-btn--danger'),
 			].join('');

@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ word counter & text stats.
+ * BNJI.NET — /projects/tools/ word counter & text stats.
  *
  * The whole tool is arithmetic over four browser primitives: a <textarea> (the
  * input), File.text() (an optional file), Intl.Segmenter (word and sentence

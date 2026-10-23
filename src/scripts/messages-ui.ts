@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — chat plan Phase D: the /messages/ browser surface (plan §7.1).
+ * BNJI.NET — chat plan Phase D: the /community/messages/ browser surface (plan §7.1).
  *
  * Wiring contract (this is what the e2e spec asserts):
  *   - account gate: unauthenticated visitors get the sign-in panel, nothing else;
@@ -638,7 +638,7 @@ export async function mountMessages(root: HTMLElement): Promise<void> {
 			? `Signed in as ${account.displayName}. ${conversations.length} conversation(s).`
 			: `Signed in as ${account.displayName}. No conversations yet.`;
 
-		// Deep link from the Friends page (/messages/?handle=x): open that
+		// Deep link from the Friends page (/community/messages/?handle=x): open that
 		// conversation once, then clean the URL so a refresh does not re-fire
 		// it. The D7 gate answers 403 not_friends below the handle field if
 		// the pair stopped being friends meanwhile.

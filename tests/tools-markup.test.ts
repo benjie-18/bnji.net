@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ markup matches its controllers.
+ * BNJI.NET — /projects/tools/ markup matches its controllers.
  *
  * WHY THIS FILE EXISTS
  * --------------------

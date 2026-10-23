@@ -1,6 +1,6 @@
 ---
 /**
- * /tools/ — fully local browser tools.
+ * /projects/tools/ — fully local browser tools.
  *
  * Each tool is its own component under src/components/tools/ and its behaviour is
  * a module under src/scripts/ started from boot().
@@ -14,26 +14,26 @@
  * no fetch and no form post behind the tools, so "nothing is uploaded" is
  * checkable in the diff.
  */
-import PageHeader from '../components/PageHeader.astro';
-import ToolGroup from '../components/tools/ToolGroup.astro';
-import ToolsRepertory from '../components/tools/ToolsRepertory.astro';
-import ColorPicker from '../components/tools/ColorPicker.astro';
-import CookingConverter from '../components/tools/CookingConverter.astro';
-import CountdownStopwatch from '../components/tools/CountdownStopwatch.astro';
-import DateDifferenceCalculator from '../components/tools/DateDifferenceCalculator.astro';
-import ImageConverter from '../components/tools/ImageConverter.astro';
-import ImageMetadata from '../components/tools/ImageMetadata.astro';
-import ListRandomizer from '../components/tools/ListRandomizer.astro';
-import PercentageCalculator from '../components/tools/PercentageCalculator.astro';
-import RandomPicker from '../components/tools/RandomPicker.astro';
-import ScreenDpiCalculator from '../components/tools/ScreenDpiCalculator.astro';
-import TextDiff from '../components/tools/TextDiff.astro';
-import TimeZoneConverter from '../components/tools/TimeZoneConverter.astro';
-import UnitConverter from '../components/tools/UnitConverter.astro';
-import WordCounter from '../components/tools/WordCounter.astro';
-import { TOOL_CATEGORIES, TOOL_COUNT, type ToolId } from '../data/tools';
-import Layout from '../layouts/Layout.astro';
-import '../styles/tools.css';
+import PageHeader from '../../components/PageHeader.astro';
+import ToolGroup from '../../components/tools/ToolGroup.astro';
+import ToolsRepertory from '../../components/tools/ToolsRepertory.astro';
+import ColorPicker from '../../components/tools/ColorPicker.astro';
+import CookingConverter from '../../components/tools/CookingConverter.astro';
+import CountdownStopwatch from '../../components/tools/CountdownStopwatch.astro';
+import DateDifferenceCalculator from '../../components/tools/DateDifferenceCalculator.astro';
+import ImageConverter from '../../components/tools/ImageConverter.astro';
+import ImageMetadata from '../../components/tools/ImageMetadata.astro';
+import ListRandomizer from '../../components/tools/ListRandomizer.astro';
+import PercentageCalculator from '../../components/tools/PercentageCalculator.astro';
+import RandomPicker from '../../components/tools/RandomPicker.astro';
+import ScreenDpiCalculator from '../../components/tools/ScreenDpiCalculator.astro';
+import TextDiff from '../../components/tools/TextDiff.astro';
+import TimeZoneConverter from '../../components/tools/TimeZoneConverter.astro';
+import UnitConverter from '../../components/tools/UnitConverter.astro';
+import WordCounter from '../../components/tools/WordCounter.astro';
+import { TOOL_CATEGORIES, TOOL_COUNT, type ToolId } from '../../data/tools';
+import Layout from '../../layouts/Layout.astro';
+import '../../styles/tools.css';
 
 const description = `${TOOL_COUNT} local browser tools for images, text, conversion and time — grouped by category, nothing uploaded.`;
 

@@ -9,7 +9,7 @@ export type Game = {
 	description: string;
 	status: GameStatus;
 	/** A Lab link is a pointer only; gameplay remains owned by src/components/lab. */
-	labHref?: `/lab/#${string}`;
+	labHref?: `/projects/lab/#${string}`;
 	/** Omit for unavailable and planned entries; never render a dead anchor. */
 	href?: string;
 	capabilities?: readonly GameCapability[];
@@ -37,7 +37,7 @@ export function defineGameCatalog<const T extends readonly Game[]>(games: T): T 
 		if (game.status === 'available' && destinations !== 1) throw new Error(`${game.id} must have exactly one destination while available`);
 		if (game.status !== 'available' && destinations !== 0) throw new Error(`${game.id} cannot have a playable destination while ${game.status}`);
 		if (game.href !== undefined && (!game.href.startsWith('/') || game.href.startsWith('//'))) throw new Error(`${game.id} has an unsafe game route`);
-		if (game.labHref !== undefined && !/^\/lab\/#[a-z0-9-]+$/.test(game.labHref)) throw new Error(`${game.id} has an invalid Lab link`);
+		if (game.labHref !== undefined && !/^\/projects\/lab\/#[a-z0-9-]+$/.test(game.labHref)) throw new Error(`${game.id} has an invalid Lab link`);
 		for (const [name, values, allowed] of [
 			['capability', game.capabilities, GAME_CAPABILITIES],
 			['mode', game.modes, undefined],
@@ -61,7 +61,7 @@ export const GAMES = defineGameCatalog([
 		title: 'Minesweeper',
 		description: 'A compact puzzle experiment, still maintained exclusively in the Lab.',
 		status: 'available',
-		labHref: '/lab/#glass-minesweeper',
+		labHref: '/projects/lab/#glass-minesweeper',
 		capabilities: ['keyboard', 'touch', 'pointer'],
 		modes: ['default'],
 	},
@@ -70,7 +70,7 @@ export const GAMES = defineGameCatalog([
 		title: 'Memory Pairs',
 		description: 'A memory-matching experiment hosted in the Lab.',
 		status: 'available',
-		labHref: '/lab/#memory-pairs',
+		labHref: '/projects/lab/#memory-pairs',
 		capabilities: ['keyboard', 'touch', 'pointer'],
 		modes: ['default'],
 	},
@@ -79,7 +79,7 @@ export const GAMES = defineGameCatalog([
 		title: 'Bubble Pop',
 		description: 'A quick, tactile popping game that stays entirely in the Lab.',
 		status: 'available',
-		labHref: '/lab/#bubble-pop',
+		labHref: '/projects/lab/#bubble-pop',
 		capabilities: ['touch', 'pointer'],
 		modes: ['default'],
 	},
@@ -88,7 +88,7 @@ export const GAMES = defineGameCatalog([
 		title: 'Reaction Timer',
 		description: 'A short reaction-time challenge hosted in the Lab.',
 		status: 'available',
-		labHref: '/lab/#reaction-timer',
+		labHref: '/projects/lab/#reaction-timer',
 		capabilities: ['keyboard', 'touch', 'pointer'],
 		modes: ['default'],
 	},
@@ -97,7 +97,7 @@ export const GAMES = defineGameCatalog([
 		title: 'Isometric Stack',
 		description: 'Drop alternating blocks, keep your combo, and chase the leaderboard.',
 		status: 'available',
-		href: '/games/stack/',
+		href: '/projects/games/stack/',
 		capabilities: ['keyboard', 'touch', 'pointer', 'canvas-2d'],
 		modes: ['default'],
 	},
@@ -106,7 +106,7 @@ export const GAMES = defineGameCatalog([
 		title: 'Chess',
 		description: 'Play in private rooms or practice locally; fastest checkmate tops the board.',
 		status: 'available',
-		href: '/games/chess/',
+		href: '/projects/games/chess/',
 		capabilities: ['keyboard', 'pointer'],
 		modes: ['fastest-mate'],
 	},
@@ -115,7 +115,7 @@ export const GAMES = defineGameCatalog([
 		title: 'PvP Minesweeper',
 		description: "Vote a difficulty, plant mines on rivals' boards, then race to clear.",
 		status: 'available',
-		href: '/games/pvp-minesweeper/',
+		href: '/projects/games/pvp-minesweeper/',
 		capabilities: ['keyboard', 'touch', 'pointer'],
 		modes: ['quick', 'normal', 'hard'],
 	},
@@ -134,7 +134,7 @@ export function getGamesByStatus(status: GameStatus): Game[] {
 
 /**
  * Games hosted on their own route — everything except the Lab entries, which
- * are pointers to `/lab/#…` and have no server side at all.
+ * are pointers to `/projects/lab/#…` and have no server side at all.
  *
  * This is the set a private room can be created for: a Lab experiment has no
  * page, no verifier and no protocol adapter, so a room "for" it would be a

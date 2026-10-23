@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — the /tools/ word counter's decisions.
+ * BNJI.NET — the /projects/tools/ word counter's decisions.
  *
  * A browser cannot be started here, so this file covers everything that is pure
  * — what counts as a word, what counts as a sentence, how a duration is worded,

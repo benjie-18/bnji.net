@@ -36,8 +36,8 @@ test('every scored standalone game has a leaderboard; lab games and unscored gam
 });
 
 test('leaderboardHref is the game route with a /leaderboard/ sibling', () => {
-	assert.equal(leaderboardHref(getGame('bnji.isometric-stack')!), '/games/stack/leaderboard/');
-	assert.equal(leaderboardHref(getGame('bnji.pvp-minesweeper')!), '/games/pvp-minesweeper/leaderboard/');
+	assert.equal(leaderboardHref(getGame('bnji.isometric-stack')!), '/projects/games/stack/leaderboard/');
+	assert.equal(leaderboardHref(getGame('bnji.pvp-minesweeper')!), '/projects/games/pvp-minesweeper/leaderboard/');
 	assert.equal(leaderboardHref(getGame('bnji.memory-pairs')!), null, 'lab games have no page of their own');
 });
 
@@ -53,7 +53,7 @@ test('leaderboardModes mirrors the catalog, and every mode has a label', () => {
 /* ------------------------------------------------------- page + component */
 
 test('the leaderboard page prerenders one route per scored game and the component carries every hook the client uses', () => {
-	const page = readFileSync(new URL('../src/pages/games/[game]/leaderboard.astro', import.meta.url), 'utf8');
+	const page = readFileSync(new URL('../src/pages/projects/games/[game]/leaderboard.astro', import.meta.url), 'utf8');
 	assert.match(page, /export function getStaticPaths\(\)/);
 	assert.match(page, /getStandaloneGames\(\)/);
 	assert.match(page, /\.filter\(hasLeaderboard\)/);
@@ -70,7 +70,7 @@ test('the leaderboard page prerenders one route per scored game and the componen
 	const shell = readFileSync(new URL('../src/components/GameShell.astro', import.meta.url), 'utf8');
 	assert.match(shell, /\{boardHref && <a class="game-shell__link game-shell__board" href=\{boardHref\}>Leaderboard<\/a>\}/);
 	for (const slug of ['stack', 'chess', 'pvp-minesweeper']) {
-		const page = readFileSync(new URL(`../src/pages/games/${slug}.astro`, import.meta.url), 'utf8');
+		const page = readFileSync(new URL(`../src/pages/projects/games/${slug}.astro`, import.meta.url), 'utf8');
 		assert.match(page, /const boardHref = leaderboardHref\(getGame\('bnji\.[a-z.-]+'\)!\);/ , `${slug} computes its board route`);
 		assert.match(page, /boardHref=\{boardHref\}/, `${slug} passes the board route to GameShell`);
 	}
@@ -95,7 +95,7 @@ function boardDom(search = ''): JSDOM {
 		<p data-board-status role="status"></p>
 		<button type="button" data-board-more hidden>Load more</button>
 	</section>
-	</body></html>`, { url: `${ORIGIN}/games/pvp-minesweeper/leaderboard/${search}` });
+	</body></html>`, { url: `${ORIGIN}/projects/games/pvp-minesweeper/leaderboard/${search}` });
 }
 
 type FetchCall = { url: string };

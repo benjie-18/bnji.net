@@ -88,13 +88,13 @@ const Title = `h${level}` as const;
 		<div data-game-shell-panel="error" hidden={initialState !== 'error'} class="game-shell__panel" data-game-shell-error>
 			<h2 data-game-shell-focus tabindex="-1">Game unavailable</h2>
 			<p>This game could not start in this browser. You can return to the Games catalog.</p>
-			<a class="game-shell__link" href="/games/">Return to Games</a>
+			<a class="game-shell__link" href="/projects/games/">Return to Games</a>
 		</div>
 
 		<div data-game-shell-panel="results" hidden={initialState !== 'results'} class="game-shell__panel">
 			<h2 data-game-shell-focus tabindex="-1">Results</h2>
 			<div class="game-shell__results"><slot name="results"><p>Your game session is complete.</p></slot></div>
-			<a class="game-shell__link" href="/games/">Return to Games</a>
+			<a class="game-shell__link" href="/projects/games/">Return to Games</a>
 		</div>
 	</div>
 </section>

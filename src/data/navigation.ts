@@ -6,8 +6,8 @@
  * page in src/pages/ and append an entry here — no component edits required.
  *
  * Convention: internal hrefs always carry a trailing slash. The site is
- * prerendered to directories (/about/index.html) and Cloudflare serves those
- * for /about/, so trailing slashes avoid a redirect on every click.
+ * prerendered to directories (/me/about/index.html) and Cloudflare serves
+ * those for /me/about/, so trailing slashes avoid a redirect on every click.
  */
 
 export type NavItem = {
@@ -60,31 +60,31 @@ export const PRIMARY_NAV: NavEntry[] = [
 		slug: 'projects',
 		items: [
 			{ label: 'Projects', href: '/projects/', description: 'Selected work and placeholders' },
-			{ label: 'Lab', href: '/lab/', description: 'Interactive experiments' },
-			{ label: 'Games', href: '/games/', description: 'A growing catalog of games' },
-			{ label: 'Tools', href: '/tools/', description: 'Image, word, diff and color tools that run locally' },
+			{ label: 'Lab', href: '/projects/lab/', description: 'Interactive experiments' },
+			{ label: 'Games', href: '/projects/games/', description: 'A growing catalog of games' },
+			{ label: 'Tools', href: '/projects/tools/', description: 'Image, word, diff and color tools that run locally' },
 		],
 	},
 	{
 		label: 'Community',
 		slug: 'community',
 		items: [
-			{ label: 'Board', href: '/board/', description: 'The public message board' },
-			{ label: 'Messages', href: '/messages/', description: 'Private messages between accounts' },
-			{ label: 'Friends', href: '/friends/', description: 'Friend requests and presence' },
+			{ label: 'Board', href: '/community/board/', description: 'The public message board' },
+			{ label: 'Messages', href: '/community/messages/', description: 'Private messages between accounts' },
+			{ label: 'Friends', href: '/community/friends/', description: 'Friend requests and presence' },
 		],
 	},
 	{
 		label: 'Me',
 		slug: 'me',
 		items: [
-			// Hidden for now — /about/ is redundant with the /gizlyy/ profile.
+			// Hidden for now — /me/about/ is redundant with the /gizlyy/ profile.
 			// The page itself still exists (noindexed, out of the sitemap);
 			// re-add this entry to put the link back.
-			// { label: 'About', href: '/about/', description: 'What this site is' },
+			// { label: 'About', href: '/me/about/', description: 'What this site is' },
 			{ label: 'Profile', href: '/gizlyy/', description: 'Personal social profile' },
-			{ label: 'Blog', href: '/blog/', description: 'Notes and placeholder writing' },
-			{ label: 'Contact', href: '/contact/', description: 'Leave a message' },
+			{ label: 'Blog', href: '/me/blog/', description: 'Notes and placeholder writing' },
+			{ label: 'Contact', href: '/me/contact/', description: 'Leave a message' },
 		],
 	},
 ];
@@ -95,10 +95,10 @@ export const PRIMARY_NAV: NavEntry[] = [
  * steps: add src/pages/<route>.astro, then move the entry into PRIMARY_NAV.
  */
 export const FUTURE_NAV: NavItem[] = [
-	{ label: 'AI', href: '/ai/', description: 'Local models, prompts, benchmarks', comingSoon: true },
+	{ label: 'AI', href: '/projects/ai/', description: 'Local models, prompts, benchmarks', comingSoon: true },
 	{
 		label: 'Minecraft',
-		href: '/minecraft/',
+		href: '/projects/ai/mc/',
 		description: 'Servers, worlds and plugins',
 		comingSoon: true,
 	},
@@ -114,11 +114,11 @@ export const FUTURE_NAV: NavItem[] = [
 
 /** Secondary footer links (site routes only — socials live in data/site.ts). */
 export const FOOTER_NAV: NavItem[] = [
-	{ label: 'Blog', href: '/blog/' },
+	{ label: 'Blog', href: '/me/blog/' },
 	{ label: 'Projects', href: '/projects/' },
-	{ label: 'Lab', href: '/lab/' },
-	{ label: 'Games', href: '/games/' },
-	{ label: 'Board', href: '/board/' },
+	{ label: 'Lab', href: '/projects/lab/' },
+	{ label: 'Games', href: '/projects/games/' },
+	{ label: 'Board', href: '/community/board/' },
 	{ label: 'Profile', href: '/gizlyy/' },
-	{ label: 'Contact', href: '/contact/' },
+	{ label: 'Contact', href: '/me/contact/' },
 ];

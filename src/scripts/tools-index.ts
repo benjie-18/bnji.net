@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ repertory behaviour: one category at a time, plus keys.
+ * BNJI.NET — /projects/tools/ repertory behaviour: one category at a time, plus keys.
  *
  * WHAT IT ADDS ON TOP OF THE MARKUP
  * ---------------------------------

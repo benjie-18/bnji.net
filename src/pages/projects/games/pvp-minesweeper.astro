@@ -1,17 +1,17 @@
 ---
 /**
- * `/games/pvp-minesweeper/` — 2–8 player mine-laying race: vote the
+ * `/projects/games/pvp-minesweeper/` — 2–8 player mine-laying race: vote the
  * difficulty (5s), place mines on the opponents' boards simultaneously,
  * then race to clear the board you received. A mine hit is instant
  * elimination — the field's designer scores the kill. The room DO runs the
  * phases and attests wins for the per-difficulty leaderboard.
  */
-import GameShell from '../../components/GameShell.astro';
-import PageHeader from '../../components/PageHeader.astro';
-import RoomPanel from '../../components/RoomPanel.astro';
-import Layout from '../../layouts/Layout.astro';
-import { getGame } from '../../data/games';
-import { leaderboardHref } from '../../data/game-adapters';
+import GameShell from '../../../components/GameShell.astro';
+import PageHeader from '../../../components/PageHeader.astro';
+import RoomPanel from '../../../components/RoomPanel.astro';
+import Layout from '../../../layouts/Layout.astro';
+import { getGame } from '../../../data/games';
+import { leaderboardHref } from '../../../data/game-adapters';
 
 const boardHref = leaderboardHref(getGame('bnji.pvp-minesweeper')!);
 
@@ -91,10 +91,10 @@ const instructions =
 </Layout>
 
 <script>
-	import { initGameShells } from '../../scripts/game-shell';
-	import { mountGameLifecycle, mountGameSession } from '../../scripts/game-runtime';
-	import { mountGameRooms } from '../../scripts/game-room-ui';
-	import { createPvpMinesweeperGame } from '../../scripts/games/pvp-minesweeper';
+	import { initGameShells } from '../../../scripts/game-shell';
+	import { mountGameLifecycle, mountGameSession } from '../../../scripts/game-runtime';
+	import { mountGameRooms } from '../../../scripts/game-room-ui';
+	import { createPvpMinesweeperGame } from '../../../scripts/games/pvp-minesweeper';
 
 	initGameShells();
 	const mines = createPvpMinesweeperGame();

@@ -2,7 +2,7 @@
  * BNJI.NET — private messaging policy (Phase D of the chat plan).
  *
  * All values are PUBLIC: they are limits and switches, not secrets. The
- * /messages/ page reads them for input attributes and disclosure copy, the
+ * /community/messages/ page reads them for input attributes and disclosure copy, the
  * DM routes read them for enforcement, and docs/CONFIGURATION.md documents
  * each one.
  *

@@ -1,5 +1,5 @@
 /**
- * Chat plan Phase E — /friends/ (browser surface).
+ * Chat plan Phase E — /community/friends/ (browser surface).
  *
  * Mocked APIs with `page.route` and the live presence socket with
  * `page.routeWebSocket`, exactly like tests/e2e/messages.spec.ts: these
@@ -75,7 +75,7 @@ function mockFriendsApi(page: import('@playwright/test').Page, options: { authen
 
 test('the friends page discloses, lists, and sends the exact action bodies', async ({ page }) => {
 	const { postBodies, deleteBodies } = mockFriendsApi(page);
-	await page.goto('/friends/');
+	await page.goto('/community/friends/');
 
 	// The saved account data is identified before any interaction.
 	const disclosure = page.locator('.friends-disclosure');
@@ -114,7 +114,7 @@ test('the friends page discloses, lists, and sends the exact action bodies', asy
 
 test('action failures surface the client error copy, not a spinner', async ({ page }) => {
 	mockFriendsApi(page, { failPost: 429, failError: 'rate_limited' });
-	await page.goto('/friends/');
+	await page.goto('/community/friends/');
 	await page.locator('[data-friends-request-handle]').fill('somebody');
 	await page.locator('[data-friends-request-form] button[type="submit"]').click();
 	await expect(page.locator('[data-friends-status]')).toContainText('Slow down a little and try again.');
@@ -122,7 +122,7 @@ test('action failures surface the client error copy, not a spinner', async ({ pa
 
 test('signed-out visitors get the account gate and no friend surface', async ({ page }) => {
 	mockFriendsApi(page, { authenticated: false });
-	await page.goto('/friends/');
+	await page.goto('/community/friends/');
 	await expect(page.locator('[data-friends-signin]')).toBeVisible();
 	await expect(page.locator('[data-friends-signed-in]')).toBeHidden();
 	const violations = await new AxeBuilder({ page }).analyze();
@@ -134,7 +134,7 @@ test('online dots follow the presence socket: snapshot in, change updates', asyn
 	let socket: WebSocketRoute | null = null;
 	await page.routeWebSocket(/\/api\/presence/, (ws) => { socket = ws; });
 
-	await page.goto('/friends/');
+	await page.goto('/community/friends/');
 	expect(socket, 'the page dials presence after the lists load').not.toBeNull();
 
 	const dot = page.locator('[data-friend-online="pal_one"]');
@@ -158,12 +158,12 @@ test('the header badge shows one honest total and deep-links to the right page',
 		contentType: 'application/json',
 		body: JSON.stringify({ unreadMessages: 2, pendingFriendRequests: 1 }),
 	}));
-	await page.goto('/friends/');
+	await page.goto('/community/friends/');
 
 	const badge = page.locator('[data-notif-badge]');
 	await expect(badge).toBeVisible();
 	await expect(badge).toContainText('3');
-	await expect(badge).toHaveAttribute('href', '/friends/');
+	await expect(badge).toHaveAttribute('href', '/community/friends/');
 	await expect(badge).toHaveAttribute('aria-label', 'Notifications: 2 unread messages, 1 pending friend request');
 
 	// Zero → hidden: the badge never claims unwired or stale counts (§8.3).
@@ -173,7 +173,7 @@ test('the header badge shows one honest total and deep-links to the right page',
 		contentType: 'application/json',
 		body: JSON.stringify({ unreadMessages: 0, pendingFriendRequests: 0 }),
 	}));
-	await page.goto('/messages/');
+	await page.goto('/community/messages/');
 	await page.reload();
 	await expect(badge).toBeHidden();
 });

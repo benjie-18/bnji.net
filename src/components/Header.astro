@@ -40,7 +40,7 @@
  * `.nav-link` rule including the dropdown variant. The dock's own positioning
  * (fixed, centred, pointer-transparent) lives in global.css.
  */
-import { isNavGroup, PRIMARY_NAV } from '../data/navigation';
+import { flatNavItems, isNavGroup, PRIMARY_NAV } from '../data/navigation';
 import { SITE } from '../data/site';
 import BrandMark from './BrandMark.astro';
 import HeaderLink from './HeaderLink.astro';
@@ -48,6 +48,16 @@ import HeaderLink from './HeaderLink.astro';
 const path = Astro.url.pathname.replace(/index\.html$/, '');
 /** Same prefix rule as HeaderLink: a group trigger lights up for its children. */
 const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href || path.startsWith(href));
+/**
+ * The one nav destination that is "the current page": the LONGEST href the
+ * prefix rule matches. Nested category routes made '/projects/' an ancestor
+ * of '/projects/lab/' etc., so without the longest-wins tiebreak two links
+ * would carry aria-current="page" on nested pages. Passed to HeaderLink via
+ * its `active` prop; group triggers keep the any-child rule above.
+ */
+const currentHref = flatNavItems(PRIMARY_NAV)
+	.filter((item) => isCurrent(item.href))
+	.sort((a, b) => b.href.length - a.href.length)[0]?.href;
 ---
 
 <!-- <header> so every page gets a real banner landmark, not a bare div. -->
@@ -95,7 +105,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 								<ul role="list">
 									{entry.items.map((item) => (
 										<li>
-											<HeaderLink href={item.href} class="nav-dropdown__link">
+											<HeaderLink href={item.href} active={item.href === currentHref} class="nav-dropdown__link">
 												{item.label}
 											</HeaderLink>
 										</li>
@@ -105,7 +115,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 						</li>
 					) : (
 						<li>
-							<HeaderLink href={entry.href}>{entry.label}</HeaderLink>
+							<HeaderLink href={entry.href} active={entry.href === currentHref}>{entry.label}</HeaderLink>
 						</li>
 					),
 				)
@@ -121,7 +131,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path === href
 			<!-- Phase E (chat plan §8.3): in-app notification badge — unread DMs +
 			     pending friend requests, polled by scripts/notifications-ui.ts.
 			     Hidden until the API reports a real count: no unwired claims. -->
-			<a class="nav-badge" href="/friends/" data-notif-badge hidden aria-label="Notifications">
+			<a class="nav-badge" href="/community/friends/" data-notif-badge hidden aria-label="Notifications">
 				<span class="nav-badge__count" data-notif-count>0</span>
 			</a>
 			<button

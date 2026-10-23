@@ -47,7 +47,7 @@ async function playerIdByHandle(db: D1Database, handle: string): Promise<{ id: s
 	return row ? { id: String(row.id), displayName: String(row.display_name) } : null;
 }
 
-/** The four lists the /friends page renders, joined to display labels. */
+/** The four lists the /community/friends page renders, joined to display labels. */
 export async function listFriendState(db: D1Database, playerId: string): Promise<FriendListState> {
 	type AcceptedRow = { handle: string | null; display_name: string; since: number };
 	type PendingRow = { handle: string | null; display_name: string; state: string; requested_by: string; since: number };

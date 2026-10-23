@@ -1,0 +1,39 @@
+# BNJI.NET — permanent redirects for the 2026-10-23 URL reorganization.
+#
+# Pages moved under their header categories (Projects / Community / Me).
+# The old flat URLs are indexed and shared externally, so every one of them
+# 301s to its new home forever. NEVER REMOVE A LINE: deleting one re-breaks
+# every external link to that URL. /, /gizlyy/, /api/*, /admin/* and
+# /rss.xml did not move and deliberately have no rules here.
+#
+# Both the trailing-slash form (the site's canonical shape) and the bare
+# form are listed so neither depends on edge normalization. The splat rules
+# carry every nested route (games, leaderboards, blog posts); the explicit
+# /games/ and /blog/ index lines precede them so the catalog and the blog
+# home resolve even if a splat ever stopped matching the empty tail.
+
+# Projects
+/lab/ /projects/lab/ 301
+/lab /projects/lab/ 301
+/tools/ /projects/tools/ 301
+/tools /projects/tools/ 301
+/games/ /projects/games/ 301
+/games /projects/games/ 301
+/games/* /projects/games/:splat 301
+
+# Community
+/board/ /community/board/ 301
+/board /community/board/ 301
+/messages/ /community/messages/ 301
+/messages /community/messages/ 301
+/friends/ /community/friends/ 301
+/friends /community/friends/ 301
+
+# Me
+/blog/ /me/blog/ 301
+/blog /me/blog/ 301
+/blog/* /me/blog/:splat 301
+/contact/ /me/contact/ 301
+/contact /me/contact/ 301
+/about/ /me/about/ 301
+/about /me/about/ 301

@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ date difference calculator tests.
+ * BNJI.NET — /projects/tools/ date difference calculator tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

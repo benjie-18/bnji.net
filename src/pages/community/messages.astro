@@ -1,14 +1,14 @@
 ---
 /**
- * /messages/ — chat plan Phase D: live private messaging between registered
+ * /community/messages/ — chat plan Phase D: live private messaging between registered
  * accounts (plan §7.1). Static shell; every piece of data arrives over the
  * authenticated API, so nothing private is baked into the build.
  *
  * The short disclosure is populated from the public messaging config, so its
  * retention window stays accurate without exposing conversation data in HTML.
  */
-import Layout from '../layouts/Layout.astro';
-import PageHeader from '../components/PageHeader.astro';
+import Layout from '../../layouts/Layout.astro';
+import PageHeader from '../../components/PageHeader.astro';
 ---
 
 <Layout title="Messages" description="Private messages between accounts on bnji.net.">
@@ -24,7 +24,7 @@ import PageHeader from '../components/PageHeader.astro';
 		<section class="dm-panel dm-signin" data-dm-signin data-glass="raised" hidden>
 			<h2>Messages are for accounts</h2>
 			<p>
-				Conversations belong to accounts. <a href="/games/">Create one on the Games page</a>
+				Conversations belong to accounts. <a href="/projects/games/">Create one on the Games page</a>
 				(or sign in with your recovery code), then come back.
 			</p>
 		</section>
@@ -135,7 +135,7 @@ import PageHeader from '../components/PageHeader.astro';
 </style>
 
 <script>
-	import { mountMessages } from '../scripts/messages-ui';
+	import { mountMessages } from '../../scripts/messages-ui';
 	const root = document.querySelector<HTMLElement>('[data-messages-root]');
 	if (root) void mountMessages(root);
 </script>

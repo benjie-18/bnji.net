@@ -13,10 +13,10 @@
  *     given name has an account — that is `/api/players`' job and its throttle.
  *  2. **A block hides in both directions.** The filter is in the SQL, not in a
  *     flag, because a flag would tell someone they were blocked. A blocked-away
- *     row is not a lie: /friends/ still lists whom *you* blocked, which is the
+ *     row is not a lie: /community/friends/ still lists whom *you* blocked, which is the
  *     only side anyone is entitled to see.
  *  3. **Relationship state, never relationship lists.** `friendState` describes
- *     the caller's own edge to that person (the same rows /friends/ renders), so
+ *     the caller's own edge to that person (the same rows /community/friends/ renders), so
  *     the UI can say "requested" instead of offering a button that will fail.
  */
 import type { D1Database } from './game-store';

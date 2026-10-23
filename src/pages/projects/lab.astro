@@ -1,32 +1,32 @@
 ---
 /**
- * /lab/ — the interactive experimentation area.
+ * /projects/lab/ — the interactive experimentation area.
  *
  * Registry: src/data/lab.ts. Implementations: src/components/lab/*.astro.
  * Shared primitives (stage, controls, readouts): src/styles/lab.css.
  */
-import GlassPanel from '../components/GlassPanel.astro';
-import PageHeader from '../components/PageHeader.astro';
-import SectionHeading from '../components/SectionHeading.astro';
-import Chip from '../components/Chip.astro';
-import BubblePop from '../components/lab/BubblePop.astro';
-import CpsCounter from '../components/lab/CpsCounter.astro';
-import CursorTrails from '../components/lab/CursorTrails.astro';
-import FluidSandbox from '../components/lab/FluidSandbox.astro';
-import GlassBench from '../components/lab/GlassBench.astro';
-import GlassMinesweeper from '../components/lab/GlassMinesweeper.astro';
-import IsoProgress from '../components/lab/IsoProgress.astro';
-import MemoryPairs from '../components/lab/MemoryPairs.astro';
-import OrbitField from '../components/lab/OrbitField.astro';
-import PianoBars from '../components/lab/PianoBars.astro';
-import ReactionTimer from '../components/lab/ReactionTimer.astro';
-import StackGame from '../components/lab/StackGame.astro';
-import StarfieldTuner from '../components/lab/StarfieldTuner.astro';
-import VoxelMap from '../components/lab/VoxelMap.astro';
-import { EXPERIMENTS, LAB_STATUS_LABEL, type Experiment, type LabComponentKey } from '../data/lab';
-import { SITE } from '../data/site';
-import Layout from '../layouts/Layout.astro';
-import '../styles/lab.css';
+import GlassPanel from '../../components/GlassPanel.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import Chip from '../../components/Chip.astro';
+import BubblePop from '../../components/lab/BubblePop.astro';
+import CpsCounter from '../../components/lab/CpsCounter.astro';
+import CursorTrails from '../../components/lab/CursorTrails.astro';
+import FluidSandbox from '../../components/lab/FluidSandbox.astro';
+import GlassBench from '../../components/lab/GlassBench.astro';
+import GlassMinesweeper from '../../components/lab/GlassMinesweeper.astro';
+import IsoProgress from '../../components/lab/IsoProgress.astro';
+import MemoryPairs from '../../components/lab/MemoryPairs.astro';
+import OrbitField from '../../components/lab/OrbitField.astro';
+import PianoBars from '../../components/lab/PianoBars.astro';
+import ReactionTimer from '../../components/lab/ReactionTimer.astro';
+import StackGame from '../../components/lab/StackGame.astro';
+import StarfieldTuner from '../../components/lab/StarfieldTuner.astro';
+import VoxelMap from '../../components/lab/VoxelMap.astro';
+import { EXPERIMENTS, LAB_STATUS_LABEL, type Experiment, type LabComponentKey } from '../../data/lab';
+import { SITE } from '../../data/site';
+import Layout from '../../layouts/Layout.astro';
+import '../../styles/lab.css';
 
 const COMPONENTS = {
 	FluidSandbox,

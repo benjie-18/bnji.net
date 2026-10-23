@@ -37,7 +37,7 @@ test('practice mode plays a full legal game and offers the verified checkmate cl
 		contentType: 'application/json',
 		body: JSON.stringify({ ok: true, score: 99_600 }),
 	}));
-	await page.goto('/games/chess/');
+	await page.goto('/projects/games/chess/');
 
 	const board = page.locator('[data-chess-board]');
 	await expect(board).toBeVisible();
@@ -104,7 +104,7 @@ test('room mode: server frames drive the board, moves ship as CAS proposals, rej
 		});
 	});
 
-	await page.goto('/games/chess/');
+	await page.goto('/projects/games/chess/');
 	await page.locator('[data-room-create]').getByRole('button', { name: 'Create a room' }).click();
 	await expect.poll(() => socket !== null).toBe(true);
 
@@ -157,7 +157,7 @@ test('a room for a different game keeps the chess board read-only', async ({ pag
 	await page.routeWebSocket(/\/api\/games\/rooms\/[^/?]+\/ws/, (ws) => {
 		socket = ws;
 	});
-	await page.goto('/games/chess/');
+	await page.goto('/projects/games/chess/');
 	await page.locator('[data-room-join] [name="roomCode"]').fill(ROOM_CODE);
 	await page.locator('[data-room-join]').getByRole('button', { name: 'Join or reconnect' }).click();
 	await expect.poll(() => socket !== null).toBe(true);

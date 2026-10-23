@@ -64,13 +64,13 @@ async function connectMockedRoom(page: Page, sockets: { current: WebSocketRoute 
 			try { frames.push(JSON.parse(String(message)) as Record<string, unknown>); } catch { /* binary */ }
 		});
 	});
-	await page.goto('/games/pvp-minesweeper/');
+	await page.goto('/projects/games/pvp-minesweeper/');
 	await page.locator('[data-room-create]').getByRole('button', { name: 'Create a room' }).click();
 	await expect.poll(() => sockets.current !== null).toBe(true);
 }
 
 test('boots into the lobby panel with a 36-cell board and a room-first status', async ({ page }) => {
-	await page.goto('/games/pvp-minesweeper/');
+	await page.goto('/projects/games/pvp-minesweeper/');
 	await expect(page.locator('[data-ms-board] button')).toHaveCount(36);
 	await expect(page.locator('[data-ms-phase]')).toContainText('Not connected');
 	await expect(page.locator('[data-ms-status]')).toContainText('needs a room');

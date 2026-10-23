@@ -2,7 +2,7 @@
  * BNJI.NET — blog collection access.
  *
  * Everything that reads the `blog` content collection goes through here, so the
- * homepage preview, /blog/ and the RSS feed cannot disagree about ordering,
+ * homepage preview, /me/blog/ and the RSS feed cannot disagree about ordering,
  * URLs or draft handling.
  *
  * Content itself stays in src/content/blog/*.md(x) and the schema stays in
@@ -15,7 +15,7 @@ export type BlogPost = CollectionEntry<'blog'>;
 
 /** Route for a post. Always trailing-slashed to match the prerendered directory. */
 export function postUrl(post: BlogPost): string {
-	return `/blog/${encodeURIComponent(post.id)}/`;
+	return `/me/blog/${encodeURIComponent(post.id)}/`;
 }
 
 /** Newest first. */

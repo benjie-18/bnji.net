@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ screen / DPI calculator tests.
+ * BNJI.NET — /projects/tools/ screen / DPI calculator tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

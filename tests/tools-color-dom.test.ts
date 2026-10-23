@@ -1,5 +1,5 @@
 /**
- * /tools/ color picker: the REAL markup from ColorPicker.astro driven by the REAL
+ * /projects/tools/ color picker: the REAL markup from ColorPicker.astro driven by the REAL
  * controller in a REAL DOM.
  *
  * WHY THIS FILE EXISTS BESIDE tests/tools-color.test.ts
@@ -185,7 +185,7 @@ function colorDom(): JSDOM {
 		}
 	});
 	const dom = new JSDOM(`<!doctype html><html><body>${colorMarkup()}</body></html>`, {
-		url: 'http://localhost:4321/tools/',
+		url: 'http://localhost:4321/projects/tools/',
 		virtualConsole,
 	});
 	const g = globalThis as Record<string, unknown>;

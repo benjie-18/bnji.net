@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Countdown & Stopwatch.
+ * BNJI.NET — /projects/tools/ Countdown & Stopwatch.
  *
  * Runs locally using high-resolution performance.now() timestamps.
  */

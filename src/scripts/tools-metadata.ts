@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Image Metadata Inspector & Remover.
+ * BNJI.NET — /projects/tools/ Image Metadata Inspector & Remover.
  *
  * Runs entirely in browser tab memory. Inspects EXIF, IPTC, XMP, and PNG text/EXIF
  * metadata tags and allows stripping metadata locally before saving.

@@ -1,6 +1,6 @@
 ---
 /**
- * /board/ — the public message board's dedicated home.
+ * /community/board/ — the public message board's dedicated home.
  *
  * Streamlined header, clean structure, and spacious staging area before the footer.
  *
@@ -17,11 +17,11 @@
  * here is one Worker invocation per board view, which for a page of this
  * size is a few milliseconds.
  */
-import BoardPaint from '../components/BoardPaint.astro';
-import MessageBoard from '../components/MessageBoard.astro';
-import PageHeader from '../components/PageHeader.astro';
-import Layout from '../layouts/Layout.astro';
-import { isAdminRequest } from '../server/admin';
+import BoardPaint from '../../components/BoardPaint.astro';
+import MessageBoard from '../../components/MessageBoard.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import Layout from '../../layouts/Layout.astro';
+import { isAdminRequest } from '../../server/admin';
 
 export const prerender = false;
 

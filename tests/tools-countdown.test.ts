@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Countdown & Stopwatch tests.
+ * BNJI.NET — /projects/tools/ Countdown & Stopwatch tests.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

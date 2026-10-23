@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ cooking unit converter with optional ingredient density adjustment.
+ * BNJI.NET — /projects/tools/ cooking unit converter with optional ingredient density adjustment.
  *
  * Converts between volume and weight kitchen units locally in browser.
  */

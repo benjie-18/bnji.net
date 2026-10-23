@@ -47,7 +47,7 @@ function playerToolsDom(): JSDOM {
 	</div>
 </body>
 </html>`;
-	return new JSDOM(html, { url: `${ORIGIN}/games/` });
+	return new JSDOM(html, { url: `${ORIGIN}/projects/games/` });
 }
 
 type Call = { url: string; method: string; body: unknown };

@@ -59,7 +59,7 @@ export const INTERESTS: Interest[] = [
 		description:
 			'Magna aliqua ut enim ad minim veniam quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
 		tags: ['Labore', 'Dolore', 'Magna'],
-		href: '/lab/',
+		href: '/projects/lab/',
 		span: 7,
 	},
 ];

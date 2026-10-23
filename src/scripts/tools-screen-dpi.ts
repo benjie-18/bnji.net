@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ screen / DPI calculator.
+ * BNJI.NET — /projects/tools/ screen / DPI calculator.
  *
  * Calculates PPI/DPI, physical dimensions (inches & cm), aspect ratio, total megapixels
  * and dot pitch locally in browser.

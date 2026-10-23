@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Unit Converter script.
+ * BNJI.NET — /projects/tools/ Unit Converter script.
  *
  * Runs locally in browser memory. Supports Length, Mass, Temperature,
  * Data Storage, Area, and Speed.

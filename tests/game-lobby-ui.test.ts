@@ -77,7 +77,7 @@ function panelDom(): JSDOM {
 		.replace('value={gameId}', 'value="bnji.chess"')
 		.replace(/(aria-labelledby|id|for)=\{`\$\{panelId\}-([^`]+)`\}/g, (_match, attribute: string, suffix: string) => `${attribute}="room-test-${suffix}"`)
 		.replace('Start a {roomNoun} room', 'Start a chess room');
-	const dom = new JSDOM(`<!doctype html><html><body>${rendered}</body></html>`, { url: `${ORIGIN}/games/chess/` });
+	const dom = new JSDOM(`<!doctype html><html><body>${rendered}</body></html>`, { url: `${ORIGIN}/projects/games/chess/` });
 	// jsdom defaults to a hidden document; ordinary tests model a foreground tab.
 	Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, value: 'visible' });
 	return dom;

@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ color picker and converter.
+ * BNJI.NET — /projects/tools/ color picker and converter.
  *
  * WHAT THIS IS
  * ------------

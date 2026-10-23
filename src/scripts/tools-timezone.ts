@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — /tools/ Time Zone Converter.
+ * BNJI.NET — /projects/tools/ Time Zone Converter.
  *
  * Runs locally in the tab using standard Intl.DateTimeFormat primitives.
  * No external API call is made.

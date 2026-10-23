@@ -1,5 +1,5 @@
 /**
- * BNJI.NET — public configuration for browser tools on /tools/.
+ * BNJI.NET — public configuration for browser tools on /projects/tools/.
  *
  * All tools run entirely inside the visitor's tab. No image, file byte, or
  * input value is ever uploaded, stored, proxied or logged.
@@ -77,8 +77,8 @@ export const IMAGE_INPUT_ACCEPT = IMAGE_INPUT_TYPES.join(',');
 export const IMAGE_INPUT_LABELS = 'PNG, JPEG, WebP, GIF, BMP or AVIF';
 
 /* ------------------------------------------------------------------------- *
- * Image files — shared by every tool that reads one (/tools/#image-converter
- * and /tools/#color-picker).
+ * Image files — shared by every tool that reads one (/projects/tools/#image-converter
+ * and /projects/tools/#color-picker).
  *
  * Same reasoning as TEXT_FILE_CONFIG below: the whitelist, the byte budget and
  * the decoded-pixel budget are one policy. Two tools carrying their own copy
@@ -103,8 +103,8 @@ export const TOOL_IMAGE_CONFIG = {
 } as const;
 
 /* ------------------------------------------------------------------------- *
- * Text files — shared by every tool that reads one (/tools/#word-counter and
- * /tools/#text-diff). One whitelist, one byte limit and one decoder, so two
+ * Text files — shared by every tool that reads one (/projects/tools/#word-counter and
+ * /projects/tools/#text-diff). One whitelist, one byte limit and one decoder, so two
  * tools cannot disagree about what a "text file" is.
  * ------------------------------------------------------------------------- */
 
@@ -119,7 +119,7 @@ export const TEXT_FILE_CONFIG = {
 } as const;
 
 /* ------------------------------------------------------------------------- *
- * Word counter & text stats (/tools/#word-counter)
+ * Word counter & text stats (/projects/tools/#word-counter)
  * ------------------------------------------------------------------------- */
 
 /** How a run of text is broken into words. */
@@ -222,7 +222,7 @@ export const TOOL_WORDS_CONFIG = {
 } as const;
 
 /* ------------------------------------------------------------------------- *
- * Text diff (/tools/#text-diff)
+ * Text diff (/projects/tools/#text-diff)
  * ------------------------------------------------------------------------- */
 
 /** How the comparison is laid out. */
@@ -269,7 +269,7 @@ export const TOOL_DIFF_CONFIG = {
 } as const;
 
 /* ------------------------------------------------------------------------- *
- * Color picker (/tools/#color-picker)
+ * Color picker (/projects/tools/#color-picker)
  *
  * Every number here is a limit a visitor could hit, and every label is copy they
  * read. Nothing about colour is hard-coded in the module: the picker's job is to

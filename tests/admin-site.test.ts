@@ -66,21 +66,21 @@ async function seed(db: ReturnType<typeof createTestD1>): Promise<void> {
 	const hash = await hashAdminToken(ADMIN_TOKEN);
 	db.raw.prepare('UPDATE admin_credentials SET token_hash = ? WHERE id = 1').run(hash);
 
-	// profile_views: two recent /friends/ sessions, one recent /, one 9 days
+	// profile_views: two recent /community/friends/ sessions, one recent /, one 9 days
 	// old (outside the 7-day window), one 40 days old (outside everything).
 	const view = db.raw.prepare('INSERT INTO profile_views (profile_slug, session_key, day_key, created_at) VALUES (?, ?, ?, ?)');
-	view.run('/friends/', 'sess-a', 'd1', now - 1_000);
-	view.run('/friends/', 'sess-b', 'd1', now - 2_000);
+	view.run('/community/friends/', 'sess-a', 'd1', now - 1_000);
+	view.run('/community/friends/', 'sess-b', 'd1', now - 2_000);
 	view.run('/', 'sess-a', 'd1', now - 3_000);
 	view.run('/', 'sess-old', 'd0', now - 9 * DAY);
-	view.run('/blog/', 'sess-ancient', 'd-40', now - 40 * DAY);
+	view.run('/me/blog/', 'sess-ancient', 'd-40', now - 40 * DAY);
 
 	// security_events page-view rows with referrers (the referrer source).
 	const event = db.raw.prepare(
 		`INSERT INTO security_events (surface, profile_slug, endpoint, ip_address, created_at, referrer)
 		 VALUES ('profile', ?, 'page-view', ?, ?, ?)`,
 	);
-	event.run('/friends/', '203.0.113.9', now - 1_000, 'https://twitter.com/some/status/1');
+	event.run('/community/friends/', '203.0.113.9', now - 1_000, 'https://twitter.com/some/status/1');
 	event.run('/', '203.0.113.9', now - 2_000, 'https://Sub.Example.com/page?q=1');
 	event.run('/', '203.0.113.9', now - 3_000, 'http://localhost/');       // same host → excluded
 	event.run('/', '203.0.113.9', now - 40 * DAY, 'https://old.example.org/'); // outside 30 days
@@ -129,11 +129,11 @@ test('admin stats: site group — top paths, live window, referrer hosts without
 		};
 	};
 
-	// 7-day leaderboard: /friends/ (2 recent) leads / (1 recent); 9-day-old row excluded.
-	assert.equal(data.site.topPaths[0]?.path, '/friends/');
+	// 7-day leaderboard: /community/friends/ (2 recent) leads / (1 recent); 9-day-old row excluded.
+	assert.equal(data.site.topPaths[0]?.path, '/community/friends/');
 	assert.equal(data.site.topPaths[0]?.views, 2);
 	assert.equal(data.site.topPaths[0]?.uniques, 2);
-	assert.ok(!data.site.topPaths.some((row) => row.path === '/blog/'), 'ancient rows stay outside the window');
+	assert.ok(!data.site.topPaths.some((row) => row.path === '/me/blog/'), 'ancient rows stay outside the window');
 	assert.ok(data.site.topPaths.some((row) => row.path === '/'), 'recent / counts');
 
 	// Live window: three fresh views, two distinct sessions, two paths.

@@ -33,7 +33,7 @@ interface Props {
 }
 
 const { title, description, image, type, publishedTime, modifiedTime, noindex } = Astro.props;
-const isBoard = Astro.url.pathname.startsWith('/board');
+const isBoard = Astro.url.pathname.startsWith('/community/board');
 ---
 
 <!doctype html>
