@@ -97,15 +97,18 @@ export function calculateDateDifference(
 		d2 = temp;
 	}
 
-	// Total milliseconds diff
-	let diffMs = d2.getTime() - d1.getTime();
+	// Calendar-day totals, not elapsed milliseconds: a midnight-to-midnight
+	// interval crossing a DST change is 23 or 25 hours in local time, so
+	// flooring the millisecond diff undercounts it by a day in spring
+	// (2024-01-01 to 2025-03-15 gave 438 instead of 439 in America/Toronto,
+	// while passing in UTC). Compare calendar dates via UTC midnights.
+	const utcDay = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+	let totalDays = Math.round((utcDay(d2) - utcDay(d1)) / (1000 * 60 * 60 * 24));
 	if (includeEndDay) {
-		diffMs += 24 * 60 * 60 * 1000;
+		totalDays += 1;
 	}
-
-	const totalMinutes = Math.floor(diffMs / (1000 * 60));
-	const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
-	const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+	const totalHours = totalDays * 24;
+	const totalMinutes = totalHours * 60;
 
 	// Business days count (Monday=1 .. Friday=5)
 	let businessDays = 0;

@@ -61,34 +61,25 @@ export const PROJECTS: Project[] = [
 		year: '2026',
 	},
 	{
-		slug: 'lorem-ipsum-kit',
-		title: 'Lorem Ipsum Kit',
+		slug: 'stella',
+		title: 'Stella',
 		description:
-			'Placeholder project: consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-		tags: ['Lorem', 'Ipsum', 'Placeholder'],
+			'A self-hosted AI development system, not a chat window: a supervisor turns requests into tracked Kanban cards, and builder and reviewer agents work in separate worktrees. Changes push only after checks pass, agents never see secret values, and firewall, publishing, and payment actions wait for human approval.',
+		tags: ['AI agents', 'Kanban', 'Self-hosted'],
 		status: 'wip',
 		featured: true,
 		year: '2026',
 	},
 	{
-		slug: 'dolor-sit-engine',
-		title: 'Dolor Sit Engine',
+		slug: 'webao',
+		title: 'WEBAO',
 		description:
-			'Placeholder project: sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.',
-		tags: ['Dolor', 'Sit', 'Amet'],
-		status: 'local',
+			'Custom websites for small businesses, built bilingual, with hosting, maintenance, and ongoing support included for a simple monthly fee.',
+		tags: ['Custom websites', 'Small business', 'Bilingual'],
+		href: 'https://webao.ca/',
+		status: 'public',
 		featured: true,
-		year: '2025',
-	},
-	{
-		slug: 'consectetur-board',
-		title: 'Consectetur Board',
-		description:
-			'Placeholder project: nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.',
-		tags: ['Consectetur', 'Adipiscing'],
-		status: 'idea',
-		featured: false,
-		year: '—',
+		year: '2026',
 	},
 ];
 
