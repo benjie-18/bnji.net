@@ -64,7 +64,7 @@ export const PROJECTS: Project[] = [
 		slug: 'stella',
 		title: 'Stella',
 		description:
-			'A self-hosted AI development system, not a chat window: a supervisor turns requests into tracked Kanban cards, and builder and reviewer agents work in separate worktrees. Changes push only after checks pass, agents never see secret values, and firewall, publishing, and payment actions wait for human approval.',
+			'A self-hosted AI development system, not a chat window: a supervisor turns requests into tracked Kanban cards, and builder and reviewer agents work in separate worktrees, with changes pushing only after checks pass. It replays agent work step by step, autopsies its own failures, heals a broken stack, benchmarks local models on the machine it runs on, and can be talked to by voice, all while agents never see secret values and firewall, publishing, and payment actions wait for human approval.',
 		tags: ['AI agents', 'Kanban', 'Self-hosted'],
 		status: 'wip',
 		featured: true,
@@ -74,8 +74,8 @@ export const PROJECTS: Project[] = [
 		slug: 'webao',
 		title: 'WEBAO',
 		description:
-			'Custom websites for small businesses, built bilingual, with hosting, maintenance, and ongoing support included for a simple monthly fee.',
-		tags: ['Custom websites', 'Small business', 'Bilingual'],
+			'Custom websites for small businesses, with hosting, maintenance, and ongoing support included for a simple monthly fee.',
+		tags: ['Custom websites', 'Small business', 'Hosting'],
 		href: 'https://webao.ca/',
 		status: 'public',
 		featured: true,
