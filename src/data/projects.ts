@@ -90,6 +90,16 @@ export const PROJECTS: Project[] = [
 		featured: false,
 		year: '—',
 	},
+	{
+		slug: 'stella',
+		title: 'Stella',
+		description:
+			'A self-hosted AI development assistant that turns requests into tracked cards, with builder and reviewer agents, human approval gates, and pushes only once checks pass.',
+		tags: ['AI assistant', 'Agents', 'Kanban'],
+		status: 'wip',
+		featured: false,
+		year: '2026',
+	},
 ];
 
 /** All projects, featured first, then by year descending (stable order). */
