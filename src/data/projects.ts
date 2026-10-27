@@ -81,16 +81,6 @@ export const PROJECTS: Project[] = [
 		featured: true,
 		year: '2026',
 	},
-	{
-		slug: 'consectetur-board',
-		title: 'Consectetur Board',
-		description:
-			'Placeholder project: nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.',
-		tags: ['Consectetur', 'Adipiscing'],
-		status: 'idea',
-		featured: false,
-		year: '—',
-	},
 ];
 
 /** All projects, featured first, then by year descending (stable order). */
