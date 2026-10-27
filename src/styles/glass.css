@@ -248,6 +248,21 @@ html[data-theme='light'] .glass--raised {
 	}
 }
 
+/* --- Stretched links ------------------------------------------------------ */
+/* ProjectCard, PostCard and ServicesPreview all put the link on the title
+   and expect the whole card to be clickable, with the CTA as a visual cue
+   rather than a second link. That only works with this rule: without it the
+   title text alone is the link and tapping "Visit" does nothing. The
+   positioned [data-glass] panel is the containing block, not the title, so
+   the pseudo-element covers the card and every click lands on the link.
+   Cards without an href have no such link, so nothing changes for them. */
+.stretched-link::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+}
+
 /* --- Concentric Geometry -------------------------------------------------- */
 /* Nested child elements calculate concentric curvature:
    r_child = max(4px, r_parent - padding * 0.5) */
