@@ -18,14 +18,14 @@ import {
 	composeStellaPrompt,
 } from '../src/data/stella-prompts';
 
-test('stella prompts: two modes and 27 phases in firing order', () => {
+test('stella prompts: two modes and 29 phases in firing order', () => {
 	assert.deepEqual(Object.keys(STELLA_MODES).sort(), ['fable', 'opus']);
-	assert.equal(STELLA_PHASES.length, 27);
+	assert.equal(STELLA_PHASES.length, 29);
 	assert.deepEqual(
 		STELLA_PHASES.map((phase) => phase.id),
 		STELLA_FIRING_ORDER,
 	);
-	assert.equal(new Set(STELLA_PHASES.map((phase) => phase.id)).size, 27);
+	assert.equal(new Set(STELLA_PHASES.map((phase) => phase.id)).size, 29);
 	for (const phase of STELLA_PHASES) {
 		assert.ok(phase.title.length > 0, phase.id);
 	}
