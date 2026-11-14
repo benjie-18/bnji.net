@@ -1,0 +1,375 @@
+---
+/**
+ * /projects/stella/ — browse the Stella handoff prompts and copy them.
+ *
+ * The prompt text lives in src/data/stella-prompts.ts, quoted verbatim from
+ * the two handoff docs. This page only selects: mode (Fable or Opus), phase
+ * (in firing order) and variant (full, fix, or phase only). The composed
+ * text is rendered server-side for the default selection, so the page is
+ * useful before any script runs; the client module keeps the controls,
+ * the preview, the copy button and the URL hash in sync.
+ */
+
+import PageHeader from '../../components/PageHeader.astro';
+import { STELLA_MODES, STELLA_PHASES, composeStellaPrompt } from '../../data/stella-prompts';
+import Layout from '../../layouts/Layout.astro';
+
+const description = 'Browse the Stella handoff prompts by mode, phase and variant, then copy the exact text.';
+
+const initial = composeStellaPrompt('fable', 'F1', 'full');
+const initialLines = initial.split('\n').length;
+---
+
+<Layout title="Stella prompts" description={description}>
+	<PageHeader
+		label="PROJECTS"
+		titleId="page-title"
+		title="Stella prompts"
+		description="Pick a mode, a phase and a variant, then copy the prompt. The text is quoted exactly as written in the handoff docs."
+	/>
+
+	<div class="container stella-body" data-stella-root>
+		<div class="stella-controls" data-glass="quiet">
+			<fieldset class="stella-field">
+				<legend class="mono stella-legend">Mode</legend>
+				<div class="stella-options">
+					{
+						Object.entries(STELLA_MODES).map(([modeId, mode]) => (
+							<label class="stella-option">
+								<input
+									type="radio"
+									name="stella-mode"
+									value={modeId}
+									data-stella-mode
+									checked={modeId === 'fable'}
+								/>
+								<span class="stella-option__name">{mode.label}</span>
+								<span class="stella-option__desc">{mode.orchestrator}</span>
+							</label>
+						))
+					}
+				</div>
+			</fieldset>
+
+			<fieldset class="stella-field">
+				<legend class="mono stella-legend">Phase</legend>
+				<div class="stella-phase-row">
+					<button type="button" class="stella-step" data-stella-prev aria-label="Previous phase">
+						← Previous
+					</button>
+					<select class="stella-select" data-stella-phase aria-label="Phase">
+						{
+							STELLA_PHASES.map((phase) => (
+								<option value={phase.id} selected={phase.id === 'F1'}>
+									{`${phase.id}: ${phase.title}`}
+								</option>
+							))
+						}
+					</select>
+					<button type="button" class="stella-step" data-stella-next aria-label="Next phase">
+						Next →
+					</button>
+				</div>
+			</fieldset>
+
+			<fieldset class="stella-field">
+				<legend class="mono stella-legend">Prompt</legend>
+				<div class="stella-options">
+					<label class="stella-option">
+						<input type="radio" name="stella-variant" value="full" data-stella-variant checked />
+						<span class="stella-option__name">Full prompt</span>
+						<span class="stella-option__desc">Preamble + phase prompt</span>
+					</label>
+					<label class="stella-option">
+						<input type="radio" name="stella-variant" value="fix" data-stella-variant />
+						<span class="stella-option__name">Fix prompt</span>
+						<span class="stella-option__desc">Preamble + fix prompt</span>
+					</label>
+					<label class="stella-option">
+						<input type="radio" name="stella-variant" value="phase" data-stella-variant />
+						<span class="stella-option__name" data-stella-phase-only-label>Only F1 prompt</span>
+						<span class="stella-option__desc">Phase prompt only, no preamble</span>
+					</label>
+				</div>
+			</fieldset>
+		</div>
+
+		<p class="stella-note" data-stella-opus-note hidden>
+			The Opus doc says F1 finishes on the Fable doc, so F1b is the first phase it can start. The F1
+			phase text is identical in both docs, only the preamble differs.
+		</p>
+
+		<div class="stella-output-head">
+			<h2 class="stella-output-title" id="stella-output-title">Prompt</h2>
+			<p class="mono stella-count" data-stella-count>
+				{initial.length.toLocaleString()} characters, {initialLines.toLocaleString()} lines
+			</p>
+			<button type="button" class="stella-copy" data-stella-copy>Copy prompt</button>
+			<p class="mono stella-status" data-stella-status aria-live="polite"></p>
+		</div>
+
+		<pre
+			class="stella-output"
+			tabindex="0"
+			aria-labelledby="stella-output-title"><code data-stella-output>{initial}</code></pre>
+
+		<p class="stella-footnote">
+			Prompts are quoted exactly as written in the two handoff docs. The only change is the first
+			line, set to the selected phase (PHASE_ID: F1, and so on). Phases are listed in firing order.
+		</p>
+	</div>
+</Layout>
+
+<script>
+	import { mountStellaPrompts } from '../../scripts/stella-prompts-ui';
+
+	const root = document.querySelector<HTMLElement>('[data-stella-root]');
+	if (root) mountStellaPrompts(root);
+</script>
+
+<style>
+	.stella-body {
+		display: grid;
+		gap: clamp(1.25rem, 3vw, 2rem);
+		padding-block-end: clamp(3rem, 8vh, 6rem);
+	}
+
+	.stella-controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		gap: 1rem 2rem;
+		padding: 1rem 1.25rem;
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+	}
+
+	.stella-field {
+		display: grid;
+		gap: 0.6rem;
+		align-content: start;
+		border: 0;
+		margin: 0;
+		padding: 0;
+	}
+
+	.stella-legend {
+		font-size: var(--text-micro);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+		padding: 0;
+	}
+
+	.stella-options {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+
+	.stella-option {
+		display: inline-flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.15rem 0.45rem;
+		padding: 0.45rem 0.8rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out),
+			background var(--dur-fast) var(--ease-out);
+	}
+
+	.stella-option:hover {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+	}
+
+	.stella-option:has(input:checked) {
+		color: var(--text-strong);
+		background: var(--glass-bg-raised);
+		border-color: var(--accent-line);
+		box-shadow: 0 0 10px -2px var(--accent-soft);
+	}
+
+	.stella-option:has(input:focus-visible) {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	.stella-option input {
+		accent-color: var(--accent-strong);
+	}
+
+	.stella-option__name {
+		font-size: 0.9rem;
+		font-weight: 450;
+	}
+
+	.stella-option__desc {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+	}
+
+	.stella-phase-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.stella-step {
+		padding: 0.45rem 0.8rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		cursor: pointer;
+		transition:
+			color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out);
+	}
+
+	.stella-step:hover:not(:disabled) {
+		color: var(--text-strong);
+		border-color: var(--glass-border-strong);
+	}
+
+	.stella-step:disabled {
+		opacity: 0.45;
+		cursor: default;
+	}
+
+	.stella-step:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	.stella-select {
+		padding: 0.45rem 0.8rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		color: var(--text-strong);
+		font-size: 0.95rem;
+		cursor: pointer;
+		outline: none;
+		max-width: 100%;
+	}
+
+	.stella-select:focus-visible {
+		border-color: var(--accent-strong);
+	}
+
+	.stella-note {
+		margin: 0;
+		padding: 0.85rem 1.1rem;
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		line-height: 1.6;
+		max-width: 74ch;
+	}
+
+	.stella-output-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.25rem 1rem;
+	}
+
+	.stella-output-title {
+		font-size: var(--text-title);
+		font-weight: 350;
+		letter-spacing: var(--tracking-snug);
+		margin: 0;
+	}
+
+	.stella-count {
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+		margin: 0;
+	}
+
+	.stella-copy {
+		margin-inline-start: auto;
+		padding: 0.5rem 1.1rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--accent-line);
+		background: var(--glass-bg-raised);
+		color: var(--text-strong);
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: border-color var(--dur-fast) var(--ease-out);
+	}
+
+	.stella-copy:hover {
+		border-color: var(--accent-strong);
+	}
+
+	.stella-copy:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	.stella-status {
+		flex-basis: 100%;
+		font-size: var(--text-micro);
+		color: var(--text-muted);
+		margin: 0;
+		min-height: 1.2em;
+	}
+
+	.stella-output {
+		margin: 0;
+		padding: 1rem 1.25rem;
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-quiet);
+		color: var(--text-strong);
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
+		line-height: 1.6;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		overflow: auto;
+		max-height: 72vh;
+	}
+
+	.stella-output:focus-visible {
+		outline: 2px solid var(--accent-strong);
+		outline-offset: 2px;
+	}
+
+	.stella-footnote {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		line-height: 1.65;
+		max-width: 74ch;
+	}
+
+	@media (max-width: 640px) {
+		.stella-controls {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.stella-field {
+			flex: 1 1 100%;
+		}
+	}
+</style>

@@ -66,6 +66,7 @@ export const PROJECTS: Project[] = [
 		description:
 			'A self-hosted AI development system, not a chat window: a supervisor turns requests into tracked Kanban cards, and builder and reviewer agents work in separate worktrees, with changes pushing only after checks pass. It replays agent work step by step, autopsies its own failures, heals a broken stack, benchmarks local models on the machine it runs on, and can be talked to by voice, all while agents never see secret values and firewall, publishing, and payment actions wait for human approval.',
 		tags: ['AI agents', 'Kanban', 'Self-hosted'],
+		href: '/projects/stella/',
 		status: 'wip',
 		featured: true,
 		year: '2026',
