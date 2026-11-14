@@ -246,6 +246,16 @@ request is answered by one guard that reads the database.
 body is a login. Both paths live on the one route because they are the one
 concern: the credential and the sessions derived from it.
 
+The Stella prompts page (`/projects/stella`, data at `/api/stella/prompt`)
+is gated behind the same credential: both routes carry
+`sessionPattern: '/admin'`, so the one admin login opens them, and a signed-out
+visit redirects to `/admin/login?next=…` and returns after sign-in. The page is
+server-rendered (`prerender = false`), noindexed, and excluded from the sitemap,
+and the prompt text itself is served only from the gated API route — it never
+ships in a static client bundle, which the edge would serve without
+authentication. The API handler re-checks the credential itself, so the route
+stays closed even if its access rule were ever removed.
+
 ### 6b. Private tracking retention — ADMIN SETTING
 
 `/admin` → **Configuration** exposes `trackingRetentionDays` (default **60**,

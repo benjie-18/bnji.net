@@ -64,10 +64,14 @@ export default defineConfig({
 			// dashboard has no business in a public index. The page also sets
 			// noindex; this is the second, load-bearing half of that.
 			//
+			// The same holds for /projects/stella: it is gated behind the
+			// admin credential, so it is unlisted here and noindexed on the
+			// page, for the same reason.
+			//
 			// /about is hidden for now (redundant with /gizlyy/): it is out of
 			// the nav and noindexed, and a sitemap entry would be a third,
 			// load-bearing leak. Drop the '/about' clause to unhide it.
-			filter: (page) => !page.includes('/admin') && !page.includes('/about'),
+			filter: (page) => !page.includes('/admin') && !page.includes('/about') && !page.includes('/projects/stella'),
 		}),
 	],
 	adapter: cloudflare({

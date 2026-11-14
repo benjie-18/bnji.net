@@ -7,7 +7,9 @@
  * change — the preamble's first line, set to the selected phase.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { ACCESS_RULES } from '../src/config/access.config';
 import {
 	STELLA_FIRING_ORDER,
 	STELLA_MODES,
@@ -86,4 +88,36 @@ test('stella prompts: no personal-info words in the prompt text', () => {
 	for (const word of ['benjamin', 'emond', 'cegep', 'rtx 4070']) {
 		assert.ok(!joined.includes(word), word);
 	}
+});
+
+test('stella prompts: page and API are gated behind the admin session', () => {
+	const page = ACCESS_RULES.find((rule) => rule.pattern === '/projects/stella');
+	assert.ok(page, 'missing /projects/stella rule');
+	assert.equal(page.auth, 'token');
+	assert.equal(page.sessionPattern, '/admin');
+	assert.equal(page.redirectTo, '/admin/login');
+	const api = ACCESS_RULES.find((rule) => rule.pattern === '/api/stella');
+	assert.ok(api, 'missing /api/stella rule');
+	assert.equal(api.auth, 'token');
+	assert.equal(api.sessionPattern, '/admin');
+	assert.equal(api.redirectTo, undefined);
+});
+
+test('stella prompts: page is server-rendered and unlisted', () => {
+	const source = readFileSync(new URL('../src/pages/projects/stella.astro', import.meta.url), 'utf8');
+	// verify-access.mjs enforces the same at build time; this pins it in
+	// the suite so the regression is caught before the build runs.
+	assert.match(source, /export\s+const\s+prerender\s*=\s*false/);
+	assert.ok(source.includes('noindex'), 'gated page must be noindexed');
+});
+
+test('stella prompts: prompt text never ships in the client bundle', () => {
+	const ui = readFileSync(new URL('../src/scripts/stella-prompts-ui.ts', import.meta.url), 'utf8');
+	// The client bundle is served statically, without running the Worker —
+	// importing the data here would publish every prompt to anyone who
+	// fetched the chunk, page gate or not. The doc comment above names the
+	// module it refuses to import, so this matches an import statement,
+	// not a bare mention.
+	assert.ok(!/from\s+['"]\.\.\/data\/stella-prompts['"]/.test(ui), 'client module must not import the prompt data');
+	assert.ok(ui.includes('/api/stella/prompt'), 'client module fetches prompt text from the gated API');
 });

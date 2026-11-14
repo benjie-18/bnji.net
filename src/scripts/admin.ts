@@ -58,6 +58,25 @@ export async function adminFetch<T>(path: string, init: RequestInit = {}): Promi
 
 /* --- login form ---------------------------------------------------------- */
 
+/**
+ * Where the login page sends the operator after a successful sign-in.
+ *
+ * The middleware appends `?next=<the page that bounced here>` to the login
+ * URL; this honours it only when it is a same-site relative path. Anything
+ * else — an absolute URL, a protocol-relative `//host`, a backslash escape,
+ * or the login page itself (which would drop the operator back on the form
+ * they just submitted) — falls back to the dashboard. The check is a pure
+ * function of the query string so it is unit-testable without a DOM.
+ */
+export function safePostLoginRedirect(search: string): string {
+	const next = new URLSearchParams(search).get('next');
+	if (!next) return '/admin';
+	if (!next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/admin';
+	const path = (next.split(/[?#]/, 1)[0] ?? '').replace(/\/$/, '') || '/';
+	if (path === '/admin/login') return '/admin';
+	return next;
+}
+
 export function startAdminLogin(): void {
 	const form = document.querySelector<HTMLFormElement>('[data-admin-login]');
 	if (!form) return;
@@ -97,7 +116,7 @@ export function startAdminLogin(): void {
 			// The session cookie is set. The token is dropped on the floor
 			// here: the cookie authenticates the dashboard page AND its API
 			// calls, so nothing needs to keep holding the secret.
-			window.location.assign('/admin');
+			window.location.assign(safePostLoginRedirect(window.location.search));
 		} catch (error) {
 			const status_ = (error as { status?: number }).status;
 			if (status_ === 429) {

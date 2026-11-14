@@ -18,6 +18,21 @@ import { isAuthorized } from './server/access';
 import { ADMIN_PATTERN, isAdminRequest } from './server/admin';
 import { secretEnv } from './server/env';
 
+/**
+ * A login redirect that remembers where the request was going.
+ *
+ * The login page only honours same-site relative paths (see
+ * safePostLoginRedirect in src/scripts/admin.ts), so a crafted value cannot
+ * bounce the operator elsewhere — and redirectTo itself is a static config
+ * value, never request input. The hash is not sent to the server, so a deep
+ * link loses its selection; the page still loads on its default.
+ */
+function loginRedirect(redirectTo: string, context: { url: URL }): string {
+	const next = `${context.url.pathname}${context.url.search}`;
+	const separator = redirectTo.includes('?') ? '&' : '?';
+	return `${redirectTo}${separator}next=${encodeURIComponent(next)}`;
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
 	const pathname = context.url.pathname;
 	const rule = ACCESS_RULES.find((r) => {
@@ -43,7 +58,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 	// from a stale source and disagree with every admin route.
 	if (rule.sessionPattern === ADMIN_PATTERN) {
 		if (await isAdminRequest(gate)) return next();
-		if (rule.redirectTo) return context.redirect(rule.redirectTo);
+		if (rule.redirectTo) return context.redirect(loginRedirect(rule.redirectTo, context));
 		return new Response(JSON.stringify({ error: 'unauthorized' }), {
 			status: 401,
 			headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
@@ -54,7 +69,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
 	const authorized = await isAuthorized(gate, rule, env);
 	if (authorized) return next();
 
-	if (rule.redirectTo) return context.redirect(rule.redirectTo);
+	if (rule.redirectTo) {
+		return context.redirect(loginRedirect(rule.redirectTo, context));
+	}
 	return new Response(JSON.stringify({ error: 'unauthorized' }), {
 		status: 401,
 		headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },

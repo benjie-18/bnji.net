@@ -2,8 +2,14 @@
 /**
  * /projects/stella/ — browse the Stella handoff prompts and copy them.
  *
+ * Gated behind the admin credential (see ACCESS_RULES): this page is
+ * server-rendered, not prerendered, so the middleware runs on every
+ * request, and it is noindexed and out of the sitemap like /admin.
+ *
  * The prompt text lives in src/data/stella-prompts.ts, quoted verbatim from
- * the two handoff docs. This page only selects: mode (Fable or Opus), phase
+ * the two handoff docs, and is served only through /api/stella/prompt —
+ * never in the page's client bundle, which the edge would serve without
+ * authentication. This page only selects: mode (Fable or Opus), phase
  * (in firing order) and variant (full, fix, or phase only). The composed
  * text is rendered server-side for the default selection, so the page is
  * useful before any script runs; the client module keeps the controls,
@@ -14,13 +20,15 @@ import PageHeader from '../../components/PageHeader.astro';
 import { STELLA_MODES, STELLA_PHASES, composeStellaPrompt } from '../../data/stella-prompts';
 import Layout from '../../layouts/Layout.astro';
 
+export const prerender = false;
+
 const description = 'Browse the Stella handoff prompts by mode, phase and variant, then copy the exact text.';
 
 const initial = composeStellaPrompt('fable', 'F1', 'full');
 const initialLines = initial.split('\n').length;
 ---
 
-<Layout title="Stella prompts" description={description}>
+<Layout title="Stella prompts" description={description} noindex={true}>
 	<PageHeader
 		label="PROJECTS"
 		titleId="page-title"

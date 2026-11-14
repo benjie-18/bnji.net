@@ -1,17 +1,22 @@
 /**
  * BNJI.NET — /projects/stella/ client.
  *
- * One mount per page: wires the mode, phase and variant controls, renders
- * the composed prompt from src/data/stella-prompts.ts, keeps the choice in
- * the URL hash so a selection is shareable, and copies the exact text.
+ * One mount per page: wires the mode, phase and variant controls, fetches
+ * the composed prompt from /api/stella/prompt, keeps the choice in the URL
+ * hash so a selection is shareable, and copies the exact text.
+ *
+ * This module never sees prompt text except as the response to that fetch.
+ * It deliberately does NOT import src/data/stella-prompts.ts: importing it
+ * would bundle every prompt into the page's static client JS, which the
+ * edge serves without running any Worker code — the page gate would be
+ * theatre, readable by anyone who fetched the chunk. The phase order comes
+ * from the server-rendered <select> instead, which is metadata, not text.
  *
  * This module never edits prompt text. The only substitution is the one the
- * data module performs: the preamble's first line is set to the selected
- * phase. Copying uses the rendered text itself, so what is copied is what
- * is shown.
+ * server performs when composing: the preamble's first line is set to the
+ * selected phase. Copying uses the rendered text itself, so what is copied
+ * is what is shown.
  */
-
-import { STELLA_PHASES, composeStellaPrompt } from '../data/stella-prompts';
 
 type VariantId = 'full' | 'fix' | 'phase';
 
@@ -29,19 +34,6 @@ function isModeId(value: string): value is Selection['modeId'] {
 
 function isVariantId(value: string): value is VariantId {
 	return value === 'full' || value === 'fix' || value === 'phase';
-}
-
-function isPhaseId(value: string): boolean {
-	return STELLA_PHASES.some((phase) => phase.id === value);
-}
-
-/** Read a selection from `#<mode>/<phase>/<variant>`; null when absent or invalid. */
-function selectionFromHash(): Selection | null {
-	const parts = window.location.hash.slice(1).split('/');
-	if (parts.length !== 3) return null;
-	const [modeId, phaseId, variantId] = parts;
-	if (!isModeId(modeId) || !isPhaseId(phaseId) || !isVariantId(variantId)) return null;
-	return { modeId, phaseId, variantId };
 }
 
 export function mountStellaPrompts(root: HTMLElement): void {
@@ -75,23 +67,64 @@ export function mountStellaPrompts(root: HTMLElement): void {
 	const copyButtonEl: HTMLButtonElement = copyButton;
 	const statusEl: HTMLElement = status;
 
-	let selection: Selection = selectionFromHash() ?? { ...DEFAULT_SELECTION };
+	// Firing order, from the server-rendered options. The <select> is
+	// rendered from the same phase list the server composes from, so this
+	// is the order — and it carries no prompt text.
+	const phaseIds = Array.from(phaseSelectEl.options).map((option) => option.value);
 
-	function phaseIndex(): number {
-		return STELLA_PHASES.findIndex((phase) => phase.id === selection.phaseId);
+	function isPhaseId(value: string): boolean {
+		return phaseIds.includes(value);
 	}
 
-	function render(): void {
-		const text = composeStellaPrompt(selection.modeId, selection.phaseId, selection.variantId);
-		outputEl.textContent = text;
-		if (count) {
-			const lines = text.split('\n').length;
-			count.textContent = `${text.length.toLocaleString()} characters, ${lines.toLocaleString()} lines`;
+	let selection: Selection = selectionFromHash() ?? { ...DEFAULT_SELECTION };
+
+	/** Read a selection from `#<mode>/<phase>/<variant>`; null when absent or invalid. */
+	function selectionFromHash(): Selection | null {
+		const parts = window.location.hash.slice(1).split('/');
+		if (parts.length !== 3) return null;
+		const [modeId, phaseId, variantId] = parts;
+		if (!isModeId(modeId) || !isPhaseId(phaseId) || !isVariantId(variantId)) return null;
+		return { modeId, phaseId, variantId };
+	}
+
+	function phaseIndex(): number {
+		return phaseIds.indexOf(selection.phaseId);
+	}
+
+	/**
+	 * The composed prompt for a selection, from the gated API route.
+	 * Throws an error carrying `status` on a non-2xx response, so the
+	 * caller can tell an expired session (401) from a failed fetch.
+	 */
+	async function fetchPrompt(sel: Selection): Promise<string> {
+		const params = new URLSearchParams({ mode: sel.modeId, phase: sel.phaseId, variant: sel.variantId });
+		const response = await fetch(`/api/stella/prompt?${params}`, {
+			credentials: 'same-origin',
+			headers: { accept: 'application/json' },
+		});
+		if (!response.ok) {
+			const error = new Error(`prompt request failed: ${response.status}`) as Error & { status: number };
+			error.status = response.status;
+			throw error;
 		}
+		const body = (await response.json()) as { text?: unknown };
+		if (typeof body.text !== 'string') throw new Error('prompt response had no text');
+		return body.text;
+	}
+
+	// Only the latest fetch may paint: a slow earlier response must not
+	// overwrite the selection the user has already moved on to.
+	let requestSeq = 0;
+
+	async function render(): Promise<void> {
+		const seq = ++requestSeq;
+
+		// The chrome is synchronous, so the controls respond at once and
+		// the text follows when the fetch lands.
 		if (phaseOnlyLabel) phaseOnlyLabel.textContent = `Only ${selection.phaseId} prompt`;
 		if (opusNote) opusNote.hidden = !(selection.modeId === 'opus' && selection.phaseId === 'F1');
 		if (prevButton) prevButton.disabled = phaseIndex() <= 0;
-		if (nextButton) nextButton.disabled = phaseIndex() >= STELLA_PHASES.length - 1;
+		if (nextButton) nextButton.disabled = phaseIndex() >= phaseIds.length - 1;
 
 		modeInputs.forEach((input) => {
 			input.checked = input.value === selection.modeId;
@@ -103,6 +136,25 @@ export function mountStellaPrompts(root: HTMLElement): void {
 
 		const hash = `#${selection.modeId}/${selection.phaseId}/${selection.variantId}`;
 		if (window.location.hash !== hash) window.history.replaceState(null, '', hash);
+
+		let text: string;
+		try {
+			text = await fetchPrompt(selection);
+		} catch (error) {
+			if (seq !== requestSeq) return;
+			const status_ = (error as { status?: number }).status;
+			statusEl.textContent =
+				status_ === 401
+					? 'Your session ended. Sign in again to keep browsing prompts.'
+					: 'Could not load that prompt. Try again.';
+			return;
+		}
+		if (seq !== requestSeq) return;
+		outputEl.textContent = text;
+		if (count) {
+			const lines = text.split('\n').length;
+			count.textContent = `${text.length.toLocaleString()} characters, ${lines.toLocaleString()} lines`;
+		}
 	}
 
 	function readControls(): Selection {
@@ -117,9 +169,9 @@ export function mountStellaPrompts(root: HTMLElement): void {
 
 	function stepPhase(delta: number): void {
 		const next = phaseIndex() + delta;
-		if (next < 0 || next >= STELLA_PHASES.length) return;
-		selection = { ...selection, phaseId: STELLA_PHASES[next].id };
-		render();
+		if (next < 0 || next >= phaseIds.length) return;
+		selection = { ...selection, phaseId: phaseIds[next] };
+		void render();
 	}
 
 	async function copyPrompt(): Promise<void> {
@@ -149,7 +201,7 @@ export function mountStellaPrompts(root: HTMLElement): void {
 		input.addEventListener('change', () => {
 			selection = readControls();
 			statusEl.textContent = '';
-			render();
+			void render();
 		});
 	});
 
@@ -157,14 +209,14 @@ export function mountStellaPrompts(root: HTMLElement): void {
 		input.addEventListener('change', () => {
 			selection = readControls();
 			statusEl.textContent = '';
-			render();
+			void render();
 		});
 	});
 
 	phaseSelectEl.addEventListener('change', () => {
 		selection = readControls();
 		statusEl.textContent = '';
-		render();
+		void render();
 	});
 
 	prevButton?.addEventListener('click', () => {
@@ -186,9 +238,12 @@ export function mountStellaPrompts(root: HTMLElement): void {
 		if (fromHash) {
 			selection = fromHash;
 			statusEl.textContent = '';
-			render();
+			void render();
 		}
 	});
 
-	render();
+	// The server already rendered the default selection, so this fetch
+	// replaces identical text on load — and fetches the hashed selection
+	// when the URL carries one.
+	void render();
 }

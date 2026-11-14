@@ -85,6 +85,16 @@ export const ACCESS_RULES: RouteAccessRule[] = [
 	// route does its own verification (constant-time compare, plus a
 	// rate limit), so the exclusion moves the check rather than removing it.
 	{ pattern: '/api/admin', auth: 'token', exclude: ['/api/admin/session'], sessionPattern: '/admin' },
+	// The Stella prompts surface. Same credential and session as /admin:
+	// there is exactly one operator credential, and the prompts are private,
+	// so the page and its data share the admin login rather than growing a
+	// second one. Both rules carry sessionPattern: '/admin' so the cookie
+	// the login mints opens both — without it the page would load and every
+	// prompt fetch would 401. The page rule redirects to the login; the API
+	// rule answers 401 JSON, like /api/admin. verify-access.mjs pass 3 also
+	// requires these two 'stella' rules to agree on sessionPattern.
+	{ pattern: '/projects/stella', auth: 'token', redirectTo: '/admin/login', sessionPattern: '/admin' },
+	{ pattern: '/api/stella', auth: 'token', sessionPattern: '/admin' },
 	// ▼▼▼ CONFIGURE HERE — example (keep commented until a real route exists):
 	// { pattern: '/monitoring', auth: 'token' },
 	// ▲▲▲ CONFIGURE HERE
